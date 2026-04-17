@@ -37,3 +37,6 @@ Open [Base44.com](http://Base44.com) and click on Publish.
 Documentation: [https://docs.base44.com/Integrations/Using-GitHub](https://docs.base44.com/Integrations/Using-GitHub)
 
 Support: [https://app.base44.com/support](https://app.base44.com/support)
+
+
+we are developing an application that can be used by every one; from small startsup to huge organzation. This software handles inventory for example; Analyze the project there are many other services. I have no idea about these. My collegues who is non-it has generated some code using Base44. Analyze the frontend; i think frontend is good. i need to focus on backend. Please analyze and tell me if backend has been implemented or not, check the databases. Few days back he was showing this software ,i noticed APIs were calling, so need to confirm on that. If there is no backend code that means he didnot downloaded the backend codes???? or it is handled. lets make a plan. We need to make this market ready in 3 months. so lets start. first lets ben on the same page. and we will discuss about the architecture, system design, etc.and lets be very proferssional.
