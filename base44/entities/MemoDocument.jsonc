@@ -1,0 +1,72 @@
+{
+  "name": "MemoDocument",
+  "type": "object",
+  "properties": {
+    "company_id": {
+      "type": "string",
+      "title": "Company ID"
+    },
+    "category": {
+      "type": "string",
+      "title": "Category",
+      "enum": [
+        "quotation",
+        "purchase_bill",
+        "sales_bill",
+        "job_card",
+        "order_slip",
+        "extra_work",
+        "supporting_doc"
+      ],
+      "default": "supporting_doc"
+    },
+    "title": {
+      "type": "string",
+      "title": "Title"
+    },
+    "date_ad": {
+      "type": "string",
+      "title": "Date (AD)"
+    },
+    "date_bs": {
+      "type": "string",
+      "title": "Date (BS)"
+    },
+    "client_name": {
+      "type": "string",
+      "title": "Client Name"
+    },
+    "client_contact": {
+      "type": "string",
+      "title": "Client Contact"
+    },
+    "client_address": {
+      "type": "string",
+      "title": "Client Address"
+    },
+    "description": {
+      "type": "string",
+      "title": "Description"
+    },
+    "document_url": {
+      "type": "string",
+      "title": "Document URL"
+    },
+    "reference_id": {
+      "type": "string",
+      "title": "Reference ID"
+    },
+    "amount": {
+      "type": "number",
+      "title": "Amount"
+    },
+    "status": {
+      "type": "string",
+      "title": "Status"
+    }
+  },
+  "required": [
+    "category",
+    "company_id"
+  ]
+}

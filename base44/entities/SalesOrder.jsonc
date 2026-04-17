@@ -1,0 +1,111 @@
+{
+  "name": "SalesOrder",
+  "type": "object",
+  "properties": {
+    "company_id": {
+      "type": "string",
+      "title": "Company ID"
+    },
+    "client_id": {
+      "type": "string",
+      "title": "Client ID"
+    },
+    "client_name": {
+      "type": "string",
+      "title": "Client Name"
+    },
+    "client_contact": {
+      "type": "string",
+      "title": "Client Contact"
+    },
+    "client_address": {
+      "type": "string",
+      "title": "Client Address"
+    },
+    "date_ad": {
+      "type": "string",
+      "title": "Date (AD)"
+    },
+    "date_bs": {
+      "type": "string",
+      "title": "Date (BS)"
+    },
+    "invoice_number": {
+      "type": "string",
+      "title": "Invoice Number"
+    },
+    "items": {
+      "type": "array",
+      "title": "Items",
+      "items": {
+        "type": "object",
+        "properties": {
+          "inventory_item_id": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "quantity": {
+            "type": "number"
+          },
+          "unit": {
+            "type": "string"
+          },
+          "unit_price": {
+            "type": "number"
+          },
+          "total": {
+            "type": "number"
+          }
+        }
+      }
+    },
+    "work_description": {
+      "type": "string",
+      "title": "Description of Work"
+    },
+    "labor_charges": {
+      "type": "number",
+      "title": "Labor Charges",
+      "default": 0
+    },
+    "is_vat": {
+      "type": "boolean",
+      "title": "VAT Bill",
+      "default": false
+    },
+    "subtotal": {
+      "type": "number",
+      "title": "Subtotal",
+      "default": 0
+    },
+    "vat_amount": {
+      "type": "number",
+      "title": "VAT Amount (13%)",
+      "default": 0
+    },
+    "total_amount": {
+      "type": "number",
+      "title": "Total Amount",
+      "default": 0
+    },
+    "status": {
+      "type": "string",
+      "title": "Status",
+      "enum": [
+        "draft",
+        "confirmed",
+        "invoiced",
+        "paid",
+        "cancelled"
+      ],
+      "default": "draft"
+    }
+  },
+  "required": [
+    "client_name",
+    "date_ad",
+    "company_id"
+  ]
+}

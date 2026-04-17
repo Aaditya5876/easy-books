@@ -1,0 +1,110 @@
+{
+  "name": "Quotation",
+  "type": "object",
+  "properties": {
+    "company_id": {
+      "type": "string",
+      "title": "Company ID"
+    },
+    "company_name": {
+      "type": "string",
+      "title": "Quoting Company"
+    },
+    "client_name": {
+      "type": "string",
+      "title": "Client Name"
+    },
+    "client_contact": {
+      "type": "string",
+      "title": "Client Contact"
+    },
+    "client_address": {
+      "type": "string",
+      "title": "Client Address"
+    },
+    "date_ad": {
+      "type": "string",
+      "title": "Date (AD)"
+    },
+    "date_bs": {
+      "type": "string",
+      "title": "Date (BS)"
+    },
+    "quotation_number": {
+      "type": "string",
+      "title": "Quotation Number"
+    },
+    "items": {
+      "type": "array",
+      "title": "Items",
+      "items": {
+        "type": "object",
+        "properties": {
+          "description": {
+            "type": "string"
+          },
+          "quantity": {
+            "type": "number"
+          },
+          "unit": {
+            "type": "string"
+          },
+          "unit_price": {
+            "type": "number"
+          },
+          "total": {
+            "type": "number"
+          }
+        }
+      }
+    },
+    "subtotal": {
+      "type": "number",
+      "title": "Subtotal",
+      "default": 0
+    },
+    "vat_amount": {
+      "type": "number",
+      "title": "VAT Amount",
+      "default": 0
+    },
+    "total_amount": {
+      "type": "number",
+      "title": "Total Amount",
+      "default": 0
+    },
+    "remark": {
+      "type": "string",
+      "title": "Remark",
+      "enum": [
+        "Quoted",
+        "Work-done",
+        "Cancelled",
+        "Revised",
+        "Billed"
+      ],
+      "default": "Quoted"
+    },
+    "invoice_id": {
+      "type": "string",
+      "title": "Invoice ID"
+    },
+    "scanned_doc_url": {
+      "type": "string",
+      "title": "Scanned Document URL"
+    },
+    "invoice_doc_url": {
+      "type": "string",
+      "title": "Invoice Document URL"
+    },
+    "notes": {
+      "type": "string",
+      "title": "Notes"
+    }
+  },
+  "required": [
+    "client_name",
+    "date_ad",
+    "company_id"
+  ]
+}

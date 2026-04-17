@@ -1,0 +1,96 @@
+{
+  "name": "Transaction",
+  "type": "object",
+  "properties": {
+    "company_id": {
+      "type": "string",
+      "title": "Company ID"
+    },
+    "date_ad": {
+      "type": "string",
+      "title": "Date (AD)"
+    },
+    "date_bs": {
+      "type": "string",
+      "title": "Date (BS)"
+    },
+    "type": {
+      "type": "string",
+      "title": "Transaction Type",
+      "enum": [
+        "cash",
+        "bank",
+        "qr",
+        "cheque"
+      ],
+      "default": "cash"
+    },
+    "category": {
+      "type": "string",
+      "title": "Category",
+      "enum": [
+        "income",
+        "expense",
+        "transfer"
+      ],
+      "default": "income"
+    },
+    "amount": {
+      "type": "number",
+      "title": "Amount",
+      "default": 0
+    },
+    "description": {
+      "type": "string",
+      "title": "Description"
+    },
+    "bank_name": {
+      "type": "string",
+      "title": "Bank Name"
+    },
+    "bank_account_number": {
+      "type": "string",
+      "title": "Bank Account Number"
+    },
+    "cheque_number": {
+      "type": "string",
+      "title": "Cheque Number"
+    },
+    "cheque_date": {
+      "type": "string",
+      "title": "Cheque Date"
+    },
+    "cheque_issue_date": {
+      "type": "string",
+      "title": "Cheque Issue Date"
+    },
+    "cheque_transaction_date": {
+      "type": "string",
+      "title": "Cheque Transaction Date"
+    },
+    "party_name": {
+      "type": "string",
+      "title": "Party Name"
+    },
+    "reference_id": {
+      "type": "string",
+      "title": "Reference ID"
+    },
+    "status": {
+      "type": "string",
+      "title": "Status",
+      "enum": [
+        "completed",
+        "pending",
+        "cancelled"
+      ],
+      "default": "completed"
+    }
+  },
+  "required": [
+    "date_ad",
+    "type",
+    "amount",
+    "company_id"
+  ]
+}

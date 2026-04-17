@@ -1,0 +1,89 @@
+{
+  "name": "InventoryItem",
+  "type": "object",
+  "properties": {
+    "company_id": {
+      "type": "string",
+      "title": "Company ID"
+    },
+    "brand": {
+      "type": "string",
+      "title": "Brand"
+    },
+    "model_no": {
+      "type": "string",
+      "title": "Model No."
+    },
+    "description": {
+      "type": "string",
+      "title": "Description"
+    },
+    "application": {
+      "type": "string",
+      "title": "Application"
+    },
+    "image_url": {
+      "type": "string",
+      "title": "Image URL"
+    },
+    "quantity": {
+      "type": "number",
+      "title": "Available Quantity",
+      "default": 0
+    },
+    "unit": {
+      "type": "string",
+      "title": "Unit",
+      "enum": [
+        "Piece",
+        "Set",
+        "Liter",
+        "ml",
+        "Kg",
+        "gm",
+        "NOS"
+      ],
+      "default": "Piece"
+    },
+    "unit_purchase_price": {
+      "type": "number",
+      "title": "Unit Purchase Price",
+      "default": 0
+    },
+    "unit_selling_price": {
+      "type": "number",
+      "title": "Unit Selling Price",
+      "default": 0
+    },
+    "stock_location": {
+      "type": "string",
+      "title": "Stock Location"
+    },
+    "low_stock_threshold": {
+      "type": "number",
+      "title": "Low Stock Alert Threshold",
+      "default": 5
+    },
+    "aging_days": {
+      "type": "number",
+      "title": "Aging Alert (Days)",
+      "default": 90
+    },
+    "date_of_purchase": {
+      "type": "string",
+      "title": "Date of Purchase (AD)"
+    },
+    "date_of_purchase_bs": {
+      "type": "string",
+      "title": "Date of Purchase (BS)"
+    },
+    "supplier_name": {
+      "type": "string",
+      "title": "Supplier Name"
+    }
+  },
+  "required": [
+    "description",
+    "company_id"
+  ]
+}

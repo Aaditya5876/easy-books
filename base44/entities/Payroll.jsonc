@@ -1,0 +1,96 @@
+{
+  "name": "Payroll",
+  "type": "object",
+  "properties": {
+    "company_id": {
+      "type": "string",
+      "title": "Company ID"
+    },
+    "employee_id": {
+      "type": "string",
+      "title": "Employee ID"
+    },
+    "employee_name": {
+      "type": "string",
+      "title": "Employee Name"
+    },
+    "month": {
+      "type": "string",
+      "title": "Month (YYYY-MM)"
+    },
+    "base_salary": {
+      "type": "number",
+      "title": "Base Salary",
+      "default": 0
+    },
+    "working_days": {
+      "type": "number",
+      "title": "Working Days in Month",
+      "default": 26
+    },
+    "days_present": {
+      "type": "number",
+      "title": "Days Present",
+      "default": 0
+    },
+    "days_absent": {
+      "type": "number",
+      "title": "Days Absent",
+      "default": 0
+    },
+    "days_half": {
+      "type": "number",
+      "title": "Half Days",
+      "default": 0
+    },
+    "late_minutes": {
+      "type": "number",
+      "title": "Total Late Minutes",
+      "default": 0
+    },
+    "absent_deduction": {
+      "type": "number",
+      "title": "Absent Deduction",
+      "default": 0
+    },
+    "late_deduction": {
+      "type": "number",
+      "title": "Late Deduction",
+      "default": 0
+    },
+    "other_deductions": {
+      "type": "number",
+      "title": "Other Deductions",
+      "default": 0
+    },
+    "bonus": {
+      "type": "number",
+      "title": "Bonus",
+      "default": 0
+    },
+    "net_salary": {
+      "type": "number",
+      "title": "Net Salary",
+      "default": 0
+    },
+    "status": {
+      "type": "string",
+      "title": "Status",
+      "enum": [
+        "draft",
+        "approved",
+        "paid"
+      ],
+      "default": "draft"
+    },
+    "notes": {
+      "type": "string",
+      "title": "Notes"
+    }
+  },
+  "required": [
+    "employee_id",
+    "month",
+    "company_id"
+  ]
+}

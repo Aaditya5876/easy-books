@@ -1,0 +1,59 @@
+{
+  "name": "BankAccount",
+  "type": "object",
+  "properties": {
+    "company_id": {
+      "type": "string",
+      "title": "Company ID"
+    },
+    "bank_name": {
+      "type": "string",
+      "title": "Bank Name"
+    },
+    "account_number": {
+      "type": "string",
+      "title": "Account Number"
+    },
+    "account_type": {
+      "type": "string",
+      "title": "Account Type",
+      "enum": [
+        "current",
+        "savings",
+        "fixed"
+      ],
+      "default": "current"
+    },
+    "branch": {
+      "type": "string",
+      "title": "Branch"
+    },
+    "current_balance": {
+      "type": "number",
+      "title": "Current Balance",
+      "default": 0
+    },
+    "portal_url": {
+      "type": "string",
+      "title": "Bank Portal URL"
+    },
+    "portal_username": {
+      "type": "string",
+      "title": "Portal Username"
+    },
+    "portal_password": {
+      "type": "string",
+      "title": "Portal Password"
+    },
+    "is_active": {
+      "type": "boolean",
+      "title": "Is Active",
+      "default": true
+    }
+  },
+  "required": [
+    "bank_name",
+    "account_number",
+    "company_id"
+  ]
+}

@@ -1,0 +1,106 @@
+{
+  "name": "PurchaseOrder",
+  "type": "object",
+  "properties": {
+    "company_id": {
+      "type": "string",
+      "title": "Company ID"
+    },
+    "vendor_id": {
+      "type": "string",
+      "title": "Vendor ID"
+    },
+    "vendor_name": {
+      "type": "string",
+      "title": "Vendor Name"
+    },
+    "vendor_contact": {
+      "type": "string",
+      "title": "Vendor Contact"
+    },
+    "vendor_address": {
+      "type": "string",
+      "title": "Vendor Address"
+    },
+    "date_ad": {
+      "type": "string",
+      "title": "Date (AD)"
+    },
+    "date_bs": {
+      "type": "string",
+      "title": "Date (BS)"
+    },
+    "order_number": {
+      "type": "string",
+      "title": "Order Number"
+    },
+    "ordered_by": {
+      "type": "string",
+      "title": "Ordered By"
+    },
+    "items": {
+      "type": "array",
+      "title": "Items",
+      "items": {
+        "type": "object",
+        "properties": {
+          "description": {
+            "type": "string"
+          },
+          "quantity": {
+            "type": "number"
+          },
+          "unit": {
+            "type": "string"
+          },
+          "unit_price": {
+            "type": "number"
+          },
+          "total": {
+            "type": "number"
+          }
+        }
+      }
+    },
+    "work_description": {
+      "type": "string",
+      "title": "Description of Work"
+    },
+    "is_vat": {
+      "type": "boolean",
+      "title": "VAT Bill",
+      "default": false
+    },
+    "subtotal": {
+      "type": "number",
+      "title": "Subtotal",
+      "default": 0
+    },
+    "vat_amount": {
+      "type": "number",
+      "title": "VAT Amount (13%)",
+      "default": 0
+    },
+    "total_amount": {
+      "type": "number",
+      "title": "Total Amount",
+      "default": 0
+    },
+    "status": {
+      "type": "string",
+      "title": "Status",
+      "enum": [
+        "draft",
+        "confirmed",
+        "received",
+        "cancelled"
+      ],
+      "default": "draft"
+    }
+  },
+  "required": [
+    "vendor_name",
+    "date_ad",
+    "company_id"
+  ]
+}

@@ -1,0 +1,69 @@
+{
+  "name": "LedgerEntry",
+  "type": "object",
+  "properties": {
+    "company_id": {
+      "type": "string",
+      "title": "Company ID"
+    },
+    "account_id": {
+      "type": "string",
+      "title": "Account ID"
+    },
+    "date_ad": {
+      "type": "string",
+      "title": "Date (AD)"
+    },
+    "date_bs": {
+      "type": "string",
+      "title": "Date (BS)"
+    },
+    "description": {
+      "type": "string",
+      "title": "Description"
+    },
+    "debit": {
+      "type": "number",
+      "title": "Debit",
+      "default": 0
+    },
+    "credit": {
+      "type": "number",
+      "title": "Credit",
+      "default": 0
+    },
+    "balance": {
+      "type": "number",
+      "title": "Balance",
+      "default": 0
+    },
+    "reference_type": {
+      "type": "string",
+      "title": "Reference Type",
+      "enum": [
+        "purchase",
+        "sales",
+        "expense",
+        "payment",
+        "receipt",
+        "journal",
+        "opening"
+      ]
+    },
+    "reference_id": {
+      "type": "string",
+      "title": "Reference ID"
+    },
+    "is_locked": {
+      "type": "boolean",
+      "title": "Is Locked",
+      "default": true
+    }
+  },
+  "required": [
+    "account_id",
+    "date_ad",
+    "description",
+    "company_id"
+  ]
+}

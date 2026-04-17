@@ -1,0 +1,52 @@
+{
+  "name": "Vendor",
+  "type": "object",
+  "properties": {
+    "company_id": {
+      "type": "string",
+      "title": "Company ID"
+    },
+    "name": {
+      "type": "string",
+      "title": "Vendor Name"
+    },
+    "contact_person": {
+      "type": "string",
+      "title": "Contact Person"
+    },
+    "phone": {
+      "type": "string",
+      "title": "Phone"
+    },
+    "email": {
+      "type": "string",
+      "title": "Email"
+    },
+    "address": {
+      "type": "string",
+      "title": "Address"
+    },
+    "pan_vat": {
+      "type": "string",
+      "title": "PAN/VAT Number"
+    },
+    "total_purchases": {
+      "type": "number",
+      "title": "Total Purchases",
+      "default": 0
+    },
+    "outstanding_balance": {
+      "type": "number",
+      "title": "Outstanding Balance",
+      "default": 0
+    },
+    "notes": {
+      "type": "string",
+      "title": "Notes"
+    }
+  },
+  "required": [
+    "name",
+    "company_id"
+  ]
+}

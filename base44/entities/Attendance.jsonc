@@ -1,0 +1,50 @@
+{
+  "name": "Attendance",
+  "type": "object",
+  "properties": {
+    "company_id": {
+      "type": "string",
+      "title": "Company ID"
+    },
+    "employee_id": {
+      "type": "string",
+      "title": "Employee ID"
+    },
+    "employee_name": {
+      "type": "string",
+      "title": "Employee Name"
+    },
+    "date": {
+      "type": "string",
+      "title": "Date"
+    },
+    "check_in": {
+      "type": "string",
+      "title": "Check In Time"
+    },
+    "check_out": {
+      "type": "string",
+      "title": "Check Out Time"
+    },
+    "status": {
+      "type": "string",
+      "title": "Status",
+      "enum": [
+        "present",
+        "absent",
+        "half_day",
+        "on_leave"
+      ],
+      "default": "present"
+    },
+    "notes": {
+      "type": "string",
+      "title": "Notes"
+    }
+  },
+  "required": [
+    "employee_id",
+    "date",
+    "company_id"
+  ]
+}
