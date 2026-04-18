@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "nest start --watch",
     "build": "nest build",
-    "start": "node dist/main",
+    "start": "node dist/backend/src/main",
     "test": "jest",
     "test:watch": "jest --watch",
     "migrate": "prisma migrate deploy",
