@@ -1,8 +1,8 @@
 import { Processor, Process } from '@nestjs/bull';
 import { Job } from 'bull';
 import { Logger } from '@nestjs/common';
-import { PayrollEngineService } from '../../application/services/payroll.engine';
-import { QUEUE_NAMES } from '../../../core/queue/bull.client';
+import { PayrollEngineService } from '../../../application/services/payroll.engine';
+import { QUEUE_NAMES } from '../../../../core/queue/bull.client';
 
 @Processor(QUEUE_NAMES.PAYROLL)
 export class PayrollJobProcessor {
@@ -17,7 +17,7 @@ export class PayrollJobProcessor {
       const result = await this.payrollEngine.calculateEmployeePayroll(companyId, employeeId, month);
       this.logger.log(`Payroll processed: ${result.employeeName} — Net: ${result.netAmount}`);
     } catch (err) {
-      this.logger.error(`Payroll failed for employee ${employeeId}: ${err.message}`);
+      this.logger.error(`Payroll failed for employee ${employeeId}: ${(err as Error).message}`);
       throw err;
     }
   }
