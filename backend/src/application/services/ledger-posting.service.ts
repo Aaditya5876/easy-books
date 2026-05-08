@@ -67,7 +67,7 @@ export class LedgerPostingService {
       },
     ];
 
-    const vatEntries = [];
+    const vatEntries: any[] = [];
     if (order.isVat && Number(order.vatAmount) > 0) {
       const vatAccount = await this.getOrCreateSystemAccount(companyId, SYSTEM_ACCOUNTS.VAT_PAYABLE, 'LIABILITY');
       vatEntries.push({
@@ -146,7 +146,7 @@ export class LedgerPostingService {
       },
     ];
 
-    const vatEntries = [];
+    const vatEntries: any[] = [];
     if (order.isVat && Number(order.vatAmount) > 0) {
       const vatRcvbl = await this.getOrCreateSystemAccount(companyId, SYSTEM_ACCOUNTS.VAT_RECEIVABLE, 'ASSET');
       vatEntries.push({

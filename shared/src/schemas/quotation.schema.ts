@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { OrderItemSchema } from './sales.schema';
+import { SalesOrderItemSchema } from './sales.schema';
 
 export const QuotationRemarkEnum = z.enum(['QUOTED', 'WORK_DONE', 'CANCELLED', 'REVISED', 'BILLED']);
 export const QuotationStatusEnum = z.enum(['ACTIVE', 'CONVERTED', 'EXPIRED']);
@@ -11,7 +11,7 @@ export const CreateQuotationSchema = z.object({
   dateAd: z.string(),
   dateBs: z.string().optional(),
   quotationNumber: z.string().min(1),
-  items: z.array(OrderItemSchema).min(1),
+  items: z.array(SalesOrderItemSchema).min(1),
   description: z.string().optional(),
   totalAmount: z.number(),
   remark: QuotationRemarkEnum.default('QUOTED'),
