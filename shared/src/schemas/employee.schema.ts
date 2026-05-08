@@ -11,8 +11,12 @@ export const CreateEmployeeSchema = z.object({
   phone: z.string().optional(),
   email: z.string().email().optional(),
   address: z.string().optional(),
+  panNumber: z.string().optional(),
   dateOfJoining: z.string().optional(),
-  salary: z.number().default(0),
+  basicSalary: z.number().nonnegative().default(0),
+  allowances: z.record(z.number()).optional(),
+  bankName: z.string().optional(),
+  bankAccount: z.string().optional(),
   status: EmployeeStatusEnum.default('ACTIVE'),
 });
 

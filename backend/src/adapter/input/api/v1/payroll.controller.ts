@@ -1,56 +1,50 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Body, Param, Query, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
-import { PayrollServiceImpl } from '../../../../application/services/payroll.service.impl';
+import { PayrollEngineService } from '../../../../application/services/payroll.engine';
 import { JwtAuthGuard } from '../../../../modules/guards/jwt-auth.guard';
-import { ZodValidationPipe } from '../../../../modules/pipes/zod-validation.pipe';
-import { CreatePayrollSchema, UpdatePayrollSchema, CreatePayrollDTO, UpdatePayrollDTO } from '@easy-books/shared';
 
 @ApiTags('Payroll')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard)
 @Controller('api/v1/payroll')
 export class PayrollController {
-  constructor(private readonly service: PayrollServiceImpl) {}
+  constructor(private readonly engine: PayrollEngineService) {}
 
-  @Get()
-  @ApiOperation({ summary: 'Get all payroll records' })
+  @Get('summary')
+  @ApiOperation({ summary: 'Get payroll summary for a month' })
   @ApiQuery({ name: 'companyId', required: true })
-  @ApiQuery({ name: 'month', required: false })
-  findAll(
-    @Query('companyId') companyId: string,
-    @Query('month') month?: string,
-  ) {
-    return this.service.findAll(companyId, month);
+  @ApiQuery({ name: 'month', required: true, example: '2081-01' })
+  getSummary(@Query('companyId') companyId: string, @Query('month') month: string) {
+    return this.engine.getPayrollSummary(companyId, month);
   }
 
-  @Get(':id')
-  @ApiOperation({ summary: 'Get a payroll record by id' })
-  @ApiQuery({ name: 'companyId', required: true })
-  findOne(@Param('id') id: string, @Query('companyId') companyId: string) {
-    return this.service.findOne(id, companyId);
+  @Post('process')
+  @ApiOperation({ summary: 'Batch-process payroll for all active employees (queues BullMQ jobs)' })
+  process(@Body() body: { companyId: string; month: string }) {
+    return this.engine.processMonthlyPayroll(body.companyId, body.month);
   }
 
-  @Post()
-  @ApiOperation({ summary: 'Create a payroll record' })
-  create(@Body(new ZodValidationPipe(CreatePayrollSchema)) dto: CreatePayrollDTO) {
-    return this.service.create(dto);
+  @Post('calculate')
+  @ApiOperation({ summary: 'Calculate payroll for a single employee (sync)' })
+  calculateOne(@Body() body: { companyId: string; employeeId: string; month: string }) {
+    return this.engine.calculateEmployeePayroll(body.companyId, body.employeeId, body.month);
   }
 
-  @Put(':id')
-  @ApiOperation({ summary: 'Update a payroll record' })
+  @Patch(':id/mark-paid')
+  @ApiOperation({ summary: 'Mark a payroll record as paid' })
   @ApiQuery({ name: 'companyId', required: true })
-  update(
+  markPaid(@Param('id') id: string, @Query('companyId') companyId: string) {
+    return this.engine.markAsPaid(companyId, id);
+  }
+
+  @Patch(':id/hold')
+  @ApiOperation({ summary: 'Put payroll on hold or release hold' })
+  @ApiQuery({ name: 'companyId', required: true })
+  setHold(
     @Param('id') id: string,
     @Query('companyId') companyId: string,
-    @Body(new ZodValidationPipe(UpdatePayrollSchema)) dto: UpdatePayrollDTO,
+    @Body() body: { isOnHold: boolean; holdReason?: string },
   ) {
-    return this.service.update(id, companyId, dto);
-  }
-
-  @Delete(':id')
-  @ApiOperation({ summary: 'Delete a payroll record' })
-  @ApiQuery({ name: 'companyId', required: true })
-  remove(@Param('id') id: string, @Query('companyId') companyId: string) {
-    return this.service.remove(id, companyId);
+    return this.engine.setHold(companyId, id, body.isOnHold, body.holdReason);
   }
 }

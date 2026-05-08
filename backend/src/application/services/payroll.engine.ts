@@ -3,16 +3,55 @@ import { PrismaService } from '../../../core/db/psql/prisma.client';
 import { InjectQueue } from '@nestjs/bull';
 import { Queue } from 'bull';
 import { QUEUE_NAMES } from '../../../core/queue/bull.client';
+import { adToBs } from '@easy-books/shared';
 
 interface PayrollResult {
   employeeId: string;
   employeeName: string;
   month: string;
   basicSalary: number;
-  presentDays: number;
-  workingDays: number;
-  deductions: number;
-  netAmount: number;
+  allowances: number;
+  grossSalary: number;
+  absentDays: number;
+  halfDays: number;
+  absentDeduction: number;
+  overtimeAmount: number;
+  ssfEmployee: number;
+  ssfEmployer: number;
+  pit: number;
+  netSalary: number;
+}
+
+function calculateSSF(basicSalary: number, employeeRate: number, employerRate: number) {
+  return {
+    employee: Number((basicSalary * (employeeRate / 100)).toFixed(2)),
+    employer: Number((basicSalary * (employerRate / 100)).toFixed(2)),
+  };
+}
+
+// Annual PIT on annual gross — returns monthly portion
+function calculateMonthlyPIT(monthlyGross: number): number {
+  const annual = monthlyGross * 12;
+  let tax = 0;
+
+  const slabs = [
+    { upTo: 500000, rate: 0.01 },
+    { upTo: 700000, rate: 0.10 },
+    { upTo: 1000000, rate: 0.20 },
+    { upTo: 2000000, rate: 0.30 },
+    { upTo: Infinity, rate: 0.36 },
+  ];
+
+  let prev = 0;
+  for (const slab of slabs) {
+    if (annual <= prev) break;
+    const taxable = Math.min(annual, slab.upTo) - prev;
+    tax += taxable * slab.rate;
+    prev = slab.upTo;
+    if (annual <= slab.upTo) break;
+  }
+
+  return Number((tax / 12).toFixed(2));
 }
 
 @Injectable()
@@ -35,38 +74,104 @@ export class PayrollEngineService {
   }
 
   async calculateEmployeePayroll(companyId: string, employeeId: string, month: string): Promise<PayrollResult> {
-    const employee = await this.prisma.employee.findFirst({ where: { id: employeeId, companyId } });
+    const [employee, settings] = await Promise.all([
+      this.prisma.employee.findFirst({ where: { id: employeeId, companyId } }),
+      this.prisma.companyPayrollSettings.findUnique({ where: { companyId } }),
+    ]);
+
     if (!employee) throw new Error(`Employee ${employeeId} not found`);
 
-    const [year, monthNum] = month.split('-').map(Number);
-    const startDate = new Date(year, monthNum - 1, 1);
-    const endDate = new Date(year, monthNum, 0);
+    const workingDaysPerMonth = settings?.workingDaysPerMonth ?? 26;
+    const ssfApplicable = settings?.ssfApplicable ?? true;
+    const pitApplicable = settings?.pitApplicable ?? true;
+    const empRate = Number(settings?.ssfEmployeeRate ?? 11);
+    const emplRate = Number(settings?.ssfEmployerRate ?? 20);
+
+    // Parse BS month — attendance stored by AD date range
+    const [bsYear, bsMonth] = month.split('-').map(Number);
 
     const attendance = await this.prisma.attendance.findMany({
       where: {
         employeeId,
         companyId,
-        date: { gte: startDate, lte: endDate },
+        date: {
+          gte: new Date(`${bsYear - 57}-${String(bsMonth).padStart(2, '0')}-01`),
+          lt: new Date(`${bsYear - 57}-${String(bsMonth + 1).padStart(2, '0')}-01`),
+        },
       },
     });
 
-    const workingDays = endDate.getDate();
-    const presentDays = attendance.filter((a) => ['PRESENT', 'HALF_DAY'].includes(a.status)).length;
+    const absentDays = attendance.filter((a) => a.status === 'ABSENT').length;
     const halfDays = attendance.filter((a) => a.status === 'HALF_DAY').length;
 
-    const basicSalary = Number(employee.salary);
-    const perDaySalary = basicSalary / workingDays;
-    const absentDays = workingDays - presentDays;
-    const deductions = Number((absentDays * perDaySalary + halfDays * perDaySalary * 0.5).toFixed(2));
-    const netAmount = Number((basicSalary - deductions).toFixed(2));
+    const basicSalary = Number(employee.basicSalary);
+    const allowancesJson = (employee.allowances as Record<string, number>) ?? {};
+    const allowances = Object.values(allowancesJson).reduce((sum, v) => sum + Number(v), 0);
+    const grossSalary = basicSalary + allowances;
+
+    const perDaySalary = basicSalary / workingDaysPerMonth;
+    const absentDeduction = Number(((absentDays + halfDays * 0.5) * perDaySalary).toFixed(2));
+
+    const overtimeHoursTotal = attendance.reduce((sum, a) => sum + Number(a.overtimeHours ?? 0), 0);
+    const overtimeRatePerHour = Number(settings?.overtimeRatePerHour ?? 0);
+    const overtimeAmount = Number((overtimeHoursTotal * overtimeRatePerHour).toFixed(2));
+
+    const ssf = ssfApplicable ? calculateSSF(basicSalary, empRate, emplRate) : { employee: 0, employer: 0 };
+    const pit = pitApplicable ? calculateMonthlyPIT(grossSalary) : 0;
+
+    const netSalary = Number((grossSalary - absentDeduction - ssf.employee - pit + overtimeAmount).toFixed(2));
 
     await this.prisma.payroll.upsert({
       where: { employeeId_month: { employeeId, month } },
-      create: { companyId, employeeId, month, salary: basicSalary, deductions, netAmount, status: 'PROCESSED' },
-      update: { salary: basicSalary, deductions, netAmount, status: 'PROCESSED' },
+      create: {
+        companyId,
+        employeeId,
+        month,
+        basicSalary,
+        allowances,
+        grossSalary,
+        absentDays,
+        halfDays,
+        absentDeduction,
+        overtimeAmount,
+        ssfEmployee: ssf.employee,
+        ssfEmployer: ssf.employer,
+        pit,
+        netSalary,
+        status: 'PROCESSED',
+      },
+      update: {
+        basicSalary,
+        allowances,
+        grossSalary,
+        absentDays,
+        halfDays,
+        absentDeduction,
+        overtimeAmount,
+        ssfEmployee: ssf.employee,
+        ssfEmployer: ssf.employer,
+        pit,
+        netSalary,
+        status: 'PROCESSED',
+      },
     });
 
-    return { employeeId, employeeName: employee.name, month, basicSalary, presentDays, workingDays, deductions, netAmount };
+    return {
+      employeeId,
+      employeeName: employee.name,
+      month,
+      basicSalary,
+      allowances,
+      grossSalary,
+      absentDays,
+      halfDays,
+      absentDeduction,
+      overtimeAmount,
+      ssfEmployee: ssf.employee,
+      ssfEmployer: ssf.employer,
+      pit,
+      netSalary,
+    };
   }
 
   async getPayrollSummary(companyId: string, month: string) {
@@ -75,10 +180,32 @@ export class PayrollEngineService {
       include: { employee: { select: { name: true, designation: true, department: true } } },
     });
 
-    const totalGross = payrolls.reduce((sum, p) => sum + Number(p.salary), 0);
-    const totalDeductions = payrolls.reduce((sum, p) => sum + Number(p.deductions), 0);
-    const totalNet = payrolls.reduce((sum, p) => sum + Number(p.netAmount), 0);
+    const summary = {
+      totalBasic: payrolls.reduce((s, p) => s + Number(p.basicSalary), 0),
+      totalAllowances: payrolls.reduce((s, p) => s + Number(p.allowances), 0),
+      totalGross: payrolls.reduce((s, p) => s + Number(p.grossSalary), 0),
+      totalSsfEmployee: payrolls.reduce((s, p) => s + Number(p.ssfEmployee), 0),
+      totalSsfEmployer: payrolls.reduce((s, p) => s + Number(p.ssfEmployer), 0),
+      totalPit: payrolls.reduce((s, p) => s + Number(p.pit), 0),
+      totalNetSalary: payrolls.reduce((s, p) => s + Number(p.netSalary), 0),
+      count: payrolls.length,
+      onHoldCount: payrolls.filter((p) => p.isOnHold).length,
+    };
 
-    return { month, payrolls, summary: { totalGross, totalDeductions, totalNet, count: payrolls.length } };
+    return { month, payrolls, summary };
+  }
+
+  async setHold(companyId: string, payrollId: string, isOnHold: boolean, holdReason?: string) {
+    return this.prisma.payroll.update({
+      where: { id: payrollId },
+      data: { isOnHold, holdReason: isOnHold ? holdReason : null, status: isOnHold ? 'ON_HOLD' : 'PROCESSED' },
+    });
+  }
+
+  async markAsPaid(companyId: string, payrollId: string) {
+    return this.prisma.payroll.update({
+      where: { id: payrollId },
+      data: { status: 'PAID', paidAt: new Date() },
+    });
   }
 }

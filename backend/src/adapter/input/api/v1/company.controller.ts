@@ -1,9 +1,7 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Put, Patch, Delete, Body, Param, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { CompanyServiceImpl } from '../../../../application/services/company.service.impl';
 import { JwtAuthGuard } from '../../../../modules/guards/jwt-auth.guard';
-import { ZodValidationPipe } from '../../../../modules/pipes/zod-validation.pipe';
-import { CreateCompanySchema, UpdateCompanySchema, CreateCompanyDTO, UpdateCompanyDTO } from '@easy-books/shared';
 
 @ApiTags('Companies')
 @ApiBearerAuth()
@@ -26,22 +24,33 @@ export class CompanyController {
 
   @Post()
   @ApiOperation({ summary: 'Create a company' })
-  create(@Body(new ZodValidationPipe(CreateCompanySchema)) dto: CreateCompanyDTO) {
-    return this.service.create(dto);
+  create(@Body() body: any) {
+    return this.service.create(body);
   }
 
   @Put(':id')
   @ApiOperation({ summary: 'Update a company' })
-  update(
-    @Param('id') id: string,
-    @Body(new ZodValidationPipe(UpdateCompanySchema)) dto: UpdateCompanyDTO,
-  ) {
-    return this.service.update(id, dto);
+  update(@Param('id') id: string, @Body() body: any) {
+    return this.service.update(id, body);
   }
 
   @Delete(':id')
   @ApiOperation({ summary: 'Delete a company' })
   remove(@Param('id') id: string) {
     return this.service.remove(id);
+  }
+
+  // ─── Payroll Settings ────────────────────────────────────────────────────────
+
+  @Get(':id/payroll-settings')
+  @ApiOperation({ summary: 'Get payroll settings for a company' })
+  getPayrollSettings(@Param('id') id: string) {
+    return this.service.getPayrollSettings(id);
+  }
+
+  @Patch(':id/payroll-settings')
+  @ApiOperation({ summary: 'Create or update payroll settings (SSF %, PIT, Dashain bonus)' })
+  upsertPayrollSettings(@Param('id') id: string, @Body() body: any) {
+    return this.service.upsertPayrollSettings(id, body);
   }
 }

@@ -5,10 +5,12 @@ export const ClientStatusEnum = z.enum(['ACTIVE', 'INACTIVE', 'PROSPECT']);
 export const CreateClientSchema = z.object({
   companyId: z.string().uuid(),
   name: z.string().min(1),
+  abbreviation: z.string().optional(),
   contactPerson: z.string().optional(),
   email: z.string().email().optional(),
   phone: z.string().optional(),
   address: z.string().optional(),
+  panVat: z.string().optional(),
   crmStatus: ClientStatusEnum.default('ACTIVE'),
   notes: z.string().optional(),
 });

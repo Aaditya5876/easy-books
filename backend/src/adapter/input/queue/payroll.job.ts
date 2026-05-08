@@ -5,8 +5,8 @@ import { PayrollEngineService } from '../../../application/services/payroll.engi
 import { QUEUE_NAMES } from '../../../../core/queue/bull.client';
 
 @Processor(QUEUE_NAMES.PAYROLL)
-export class PayrollJobProcessor {
-  private readonly logger = new Logger(PayrollJobProcessor.name);
+export class PayrollJobHandler {
+  private readonly logger = new Logger(PayrollJobHandler.name);
 
   constructor(private readonly payrollEngine: PayrollEngineService) {}
 
@@ -15,7 +15,7 @@ export class PayrollJobProcessor {
     const { companyId, employeeId, month } = job.data;
     try {
       const result = await this.payrollEngine.calculateEmployeePayroll(companyId, employeeId, month);
-      this.logger.log(`Payroll processed: ${result.employeeName} — Net: ${result.netAmount}`);
+      this.logger.log(`Payroll processed: ${result.employeeName} — Net: ${result.netSalary}`);
     } catch (err) {
       this.logger.error(`Payroll failed for employee ${employeeId}: ${(err as Error).message}`);
       throw err;
