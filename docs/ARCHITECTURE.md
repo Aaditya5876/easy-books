@@ -15,7 +15,7 @@ The system is built as a **monorepo** containing three packages:
 ```
 easy-books/
 ├── frontend/        ← React SPA (user interface)
-├── backend/         ← NestJS REST API (business logic)
+                        ├── backend/         ← NestJS REST API (business logic)
 ├── shared/          ← Zod schemas + TypeScript types (shared by both)
 └── package.json     ← npm workspaces root
 ```

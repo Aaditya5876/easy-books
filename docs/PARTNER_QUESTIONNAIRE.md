@@ -16,7 +16,7 @@
 **Why we ask:** We need to build the exact flow in the software — if we miss a step, the software won't match reality.
 
 **Partner's Answer:**
-> _[Write here]_
+> _We are good here. The logic is good._
 
 ---
 
@@ -26,7 +26,7 @@
 **Why we ask:** We have a Quotation feature — we need to know if it's used before or after the sale.
 
 **Partner's Answer:**
-> _[Write here]_
+> _depends on the situation sometimes the client comes in and derectly ask for something to to be done and then pays directly and some times they ask for quotations prior to conducting business, reviews the quotation and then make the approval or changes as per requirement._
 
 ---
 
@@ -40,7 +40,7 @@
 **Why we ask:** The system needs to generate invoice numbers in the correct format.
 
 **Partner's Answer:**
-> _[Write here]_
+> _company_name_abbervation/our_company_abbervation/fiscalyear/billnumber_
 
 ---
 
@@ -52,7 +52,7 @@
 **Why we ask:** We need to add a discount field in the right place on the invoice.
 
 **Partner's Answer:**
-> _[Write here]_
+> _Discount on each item seperately for each item._
 
 ---
 
@@ -65,7 +65,7 @@
 **Why we ask:** The VAT toggle on the invoice must match how you actually use it.
 
 **Partner's Answer:**
-> _[Write here]_
+> _depends on the situation as not all purchases or sales come in VAT, and not all vendors or client require VAT bills, so there must be an option (which should be hidden) to select whether the purchase or sales are in VAT or not.  _
 
 ---
 
@@ -75,7 +75,7 @@
 **Why we ask:** If some items are 0% VAT, the system must handle mixed VAT on one invoice.
 
 **Partner's Answer:**
-> _[Write here]_
+> _depends on the client_
 
 ---
 
@@ -91,7 +91,7 @@
 **Why we ask:** We need to build all payment methods the system tracks.
 
 **Partner's Answer:**
-> _[Write here]_
+> _All of the above._
 
 ---
 
@@ -104,7 +104,7 @@
 **Why we ask:** We need a "partial payment" or "outstanding balance" feature if this is common.
 
 **Partner's Answer:**
-> _[Write here]_
+> _if partail paid come, opent the ledger for it._
 
 ---
 
@@ -114,7 +114,7 @@
 **Why we ask:** This is a major feature — Accounts Receivable. We need to build it if it's important.
 
 **Partner's Answer:**
-> _[Write here]_
+> _Memo should record the commuincation between the company and the customer.Finical should be maintain via ledger. _
 
 ---
 
@@ -126,7 +126,7 @@
 **Why we ask:** Returns and refunds need a separate flow in the system (credit notes / return invoices).
 
 **Partner's Answer:**
-> _[Write here]_
+> _credit note and debit note_
 
 ---
 
@@ -144,7 +144,7 @@
 **Why we ask:** Same as Q1 — we need the exact flow to build the software correctly.
 
 **Partner's Answer:**
-> _[Write here]_
+> _create an order slip and with details like name of the person issuing the order, date, items to be purchased, ordered quantity, price and name of the vendor, which is to be kept as proof of order and for future pricing refrences.
 
 ---
 
@@ -156,7 +156,7 @@
 **Why we ask:** VAT on purchases affects your tax calculation — you can claim back VAT paid on purchases (input VAT).
 
 **Partner's Answer:**
-> _[Write here]_
+> _same as sales._
 
 ---
 
@@ -166,7 +166,7 @@
 **Why we ask:** Accounts Payable tracking — how much you owe suppliers.
 
 **Partner's Answer:**
-> _[Write here]_
+> _both depends. immidate payment, back date check, bank gurantee. _
 
 ---
 
@@ -176,7 +176,7 @@
 > - You always pay immediately — no credit
 
 **Partner's Answer:**
-> _[Write here]_
+> _via memo and ledger._
 
 ---
 
@@ -194,7 +194,7 @@
 **Why we ask:** The system records this in a Purchase Order — we need to know every field that matters.
 
 **Partner's Answer:**
-> _[Write here]_
+> _previous stock.if price deffernece is there new item should be formed._
 
 ---
 
@@ -204,7 +204,7 @@
 **Why we ask:** Auto stock deduction requires linking Sales Order → Inventory. It is more complex to build.
 
 **Partner's Answer:**
-> _[Write here]_
+> _yes. ofcourse. update on purchase and sales too._
 
 ---
 
@@ -217,7 +217,7 @@
 **Why we ask:** Stock valuation method directly affects your profit calculation. This is a critical accounting decision.
 
 **Partner's Answer:**
-> _[Write here]_
+> _old items should be also in 600.while doing stock entery we can also add percentage of discount that can be proided to custoemrs in that specific item. _
 
 ---
 
@@ -227,7 +227,7 @@
 **Why we ask:** Expiry tracking is a separate feature — important for food, medicine, chemicals.
 
 **Partner's Answer:**
-> _[Write here]_
+> _yes. aging scheduled for prodcut._
 
 ---
 
@@ -237,7 +237,7 @@
 **Why we ask:** Batch/serial tracking requires significant additional work.
 
 **Partner's Answer:**
-> _[Write here]_
+> _depends on the product._
 
 ---
 
@@ -246,7 +246,7 @@
 > Are there other units you use? Examples: Dozen, Box, Meter, Foot, Quintal, Bag, Roll
 
 **Partner's Answer:**
-> _[Write here]_
+> _ custom options for any specific product as per requirement. _
 
 ---
 
@@ -268,7 +268,7 @@
 **Why we ask:** The software must match the skill level of who will use it.
 
 **Partner's Answer:**
-> _[Write here]_
+> _The sytem should handled that no physical accoutant needed. _
 
 ---
 
@@ -282,7 +282,7 @@
 **Why we ask:** We need to understand what the user is used to, so our system is not too different.
 
 **Partner's Answer:**
-> _[Write here]_
+> _we will maintin that in this system._
 
 ---
 
@@ -300,7 +300,7 @@
 **Why we ask:** Our Ledger module uses double-entry. If your users don't need this, we should hide it or simplify it.
 
 **Partner's Answer:**
-> _[Write here]_
+> _basically sales account maintains the sales record and cash account mentains the velue of cash in hand both are required but double entries are not to be made, i.e., once sales entries are made if the sales is paid in cash the cash account should automatically be updated_and if the sales is in credit ledger account should be updated or created as per requirement
 
 ---
 
@@ -320,7 +320,7 @@
 **Why we ask:** Each of these is a separate report to build. We prioritize based on what you actually need.
 
 **Partner's Answer:**
-> _[Write here]_
+> _memo and reminders._
 
 ---
 
@@ -333,7 +333,7 @@
 **Why we ask:** If yes, the system must generate a VAT report in the format IRD accepts.
 
 **Partner's Answer:**
-> _[Write here]_
+> Depends on the company, if the company the company is registered as VAT then yes and if it's registered as non-VAT(PAN, NGO, etc) then no. Howerver in case of VAT companies there should be an option to select where the user can choose if he wants the system to automatically submit VAT return entries every monthy or on 4 month basis (as per requirement) to the IRD website or if the user wants to do it manually by themselves_
 
 ---
 
@@ -343,7 +343,7 @@
 > - Excel file upload
 
 **Partner's Answer:**
-> _[Write here]_
+> _TBD_
 
 ---
 
@@ -375,7 +375,7 @@
 **Why we ask:** SSF calculation is complex and significantly changes the payroll engine.
 
 **Partner's Answer:**
-> _[Write here]_
+> _depends._
 
 ---
 
@@ -393,7 +393,7 @@
 **Why we ask:** If salary has components, we need separate fields for each. SSF is calculated on basic salary only — not total gross.
 
 **Partner's Answer:**
-> _[Write here]_
+> _depends_
 
 ---
 
@@ -411,7 +411,7 @@
 **Why we ask:** PIT deduction is a legal requirement for employees above the threshold. The system must calculate and deduct it.
 
 **Partner's Answer:**
-> _[Write here]_
+> _yes.tax can be paid via company or by employee themselves._
 
 ---
 
@@ -425,7 +425,7 @@
 **Why we ask:** Per-day salary calculation depends on working days. This directly affects absent-day deductions.
 
 **Partner's Answer:**
-> _[Write here]_
+> _depends. _
 
 ---
 
@@ -437,7 +437,7 @@
 **Why we ask:** Our current system marks holidays as "no deduction" — we need to confirm this is correct.
 
 **Partner's Answer:**
-> _[Write here]_
+> _depends on comapny calander._
 
 ---
 
@@ -454,7 +454,7 @@
 > - Do unused leaves carry forward to next year? Or are they paid out?
 
 **Partner's Answer:**
-> _[Write here]_
+> _depends on the company._
 
 ---
 
@@ -468,7 +468,7 @@
 **Why we ask:** The system needs a Dashain bonus calculation feature if you use it.
 
 **Partner's Answer:**
-> _[Write here]_
+> _depends_
 
 ---
 
@@ -483,7 +483,7 @@
 **Why we ask:** We need to build the exact payroll workflow — not just the calculation.
 
 **Partner's Answer:**
-> _[Write here]_
+> _monthly release with an option to hold the payroll._
 
 ---
 
@@ -493,7 +493,7 @@
 **Why we ask:** The system should generate printable/shareable salary slips.
 
 **Partner's Answer:**
-> _[Write here]_
+> _depeneds_
 
 ---
 
@@ -507,7 +507,7 @@
 > And which banks? (NIC Asia, Nabil, Global IME, Sanima, etc.)
 
 **Partner's Answer:**
-> _[Write here]_
+> _depends.system maa jati ni add garna payo._
 
 ---
 
@@ -518,7 +518,7 @@
 > - We don't do formal reconciliation
 
 **Partner's Answer:**
-> _[Write here]_
+> _cross refreencing bank statemnt with own records._
 
 ---
 
@@ -529,7 +529,7 @@
 > - What happens when a cheque bounces?
 
 **Partner's Answer:**
-> _[Write here]_
+> _deends. can be both._
 
 ---
 
@@ -540,7 +540,7 @@
 > - What is the maximum a single petty cash expense can be?
 
 **Partner's Answer:**
-> _[Write here]_
+> _petty chash voucher._
 
 ---
 
@@ -612,6 +612,8 @@
 **Partner's Answer:**
 > _[Write here]_
 
+**What a memo do**
+It basically serves the purpose of reminder, communication and records as a whole.
 ---
 
 ---
@@ -622,15 +624,15 @@ After all the answers above, please rank these features for the FIRST LAUNCH:
 
 | Feature | Must Have | Nice to Have | Not Needed |
 |---|---|---|---|
-| Sales Invoice with VAT | | | |
-| Purchase Order | | | |
+| Sales Invoice with or without VAT | | | |
+| Purchase Order/job cards | | | |
 | Inventory management | | | |
 | Auto stock deduction on sale | | | |
 | Client/Vendor management | | | |
 | Cash/Bank transaction recording | | | |
 | Payroll with SSF/PIT | | | |
 | Leave management | | | |
-| Double-entry ledger | | | |
+| single-entry ledger | | | |
 | Profit & Loss report | | | |
 | VAT report for IRD | | | |
 | Bank reconciliation | | | |
