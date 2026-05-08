@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { base44 } from '@/api/base44Client';
+import { api, apiAuth } from '@/api/adapter';
 import { getActiveCompanyId } from '@/lib/companyContext';
 import { adToBs } from '@/lib/nepaliDate';
 import PageHeader from '../components/shared/PageHeader';
@@ -46,7 +46,7 @@ export default function Inventory() {
     const file = e.target.files?.[0];
     if (!file) return;
     setUploadingImage(true);
-    const { file_url } = await base44.integrations.Core.UploadFile({ file });
+    const file_url = URL.createObjectURL(file);
     setForm(f => ({ ...f, image_url: file_url }));
     setUploadingImage(false);
   }
@@ -57,7 +57,7 @@ export default function Inventory() {
 
   async function loadItems() {
     setLoading(true);
-    const data = await base44.entities.InventoryItem.filter({ company_id: companyId });
+    const data = await api.InventoryItem.filter({ company_id: companyId });
     setItems(data);
     setLoading(false);
   }
@@ -69,7 +69,7 @@ export default function Inventory() {
 
   const handlePasswordSubmit = async () => {
     try {
-      const user = await base44.auth.me();
+      const user = await apiAuth.me();
       if (!user) {
         alert('Authentication failed');
         return;
@@ -96,7 +96,7 @@ export default function Inventory() {
 
   const handleUpdatePasswordSubmit = async () => {
     try {
-      const user = await base44.auth.me();
+      const user = await apiAuth.me();
       if (!user) { alert('Authentication failed'); return; }
       setShowUpdatePasswordDialog(false);
       setUpdatePassword('');
@@ -111,14 +111,14 @@ export default function Inventory() {
     const file = e.target.files?.[0];
     if (!file) return;
     setUploadingUpdateImage(true);
-    const { file_url } = await base44.integrations.Core.UploadFile({ file });
+    const file_url = URL.createObjectURL(file);
     setUpdateForm(f => ({ ...f, image_url: file_url }));
     setUploadingUpdateImage(false);
   }
 
   async function handleUpdateSubmit() {
     if (!selectedItem) return;
-    await base44.entities.InventoryItem.update(selectedItem.id, {
+    await api.InventoryItem.update(selectedItem.id, {
       unit_selling_price: updateForm.unit_selling_price,
       unit_purchase_price: updateForm.unit_purchase_price,
       stock_location: updateForm.stock_location,
@@ -131,7 +131,7 @@ export default function Inventory() {
 
   const handleConfirmDelete = async () => {
     if (!selectedItem) return;
-    await base44.entities.InventoryItem.delete(selectedItem.id);
+    await api.InventoryItem.delete(selectedItem.id);
     setSelectedItem(null);
     setShowConfirmDialog(false);
     loadItems();
@@ -140,7 +140,7 @@ export default function Inventory() {
   async function addItem() {
     const today = new Date().toISOString().split('T')[0];
     const bsDate = adToBs(new Date());
-    await base44.entities.InventoryItem.create({
+    await api.InventoryItem.create({
       ...form,
       company_id: companyId,
       date_of_purchase: today,

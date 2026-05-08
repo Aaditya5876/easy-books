@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { base44 } from '@/api/base44Client';
+import { api } from '@/api/adapter';
 import { getActiveCompanyId } from '@/lib/companyContext';
 import PageHeader from '../components/shared/PageHeader';
 import DataTable from '../components/shared/DataTable';
@@ -26,8 +26,8 @@ export default function Attendance() {
   async function load() {
     setLoading(true);
     const [att, emp] = await Promise.all([
-      base44.entities.Attendance.filter({ company_id: companyId }, '-date', 100),
-      base44.entities.Employee.filter({ company_id: companyId }, 'name', 100),
+      api.Attendance.filter({ company_id: companyId }, '-date', 100),
+      api.Employee.filter({ company_id: companyId }, 'name', 100),
     ]);
     setRecords(att);
     setEmployees(emp);
@@ -35,7 +35,7 @@ export default function Attendance() {
   }
 
   async function save() {
-    await base44.entities.Attendance.create({ ...form, company_id: companyId });
+    await api.Attendance.create({ ...form, company_id: companyId });
     setForm({ employee_id: '', employee_name: '', date: new Date().toISOString().split('T')[0], check_in: '', check_out: '', status: 'present', notes: '' });
     setShowForm(false);
     load();

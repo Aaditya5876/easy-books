@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { base44 } from '@/api/base44Client';
+import { api } from '@/api/adapter';
 import { getActiveCompanyId } from '@/lib/companyContext';
 import PageHeader from '../components/shared/PageHeader';
 import DataTable from '../components/shared/DataTable';
@@ -25,13 +25,13 @@ export default function Employees() {
 
   async function load() {
     setLoading(true);
-    const data = await base44.entities.Employee.filter({ company_id: companyId }, 'name', 100);
+    const data = await api.Employee.filter({ company_id: companyId }, 'name', 100);
     setEmployees(data);
     setLoading(false);
   }
 
   async function save() {
-    await base44.entities.Employee.create({ ...form, company_id: companyId, salary: parseFloat(form.salary) || 0 });
+    await api.Employee.create({ ...form, company_id: companyId, salary: parseFloat(form.salary) || 0 });
     setForm({ name: '', employee_id: '', department: '', designation: '', phone: '', email: '', address: '', date_of_joining: '', salary: '', status: 'active', notes: '' });
     setShowForm(false);
     load();

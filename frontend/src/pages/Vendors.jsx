@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { base44 } from '@/api/base44Client';
+import { api } from '@/api/adapter';
 import { getActiveCompanyId } from '@/lib/companyContext';
 import PageHeader from '../components/shared/PageHeader';
 import DataTable from '../components/shared/DataTable';
@@ -27,13 +27,13 @@ export default function Vendors() {
 
   async function loadData() {
     setLoading(true);
-    const data = await base44.entities.Vendor.filter({ company_id: companyId });
+    const data = await api.Vendor.filter({ company_id: companyId });
     setVendors(data);
     setLoading(false);
   }
 
   async function addVendor() {
-    await base44.entities.Vendor.create({ ...form, company_id: companyId });
+    await api.Vendor.create({ ...form, company_id: companyId });
     setForm({ name: '', contact_person: '', phone: '', email: '', address: '', pan_vat: '', notes: '' });
     setShowAdd(false);
     loadData();

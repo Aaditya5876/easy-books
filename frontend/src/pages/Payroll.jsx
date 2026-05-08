@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { base44 } from '@/api/base44Client';
+import { api } from '@/api/adapter';
 import { getActiveCompanyId } from '@/lib/companyContext';
 import PageHeader from '../components/shared/PageHeader';
 import DataTable from '../components/shared/DataTable';
@@ -48,8 +48,8 @@ export default function Payroll() {
   async function load() {
     setLoading(true);
     const [pr, emp] = await Promise.all([
-      base44.entities.Payroll.filter({ company_id: companyId }, '-month', 200),
-      base44.entities.Employee.filter({ company_id: companyId }, 'name', 100),
+      api.Payroll.filter({ company_id: companyId }, '-month', 200),
+      api.Employee.filter({ company_id: companyId }, 'name', 100),
     ]);
     setPayrolls(pr);
     setEmployees(emp);
@@ -62,7 +62,7 @@ export default function Payroll() {
     const startDate = `${selectedMonth}-01`;
     const endDate = new Date(y, m, 0).toISOString().split('T')[0];
 
-    const attendance = await base44.entities.Attendance.filter({ company_id: companyId }, 'date', 500);
+    const attendance = await api.Attendance.filter({ company_id: companyId }, 'date', 500);
     const monthAtt = attendance.filter(a => a.date >= startDate && a.date <= endDate);
 
     const daysInMonth = new Date(y, m, 0).getDate();
@@ -87,7 +87,7 @@ export default function Payroll() {
       const lateDeduction = lateMinutes * perMinute;
       const netSalary = Math.max(0, baseSalary - absentDeduction - lateDeduction);
 
-      await base44.entities.Payroll.create({
+      await api.Payroll.create({
         company_id: companyId,
         employee_id: emp.id,
         employee_name: emp.name,
@@ -111,7 +111,7 @@ export default function Payroll() {
   }
 
   async function updateStatus(id, status) {
-    await base44.entities.Payroll.update(id, { status });
+    await api.Payroll.update(id, { status });
     load();
   }
 

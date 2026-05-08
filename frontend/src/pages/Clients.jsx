@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { base44 } from '@/api/base44Client';
+import { api } from '@/api/adapter';
 import { getActiveCompanyId } from '@/lib/companyContext';
 import PageHeader from '../components/shared/PageHeader';
 import DataTable from '../components/shared/DataTable';
@@ -33,13 +33,13 @@ export default function Clients() {
 
   async function loadData() {
     setLoading(true);
-    const data = await base44.entities.Client.filter({ company_id: companyId });
+    const data = await api.Client.filter({ company_id: companyId });
     setClients(data);
     setLoading(false);
   }
 
   async function addClient() {
-    await base44.entities.Client.create({ ...form, company_id: companyId });
+    await api.Client.create({ ...form, company_id: companyId });
     setForm({ name: '', contact_person: '', phone: '', email: '', address: '', pan_vat: '', crm_status: 'active', notes: '' });
     setShowAdd(false);
     loadData();

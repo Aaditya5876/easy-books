@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { base44 } from '@/api/base44Client';
+import { api } from '@/api/adapter';
 import { getActiveCompanyId } from '@/lib/companyContext';
 import PageHeader from '../components/shared/PageHeader';
 import { Button } from "@/components/ui/button";
@@ -34,7 +34,7 @@ export default function Templates() {
   }, []);
 
   async function loadCompanies() {
-    const data = await base44.entities.Company.list();
+    const data = await api.Company.list();
     setCompanies(data);
   }
 

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { base44 } from '@/api/base44Client';
+import { api } from '@/api/adapter';
 import { getActiveCompanyId } from '@/lib/companyContext';
 import { adToBs } from '@/lib/nepaliDate';
 import PageHeader from '../components/shared/PageHeader';
@@ -46,8 +46,8 @@ export default function Transactions() {
   async function loadData() {
     setLoading(true);
     const [txns, banks] = await Promise.all([
-      base44.entities.Transaction.filter({ company_id: companyId }, '-created_date', 100),
-      base44.entities.BankAccount.filter({ company_id: companyId }),
+      api.Transaction.filter({ company_id: companyId }, '-created_date', 100),
+      api.BankAccount.filter({ company_id: companyId }),
     ]);
     setTransactions(txns);
     setBankAccounts(banks);
@@ -56,7 +56,7 @@ export default function Transactions() {
   }
 
   async function createBankAccount() {
-    const acct = await base44.entities.BankAccount.create({ ...bankForm, company_id: companyId, is_active: true });
+    const acct = await api.BankAccount.create({ ...bankForm, company_id: companyId, is_active: true });
     setBankForm({ bank_name: '', account_number: '', account_type: 'current', branch: '', current_balance: 0, portal_url: '', portal_username: '', portal_password: '' });
     setShowAddBank(false);
     setActiveBankId(acct.id);
@@ -64,7 +64,7 @@ export default function Transactions() {
   }
 
   async function deleteBankAccount(id) {
-    await base44.entities.BankAccount.delete(id);
+    await api.BankAccount.delete(id);
     setActiveBankId(null);
     loadData();
   }
@@ -73,7 +73,7 @@ export default function Transactions() {
     const today = new Date().toISOString().split('T')[0];
     const bsDate = adToBs(new Date());
     const type = activeTab === 'all' ? 'cash' : activeTab;
-    await base44.entities.Transaction.create({
+    await api.Transaction.create({
       ...form,
       type,
       company_id: companyId,
@@ -134,7 +134,7 @@ export default function Transactions() {
         value={row.status}
         onClick={e => e.stopPropagation()}
         onChange={async e => {
-          await base44.entities.Transaction.update(row.id, { status: e.target.value });
+          await api.Transaction.update(row.id, { status: e.target.value });
           loadData();
         }}
         className="text-xs border border-input rounded-md px-2 py-1 bg-background cursor-pointer"

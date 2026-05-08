@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { base44 } from '@/api/base44Client';
+import { api } from '@/api/adapter';
 import { getActiveCompanyId } from '@/lib/companyContext';
 import { adToBs } from '@/lib/nepaliDate';
 import PageHeader from '../components/shared/PageHeader';
@@ -51,7 +51,7 @@ export default function Memo() {
     const file = e.target.files?.[0];
     if (!file) return;
     setUploading(true);
-    const { file_url } = await base44.integrations.Core.UploadFile({ file });
+    const file_url = URL.createObjectURL(file);
     setForm(f => ({ ...f, document_url: file_url }));
     setUploading(false);
   }
@@ -63,8 +63,8 @@ export default function Memo() {
   async function loadData() {
     setLoading(true);
     const [docs, quots] = await Promise.all([
-      base44.entities.MemoDocument.filter({ company_id: companyId }),
-      base44.entities.Quotation.filter({ company_id: companyId }),
+      api.Memo.filter({ company_id: companyId }),
+      api.Quotation.filter({ company_id: companyId }),
     ]);
     setDocuments(docs);
     setQuotations(quots);
@@ -78,7 +78,7 @@ export default function Memo() {
     }
     try {
       const bsDate = adToBs(new Date(form.date_ad));
-      await base44.entities.MemoDocument.create({
+      await api.Memo.create({
         category: form.category,
         client_name: form.client_name,
         client_contact: form.client_contact,
@@ -102,8 +102,7 @@ export default function Memo() {
   }
 
   async function uploadDocument(file) {
-    const { file_url } = await base44.integrations.Core.UploadFile({ file });
-    return file_url;
+    return URL.createObjectURL(file);
   }
 
   const remarkColors = {
@@ -128,7 +127,7 @@ export default function Memo() {
   const filteredQuotations = filteredDocs; // quotation tab uses MemoDocument with category='quotation'
 
   async function updateRemark(id, remark) {
-    await base44.entities.MemoDocument.update(id, { status: remark });
+    await api.Memo.update(id, { status: remark });
     setDocuments(prev => prev.map(d => d.id === id ? { ...d, status: remark } : d));
   }
 
@@ -208,7 +207,7 @@ export default function Memo() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowDeleteDialog(false)}>Cancel</Button>
             <Button variant="destructive" onClick={async () => {
-              await base44.entities.MemoDocument.delete(selectedDoc.id);
+              await api.Memo.delete(selectedDoc.id);
               setSelectedDoc(null);
               setShowDeleteDialog(false);
               await loadData();

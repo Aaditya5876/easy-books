@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { base44 } from '@/api/base44Client';
+import { api } from '@/api/adapter';
 import { getActiveCompanyId } from '@/lib/companyContext';
 import { adToBs } from '@/lib/nepaliDate';
 import PageHeader from '../components/shared/PageHeader';
@@ -43,7 +43,7 @@ export default function Purchase() {
 
   async function loadData() {
     setLoading(true);
-    const data = await base44.entities.PurchaseOrder.filter({ company_id: companyId }, '-created_date', 50);
+    const data = await api.PurchaseOrder.filter({ company_id: companyId }, '-created_date', 50);
     setOrders(data);
     setLoading(false);
   }
@@ -91,7 +91,7 @@ export default function Purchase() {
     const subtotal = form.items.reduce((sum, i) => sum + (i.total || 0), 0) + laborTotal;
     const vatAmount = form.is_vat ? subtotal * 0.13 : 0;
 
-    await base44.entities.PurchaseOrder.create({
+    await api.PurchaseOrder.create({
       company_id: companyId,
       vendor_name: form.vendor_name,
       vendor_contact: form.vendor_contact,
@@ -111,9 +111,9 @@ export default function Purchase() {
     });
 
     // Auto-create vendor if not exists
-    const existingVendors = await base44.entities.Vendor.filter({ company_id: companyId, name: form.vendor_name });
+    const existingVendors = await api.Vendor.filter({ company_id: companyId, name: form.vendor_name });
     if (existingVendors.length === 0 && form.vendor_name) {
-      await base44.entities.Vendor.create({
+      await api.Vendor.create({
         company_id: companyId,
         name: form.vendor_name,
         phone: form.vendor_contact,
@@ -124,7 +124,7 @@ export default function Purchase() {
     // Update inventory for purchased items
     for (const item of form.items) {
       if (item.description) {
-        await base44.entities.InventoryItem.create({
+        await api.InventoryItem.create({
           company_id: companyId,
           description: item.description,
           quantity: item.quantity || 0,

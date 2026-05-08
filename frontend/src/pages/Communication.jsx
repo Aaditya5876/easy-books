@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { base44 } from '@/api/base44Client';
+import { api, apiAuth } from '@/api/adapter';
 import { getActiveCompanyId } from '@/lib/companyContext';
 import PageHeader from '../components/shared/PageHeader';
 import DataTable from '../components/shared/DataTable';
@@ -37,14 +37,14 @@ export default function Communication() {
 
   async function loadData() {
     setLoading(true);
-    const data = await base44.entities.Task.filter({ company_id: companyId }, '-created_date', 50);
+    const data = await api.Task.filter({ company_id: companyId }, '-created_date', 50);
     setTasks(data);
     setLoading(false);
   }
 
   async function createTask() {
-    const user = await base44.auth.me();
-    await base44.entities.Task.create({
+    const user = await apiAuth.me();
+    await api.Task.create({
       ...form,
       company_id: companyId,
       assigned_by: user.email,
@@ -56,7 +56,7 @@ export default function Communication() {
   }
 
   async function updateTaskStatus(taskId, status) {
-    await base44.entities.Task.update(taskId, { status });
+    await api.Task.update(taskId, { status });
     loadData();
   }
 
@@ -271,10 +271,10 @@ export default function Communication() {
               <Select value={form.party_type} onValueChange={async v => {
                 setForm({ ...form, party_type: v, party_name: '', party_contact: '' });
                 if (v === 'client') {
-                  const data = await base44.entities.Client.filter({ company_id: companyId });
+                  const data = await api.Client.filter({ company_id: companyId });
                   setPartyOptions(data.map(c => ({ id: c.id, name: c.name, contact: c.phone || c.email || '' })));
                 } else if (v === 'vendor') {
-                  const data = await base44.entities.Vendor.filter({ company_id: companyId });
+                  const data = await api.Vendor.filter({ company_id: companyId });
                   setPartyOptions(data.map(v => ({ id: v.id, name: v.name, contact: v.phone || v.email || '' })));
                 }
               }}>

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { base44 } from '@/api/base44Client';
+import { api } from '@/api/adapter';
 import { getActiveCompanyId } from '@/lib/companyContext';
 import { 
   Package, ShoppingCart, Receipt, Wallet, AlertTriangle, 
@@ -44,13 +44,13 @@ export default function Dashboard() {
     }
 
     const [inventory, purchases, sales, transactions, quotations, banks, clients] = await Promise.all([
-      base44.entities.InventoryItem.filter({ company_id: companyId }),
-      base44.entities.PurchaseOrder.filter({ company_id: companyId }, '-created_date', 20),
-      base44.entities.SalesOrder.filter({ company_id: companyId }, '-created_date', 200),
-      base44.entities.Transaction.filter({ company_id: companyId }, '-created_date', 20),
-      base44.entities.Quotation.filter({ company_id: companyId }),
-      base44.entities.BankAccount.filter({ company_id: companyId }),
-      base44.entities.Client.filter({ company_id: companyId }),
+      api.InventoryItem.filter({ company_id: companyId }),
+      api.PurchaseOrder.filter({ company_id: companyId }, '-created_date', 20),
+      api.SalesOrder.filter({ company_id: companyId }, '-created_date', 200),
+      api.Transaction.filter({ company_id: companyId }, '-created_date', 20),
+      api.Quotation.filter({ company_id: companyId }),
+      api.BankAccount.filter({ company_id: companyId }),
+      api.Client.filter({ company_id: companyId }),
     ]);
 
     const lowStockItems = inventory.filter(i => i.quantity <= (i.low_stock_threshold || 5));
@@ -347,7 +347,7 @@ function NoCompanyState() {
   async function handleCreate() {
     if (!name.trim()) return;
     setCreating(true);
-    const company = await base44.entities.Company.create({ name: name.trim(), is_active: true });
+    const company = await api.Company.create({ name: name.trim(), is_active: true });
     const { setActiveCompanyId } = await import('@/lib/companyContext');
     setActiveCompanyId(company.id);
     window.location.reload();

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { base44 } from '@/api/base44Client';
+import { api, apiAuth } from '@/api/adapter';
 import { 
   Search, Bell, Settings, LogOut, Building2, ChevronDown, Plus, Menu, Wrench, Calculator, RefreshCw, CalendarDays, UserCircle, CalendarCheck, UsersRound, Banknote
 } from 'lucide-react';
@@ -28,9 +28,9 @@ export default function TopBar({ onMobileMenuToggle, onToolOpen }) {
   }, []);
 
   async function loadData() {
-    const me = await base44.auth.me();
+    const me = await apiAuth.me();
     setUser(me);
-    const companyList = await base44.entities.Company.list();
+    const companyList = await api.Company.list();
     setCompanies(companyList);
     const activeId = getActiveCompanyId();
     if (activeId) {
@@ -180,7 +180,7 @@ export default function TopBar({ onMobileMenuToggle, onToolOpen }) {
               Settings
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => base44.auth.logout()}>
+            <DropdownMenuItem onClick={() => apiAuth.logout()}>
               <LogOut className="w-4 h-4 mr-2" />
               Logout
             </DropdownMenuItem>

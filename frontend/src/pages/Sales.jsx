@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { base44 } from '@/api/base44Client';
+import { api } from '@/api/adapter';
 import { getActiveCompanyId } from '@/lib/companyContext';
 import { adToBs, getCurrentFiscalYear } from '@/lib/nepaliDate';
 import PageHeader from '../components/shared/PageHeader';
@@ -43,8 +43,8 @@ export default function Sales() {
   async function loadData() {
     setLoading(true);
     const [salesData, invData] = await Promise.all([
-      base44.entities.SalesOrder.filter({ company_id: companyId }, '-created_date', 500),
-      base44.entities.InventoryItem.filter({ company_id: companyId }),
+      api.SalesOrder.filter({ company_id: companyId }, '-created_date', 500),
+      api.InventoryItem.filter({ company_id: companyId }),
     ]);
     setOrders(salesData);
     setInventory(invData);
@@ -134,7 +134,7 @@ export default function Sales() {
     const subtotal = form.items.reduce((sum, i) => sum + (i.total || 0), 0) + totalLabor;
     const vatAmount = form.is_vat ? subtotal * 0.13 : 0;
 
-    await base44.entities.SalesOrder.create({
+    await api.SalesOrder.create({
       company_id: companyId,
       client_name: form.client_name,
       client_contact: form.client_contact,
@@ -154,9 +154,9 @@ export default function Sales() {
     });
 
     // Auto-create client
-    const existingClients = await base44.entities.Client.filter({ company_id: companyId, name: form.client_name });
+    const existingClients = await api.Client.filter({ company_id: companyId, name: form.client_name });
     if (existingClients.length === 0 && form.client_name) {
-      await base44.entities.Client.create({
+      await api.Client.create({
         company_id: companyId,
         name: form.client_name,
         phone: form.client_contact,
@@ -170,7 +170,7 @@ export default function Sales() {
       if (item.inventory_item_id) {
         const invItem = inventory.find(i => i.id === item.inventory_item_id);
         if (invItem) {
-          await base44.entities.InventoryItem.update(item.inventory_item_id, {
+          await api.InventoryItem.update(item.inventory_item_id, {
             quantity: Math.max(0, (invItem.quantity || 0) - (item.quantity || 0))
           });
         }

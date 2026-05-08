@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { base44 } from '@/api/base44Client';
+import { api } from '@/api/adapter';
 import { getActiveCompanyId, setActiveCompanyId } from '@/lib/companyContext';
 import PageHeader from '../components/shared/PageHeader';
 import { Button } from "@/components/ui/button";
@@ -26,8 +26,8 @@ export default function Settings() {
   async function loadData() {
     setLoading(true);
     const [companyList, userList] = await Promise.all([
-      base44.entities.Company.list(),
-      base44.entities.User.list(),
+      api.Company.list(),
+      Promise.resolve([]),
     ]);
     setCompanies(companyList);
     setUsers(userList);
@@ -35,7 +35,7 @@ export default function Settings() {
   }
 
   async function addCompany() {
-    await base44.entities.Company.create({ ...companyForm, is_active: true });
+    await api.Company.create({ ...companyForm, is_active: true });
     setCompanyForm({ name: '', address: '', phone: '', email: '', pan_vat: '', currency: 'NPR' });
     setShowAddCompany(false);
     loadData();
@@ -43,14 +43,14 @@ export default function Settings() {
 
   async function updateCompany() {
     if (!editingCompany) return;
-    await base44.entities.Company.update(editingCompany.id, editingCompany);
+    await api.Company.update(editingCompany.id, editingCompany);
     setEditingCompany(null);
     loadData();
   }
 
   async function deleteCompany(id) {
     if (!confirm('Are you sure you want to delete this company?')) return;
-    await base44.entities.Company.delete(id);
+    await api.Company.delete(id);
     if (getActiveCompanyId() === id) {
       const remaining = companies.filter(c => c.id !== id);
       if (remaining.length > 0) setActiveCompanyId(remaining[0].id);

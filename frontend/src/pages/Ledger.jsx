@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { base44 } from '@/api/base44Client';
+import { api } from '@/api/adapter';
 import { getActiveCompanyId } from '@/lib/companyContext';
 import { adToBs } from '@/lib/nepaliDate';
 import PageHeader from '../components/shared/PageHeader';
@@ -41,8 +41,8 @@ export default function Ledger() {
   async function loadData() {
     setLoading(true);
     const [accs, ents] = await Promise.all([
-      base44.entities.LedgerAccount.filter({ company_id: companyId, account_type: activeTab }),
-      base44.entities.LedgerEntry.filter({ company_id: companyId }, '-created_date', 50),
+      api.LedgerAccount.filter({ company_id: companyId, account_type: activeTab }),
+      api.LedgerEntry.filter({ company_id: companyId }, '-created_date', 50),
     ]);
     setAccounts(accs);
     setEntries(ents);
@@ -52,7 +52,7 @@ export default function Ledger() {
   async function createAccount() {
     const today = new Date().toISOString().split('T')[0];
     const bsDate = adToBs(new Date());
-    await base44.entities.LedgerAccount.create({
+    await api.LedgerAccount.create({
       ...newAccount,
       company_id: companyId,
       account_type: activeTab,
@@ -75,7 +75,7 @@ export default function Ledger() {
 
     const entryDate = newEntry.date_ad || today;
     const entryBs = adToBs(new Date(entryDate));
-    await base44.entities.LedgerEntry.create({
+    await api.LedgerEntry.create({
       company_id: companyId,
       account_id: showAccountDetail.id,
       date_ad: entryDate,
@@ -89,7 +89,7 @@ export default function Ledger() {
       is_locked: true,
     });
 
-    await base44.entities.LedgerAccount.update(showAccountDetail.id, { current_balance: newBalance });
+    await api.LedgerAccount.update(showAccountDetail.id, { current_balance: newBalance });
     setNewEntry({ description: '', debit: 0, credit: 0, reference_id: '', date_ad: new Date().toISOString().split('T')[0] });
     setShowNewEntry(false);
     loadData();
