@@ -5,7 +5,7 @@ import { Queue } from 'bull';
 import { QUEUE_NAMES } from '../../../core/queue/bull.client';
 import { adToBs } from '@easy-books/shared';
 
-interface PayrollResult {
+export interface PayrollResult {
   employeeId: string;
   employeeName: string;
   month: string;
