@@ -6,29 +6,60 @@ const apiClient = axios.create({
   headers: { 'Content-Type': 'application/json' },
 });
 
-apiClient.interceptors.response.use(
-  (res) => res,
-  async (error) => {
-    const original = error.config;
-    const isRefreshCall = original?.url?.includes('/auth/refresh');
+let isRefreshing = false;
+let waitingQueue: Array<(ok: boolean) => void> = [];
 
-    if (isRefreshCall || original?._retry) {
-      window.location.href = '/login';
+function drainQueue(ok: boolean) {
+  waitingQueue.forEach(cb => cb(ok));
+  waitingQueue = [];
+}
+
+function redirectToLogin() {
+  isRefreshing = false;
+  waitingQueue = [];
+  window.location.href = '/login';
+}
+
+apiClient.interceptors.response.use(
+  res => res,
+  async error => {
+    const original = error.config;
+
+    if (error.response?.status !== 401) return Promise.reject(error);
+
+    // Refresh endpoint itself returned 401 — no valid session, go to login
+    if (original?.url?.includes('/auth/refresh')) {
+      drainQueue(false);
+      redirectToLogin();
       return Promise.reject(error);
     }
 
-    if (error.response?.status === 401) {
-      original._retry = true;
-      try {
-        await apiClient.post('/api/v1/auth/refresh');
-        return apiClient(original);
-      } catch {
-        window.location.href = '/login';
-        return Promise.reject(error);
-      }
+    // Already retried this request — don't retry again
+    if (original?._retry) return Promise.reject(error);
+
+    original._retry = true;
+
+    // A refresh is already in progress — queue this request to retry when done
+    if (isRefreshing) {
+      return new Promise((resolve, reject) => {
+        waitingQueue.push(ok => {
+          if (ok) resolve(apiClient(original));
+          else reject(error);
+        });
+      });
     }
 
-    return Promise.reject(error);
+    isRefreshing = true;
+    try {
+      await apiClient.post('/api/v1/auth/refresh');
+      isRefreshing = false;
+      drainQueue(true);
+      return apiClient(original);
+    } catch {
+      drainQueue(false);
+      redirectToLogin();
+      return Promise.reject(error);
+    }
   },
 );
 
