@@ -10,15 +10,24 @@ apiClient.interceptors.response.use(
   (res) => res,
   async (error) => {
     const original = error.config;
-    if (error.response?.status === 401 && !original._retry) {
+    const isRefreshCall = original?.url?.includes('/auth/refresh');
+
+    if (isRefreshCall || original?._retry) {
+      window.location.href = '/login';
+      return Promise.reject(error);
+    }
+
+    if (error.response?.status === 401) {
       original._retry = true;
       try {
         await apiClient.post('/api/v1/auth/refresh');
         return apiClient(original);
       } catch {
         window.location.href = '/login';
+        return Promise.reject(error);
       }
     }
+
     return Promise.reject(error);
   },
 );

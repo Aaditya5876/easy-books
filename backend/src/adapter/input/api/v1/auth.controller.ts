@@ -1,5 +1,5 @@
 import { Controller, Post, Get, Body, Req, Res, UseGuards, Inject, HttpCode, HttpStatus, UnauthorizedException } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiBearerAuth, ApiBody } from '@nestjs/swagger';
 import { Request, Response } from 'express';
 import { LoginSchema, RegisterSchema, LoginDTO, RegisterDTO } from '@easy-books/shared';
 import { IAuthService, AUTH_SERVICE } from '../../../../domain/services/auth.service';
@@ -13,6 +13,7 @@ export class AuthController {
 
   @Post('register')
   @ApiOperation({ summary: 'Register new user and company' })
+  @ApiBody({ schema: { type: 'object', required: ['email', 'password', 'name', 'companyName'], properties: { email: { type: 'string', example: 'user@example.com' }, password: { type: 'string', example: 'password123' }, name: { type: 'string', example: 'John Doe' }, companyName: { type: 'string', example: 'My Company' } } } })
   async register(
     @Body(new ZodValidationPipe(RegisterSchema)) dto: RegisterDTO,
     @Res({ passthrough: true }) res: Response,
@@ -25,6 +26,7 @@ export class AuthController {
   @Post('login')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Login with email and password' })
+  @ApiBody({ schema: { type: 'object', required: ['email', 'password'], properties: { email: { type: 'string', example: 'user@example.com' }, password: { type: 'string', example: 'password123' } } } })
   async login(
     @Body(new ZodValidationPipe(LoginSchema)) dto: LoginDTO,
     @Res({ passthrough: true }) res: Response,
