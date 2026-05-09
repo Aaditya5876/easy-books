@@ -60,7 +60,7 @@ export class PettyCashServiceImpl {
     });
 
     const totalSpent = vouchers.reduce((sum, v) => sum + Number(v.amount), 0);
-    const byCategory = vouchers.reduce<Record<string, number>>((acc, v) => {
+    const byCategory = vouchers.reduce((acc: Record<string, number>, v) => {
       const cat = v.category ?? 'Uncategorized';
       acc[cat] = (acc[cat] ?? 0) + Number(v.amount);
       return acc;
