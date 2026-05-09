@@ -1,42 +1,142 @@
-**Welcome to your Base44 project** 
+# Easy Books — Local Setup Guide
 
-**About**
+## Prerequisites
 
-View and Edit  your app on [Base44.com](http://Base44.com) 
+Install these before starting:
 
-This project contains everything you need to run your app locally.
+- **Node.js** v18 or higher — https://nodejs.org
+- **PostgreSQL** v14 or higher — https://www.postgresql.org/download
+- **Git** — https://git-scm.com
 
-**Edit the code in your local development environment**
+---
 
-Any change pushed to the repo will also be reflected in the Base44 Builder.
+## Step 1 — Clone the repository
 
-**Prerequisites:** 
-
-1. Clone the repository using the project's Git URL 
-2. Navigate to the project directory
-3. Install dependencies: `npm install`
-4. Create an `.env.local` file and set the right environment variables
-
-```
-VITE_BASE44_APP_ID=your_app_id
-VITE_BASE44_APP_BASE_URL=your_backend_url
-
-e.g.
-VITE_BASE44_APP_ID=cbef744a8545c389ef439ea6
-VITE_BASE44_APP_BASE_URL=https://my-to-do-list-81bfaad7.base44.app
+```bash
+git clone https://github.com/Aaditya5876/easy-books.git
+cd easy-books
 ```
 
-Run the app: `npm run dev`
+---
 
-**Publish your changes**
+## Step 2 — Create the backend environment file
 
-Open [Base44.com](http://Base44.com) and click on Publish.
+Create a file called `.env` inside the `backend/` folder:
 
-**Docs & Support**
+```
+backend/.env
+```
 
-Documentation: [https://docs.base44.com/Integrations/Using-GitHub](https://docs.base44.com/Integrations/Using-GitHub)
+Paste this content into it and fill in your values:
 
-Support: [https://app.base44.com/support](https://app.base44.com/support)
+```env
+# Database — replace with your PostgreSQL connection string
+DATABASE_URL="postgresql://postgres:yourpassword@localhost:5432/easybooks"
 
+# JWT Secrets — use any long random strings (keep these secret)
+JWT_ACCESS_SECRET=your_access_secret_change_this
+JWT_REFRESH_SECRET=your_refresh_secret_change_this
 
-we are developing an application that can be used by every one; from small startsup to huge organzation. This software handles inventory for example; Analyze the project there are many other services. I have no idea about these. My collegues who is non-it has generated some code using Base44. Analyze the frontend; i think frontend is good. i need to focus on backend. Please analyze and tell me if backend has been implemented or not, check the databases. Few days back he was showing this software ,i noticed APIs were calling, so need to confirm on that. If there is no backend code that means he didnot downloaded the backend codes???? or it is handled. lets make a plan. We need to make this market ready in 3 months. so lets start. first lets ben on the same page. and we will discuss about the architecture, system design, etc.and lets be very proferssional.
+# Optional — defaults shown
+JWT_ACCESS_EXPIRES_IN=15m
+JWT_REFRESH_EXPIRES_IN=7d
+PORT=3000
+NODE_ENV=development
+```
+
+> **How to create the PostgreSQL database:**
+> Open a terminal and run:
+> ```bash
+> psql -U postgres
+> CREATE DATABASE easybooks;
+> \q
+> ```
+
+---
+
+## Step 3 — Install dependencies
+
+Run this once from the root folder (installs everything for frontend, backend, and shared):
+
+```bash
+npm install
+```
+
+---
+
+## Step 4 — Set up the database
+
+Run these from the root folder:
+
+```bash
+npm run migrate:dev --workspace=backend
+```
+
+This creates all the tables in your database.
+
+If it asks for a migration name, type anything like `init` and press Enter.
+
+---
+
+## Step 5 — Start the backend
+
+Open a terminal and run:
+
+```bash
+npm run dev:backend
+```
+
+Backend runs at: `http://localhost:3000`
+
+API docs (Swagger): `http://localhost:3000/api/docs`
+
+---
+
+## Step 6 — Start the frontend
+
+Open a **second terminal** and run:
+
+```bash
+npm run dev:frontend
+```
+
+Frontend runs at: `http://localhost:5173`
+
+Open `http://localhost:5173` in your browser.
+
+---
+
+## Step 7 — Register your first account
+
+Go to `http://localhost:5173/register` and create an account. This also creates your first company.
+
+---
+
+## Running both at once (optional)
+
+Instead of Steps 5 and 6 separately, you can run everything with one command:
+
+```bash
+npm run dev
+```
+
+This starts both backend and frontend together.
+
+---
+
+## Common issues
+
+**"password authentication failed for user postgres"**
+Your DATABASE_URL username/password doesn't match your PostgreSQL installation. Check what user you set during PostgreSQL install and update `backend/.env`.
+
+**"database easybooks does not exist"**
+You skipped creating the database. Run the `psql` commands in Step 2.
+
+**"Cannot find module" or TypeScript errors in IDE**
+These are IDE warnings — they don't affect running the app. The app will still work.
+
+**Frontend shows blank page or login loops**
+Make sure the backend is running on port 3000 before opening the frontend.
+
+**Port 3000 already in use**
+Add `PORT=3001` to `backend/.env` and update `frontend/src/api/client.ts` — change `http://localhost:3000` to `http://localhost:3001`.
