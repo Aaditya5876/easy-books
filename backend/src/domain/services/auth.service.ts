@@ -3,6 +3,7 @@ import { LoginDTO, RegisterDTO } from '@easy-books/shared';
 export interface AuthTokens {
   accessToken: string;
   refreshToken: string;
+  userId: string;
 }
 
 export interface IAuthService {

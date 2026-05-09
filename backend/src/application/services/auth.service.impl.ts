@@ -82,6 +82,6 @@ export class AuthServiceImpl implements IAuthService {
     const hashedRefresh = await bcrypt.hash(refreshToken, 10);
     await this.userRepo.updateRefreshToken(userId, hashedRefresh);
 
-    return { accessToken, refreshToken };
+    return { accessToken, refreshToken, userId };
   }
 }

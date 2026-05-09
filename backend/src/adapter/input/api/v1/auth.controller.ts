@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Body, Req, Res, UseGuards, Inject, HttpCode, HttpStatus } from '@nestjs/common';
+import { Controller, Post, Get, Body, Req, Res, UseGuards, Inject, HttpCode, HttpStatus, UnauthorizedException } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { Request, Response } from 'express';
 import { LoginSchema, RegisterSchema, LoginDTO, RegisterDTO } from '@easy-books/shared';
@@ -41,7 +41,7 @@ export class AuthController {
     const userId = req.cookies?.userId;
     const refreshToken = req.cookies?.refreshToken;
     if (!userId || !refreshToken) {
-      return res.status(HttpStatus.UNAUTHORIZED).json({ message: 'No refresh token' });
+      throw new UnauthorizedException('No refresh token');
     }
     const tokens = await this.authService.refresh(userId, refreshToken);
     this.setTokenCookies(res, tokens);
@@ -69,16 +69,23 @@ export class AuthController {
     return this.authService.me(req.user.sub);
   }
 
-  private setTokenCookies(res: Response, tokens: { accessToken: string; refreshToken: string }) {
+  private setTokenCookies(res: Response, tokens: { accessToken: string; refreshToken: string; userId: string }) {
+    const secure = process.env.NODE_ENV === 'production';
     res.cookie('accessToken', tokens.accessToken, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure,
       sameSite: 'strict',
       maxAge: 15 * 60 * 1000,
     });
     res.cookie('refreshToken', tokens.refreshToken, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure,
+      sameSite: 'strict',
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+    });
+    res.cookie('userId', tokens.userId, {
+      httpOnly: true,
+      secure,
       sameSite: 'strict',
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
