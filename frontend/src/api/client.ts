@@ -27,10 +27,12 @@ apiClient.interceptors.response.use(
 
     if (error.response?.status !== 401) return Promise.reject(error);
 
-    // Refresh endpoint itself returned 401 — no valid session, go to login
-    if (original?.url?.includes('/auth/refresh')) {
-      drainQueue(false);
-      redirectToLogin();
+    const url: string = original?.url || '';
+
+    // Auth endpoints: never try to refresh, just propagate the error.
+    // AuthContext handles /auth/me failures by setting isAuthenticated=false.
+    if (url.includes('/auth/')) {
+      if (url.includes('/auth/refresh')) drainQueue(false);
       return Promise.reject(error);
     }
 
