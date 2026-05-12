@@ -10,6 +10,9 @@ export const RegisterSchema = z.object({
   password: z.string().min(6),
   name: z.string().min(1),
   companyName: z.string().min(1),
+  businessType: z.string().optional(),
+  registrationNumber: z.string().optional(),
+  defaultUnitType: z.string().optional(),
 });
 
 export const RefreshTokenSchema = z.object({

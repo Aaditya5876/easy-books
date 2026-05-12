@@ -12,7 +12,15 @@ export default function Login() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [mode, setMode] = useState('login');
-  const [regForm, setRegForm] = useState({ name: '', email: '', password: '', companyName: '' });
+  const [regForm, setRegForm] = useState({ 
+    name: '', 
+    email: '', 
+    password: '', 
+    companyName: '',
+    businessType: '',
+    registrationNumber: '',
+    defaultUnitType: '',
+  });
 
   async function handleLogin(e) {
     e.preventDefault();
@@ -82,7 +90,7 @@ export default function Login() {
               </Button>
             </form>
           ) : (
-            <form onSubmit={handleRegister} className="space-y-4">
+            <form onSubmit={handleRegister} className="space-y-3">
               <div className="space-y-1.5">
                 <Label>Your Name</Label>
                 <Input placeholder="Ram Sharma" value={regForm.name}
@@ -92,6 +100,21 @@ export default function Login() {
                 <Label>Company Name</Label>
                 <Input placeholder="My Company Pvt. Ltd." value={regForm.companyName}
                   onChange={e => setRegForm({ ...regForm, companyName: e.target.value })} required />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Business Type (Optional)</Label>
+                <Input placeholder="e.g. pharmacy, tea-shop, clothes" value={regForm.businessType}
+                  onChange={e => setRegForm({ ...regForm, businessType: e.target.value })} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Registration Number (Optional)</Label>
+                <Input placeholder="e.g. PAN/Company Reg No." value={regForm.registrationNumber}
+                  onChange={e => setRegForm({ ...regForm, registrationNumber: e.target.value })} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Default Unit Type (Optional)</Label>
+                <Input placeholder="e.g. pcs, meter, tablet, strip" value={regForm.defaultUnitType}
+                  onChange={e => setRegForm({ ...regForm, defaultUnitType: e.target.value })} />
               </div>
               <div className="space-y-1.5">
                 <Label>Email</Label>

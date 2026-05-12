@@ -149,11 +149,11 @@ model User {
   password     String
   name         String
   role         UserRole @default(STAFF)
-  companyId    String?
-  company      Company? @relation(fields: [companyId], references: [id])
   refreshToken String?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+
+  userCompanies UserCompany[]
 
   @@map("users")
 }
@@ -166,9 +166,12 @@ model Company {
   phone            String?
   email            String?
   panVat           String?
+  registrationNumber String?
   logoUrl          String?
   currency         String   @default("NPR")
   fiscalYearStart  String?
+  businessType     String?  // "pharmacy", "tea-shop", "clothes", "bakery", etc.
+  defaultUnitType  String?  // "pcs", "meter", "tablet", "strip", "bottle", etc.
   isVatRegistered  Boolean  @default(false)
   vatSubmissionFreq String? // "MONTHLY" | "TRIMESTERLY"
   isActive         Boolean  @default(true)
@@ -181,7 +184,7 @@ model Company {
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
-  users               User[]
+  userCompanies   UserCompany[]
   employees           Employee[]
   attendance          Attendance[]
   payrolls            Payroll[]
@@ -207,6 +210,20 @@ model Company {
   payrollSettings     CompanyPayrollSettings?
 
   @@map("companies")
+}
+
+model UserCompany {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  companyId String
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  isDefault Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, companyId])
+  @@map("user_companies")
 }
 
 model CompanyPayrollSettings {

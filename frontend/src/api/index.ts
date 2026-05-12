@@ -147,6 +147,8 @@ export const taskApi = {
 // Companies
 export const companyApi = {
   list: () => apiClient.get('/api/v1/companies'),
+  userCompanies: () => apiClient.get('/api/v1/companies/user-companies'),
+  getDefault: () => apiClient.get('/api/v1/companies/default'),
   get: (id: string) => apiClient.get(`/api/v1/companies/${id}`),
   create: (data: object) => apiClient.post('/api/v1/companies', data),
   update: (id: string, data: object) => apiClient.put(`/api/v1/companies/${id}`, data),

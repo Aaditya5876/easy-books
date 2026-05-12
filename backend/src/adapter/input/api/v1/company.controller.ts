@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Patch, Delete, Body, Param, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Put, Patch, Delete, Body, Param, UseGuards, Req } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { CompanyServiceImpl } from '../../../../application/services/company.service.impl';
 import { JwtAuthGuard } from '../../../../modules/guards/jwt-auth.guard';
@@ -11,9 +11,21 @@ export class CompanyController {
   constructor(private readonly service: CompanyServiceImpl) {}
 
   @Get()
-  @ApiOperation({ summary: 'Get all companies' })
-  findAll() {
-    return this.service.findAll();
+  @ApiOperation({ summary: 'Get all companies for current user' })
+  findAll(@Req() req: any) {
+    return this.service.findAll(req.user.sub);
+  }
+
+  @Get('user-companies')
+  @ApiOperation({ summary: 'Get user companies with default flag' })
+  getUserCompanies(@Req() req: any) {
+    return this.service.getUserCompanies(req.user.sub);
+  }
+
+  @Get('default')
+  @ApiOperation({ summary: 'Get default company for current user' })
+  getDefaultCompany(@Req() req: any) {
+    return this.service.getDefaultCompany(req.user.sub);
   }
 
   @Get(':id')
@@ -24,7 +36,7 @@ export class CompanyController {
 
   @Post()
   @ApiOperation({ summary: 'Create a company' })
-  create(@Body() body: any) {
+  create(@Body() body: any, @Req() req: any) {
     return this.service.create(body);
   }
 

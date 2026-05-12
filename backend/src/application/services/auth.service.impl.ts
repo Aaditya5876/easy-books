@@ -21,7 +21,12 @@ export class AuthServiceImpl implements IAuthService {
     if (existing) throw new ConflictException('Email already registered');
 
     const company = await this.prisma.company.create({
-      data: { name: dto.companyName },
+      data: { 
+        name: dto.companyName,
+        businessType: dto.businessType,
+        registrationNumber: dto.registrationNumber,
+        defaultUnitType: dto.defaultUnitType,
+      },
     });
 
     const hashed = await bcrypt.hash(dto.password, 10);
@@ -30,7 +35,15 @@ export class AuthServiceImpl implements IAuthService {
       password: hashed,
       name: dto.name,
       role: 'ADMIN',
-      companyId: company.id,
+    });
+
+    // Create user-company association with isDefault=true
+    await this.prisma.userCompany.create({
+      data: {
+        userId: user.id,
+        companyId: company.id,
+        isDefault: true,
+      },
     });
 
     return this.issueTokens(user.id, user.email, user.role);
@@ -63,7 +76,21 @@ export class AuthServiceImpl implements IAuthService {
   async me(userId: string) {
     const user = await this.userRepo.findById(userId);
     if (!user) throw new UnauthorizedException();
-    return { id: user.id, email: user.email, name: user.name, role: user.role, companyId: user.companyId };
+    
+    // Get default company for user
+    const defaultUC = await this.prisma.userCompany.findFirst({
+      where: { userId, isDefault: true },
+      include: { company: true },
+    });
+    
+    return { 
+      id: user.id, 
+      email: user.email, 
+      name: user.name, 
+      role: user.role, 
+      defaultCompanyId: defaultUC?.company.id || null,
+      defaultCompany: defaultUC?.company || null,
+    };
   }
 
   private async issueTokens(userId: string, email: string, role: string): Promise<AuthTokens> {

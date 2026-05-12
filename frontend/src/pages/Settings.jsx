@@ -16,7 +16,17 @@ export default function Settings() {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showAddCompany, setShowAddCompany] = useState(false);
-  const [companyForm, setCompanyForm] = useState({ name: '', address: '', phone: '', email: '', pan_vat: '', currency: 'NPR' });
+  const [companyForm, setCompanyForm] = useState({ 
+    name: '', 
+    address: '', 
+    phone: '', 
+    email: '', 
+    pan_vat: '', 
+    registration_number: '',
+    business_type: '',
+    default_unit_type: '',
+    currency: 'NPR' 
+  });
   const [editingCompany, setEditingCompany] = useState(null);
 
   useEffect(() => {
@@ -36,7 +46,7 @@ export default function Settings() {
 
   async function addCompany() {
     await api.Company.create({ ...companyForm, is_active: true });
-    setCompanyForm({ name: '', address: '', phone: '', email: '', pan_vat: '', currency: 'NPR' });
+    setCompanyForm({ name: '', address: '', phone: '', email: '', pan_vat: '', registration_number: '', business_type: '', default_unit_type: '', currency: 'NPR' });
     setShowAddCompany(false);
     loadData();
   }
@@ -150,10 +160,13 @@ export default function Settings() {
 
       {/* Add Company Dialog */}
       <Dialog open={showAddCompany} onOpenChange={setShowAddCompany}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md max-h-96 overflow-y-auto">
           <DialogHeader><DialogTitle>Add Company</DialogTitle></DialogHeader>
           <div className="space-y-3">
             <div><Label>Company Name *</Label><Input value={companyForm.name} onChange={e => setCompanyForm({ ...companyForm, name: e.target.value })} /></div>
+            <div><Label>Business Type</Label><Input placeholder="e.g. pharmacy, tea-shop" value={companyForm.business_type} onChange={e => setCompanyForm({ ...companyForm, business_type: e.target.value })} /></div>
+            <div><Label>Registration Number</Label><Input value={companyForm.registration_number} onChange={e => setCompanyForm({ ...companyForm, registration_number: e.target.value })} /></div>
+            <div><Label>Default Unit Type</Label><Input placeholder="e.g. pcs, meter, tablet" value={companyForm.default_unit_type} onChange={e => setCompanyForm({ ...companyForm, default_unit_type: e.target.value })} /></div>
             <div><Label>Address</Label><Input value={companyForm.address} onChange={e => setCompanyForm({ ...companyForm, address: e.target.value })} /></div>
             <div className="grid grid-cols-2 gap-3">
               <div><Label>Phone</Label><Input value={companyForm.phone} onChange={e => setCompanyForm({ ...companyForm, phone: e.target.value })} /></div>
@@ -170,11 +183,14 @@ export default function Settings() {
 
       {/* Edit Company Dialog */}
       <Dialog open={!!editingCompany} onOpenChange={() => setEditingCompany(null)}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md max-h-96 overflow-y-auto">
           <DialogHeader><DialogTitle>Edit Company</DialogTitle></DialogHeader>
           {editingCompany && (
             <div className="space-y-3">
               <div><Label>Company Name</Label><Input value={editingCompany.name} onChange={e => setEditingCompany({ ...editingCompany, name: e.target.value })} /></div>
+              <div><Label>Business Type</Label><Input placeholder="e.g. pharmacy, tea-shop" value={editingCompany.business_type || ''} onChange={e => setEditingCompany({ ...editingCompany, business_type: e.target.value })} /></div>
+              <div><Label>Registration Number</Label><Input value={editingCompany.registration_number || ''} onChange={e => setEditingCompany({ ...editingCompany, registration_number: e.target.value })} /></div>
+              <div><Label>Default Unit Type</Label><Input placeholder="e.g. pcs, meter, tablet" value={editingCompany.default_unit_type || ''} onChange={e => setEditingCompany({ ...editingCompany, default_unit_type: e.target.value })} /></div>
               <div><Label>Address</Label><Input value={editingCompany.address || ''} onChange={e => setEditingCompany({ ...editingCompany, address: e.target.value })} /></div>
               <div className="grid grid-cols-2 gap-3">
                 <div><Label>Phone</Label><Input value={editingCompany.phone || ''} onChange={e => setEditingCompany({ ...editingCompany, phone: e.target.value })} /></div>

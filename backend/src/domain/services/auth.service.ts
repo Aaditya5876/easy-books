@@ -11,7 +11,14 @@ export interface IAuthService {
   login(dto: LoginDTO): Promise<AuthTokens>;
   refresh(userId: string, refreshToken: string): Promise<AuthTokens>;
   logout(userId: string): Promise<void>;
-  me(userId: string): Promise<{ id: string; email: string; name: string; role: string; companyId: string | null }>;
+  me(userId: string): Promise<{ 
+    id: string; 
+    email: string; 
+    name: string; 
+    role: string; 
+    defaultCompanyId: string | null;
+    defaultCompany: any;
+  }>;
 }
 
 export const AUTH_SERVICE = Symbol('IAuthService');

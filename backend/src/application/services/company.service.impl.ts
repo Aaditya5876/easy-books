@@ -1,12 +1,34 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../../core/db/psql/prisma.client';
 
 @Injectable()
 export class CompanyServiceImpl {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findAll() {
-    return this.prisma.company.findMany({ orderBy: { createdAt: 'desc' } });
+  async findAll(userId: string) {
+    const userCompanies = await this.prisma.userCompany.findMany({
+      where: { userId },
+      include: { company: true },
+      orderBy: [{ isDefault: 'desc' }, { company: { createdAt: 'desc' } }],
+    });
+    return userCompanies.map(uc => ({ ...uc.company, isDefault: uc.isDefault }));
+  }
+
+  async getUserCompanies(userId: string) {
+    const userCompanies = await this.prisma.userCompany.findMany({
+      where: { userId },
+      include: { company: true },
+      orderBy: [{ isDefault: 'desc' }, { company: { createdAt: 'desc' } }],
+    });
+    return userCompanies.map(uc => ({ ...uc.company, isDefault: uc.isDefault, userCompanyId: uc.id }));
+  }
+
+  async getDefaultCompany(userId: string) {
+    const defaultUC = await this.prisma.userCompany.findFirst({
+      where: { userId, isDefault: true },
+      include: { company: true },
+    });
+    return defaultUC?.company || null;
   }
 
   async findOne(id: string) {
