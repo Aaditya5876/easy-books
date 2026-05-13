@@ -17,6 +17,7 @@ import Purchase from './pages/Purchase';
 import Sales from './pages/Sales';
 import Memo from './pages/Memo';
 import Communication from './pages/Communication';
+import Workflow from './pages/Workflow';
 import Templates from './pages/Templates';
 import Calculator from './pages/Calculator';
 import CalendarPage from './pages/CalendarPage';
@@ -54,6 +55,7 @@ const AuthenticatedApp = () => {
         <Route path="/purchase" element={<Purchase />} />
         <Route path="/sales" element={<Sales />} />
         <Route path="/memo" element={<Memo />} />
+        <Route path="/workflow" element={<Workflow />} />
         <Route path="/communication" element={<Communication />} />
         <Route path="/templates" element={<Templates />} />
         <Route path="/calculator" element={<Calculator />} />

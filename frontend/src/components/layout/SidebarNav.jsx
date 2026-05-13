@@ -3,7 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { 
   LayoutDashboard, BookOpen, ArrowLeftRight, Users, UserCheck, 
   Package, ShoppingCart, Receipt, FileText, MessageSquare, 
-  FileSpreadsheet, UserCircle, CalendarCheck, Banknote,
+  FileSpreadsheet, UserCircle, CalendarCheck, Banknote, CheckSquare,
   ChevronLeft, ChevronRight, Building2, ChevronDown
 } from 'lucide-react';
 import { cn } from "@/lib/utils";
@@ -37,6 +37,7 @@ const navSections = [
     label: 'Records',
     items: [
       { icon: FileText, label: 'Memo', path: '/memo' },
+      { icon: CheckSquare, label: 'Workflow', path: '/workflow' },
       { icon: MessageSquare, label: 'Communication', path: '/communication' },
       { icon: FileSpreadsheet, label: 'Templates', path: '/templates' },
     ]
