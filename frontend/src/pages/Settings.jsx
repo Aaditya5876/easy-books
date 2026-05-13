@@ -9,7 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter
 } from "@/components/ui/dialog";
-import { Building2, Plus, Trash2, Save } from 'lucide-react';
+import { Building2, Plus, Trash2, Save, ImagePlus, X } from 'lucide-react';
 
 export default function Settings() {
   const [companies, setCompanies] = useState([]);
@@ -25,9 +25,11 @@ export default function Settings() {
     registration_number: '',
     business_type: '',
     default_unit_type: '',
-    currency: 'NPR' 
+    currency: 'NPR',
+    logo_url: ''
   });
   const [editingCompany, setEditingCompany] = useState(null);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -45,15 +47,22 @@ export default function Settings() {
   }
 
   async function addCompany() {
-    await api.Company.create({ ...companyForm, is_active: true });
-    setCompanyForm({ name: '', address: '', phone: '', email: '', pan_vat: '', registration_number: '', business_type: '', default_unit_type: '', currency: 'NPR' });
+    await api.Company.create({ 
+      ...companyForm, 
+      logo_url: companyForm.logo_url,
+      is_active: true 
+    });
+    setCompanyForm({ name: '', address: '', phone: '', email: '', pan_vat: '', registration_number: '', business_type: '', default_unit_type: '', currency: 'NPR', logo_url: '' });
     setShowAddCompany(false);
     loadData();
   }
 
   async function updateCompany() {
     if (!editingCompany) return;
-    await api.Company.update(editingCompany.id, editingCompany);
+    await api.Company.update(editingCompany.id, {
+      ...editingCompany,
+      logo_url: editingCompany.logo_url
+    });
     setEditingCompany(null);
     loadData();
   }
@@ -66,6 +75,25 @@ export default function Settings() {
       if (remaining.length > 0) setActiveCompanyId(remaining[0].id);
     }
     loadData();
+  }
+
+  async function handleLogoUpload(e, isEditing = false) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingLogo(true);
+    try {
+      // For now, create a local URL. In production, you'd upload to a cloud storage
+      const file_url = URL.createObjectURL(file);
+      if (isEditing && editingCompany) {
+        setEditingCompany({ ...editingCompany, logo_url: file_url });
+      } else {
+        setCompanyForm({ ...companyForm, logo_url: file_url });
+      }
+    } catch (error) {
+      alert('Failed to upload logo');
+    } finally {
+      setUploadingLogo(false);
+    }
   }
 
   if (loading) return <div className="flex items-center justify-center py-20"><div className="w-8 h-8 border-4 border-primary/20 border-t-primary rounded-full animate-spin" /></div>;
@@ -89,8 +117,12 @@ export default function Settings() {
             {companies.map(c => (
               <div key={c.id} className="bg-card rounded-xl border p-5 flex items-start justify-between">
                 <div className="flex items-start gap-4">
-                  <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center">
-                    <Building2 className="w-6 h-6 text-primary" />
+                  <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center overflow-hidden">
+                    {c.logo_url ? (
+                      <img src={c.logo_url} alt={c.name} className="w-full h-full object-cover" />
+                    ) : (
+                      <Building2 className="w-6 h-6 text-primary" />
+                    )}
                   </div>
                   <div>
                     <h3 className="font-semibold">{c.name}</h3>
@@ -163,6 +195,23 @@ export default function Settings() {
         <DialogContent className="max-w-md max-h-96 overflow-y-auto">
           <DialogHeader><DialogTitle>Add Company</DialogTitle></DialogHeader>
           <div className="space-y-3">
+            <div>
+              <Label className="text-sm font-medium mb-2 block">Company Logo</Label>
+              {companyForm.logo_url ? (
+                <div className="relative w-16 h-16">
+                  <img src={companyForm.logo_url} alt="logo preview" className="w-16 h-16 rounded-lg object-cover border shadow-sm" />
+                  <button type="button" onClick={() => setCompanyForm(f => ({ ...f, logo_url: '' }))} className="absolute -top-2 -right-2 bg-destructive text-destructive-foreground rounded-full w-6 h-6 flex items-center justify-center shadow-md hover:scale-110 transition-transform">
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              ) : (
+                <label className="flex flex-col items-center justify-center w-16 h-16 border-2 border-dashed border-muted-foreground/25 rounded-lg cursor-pointer hover:border-primary/50 hover:bg-primary/5 transition-colors">
+                  <ImagePlus className="w-4 h-4 text-muted-foreground mb-1" />
+                  <span className="text-xs text-muted-foreground text-center">Logo</span>
+                  <input type="file" accept="image/*" className="hidden" onChange={(e) => handleLogoUpload(e, false)} disabled={uploadingLogo} />
+                </label>
+              )}
+            </div>
             <div><Label>Company Name *</Label><Input value={companyForm.name} onChange={e => setCompanyForm({ ...companyForm, name: e.target.value })} /></div>
             <div><Label>Business Type</Label><Input placeholder="e.g. pharmacy, tea-shop" value={companyForm.business_type} onChange={e => setCompanyForm({ ...companyForm, business_type: e.target.value })} /></div>
             <div><Label>Registration Number</Label><Input value={companyForm.registration_number} onChange={e => setCompanyForm({ ...companyForm, registration_number: e.target.value })} /></div>
@@ -187,6 +236,23 @@ export default function Settings() {
           <DialogHeader><DialogTitle>Edit Company</DialogTitle></DialogHeader>
           {editingCompany && (
             <div className="space-y-3">
+              <div>
+                <Label className="text-sm font-medium mb-2 block">Company Logo</Label>
+                {editingCompany.logo_url ? (
+                  <div className="relative w-16 h-16">
+                    <img src={editingCompany.logo_url} alt="logo preview" className="w-16 h-16 rounded-lg object-cover border shadow-sm" />
+                    <button type="button" onClick={() => setEditingCompany({ ...editingCompany, logo_url: '' })} className="absolute -top-2 -right-2 bg-destructive text-destructive-foreground rounded-full w-6 h-6 flex items-center justify-center shadow-md hover:scale-110 transition-transform">
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                ) : (
+                  <label className="flex flex-col items-center justify-center w-16 h-16 border-2 border-dashed border-muted-foreground/25 rounded-lg cursor-pointer hover:border-primary/50 hover:bg-primary/5 transition-colors">
+                    <ImagePlus className="w-4 h-4 text-muted-foreground mb-1" />
+                    <span className="text-xs text-muted-foreground text-center">Logo</span>
+                    <input type="file" accept="image/*" className="hidden" onChange={(e) => handleLogoUpload(e, true)} disabled={uploadingLogo} />
+                  </label>
+                )}
+              </div>
               <div><Label>Company Name</Label><Input value={editingCompany.name} onChange={e => setEditingCompany({ ...editingCompany, name: e.target.value })} /></div>
               <div><Label>Business Type</Label><Input placeholder="e.g. pharmacy, tea-shop" value={editingCompany.business_type || ''} onChange={e => setEditingCompany({ ...editingCompany, business_type: e.target.value })} /></div>
               <div><Label>Registration Number</Label><Input value={editingCompany.registration_number || ''} onChange={e => setEditingCompany({ ...editingCompany, registration_number: e.target.value })} /></div>

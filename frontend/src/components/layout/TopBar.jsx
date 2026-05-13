@@ -65,7 +65,11 @@ export default function TopBar({ onMobileMenuToggle, onToolOpen }) {
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" className="gap-2 font-medium">
-              <Building2 className="w-4 h-4 text-primary" />
+              {activeCompany?.logo_url ? (
+                <img src={activeCompany.logo_url} alt={activeCompany.name} className="w-6 h-6 rounded-md object-cover" />
+              ) : (
+                <Building2 className="w-4 h-4 text-primary" />
+              )}
               <span className="hidden sm:inline max-w-[160px] truncate">
                 {activeCompany?.name || 'Select Company'}
               </span>

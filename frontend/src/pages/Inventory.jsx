@@ -27,9 +27,10 @@ export default function Inventory() {
   const hasFilters = Object.values(filters).some(v => v);
   const [showAdd, setShowAdd] = useState(false);
   const [form, setForm] = useState({
-    brand: '', model_no: '', description: '', application: '',
-    quantity: 0, unit: 'Piece', unit_purchase_price: 0, unit_selling_price: 0,
-    stock_location: '', low_stock_threshold: 5, aging_days: 90, supplier_name: '', image_url: ''
+    item_name: '', brand: '', model_no: '', description: '', application: '',
+    quantity: '', unit: 'Piece', unit_purchase_price: '', unit_selling_price: '',
+    stock_location: '', low_stock_threshold: '5', aging_days: '90', supplier_name: '', image_url: '',
+    expiry_date: '', expiry_alert_days: ''
   });
   const [uploadingImage, setUploadingImage] = useState(false);
   const [selectedItem, setSelectedItem] = useState(null);
@@ -84,7 +85,10 @@ export default function Inventory() {
   };
 
   const handleUpdateClick = () => {
-    if (!selectedItem) return;
+    if (!selectedItem) {
+      alert('Please select an item from the table first by clicking on a row.');
+      return;
+    }
     setUpdateForm({
       unit_selling_price: selectedItem.unit_selling_price || 0,
       unit_purchase_price: selectedItem.unit_purchase_price || 0,
@@ -118,12 +122,18 @@ export default function Inventory() {
 
   async function handleUpdateSubmit() {
     if (!selectedItem) return;
-    await api.InventoryItem.update(selectedItem.id, {
-      unit_selling_price: updateForm.unit_selling_price,
-      unit_purchase_price: updateForm.unit_purchase_price,
-      stock_location: updateForm.stock_location,
-      image_url: updateForm.image_url,
-    });
+    const payload = {};
+    if (updateForm.unit_selling_price !== '') payload.unit_selling_price = updateForm.unit_selling_price;
+    if (updateForm.unit_purchase_price !== '') payload.unit_purchase_price = updateForm.unit_purchase_price;
+    if (updateForm.stock_location) payload.stock_location = updateForm.stock_location;
+    if (updateForm.image_url) payload.image_url = updateForm.image_url;
+
+    if (Object.keys(payload).length === 0) {
+      alert('Update at least one field before saving.');
+      return;
+    }
+
+    await api.InventoryItem.update(selectedItem.id, payload);
     setShowUpdateDialog(false);
     setSelectedItem(null);
     loadItems();
@@ -145,13 +155,21 @@ export default function Inventory() {
       company_id: companyId,
       date_of_purchase: today,
       date_of_purchase_bs: bsDate.formatted,
+      item_name: form.item_name,
+      quantity: form.quantity === '' ? 0 : parseFloat(form.quantity),
+      unit_purchase_price: form.unit_purchase_price === '' ? 0 : parseFloat(form.unit_purchase_price),
+      unit_selling_price: form.unit_selling_price === '' ? 0 : parseFloat(form.unit_selling_price),
+      low_stock_threshold: form.low_stock_threshold === '' ? 5 : parseInt(form.low_stock_threshold),
+      aging_days: form.aging_days === '' ? 90 : parseInt(form.aging_days),
+      expiry_alert_days: form.expiry_alert_days === '' ? null : parseInt(form.expiry_alert_days),
     });
     setForm({
-      brand: '', model_no: '', description: '', application: '',
-      quantity: 0, unit: 'Piece', unit_purchase_price: 0, unit_selling_price: 0,
-      stock_location: '', low_stock_threshold: 5, aging_days: 90, supplier_name: '', image_url: ''
-      });
-      setShowAdd(false);
+      item_name: '', brand: '', model_no: '', description: '', application: '',
+      quantity: '', unit: 'Piece', unit_purchase_price: '', unit_selling_price: '',
+      stock_location: '', low_stock_threshold: '5', aging_days: '90', supplier_name: '', image_url: '',
+      expiry_date: '', expiry_alert_days: ''
+    });
+    setShowAdd(false);
     loadItems();
   }
 
@@ -172,10 +190,13 @@ export default function Inventory() {
 
   const columns = [
 
+    { key: 'item_name', label: 'Name', render: (row) => (
+      <span className="font-medium max-w-[200px] truncate block">{row.item_name || '—'}</span>
+    )},
     { key: 'brand', label: 'Brand' },
     { key: 'model_no', label: 'Model No.' },
-    { key: 'description', label: 'Description', render: (row) => (
-      <span className="font-medium max-w-[200px] truncate block">{row.description}</span>
+    { key: 'description', label: 'Details', render: (row) => (
+      <span className="font-medium max-w-[200px] truncate block">{row.description || '—'}</span>
     )},
     { key: 'application', label: 'Application' },
     { key: 'quantity', label: 'Qty', render: (row) => {
@@ -218,7 +239,7 @@ export default function Inventory() {
         onAdd={() => setShowAdd(true)}
         addLabel="Add Stock"
       >
-        <Button onClick={handleUpdateClick} variant="outline" className="gap-2" disabled={!selectedItem}>
+        <Button onClick={handleUpdateClick} variant="outline" className="gap-2">
           <Tag className="w-4 h-4" />
           Update
         </Button>
@@ -288,46 +309,70 @@ export default function Inventory() {
 
       {/* Update Price/Location/Image Dialog */}
       <Dialog open={showUpdateDialog} onOpenChange={setShowUpdateDialog}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Update Item — {selectedItem?.description}</DialogTitle>
+        <DialogContent className="max-w-lg max-h-[85vh] overflow-hidden">
+          <DialogHeader className="pb-2 border-b border-muted-foreground/10">
+            <DialogTitle className="flex items-center gap-2">
+              <Tag className="w-5 h-5 text-primary" />
+              Update Item — {selectedItem?.description}
+            </DialogTitle>
+            <p className="text-sm text-muted-foreground">Modify pricing, location, or image for this inventory item.</p>
           </DialogHeader>
-          <div className="space-y-4">
+          <div className="space-y-4 overflow-y-auto max-h-[calc(85vh-120px)] py-4">
             <div>
-              <Label>Item Image</Label>
+              <Label className="text-sm font-medium mb-2 block">Product Image</Label>
               {updateForm.image_url ? (
-                <div className="relative w-24 h-24 mt-1">
-                  <img src={updateForm.image_url} alt="preview" className="w-24 h-24 rounded-lg object-cover border" />
-                  <button type="button" onClick={() => setUpdateForm(f => ({ ...f, image_url: '' }))} className="absolute -top-1.5 -right-1.5 bg-destructive text-destructive-foreground rounded-full w-5 h-5 flex items-center justify-center">
+                <div className="relative w-24 h-24">
+                  <img src={updateForm.image_url} alt="preview" className="w-24 h-24 rounded-lg object-cover border shadow-sm" />
+                  <button type="button" onClick={() => setUpdateForm(f => ({ ...f, image_url: '' }))} className="absolute -top-2 -right-2 bg-destructive text-destructive-foreground rounded-full w-6 h-6 flex items-center justify-center shadow-md hover:scale-110 transition-transform">
                     <X className="w-3 h-3" />
                   </button>
                 </div>
               ) : (
-                <label className="mt-1 flex items-center gap-2 cursor-pointer border border-dashed rounded-lg p-3 hover:bg-muted transition-colors">
-                  <ImagePlus className="w-4 h-4 text-muted-foreground" />
-                  <span className="text-sm text-muted-foreground">{uploadingUpdateImage ? 'Uploading...' : 'Click to upload image'}</span>
+                <label className="flex flex-col items-center justify-center w-24 h-24 border-2 border-dashed border-muted-foreground/25 rounded-lg cursor-pointer hover:border-primary/50 hover:bg-primary/5 transition-colors">
+                  <ImagePlus className="w-5 h-5 text-muted-foreground mb-1" />
+                  <span className="text-xs text-muted-foreground text-center">Upload<br/>image</span>
                   <input type="file" accept="image/*" className="hidden" onChange={handleUpdateImageUpload} disabled={uploadingUpdateImage} />
                 </label>
               )}
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 gap-4">
               <div>
-                <Label>Purchase Price (NPR)</Label>
-                <Input type="number" value={updateForm.unit_purchase_price} onChange={e => setUpdateForm(f => ({ ...f, unit_purchase_price: parseFloat(e.target.value) || 0 }))} />
+                <Label className="text-sm font-medium">Purchase Price (NPR)</Label>
+                <Input 
+                  type="number" 
+                  value={updateForm.unit_purchase_price} 
+                  onChange={e => setUpdateForm(f => ({ ...f, unit_purchase_price: e.target.value === '' ? '' : parseFloat(e.target.value) || 0 }))} 
+                  placeholder="0.00"
+                  className="mt-1"
+                />
               </div>
               <div>
-                <Label>Selling Price (NPR)</Label>
-                <Input type="number" value={updateForm.unit_selling_price} onChange={e => setUpdateForm(f => ({ ...f, unit_selling_price: parseFloat(e.target.value) || 0 }))} />
+                <Label className="text-sm font-medium">Selling Price (NPR)</Label>
+                <Input 
+                  type="number" 
+                  value={updateForm.unit_selling_price} 
+                  onChange={e => setUpdateForm(f => ({ ...f, unit_selling_price: e.target.value === '' ? '' : parseFloat(e.target.value) || 0 }))} 
+                  placeholder="0.00"
+                  className="mt-1"
+                />
               </div>
             </div>
             <div>
-              <Label>Stock Location</Label>
-              <Input value={updateForm.stock_location} onChange={e => setUpdateForm(f => ({ ...f, stock_location: e.target.value }))} placeholder="e.g. Shelf A" />
+              <Label className="text-sm font-medium">Stock Location</Label>
+              <Input 
+                value={updateForm.stock_location} 
+                onChange={e => setUpdateForm(f => ({ ...f, stock_location: e.target.value }))} 
+                placeholder="e.g. Shelf A-3"
+                className="mt-1"
+              />
             </div>
           </div>
-          <DialogFooter>
+          <DialogFooter className="border-t pt-4">
             <Button variant="outline" onClick={() => setShowUpdateDialog(false)}>Cancel</Button>
-            <Button onClick={handleUpdateSubmit}>Save Changes</Button>
+            <Button onClick={handleUpdateSubmit} className="gap-2">
+              <Tag className="w-4 h-4" />
+              Save Changes
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -378,114 +423,236 @@ export default function Inventory() {
 
       {/* Add Item Dialog */}
       <Dialog open={showAdd} onOpenChange={setShowAdd}>
-        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Add Inventory Item</DialogTitle>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-hidden">
+          <DialogHeader className="pb-2 border-b border-muted-foreground/10">
+            <DialogTitle className="flex items-center gap-2">
+              <Package className="w-5 h-5 text-primary" />
+              Add New Inventory Item
+            </DialogTitle>
+            <p className="text-sm text-muted-foreground">Fill in the details for your new inventory item. All fields are optional.</p>
           </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label>Item Image</Label>
+          <div className="flex gap-6 max-h-[calc(90vh-120px)] overflow-hidden">
+            {/* Left Column - Image */}
+            <div className="w-32 shrink-0">
+              <Label className="text-sm font-medium mb-2 block">Product Image</Label>
               {form.image_url ? (
-                <div className="relative w-24 h-24 mt-1">
-                  <img src={form.image_url} alt="preview" className="w-24 h-24 rounded-lg object-cover border" />
-                  <button type="button" onClick={() => setForm(f => ({ ...f, image_url: '' }))} className="absolute -top-1.5 -right-1.5 bg-destructive text-destructive-foreground rounded-full w-5 h-5 flex items-center justify-center">
+                <div className="relative">
+                  <img src={form.image_url} alt="preview" className="w-32 h-32 rounded-lg object-cover border shadow-sm" />
+                  <button type="button" onClick={() => setForm(f => ({ ...f, image_url: '' }))} className="absolute -top-2 -right-2 bg-destructive text-destructive-foreground rounded-full w-6 h-6 flex items-center justify-center shadow-md hover:scale-110 transition-transform">
                     <X className="w-3 h-3" />
                   </button>
                 </div>
               ) : (
-                <label className="mt-1 flex items-center gap-2 cursor-pointer border border-dashed rounded-lg p-3 hover:bg-muted transition-colors">
-                  <ImagePlus className="w-4 h-4 text-muted-foreground" />
-                  <span className="text-sm text-muted-foreground">{uploadingImage ? 'Uploading...' : 'Click to upload image'}</span>
+                <label className="flex flex-col items-center justify-center w-32 h-32 border-2 border-dashed border-muted-foreground/25 rounded-lg cursor-pointer hover:border-primary/50 hover:bg-primary/5 transition-colors">
+                  <ImagePlus className="w-6 h-6 text-muted-foreground mb-1" />
+                  <span className="text-xs text-muted-foreground text-center">Click to<br/>upload</span>
                   <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} disabled={uploadingImage} />
                 </label>
               )}
             </div>
-            <div>
-              <Label>Description *</Label>
-              <Input value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label>Brand</Label>
-                <Input value={form.brand} onChange={e => setForm({ ...form, brand: e.target.value })} />
-              </div>
-              <div>
-                <Label>Model No.</Label>
-                <Input value={form.model_no} onChange={e => setForm({ ...form, model_no: e.target.value })} />
-              </div>
-            </div>
-            <div>
-              <Label>Application</Label>
-              <Input value={form.application} onChange={e => setForm({ ...form, application: e.target.value })} />
-            </div>
-            <div className="grid grid-cols-3 gap-3">
-              <div>
-                <Label>Quantity</Label>
-                <Input type="number" value={form.quantity} onChange={e => setForm({ ...form, quantity: e.target.value === '' ? '' : parseFloat(e.target.value) })} />
-              </div>
-              <div>
-                <Label>Unit</Label>
-                {!form.unit || UNITS.includes(form.unit) ? (
-                  <Select value={form.unit} onValueChange={v => {
-                    if (v === '__custom__') setForm({ ...form, unit: '__custom__' });
-                    else setForm({ ...form, unit: v });
-                  }}>
-                    <SelectTrigger><SelectValue placeholder="Select unit" /></SelectTrigger>
-                    <SelectContent>
-                      {UNITS.map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}
-                      <SelectItem value="__custom__">Custom...</SelectItem>
-                    </SelectContent>
-                  </Select>
-                ) : (
-                  <div className="flex gap-1">
-                    <Input value={form.unit === '__custom__' ? '' : form.unit} onChange={e => setForm({ ...form, unit: e.target.value })} placeholder="Enter custom unit" autoFocus />
-                    <Button type="button" variant="outline" size="sm" className="shrink-0" onClick={() => setForm({ ...form, unit: 'Piece' })}>↩</Button>
+
+            {/* Right Column - Form Fields */}
+            <div className="flex-1 overflow-y-auto pr-2 max-h-[calc(90vh-160px)]">
+              <div className="space-y-4">
+                {/* Basic Info */}
+                <div className="space-y-3">
+                  <h4 className="text-sm font-medium text-foreground border-b pb-1">Basic Information</h4>
+                              <div>
+                    <Label className="text-sm">Item Name</Label>
+                    <Input 
+                      value={form.item_name} 
+                      onChange={e => setForm({ ...form, item_name: e.target.value })} 
+                      placeholder="e.g. Paracetamol 500mg"
+                      className="mt-1"
+                    />
                   </div>
-                )}
-              </div>
-              <div>
-                <Label>Low Stock Alert</Label>
-                <Input type="number" value={form.low_stock_threshold} onChange={e => setForm({ ...form, low_stock_threshold: parseInt(e.target.value) || 5 })} />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label>Purchase Price (NPR)</Label>
-                <Input type="number" value={form.unit_purchase_price} onChange={e => setForm({ ...form, unit_purchase_price: e.target.value === '' ? '' : parseFloat(e.target.value) })} />
-              </div>
-              <div>
-                <Label>Selling Price (NPR)</Label>
-                <Input type="number" value={form.unit_selling_price} onChange={e => setForm({ ...form, unit_selling_price: e.target.value === '' ? '' : parseFloat(e.target.value) })} />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label>Stock Location</Label>
-                <Input value={form.stock_location} onChange={e => setForm({ ...form, stock_location: e.target.value })} />
-              </div>
-              <div>
-                <Label>Supplier Name</Label>
-                <Input value={form.supplier_name} onChange={e => setForm({ ...form, supplier_name: e.target.value })} />
-              </div>
-            </div>
-            <div>
-              <Label>Aging Alert (Days)</Label>
-              <Input type="number" value={form.aging_days} onChange={e => setForm({ ...form, aging_days: parseInt(e.target.value) || 90 })} />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label>Date of Expiry</Label>
-                <Input type="date" value={form.expiry_date || ''} onChange={e => setForm({ ...form, expiry_date: e.target.value })} />
-              </div>
-              <div>
-                <Label>Expiry Alert (Days Before)</Label>
-                <Input type="number" placeholder="e.g. 30" value={form.expiry_alert_days || ''} onChange={e => setForm({ ...form, expiry_alert_days: parseInt(e.target.value) || '' })} />
+                  <div>
+                    <Label className="text-sm">Item Description</Label>
+                    <Input 
+                      value={form.description} 
+                      onChange={e => setForm({ ...form, description: e.target.value })} 
+                      placeholder="Optional details, composition or notes"
+                      className="mt-1"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <Label className="text-sm">Brand</Label>
+                      <Input 
+                        value={form.brand} 
+                        onChange={e => setForm({ ...form, brand: e.target.value })} 
+                        placeholder="e.g. Cipla"
+                        className="mt-1"
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-sm">Model/Part Number</Label>
+                      <Input 
+                        value={form.model_no} 
+                        onChange={e => setForm({ ...form, model_no: e.target.value })} 
+                        placeholder="e.g. PARA500"
+                        className="mt-1"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <Label className="text-sm">Usage/Purpose</Label>
+                    <Input 
+                      value={form.application} 
+                      onChange={e => setForm({ ...form, application: e.target.value })} 
+                      placeholder="e.g. Pain relief, Fever reduction"
+                      className="mt-1"
+                    />
+                  </div>
+                </div>
+
+                {/* Quantity & Pricing */}
+                <div className="space-y-3">
+                  <h4 className="text-sm font-medium text-foreground border-b pb-1">Quantity & Pricing</h4>
+                  <div className="grid grid-cols-3 gap-3">
+                    <div>
+                      <Label className="text-sm">Quantity</Label>
+                      <Input 
+                        type="number" 
+                        value={form.quantity} 
+                        onChange={e => setForm({ ...form, quantity: e.target.value })} 
+                        placeholder="0"
+                        className="mt-1"
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-sm">Unit</Label>
+                      {!form.unit || UNITS.includes(form.unit) ? (
+                        <Select value={form.unit} onValueChange={v => {
+                          if (v === '__custom__') setForm({ ...form, unit: '__custom__' });
+                          else setForm({ ...form, unit: v });
+                        }}>
+                          <SelectTrigger className="mt-1">
+                            <SelectValue placeholder="Select unit" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {UNITS.map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}
+                            <SelectItem value="__custom__">Custom...</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <div className="flex gap-2 mt-1">
+                          <Input 
+                            value={form.unit === '__custom__' ? '' : form.unit} 
+                            onChange={e => setForm({ ...form, unit: e.target.value })} 
+                            placeholder="Enter custom unit" 
+                            autoFocus 
+                          />
+                          <Button type="button" variant="outline" size="sm" onClick={() => setForm({ ...form, unit: 'Piece' })}>
+                            ↩
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                    <div>
+                      <Label className="text-sm">Low Stock Alert</Label>
+                      <Input 
+                        type="number" 
+                        value={form.low_stock_threshold} 
+                        onChange={e => setForm({ ...form, low_stock_threshold: e.target.value })} 
+                        placeholder="5"
+                        className="mt-1"
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <Label className="text-sm">Purchase Price (NPR)</Label>
+                      <Input 
+                        type="number" 
+                        value={form.unit_purchase_price} 
+                        onChange={e => setForm({ ...form, unit_purchase_price: e.target.value })} 
+                        placeholder="0.00"
+                        className="mt-1"
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-sm">Selling Price (NPR)</Label>
+                      <Input 
+                        type="number" 
+                        value={form.unit_selling_price} 
+                        onChange={e => setForm({ ...form, unit_selling_price: e.target.value })} 
+                        placeholder="0.00"
+                        className="mt-1"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Storage & Supplier */}
+                <div className="space-y-3">
+                  <h4 className="text-sm font-medium text-foreground border-b pb-1">Storage & Supplier</h4>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <Label className="text-sm">Stock Location</Label>
+                      <Input 
+                        value={form.stock_location} 
+                        onChange={e => setForm({ ...form, stock_location: e.target.value })} 
+                        placeholder="e.g. Shelf A-3"
+                        className="mt-1"
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-sm">Supplier Name</Label>
+                      <Input 
+                        value={form.supplier_name} 
+                        onChange={e => setForm({ ...form, supplier_name: e.target.value })} 
+                        placeholder="e.g. ABC Pharmaceuticals"
+                        className="mt-1"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <Label className="text-sm">Aging Alert (Days)</Label>
+                    <Input 
+                      type="number" 
+                      value={form.aging_days} 
+                      onChange={e => setForm({ ...form, aging_days: e.target.value })} 
+                      placeholder="90"
+                      className="mt-1"
+                    />
+                  </div>
+                </div>
+
+                {/* Expiry */}
+                <div className="space-y-3">
+                  <h4 className="text-sm font-medium text-foreground border-b pb-1">Expiry Information</h4>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <Label className="text-sm">Expiry Date</Label>
+                      <Input 
+                        type="date" 
+                        value={form.expiry_date || ''} 
+                        onChange={e => setForm({ ...form, expiry_date: e.target.value })} 
+                        className="mt-1"
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-sm">Alert Before Expiry (Days)</Label>
+                      <Input 
+                        type="number" 
+                        placeholder="30" 
+                        value={form.expiry_alert_days || ''} 
+                        onChange={e => setForm({ ...form, expiry_alert_days: e.target.value })} 
+                        className="mt-1"
+                      />
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
-          <DialogFooter>
+          <DialogFooter className="border-t pt-4">
             <Button variant="outline" onClick={() => setShowAdd(false)}>Cancel</Button>
-            <Button onClick={addItem} disabled={!form.description}>Add Item</Button>
+            <Button onClick={addItem} className="gap-2">
+              <Package className="w-4 h-4" />
+              Add Item
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
