@@ -30,6 +30,7 @@ const navSections = [
       { icon: Package, label: 'Inventory', path: '/inventory' },
       { icon: ShoppingCart, label: 'Purchase', path: '/purchase' },
       { icon: Receipt, label: 'Sales', path: '/sales' },
+      { icon: CheckSquare, label: 'Workflow', path: '/workflow' },
     ]
   },
 
@@ -37,7 +38,6 @@ const navSections = [
     label: 'Records',
     items: [
       { icon: FileText, label: 'Memo', path: '/memo' },
-      { icon: CheckSquare, label: 'Workflow', path: '/workflow' },
       { icon: MessageSquare, label: 'Communication', path: '/communication' },
       { icon: FileSpreadsheet, label: 'Templates', path: '/templates' },
     ]

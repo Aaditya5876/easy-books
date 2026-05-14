@@ -23,6 +23,13 @@ export default function Dashboard() {
     bankBalance: 0,
     pendingQuotations: 0,
     activeClients: 0,
+    totalExpenses: 0,
+    profitLoss: 0,
+    receivableTotal: 0,
+    payableTotal: 0,
+    overdueTasks: 0,
+    chequePayableDue: 0,
+    chequeReceivableDue: 0,
   });
   const [inventoryItems, setInventoryItems] = useState([]);
   const [recentActivities, setRecentActivities] = useState([]);
@@ -31,6 +38,13 @@ export default function Dashboard() {
   const [inventorySoldValue, setInventorySoldValue] = useState(0);
   const [inventoryInHandValue, setInventoryInHandValue] = useState(0);
   const [agingItems, setAgingItems] = useState([]);
+  const [tasks, setTasks] = useState([]);
+  const [chequeDuePayable, setChequeDuePayable] = useState([]);
+  const [chequeDueReceivable, setChequeDueReceivable] = useState([]);
+  const [workflowReminders, setWorkflowReminders] = useState([]);
+  const [financeChartData, setFinanceChartData] = useState([]);
+  const [receivablePayableData, setReceivablePayableData] = useState([]);
+  const [expenseTypeData, setExpenseTypeData] = useState([]);
   const companyId = getActiveCompanyId();
 
   useEffect(() => {
@@ -43,32 +57,55 @@ export default function Dashboard() {
       return;
     }
 
-    const [inventory, purchases, sales, transactions, quotations, banks, clients] = await Promise.all([
+    const [inventory, purchases, sales, transactions, quotations, banks, clients, tasks] = await Promise.all([
       api.InventoryItem.filter({ company_id: companyId }),
       api.PurchaseOrder.filter({ company_id: companyId }, '-created_date', 20),
       api.SalesOrder.filter({ company_id: companyId }, '-created_date', 200),
-      api.Transaction.filter({ company_id: companyId }, '-created_date', 20),
+      api.Transaction.filter({ company_id: companyId }, '-created_date', 200),
       api.Quotation.filter({ company_id: companyId }),
       api.BankAccount.filter({ company_id: companyId }),
       api.Client.filter({ company_id: companyId }),
+      api.Task.filter({ company_id: companyId }),
     ]);
 
     const lowStockItems = inventory.filter(i => i.quantity <= (i.low_stock_threshold || 5));
     const totalPurchaseAmt = purchases.reduce((sum, p) => sum + (p.total_amount || 0), 0);
     const totalSalesAmt = sales.reduce((sum, s) => sum + (s.total_amount || 0), 0);
-    
+    const totalExpenses = transactions.filter(t => t.category === 'expense').reduce((sum, t) => sum + (t.amount || 0), 0);
+    const totalIncome = transactions.filter(t => t.category === 'income').reduce((sum, t) => sum + (t.amount || 0), 0);
+    const receivableTotal = totalIncome;
+    const payableTotal = totalExpenses;
+    const profitLossValue = totalSalesAmt - totalPurchaseAmt - totalExpenses;
+
     const cashTransactions = transactions.filter(t => t.type === 'cash');
     const cashIn = cashTransactions.filter(t => t.category === 'income').reduce((s, t) => s + (t.amount || 0), 0);
     const cashOut = cashTransactions.filter(t => t.category === 'expense').reduce((s, t) => s + (t.amount || 0), 0);
-    
     const bankBalance = banks.reduce((sum, b) => sum + (b.current_balance || 0), 0);
 
-    // Quotation stats by remark
     const quotationRemarks = ['Quoted', 'Work-done', 'Cancelled', 'Revised', 'Billed'];
     const qStats = quotationRemarks.map(remark => ({
       name: remark,
       value: quotations.filter(q => q.remark === remark).length
     })).filter(q => q.value > 0);
+
+    const today = new Date();
+    const todayString = today.toISOString().split('T')[0];
+    const overdueTasks = tasks.filter(t => t.status !== 'completed' && t.due_date && new Date(t.due_date) < today);
+    const dueTodayTasks = tasks.filter(t => t.status !== 'completed' && t.due_date === todayString);
+    const upcomingAppointments = tasks
+      .filter(t => t.status !== 'completed' && t.due_date && new Date(t.due_date) >= today && new Date(t.due_date) <= new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000))
+      .sort((a, b) => new Date(a.due_date) - new Date(b.due_date));
+
+    const chequeDue = transactions.filter(t => t.type === 'cheque' && t.cheque_date && t.status !== 'completed');
+    const chequePayableDueList = chequeDue.filter(t => t.category === 'expense').sort((a, b) => new Date(a.cheque_date) - new Date(b.cheque_date)).slice(0, 5);
+    const chequeReceivableDueList = chequeDue.filter(t => t.category === 'income').sort((a, b) => new Date(a.cheque_date) - new Date(b.cheque_date)).slice(0, 5);
+
+    const expenseTypeGroups = transactions.filter(t => t.category === 'expense').reduce((acc, t) => {
+      const type = t.expense_type || 'other';
+      acc[type] = (acc[type] || 0) + (t.amount || 0);
+      return acc;
+    }, {});
+    const expenseTypes = Object.entries(expenseTypeGroups).map(([name, value]) => ({ name, value }));
 
     setStats({
       totalInventory: inventory.length,
@@ -79,12 +116,22 @@ export default function Dashboard() {
       bankBalance,
       pendingQuotations: quotations.filter(q => q.remark === 'Quoted').length,
       activeClients: clients.filter(c => c.crm_status === 'active').length,
+      totalExpenses,
+      profitLoss: profitLossValue,
+      receivableTotal,
+      payableTotal,
+      overdueTasks: overdueTasks.length,
+      chequePayableDue: chequePayableDueList.length,
+      chequeReceivableDue: chequeReceivableDueList.length,
     });
 
     setInventoryItems(inventory.sort((a, b) => (a.quantity || 0) - (b.quantity || 0)).slice(0, 5));
     setQuotationStats(qStats);
+    setTasks(tasks);
+    setChequeDuePayable(chequePayableDueList);
+    setChequeDueReceivable(chequeReceivableDueList);
+    setWorkflowReminders([ ...overdueTasks.slice(0, 3), ...dueTodayTasks.slice(0, 3), ...upcomingAppointments.slice(0, 3) ]);
 
-    // Top selling items
     const itemSalesMap = {};
     sales.forEach(order => {
       (order.items || []).forEach(item => {
@@ -97,15 +144,10 @@ export default function Dashboard() {
     const topSelling = Object.values(itemSalesMap).sort((a, b) => b.value - a.value).slice(0, 10);
     setTopSellingItems(topSelling);
 
-    // Inventory sold value = total of all sales
     setInventorySoldValue(totalSalesAmt);
-
-    // Inventory in hand value
     const inHandValue = inventory.reduce((sum, i) => sum + ((i.quantity || 0) * (i.unit_selling_price || 0)), 0);
     setInventoryInHandValue(inHandValue);
 
-    // Aging inventory
-    const today = new Date();
     const aging = inventory.filter(i => {
       if (!i.date_of_purchase) return false;
       const days = Math.floor((today - new Date(i.date_of_purchase)) / (1000 * 60 * 60 * 24));
@@ -113,7 +155,18 @@ export default function Dashboard() {
     });
     setAgingItems(aging);
 
-    // Build recent activities
+    setFinanceChartData([
+      { name: 'Sales', value: totalSalesAmt },
+      { name: 'Purchases', value: totalPurchaseAmt },
+      { name: 'Expenses', value: totalExpenses },
+      { name: 'Profit', value: profitLossValue },
+    ]);
+    setReceivablePayableData([
+      { name: 'Receivable', value: receivableTotal },
+      { name: 'Payable', value: payableTotal },
+    ]);
+    setExpenseTypeData(expenseTypes.length ? expenseTypes : [{ name: 'Unknown', value: totalExpenses }]);
+
     const activities = [
       ...purchases.slice(0, 5).map(p => ({
         type: 'purchase',
@@ -198,7 +251,141 @@ export default function Dashboard() {
         <StatCard icon={TrendingUp} label="Active Clients" value={stats.activeClients} />
       </div>
 
+      {/* Decision Snapshot */}
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+        <StatCard
+          icon={Receipt}
+          label="Profit / Loss"
+          value={`NPR ${stats.profitLoss.toLocaleString()}`}
+          trend={stats.profitLoss >= 0 ? 'Profit' : 'Loss'}
+          trendUp={stats.profitLoss >= 0}
+        />
+        <StatCard
+          icon={FileText}
+          label="Overdue Workflow"
+          value={stats.overdueTasks}
+          trend={stats.overdueTasks > 0 ? 'Action needed' : 'On track'}
+          trendUp={stats.overdueTasks === 0}
+        />
+        <StatCard
+          icon={ShoppingCart}
+          label="Cheque Payable Due"
+          value={stats.chequePayableDue}
+          trend={stats.chequePayableDue > 0 ? 'Review now' : 'No due cheques'}
+          trendUp={stats.chequePayableDue === 0}
+        />
+        <StatCard
+          icon={Wallet}
+          label="Cheque Receivable Due"
+          value={stats.chequeReceivableDue}
+          trend={stats.chequeReceivableDue > 0 ? 'Collect soon' : 'No due cheques'}
+          trendUp={stats.chequeReceivableDue === 0}
+        />
+      </div>
 
+      {/* Finance Charts */}
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+        <div className="bg-card rounded-xl border border-border p-6">
+          <h3 className="text-sm font-semibold text-foreground mb-4">Sales, Purchases, Expenses & Profit</h3>
+          {financeChartData.length > 0 ? (
+            <ResponsiveContainer width="100%" height={260}>
+              <BarChart data={financeChartData} margin={{ top: 0, right: 0, left: -10, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                <YAxis tick={{ fontSize: 11 }} />
+                <Tooltip formatter={(value) => [`NPR ${value.toLocaleString()}`, 'Amount']} />
+                <Bar dataKey="value" radius={[6, 6, 0, 0]}>
+                  {financeChartData.map((entry) => {
+                    const color = entry.name === 'Profit' ? 'hsl(160, 60%, 45%)' : entry.name === 'Expenses' ? 'hsl(0, 84%, 60%)' : 'hsl(217, 71%, 53%)';
+                    return <Cell key={entry.name} fill={color} />;
+                  })}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="flex items-center justify-center h-[260px] text-muted-foreground text-sm">Insufficient financial data</div>
+          )}
+        </div>
+
+        <div className="bg-card rounded-xl border border-border p-6">
+          <h3 className="text-sm font-semibold text-foreground mb-4">Receivable vs Payable</h3>
+          {receivablePayableData.length > 0 ? (
+            <ResponsiveContainer width="100%" height={260}>
+              <PieChart>
+                <Pie
+                  data={receivablePayableData}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={50}
+                  outerRadius={80}
+                  paddingAngle={4}
+                  dataKey="value"
+                >
+                  {receivablePayableData.map((_, idx) => (
+                    <Cell key={idx} fill={CHART_COLORS[idx % CHART_COLORS.length]} />
+                  ))}
+                </Pie>
+                <Tooltip formatter={(value) => [`NPR ${value.toLocaleString()}`, 'Amount']} />
+              </PieChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="flex items-center justify-center h-[260px] text-muted-foreground text-sm">No receivable/payable data</div>
+          )}
+          <div className="grid grid-cols-2 gap-2 mt-4 text-xs text-muted-foreground">
+            {receivablePayableData.map((row) => (
+              <div key={row.name} className="rounded-lg bg-muted/40 p-2">
+                <p className="font-semibold text-foreground">{row.name}</p>
+                <p>NPR {row.value.toLocaleString()}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="bg-card rounded-xl border border-border p-6">
+          <h3 className="text-sm font-semibold text-foreground mb-4">Workflow & Cheque Reminders</h3>
+          <div className="space-y-4">
+            <div>
+              <p className="text-xs text-muted-foreground uppercase tracking-[0.2em] mb-2">Workflow reminders</p>
+              {workflowReminders.length > 0 ? (
+                <div className="space-y-2">
+                  {workflowReminders.slice(0, 5).map((task, idx) => (
+                    <div key={`${task.id}-${idx}`} className="rounded-2xl bg-slate-50 p-3 text-sm">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="font-medium truncate">{task.title || 'Untitled task'}</p>
+                        <span className="text-[11px] text-muted-foreground">{task.due_date}</span>
+                      </div>
+                      <p className="text-xs text-muted-foreground truncate">{task.assigned_name || task.assigned_to || 'Unassigned'}</p>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground">No workflow reminders for the next 7 days.</p>
+              )}
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground uppercase tracking-[0.2em] mb-2">Cheque due alerts</p>
+              {chequeDuePayable.length + chequeDueReceivable.length > 0 ? (
+                <div className="space-y-2">
+                  {chequeDuePayable.slice(0, 2).map(txn => (
+                    <div key={`payable-${txn.id}`} className="rounded-2xl bg-red-50 p-3 text-sm">
+                      <p className="font-medium">Payable: {txn.party_name || txn.description}</p>
+                      <p className="text-xs text-muted-foreground">Due {txn.cheque_date} · NPR {txn.amount?.toLocaleString()}</p>
+                    </div>
+                  ))}
+                  {chequeDueReceivable.slice(0, 2).map(txn => (
+                    <div key={`receivable-${txn.id}`} className="rounded-2xl bg-emerald-50 p-3 text-sm">
+                      <p className="font-medium">Receivable: {txn.party_name || txn.description}</p>
+                      <p className="text-xs text-muted-foreground">Due {txn.cheque_date} · NPR {txn.amount?.toLocaleString()}</p>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground">No cheque reminders pending.</p>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
 
       {/* Inventory Summary Row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
