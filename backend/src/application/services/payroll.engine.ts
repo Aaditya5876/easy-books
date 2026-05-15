@@ -3,7 +3,8 @@ import { PrismaService } from '../../../core/db/psql/prisma.client';
 import { InjectQueue } from '@nestjs/bull';
 import { Queue } from 'bull';
 import { QUEUE_NAMES } from '../../../core/queue/bull.client';
-import { adToBs } from '@easy-books/shared';
+import { adToBs, bsToAd } from '@easy-books/shared';
+import { LedgerPostingService } from './ledger-posting.service';
 
 export interface PayrollResult {
   employeeId: string;
@@ -19,6 +20,8 @@ export interface PayrollResult {
   ssfEmployee: number;
   ssfEmployer: number;
   pit: number;
+  dashainBonus: number;
+  isDashainBonus: boolean;
   netSalary: number;
 }
 
@@ -30,12 +33,15 @@ function calculateSSF(basicSalary: number, employeeRate: number, employerRate: n
 }
 
 // Annual PIT on annual gross — returns monthly portion
-function calculateMonthlyPIT(monthlyGross: number): number {
+function calculateMonthlyPIT(monthlyGross: number, isMarried: boolean): number {
   const annual = monthlyGross * 12;
   let tax = 0;
 
+  // Married threshold is Rs 600,000 vs Rs 500,000 for single
+  const firstSlabLimit = isMarried ? 600000 : 500000;
+
   const slabs = [
-    { upTo: 500000, rate: 0.01 },
+    { upTo: firstSlabLimit, rate: 0.01 },
     { upTo: 700000, rate: 0.10 },
     { upTo: 1000000, rate: 0.20 },
     { upTo: 2000000, rate: 0.30 },
@@ -54,11 +60,24 @@ function calculateMonthlyPIT(monthlyGross: number): number {
   return Number((tax / 12).toFixed(2));
 }
 
+// Maps dashainBonusMonth setting (name or number string) to BS month number
+function getDashainMonthNumber(value: string | null | undefined): number | null {
+  if (!value) return null;
+  const num = parseInt(value, 10);
+  if (!isNaN(num) && num >= 1 && num <= 12) return num;
+  const names: Record<string, number> = {
+    baishakh: 1, jestha: 2, ashadh: 3, shrawan: 4, bhadra: 5, aswin: 6,
+    kartik: 7, mangsir: 8, poush: 9, magh: 10, falgun: 11, chaitra: 12,
+  };
+  return names[value.toLowerCase()] ?? null;
+}
+
 @Injectable()
 export class PayrollEngineService {
   constructor(
     private readonly prisma: PrismaService,
     @InjectQueue(QUEUE_NAMES.PAYROLL) private readonly payrollQueue: Queue,
+    private readonly ledgerPosting: LedgerPostingService,
   ) {}
 
   async processMonthlyPayroll(companyId: string, month: string): Promise<{ queued: number }> {
@@ -87,17 +106,18 @@ export class PayrollEngineService {
     const empRate = Number(settings?.ssfEmployeeRate ?? 11);
     const emplRate = Number(settings?.ssfEmployerRate ?? 20);
 
-    // Parse BS month — attendance stored by AD date range
+    // Parse BS month and convert to AD date range using proper library (not ±57)
     const [bsYear, bsMonth] = month.split('-').map(Number);
+    const startAd = bsToAd(`${bsYear}-${String(bsMonth).padStart(2, '0')}-01`);
+    const nextBsYear = bsMonth === 12 ? bsYear + 1 : bsYear;
+    const nextBsMonth = bsMonth === 12 ? 1 : bsMonth + 1;
+    const endAd = bsToAd(`${nextBsYear}-${String(nextBsMonth).padStart(2, '0')}-01`);
 
     const attendance = await this.prisma.attendance.findMany({
       where: {
         employeeId,
         companyId,
-        date: {
-          gte: new Date(`${bsYear - 57}-${String(bsMonth).padStart(2, '0')}-01`),
-          lt: new Date(`${bsYear - 57}-${String(bsMonth + 1).padStart(2, '0')}-01`),
-        },
+        date: { gte: startAd, lt: endAd },
       },
     });
 
@@ -117,9 +137,15 @@ export class PayrollEngineService {
     const overtimeAmount = Number((overtimeHoursTotal * overtimeRatePerHour).toFixed(2));
 
     const ssf = ssfApplicable ? calculateSSF(basicSalary, empRate, emplRate) : { employee: 0, employer: 0 };
-    const pit = pitApplicable ? calculateMonthlyPIT(grossSalary) : 0;
+    const isMarried = (employee as any).maritalStatus === 'MARRIED';
+    const pit = pitApplicable ? calculateMonthlyPIT(grossSalary, isMarried) : 0;
 
-    const netSalary = Number((grossSalary - absentDeduction - ssf.employee - pit + overtimeAmount).toFixed(2));
+    // Dashain bonus — 1 month basic salary in the configured month
+    const dashainMonthNum = getDashainMonthNumber(settings?.dashainBonusMonth ?? null);
+    const isDashainBonus = !!(settings?.dashainBonusApplicable && dashainMonthNum && bsMonth === dashainMonthNum);
+    const dashainBonus = isDashainBonus ? basicSalary : 0;
+
+    const netSalary = Number((grossSalary - absentDeduction - ssf.employee - pit + overtimeAmount + dashainBonus).toFixed(2));
 
     await this.prisma.payroll.upsert({
       where: { employeeId_month: { employeeId, month } },
@@ -138,6 +164,7 @@ export class PayrollEngineService {
         ssfEmployer: ssf.employer,
         pit,
         netSalary,
+        isDashainBonus,
         status: 'PROCESSED',
       },
       update: {
@@ -152,6 +179,7 @@ export class PayrollEngineService {
         ssfEmployer: ssf.employer,
         pit,
         netSalary,
+        isDashainBonus,
         status: 'PROCESSED',
       },
     });
@@ -170,6 +198,8 @@ export class PayrollEngineService {
       ssfEmployee: ssf.employee,
       ssfEmployer: ssf.employer,
       pit,
+      dashainBonus,
+      isDashainBonus,
       netSalary,
     };
   }
@@ -203,9 +233,54 @@ export class PayrollEngineService {
   }
 
   async markAsPaid(companyId: string, payrollId: string) {
-    return this.prisma.payroll.update({
+    const payroll = await this.prisma.payroll.update({
       where: { id: payrollId },
       data: { status: 'PAID', paidAt: new Date() },
     });
+
+    // Post to GL after marking paid — outside the update so a ledger failure doesn't prevent status change
+    await this.ledgerPosting.postPayroll(companyId, payrollId);
+
+    return payroll;
+  }
+
+  // Nepal Labour Act 2074: gratuity = (last basic salary / 12) × total months worked, min 3 years service
+  async calculateGratuity(companyId: string, employeeId: string) {
+    const employee = await this.prisma.employee.findFirst({
+      where: { id: employeeId, companyId },
+    });
+    if (!employee) throw new Error('Employee not found');
+    if (!employee.dateOfJoining) {
+      return { eligible: false, reason: 'Date of joining not set', gratuityAmount: 0 };
+    }
+
+    const now = new Date();
+    const joining = new Date(employee.dateOfJoining);
+    const monthsWorked = (now.getFullYear() - joining.getFullYear()) * 12 + (now.getMonth() - joining.getMonth());
+    const yearsWorked = monthsWorked / 12;
+
+    if (yearsWorked < 3) {
+      return {
+        eligible: false,
+        reason: `Minimum 3 years required. Current: ${yearsWorked.toFixed(1)} years`,
+        gratuityAmount: 0,
+        monthsWorked,
+      };
+    }
+
+    const basicSalary = Number(employee.basicSalary);
+    // Monthly accrual = basic / 12; total = monthly × months worked
+    const monthlyAccrual = Number((basicSalary / 12).toFixed(2));
+    const gratuityAmount = Number((monthlyAccrual * monthsWorked).toFixed(2));
+
+    return {
+      eligible: true,
+      employeeName: employee.name,
+      basicSalary,
+      monthsWorked,
+      yearsWorked: Number(yearsWorked.toFixed(2)),
+      monthlyAccrual,
+      gratuityAmount,
+    };
   }
 }

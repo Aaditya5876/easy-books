@@ -1,13 +1,13 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param, Query } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { VendorServiceImpl } from '../../../../application/services/vendor.service.impl';
-import { JwtAuthGuard } from '../../../../modules/guards/jwt-auth.guard';
+import { Roles } from '../../../../modules/decorators/roles.decorator';
 import { ZodValidationPipe } from '../../../../modules/pipes/zod-validation.pipe';
 import { CreateVendorSchema, UpdateVendorSchema, CreateVendorDTO, UpdateVendorDTO } from '@easy-books/shared';
 
 @ApiTags('Vendors')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
+@Roles('STAFF', 'ACCOUNTANT', 'ADMIN')
 @Controller('api/v1/vendors')
 export class VendorController {
   constructor(private readonly service: VendorServiceImpl) {}
@@ -44,7 +44,7 @@ export class VendorController {
   }
 
   @Delete(':id')
-  @ApiOperation({ summary: 'Delete a vendor' })
+  @ApiOperation({ summary: 'Delete a vendor (blocked if has purchase orders)' })
   @ApiQuery({ name: 'companyId', required: true })
   remove(@Param('id') id: string, @Query('companyId') companyId: string) {
     return this.service.remove(id, companyId);

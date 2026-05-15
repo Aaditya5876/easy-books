@@ -1,13 +1,13 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param, Query } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { BankAccountServiceImpl } from '../../../../application/services/bank-account.service.impl';
-import { JwtAuthGuard } from '../../../../modules/guards/jwt-auth.guard';
+import { Roles } from '../../../../modules/decorators/roles.decorator';
 import { ZodValidationPipe } from '../../../../modules/pipes/zod-validation.pipe';
 import { CreateBankAccountSchema, UpdateBankAccountSchema, CreateBankAccountDTO, UpdateBankAccountDTO } from '@easy-books/shared';
 
 @ApiTags('Bank Accounts')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
+@Roles('ACCOUNTANT', 'ADMIN')
 @Controller('api/v1/bank-accounts')
 export class BankAccountController {
   constructor(private readonly service: BankAccountServiceImpl) {}

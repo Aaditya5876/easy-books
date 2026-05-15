@@ -1,13 +1,13 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param, Query } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { AttendanceServiceImpl } from '../../../../application/services/attendance.service.impl';
-import { JwtAuthGuard } from '../../../../modules/guards/jwt-auth.guard';
+import { Roles } from '../../../../modules/decorators/roles.decorator';
 import { ZodValidationPipe } from '../../../../modules/pipes/zod-validation.pipe';
 import { CreateAttendanceSchema, UpdateAttendanceSchema, CreateAttendanceDTO, UpdateAttendanceDTO } from '@easy-books/shared';
 
 @ApiTags('Attendance')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
+@Roles('STAFF', 'ACCOUNTANT', 'ADMIN')
 @Controller('api/v1/attendance')
 export class AttendanceController {
   constructor(private readonly service: AttendanceServiceImpl) {}

@@ -1,10 +1,14 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../../core/db/psql/prisma.client';
+import { LedgerPostingService } from './ledger-posting.service';
 import { adToBs } from '@easy-books/shared';
 
 @Injectable()
 export class ChequeServiceImpl {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly ledgerPosting: LedgerPostingService,
+  ) {}
 
   async findAll(companyId: string, filters?: { status?: string; isReceivable?: boolean }) {
     return this.prisma.cheque.findMany({
@@ -68,7 +72,7 @@ export class ChequeServiceImpl {
       throw new BadRequestException(`Cannot transition cheque from ${cheque.status} to ${status}`);
     }
 
-    return this.prisma.cheque.update({
+    const updated = await this.prisma.cheque.update({
       where: { id },
       data: {
         status: status as any,
@@ -76,5 +80,11 @@ export class ChequeServiceImpl {
         ...(notes ? { notes } : {}),
       },
     });
+
+    if (status === 'CLEARED') {
+      await this.ledgerPosting.postChequeCleared(companyId, id);
+    }
+
+    return updated;
   }
 }

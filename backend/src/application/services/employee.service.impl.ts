@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../../core/db/psql/prisma.client';
 import { CreateEmployeeDTO, UpdateEmployeeDTO } from '@easy-books/shared';
 
@@ -11,7 +11,9 @@ export class EmployeeServiceImpl {
   }
 
   async findOne(id: string, companyId: string) {
-    return this.prisma.employee.findFirst({ where: { id, companyId } });
+    const emp = await this.prisma.employee.findFirst({ where: { id, companyId } });
+    if (!emp) throw new NotFoundException('Employee not found');
+    return emp;
   }
 
   async create(dto: CreateEmployeeDTO) {
@@ -23,6 +25,8 @@ export class EmployeeServiceImpl {
   }
 
   async remove(id: string, companyId: string) {
-    return this.prisma.employee.delete({ where: { id } });
+    const emp = await this.prisma.employee.findFirst({ where: { id, companyId } });
+    if (!emp) throw new NotFoundException('Employee not found');
+    return this.prisma.employee.update({ where: { id }, data: { status: 'INACTIVE' } });
   }
 }

@@ -1,13 +1,13 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param, Query } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { MemoServiceImpl } from '../../../../application/services/memo.service.impl';
-import { JwtAuthGuard } from '../../../../modules/guards/jwt-auth.guard';
+import { Roles } from '../../../../modules/decorators/roles.decorator';
 import { ZodValidationPipe } from '../../../../modules/pipes/zod-validation.pipe';
 import { CreateMemoDocumentSchema, UpdateMemoDocumentSchema, CreateMemoDocumentDTO, UpdateMemoDocumentDTO } from '@easy-books/shared';
 
 @ApiTags('Memos')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
+@Roles('STAFF', 'ACCOUNTANT', 'ADMIN')
 @Controller('api/v1/memos')
 export class MemoController {
   constructor(private readonly service: MemoServiceImpl) {}

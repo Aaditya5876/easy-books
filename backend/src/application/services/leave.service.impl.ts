@@ -1,5 +1,15 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../../core/db/psql/prisma.client';
+import { adToBs } from '@easy-books/shared';
+
+// Nepal fiscal year: Shrawan (month 4) to Ashadh (month 3 of next year)
+function getFiscalYear(adDate: Date): string {
+  const bsDateStr = adToBs(adDate);
+  const bsYear = parseInt(bsDateStr.split('-')[0]);
+  const bsMonth = parseInt(bsDateStr.split('-')[1]);
+  const fy = bsMonth >= 4 ? bsYear : bsYear - 1;
+  return `${fy}-${String(fy + 1).slice(-2)}`;
+}
 
 @Injectable()
 export class LeaveServiceImpl {
@@ -42,11 +52,69 @@ export class LeaveServiceImpl {
   }
 
   async allocateLeave(companyId: string, employeeId: string, leaveTypeId: string, fiscalYear: string, totalDays: number) {
-    return this.prisma.leaveBalance.upsert({
+    const existing = await this.prisma.leaveBalance.findUnique({
       where: { employeeId_leaveTypeId_fiscalYear: { employeeId, leaveTypeId, fiscalYear } },
-      create: { companyId, employeeId, leaveTypeId, fiscalYear, totalDays, usedDays: 0, remainingDays: totalDays },
-      update: { totalDays, remainingDays: totalDays },
     });
+
+    if (existing) {
+      const usedDays = Number(existing.usedDays);
+      return this.prisma.leaveBalance.update({
+        where: { id: existing.id },
+        data: { totalDays, remainingDays: Math.max(0, totalDays - usedDays) },
+      });
+    }
+
+    return this.prisma.leaveBalance.create({
+      data: { companyId, employeeId, leaveTypeId, fiscalYear, totalDays, usedDays: 0, remainingDays: totalDays },
+    });
+  }
+
+  async carryoverLeave(companyId: string, fromFiscalYear: string, toFiscalYear: string) {
+    const employees = await this.prisma.employee.findMany({
+      where: { companyId, status: 'ACTIVE' },
+      select: { id: true },
+    });
+
+    const leaveTypes = await this.prisma.leaveType.findMany({
+      where: { companyId },
+      select: { id: true },
+    });
+
+    let carried = 0;
+    for (const emp of employees) {
+      for (const lt of leaveTypes) {
+        const fromBalance = await this.prisma.leaveBalance.findUnique({
+          where: { employeeId_leaveTypeId_fiscalYear: { employeeId: emp.id, leaveTypeId: lt.id, fiscalYear: fromFiscalYear } },
+        });
+        if (!fromBalance || Number(fromBalance.remainingDays) <= 0) continue;
+
+        const carryDays = Number(fromBalance.remainingDays);
+        const existing = await this.prisma.leaveBalance.findUnique({
+          where: { employeeId_leaveTypeId_fiscalYear: { employeeId: emp.id, leaveTypeId: lt.id, fiscalYear: toFiscalYear } },
+        });
+
+        if (existing) {
+          await this.prisma.leaveBalance.update({
+            where: { id: existing.id },
+            data: {
+              totalDays: { increment: carryDays },
+              remainingDays: { increment: carryDays },
+            },
+          });
+        } else {
+          await this.prisma.leaveBalance.create({
+            data: {
+              companyId, employeeId: emp.id, leaveTypeId: lt.id,
+              fiscalYear: toFiscalYear,
+              totalDays: carryDays, usedDays: 0, remainingDays: carryDays,
+            },
+          });
+        }
+        carried++;
+      }
+    }
+
+    return { carried, message: `Carried over leave balances for ${employees.length} employees from ${fromFiscalYear} to ${toFiscalYear}` };
   }
 
   // ─── Leave Requests ───────────────────────────────────────────────────────────
@@ -88,7 +156,6 @@ export class LeaveServiceImpl {
 
     if (totalDays <= 0) throw new BadRequestException('End date must be after start date');
 
-    // Check existing pending/approved requests for overlap
     const overlap = await this.prisma.leaveRequest.findFirst({
       where: {
         employeeId: data.employeeId,
@@ -118,9 +185,7 @@ export class LeaveServiceImpl {
     if (!req) throw new NotFoundException('Leave request not found');
     if (req.status !== 'PENDING') throw new BadRequestException('Only pending requests can be approved');
 
-    // Get fiscal year from start date (BS year approximation)
-    const bsYear = req.startDate.getFullYear() + 57;
-    const fiscalYear = `${bsYear}-${String(bsYear + 1).slice(-2)}`;
+    const fiscalYear = getFiscalYear(req.startDate);
 
     await this.prisma.$transaction(async (tx) => {
       await tx.leaveRequest.update({
@@ -128,7 +193,6 @@ export class LeaveServiceImpl {
         data: { status: 'APPROVED', approvedBy, approvedAt: new Date() },
       });
 
-      // Deduct from leave balance
       const balance = await tx.leaveBalance.findUnique({
         where: { employeeId_leaveTypeId_fiscalYear: { employeeId: req.employeeId, leaveTypeId: req.leaveTypeId, fiscalYear } },
       });
@@ -167,11 +231,8 @@ export class LeaveServiceImpl {
     await this.prisma.$transaction(async (tx) => {
       await tx.leaveRequest.update({ where: { id }, data: { status: 'CANCELLED' } });
 
-      // Restore balance if it was approved
       if (req.status === 'APPROVED') {
-        const bsYear = req.startDate.getFullYear() + 57;
-        const fiscalYear = `${bsYear}-${String(bsYear + 1).slice(-2)}`;
-
+        const fiscalYear = getFiscalYear(req.startDate);
         const balance = await tx.leaveBalance.findUnique({
           where: { employeeId_leaveTypeId_fiscalYear: { employeeId: req.employeeId, leaveTypeId: req.leaveTypeId, fiscalYear } },
         });

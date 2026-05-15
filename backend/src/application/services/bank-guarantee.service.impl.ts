@@ -1,10 +1,14 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../../core/db/psql/prisma.client';
+import { LedgerPostingService } from './ledger-posting.service';
 import { adToBs } from '@easy-books/shared';
 
 @Injectable()
 export class BankGuaranteeServiceImpl {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly ledgerPosting: LedgerPostingService,
+  ) {}
 
   async findAll(companyId: string, filters?: { status?: string }) {
     return this.prisma.bankGuarantee.findMany({
@@ -35,7 +39,7 @@ export class BankGuaranteeServiceImpl {
     const issuedDate = new Date(data.issuedDateAd);
     const expiryDate = new Date(data.expiryDateAd);
 
-    return this.prisma.bankGuarantee.create({
+    const bg = await this.prisma.bankGuarantee.create({
       data: {
         companyId,
         bgNumber: data.bgNumber,
@@ -51,13 +55,23 @@ export class BankGuaranteeServiceImpl {
         status: 'ACTIVE',
       },
     });
+
+    await this.ledgerPosting.postBankGuaranteeIssued(companyId, bg.id);
+    return bg;
   }
 
   async update(id: string, companyId: string, data: { status?: string; notes?: string }) {
     const bg = await this.prisma.bankGuarantee.findFirst({ where: { id, companyId } });
     if (!bg) throw new NotFoundException('Bank guarantee not found');
 
-    return this.prisma.bankGuarantee.update({ where: { id }, data: data as any });
+    const updated = await this.prisma.bankGuarantee.update({ where: { id }, data: data as any });
+
+    // Reverse GL entries when BG is closed or expired
+    if (data.status && ['EXPIRED', 'CANCELLED', 'INVOKED'].includes(data.status) && bg.status === 'ACTIVE') {
+      await this.ledgerPosting.postBankGuaranteeClosed(companyId, id);
+    }
+
+    return updated;
   }
 
   async findExpiringSoon(companyId: string, withinDays: number = 30) {

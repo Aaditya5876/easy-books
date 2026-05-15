@@ -141,7 +141,7 @@ export class PurchaseServiceImpl {
 
     const newStatus = newPaid >= Number(order.totalAmount) ? 'COMPLETED' : 'PARTIALLY_PAID';
 
-    return this.prisma.$transaction(async (tx) => {
+    const payment = await this.prisma.$transaction(async (tx) => {
       const p = await tx.payment.create({
         data: {
           companyId: dto.companyId,
@@ -162,6 +162,10 @@ export class PurchaseServiceImpl {
 
       return p;
     });
+
+    await this.ledgerPosting.postPaymentMade(dto.companyId, payment.id);
+
+    return payment;
   }
 
   async update(id: string, companyId: string, data: any) {
@@ -194,18 +198,33 @@ export class PurchaseServiceImpl {
   }
 
   private async generateOrderNumber(companyId: string): Promise<string> {
-    const company = await this.prisma.company.update({
+    const company = await this.prisma.company.findUnique({
       where: { id: companyId },
-      data: { purchaseSequence: { increment: 1 } },
+      select: { abbreviation: true, purchaseSequence: true, sequenceFiscalYear: true },
+    });
+    if (!company) throw new BadRequestException('Company not found');
+
+    const todayBsStr = adToBs(new Date());
+    const bsYear = parseInt(todayBsStr.split('-')[0]);
+    const bsMonth = parseInt(todayBsStr.split('-')[1]);
+    const fyStart = bsMonth >= 4 ? bsYear : bsYear - 1;
+    const currentFiscalYear = `${fyStart}-${String(fyStart + 1).slice(-2)}`;
+
+    const needsReset = company.sequenceFiscalYear !== currentFiscalYear;
+
+    const updated = await this.prisma.company.update({
+      where: { id: companyId },
+      data: {
+        purchaseSequence: needsReset ? 1 : { increment: 1 },
+        sequenceFiscalYear: currentFiscalYear,
+      },
       select: { abbreviation: true, purchaseSequence: true },
     });
 
-    const abbr = (company.abbreviation ?? 'PO').toUpperCase();
-    const seq = String(company.purchaseSequence).padStart(4, '0');
-    const bsYear = new Date().getFullYear() + 57;
-    const fiscalYear = `${bsYear}-${String(bsYear + 1).slice(-2)}`;
+    const abbr = (updated.abbreviation ?? 'PO').toUpperCase();
+    const seq = String(updated.purchaseSequence).padStart(4, '0');
 
-    return `${abbr}/PO/${fiscalYear}/${seq}`;
+    return `${abbr}/PO/${currentFiscalYear}/${seq}`;
   }
 
   private computeItems(items: OrderItem[]) {

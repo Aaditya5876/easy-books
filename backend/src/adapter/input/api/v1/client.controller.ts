@@ -1,13 +1,13 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param, Query } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { ClientServiceImpl } from '../../../../application/services/client.service.impl';
-import { JwtAuthGuard } from '../../../../modules/guards/jwt-auth.guard';
+import { Roles } from '../../../../modules/decorators/roles.decorator';
 import { ZodValidationPipe } from '../../../../modules/pipes/zod-validation.pipe';
 import { CreateClientSchema, UpdateClientSchema, CreateClientDTO, UpdateClientDTO } from '@easy-books/shared';
 
 @ApiTags('Clients')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
+@Roles('STAFF', 'ACCOUNTANT', 'ADMIN')
 @Controller('api/v1/clients')
 export class ClientController {
   constructor(private readonly service: ClientServiceImpl) {}
@@ -44,7 +44,7 @@ export class ClientController {
   }
 
   @Delete(':id')
-  @ApiOperation({ summary: 'Delete a client' })
+  @ApiOperation({ summary: 'Delete a client (blocked if has sales orders)' })
   @ApiQuery({ name: 'companyId', required: true })
   remove(@Param('id') id: string, @Query('companyId') companyId: string) {
     return this.service.remove(id, companyId);

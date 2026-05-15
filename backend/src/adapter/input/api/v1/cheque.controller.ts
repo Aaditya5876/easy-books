@@ -1,11 +1,11 @@
-import { Controller, Get, Post, Patch, Body, Param, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Body, Param, Query } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { ChequeServiceImpl } from '../../../../application/services/cheque.service.impl';
-import { JwtAuthGuard } from '../../../../modules/guards/jwt-auth.guard';
+import { Roles } from '../../../../modules/decorators/roles.decorator';
 
 @ApiTags('Cheques')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
+@Roles('ACCOUNTANT', 'ADMIN')
 @Controller('api/v1/cheques')
 export class ChequeController {
   constructor(private readonly service: ChequeServiceImpl) {}

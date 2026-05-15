@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../../core/db/psql/prisma.client';
 import { CreateVendorDTO, UpdateVendorDTO } from '@easy-books/shared';
 
@@ -11,7 +11,9 @@ export class VendorServiceImpl {
   }
 
   async findOne(id: string, companyId: string) {
-    return this.prisma.vendor.findFirst({ where: { id, companyId } });
+    const vendor = await this.prisma.vendor.findFirst({ where: { id, companyId } });
+    if (!vendor) throw new NotFoundException('Vendor not found');
+    return vendor;
   }
 
   async create(dto: CreateVendorDTO) {
@@ -23,6 +25,14 @@ export class VendorServiceImpl {
   }
 
   async remove(id: string, companyId: string) {
+    const vendor = await this.prisma.vendor.findFirst({ where: { id, companyId } });
+    if (!vendor) throw new NotFoundException('Vendor not found');
+
+    const hasOrders = await this.prisma.purchaseOrder.findFirst({ where: { vendorId: id } });
+    if (hasOrders) {
+      throw new BadRequestException('Cannot delete vendor with existing purchase orders');
+    }
+
     return this.prisma.vendor.delete({ where: { id } });
   }
 }

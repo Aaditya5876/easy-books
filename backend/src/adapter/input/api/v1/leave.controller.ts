@@ -1,11 +1,10 @@
-import { Controller, Get, Post, Put, Delete, Patch, Body, Param, Query, UseGuards, Request } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Patch, Body, Param, Query, Request } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { LeaveServiceImpl } from '../../../../application/services/leave.service.impl';
-import { JwtAuthGuard } from '../../../../modules/guards/jwt-auth.guard';
+import { Roles } from '../../../../modules/decorators/roles.decorator';
 
 @ApiTags('Leave')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
 @Controller('api/v1/leave')
 export class LeaveController {
   constructor(private readonly service: LeaveServiceImpl) {}
@@ -13,6 +12,7 @@ export class LeaveController {
   // ─── Leave Types ─────────────────────────────────────────────────────────────
 
   @Get('types')
+  @Roles('STAFF', 'ACCOUNTANT', 'ADMIN')
   @ApiOperation({ summary: 'Get all leave types' })
   @ApiQuery({ name: 'companyId', required: true })
   findAllTypes(@Query('companyId') companyId: string) {
@@ -20,6 +20,7 @@ export class LeaveController {
   }
 
   @Post('types')
+  @Roles('ADMIN')
   @ApiOperation({ summary: 'Create a leave type' })
   @ApiQuery({ name: 'companyId', required: true })
   createType(@Query('companyId') companyId: string, @Body() body: { name: string; daysPerYear: number; isPaid?: boolean }) {
@@ -27,6 +28,7 @@ export class LeaveController {
   }
 
   @Put('types/:id')
+  @Roles('ADMIN')
   @ApiOperation({ summary: 'Update a leave type' })
   @ApiQuery({ name: 'companyId', required: true })
   updateType(@Param('id') id: string, @Query('companyId') companyId: string, @Body() body: any) {
@@ -34,6 +36,7 @@ export class LeaveController {
   }
 
   @Delete('types/:id')
+  @Roles('ADMIN')
   @ApiOperation({ summary: 'Delete a leave type' })
   @ApiQuery({ name: 'companyId', required: true })
   removeType(@Param('id') id: string, @Query('companyId') companyId: string) {
@@ -43,6 +46,7 @@ export class LeaveController {
   // ─── Leave Balances ──────────────────────────────────────────────────────────
 
   @Get('balances/:employeeId')
+  @Roles('STAFF', 'ACCOUNTANT', 'ADMIN')
   @ApiOperation({ summary: 'Get leave balances for an employee' })
   @ApiQuery({ name: 'companyId', required: true })
   @ApiQuery({ name: 'fiscalYear', required: true, example: '2081-82' })
@@ -55,6 +59,7 @@ export class LeaveController {
   }
 
   @Post('balances/allocate')
+  @Roles('ACCOUNTANT', 'ADMIN')
   @ApiOperation({ summary: 'Allocate leave days to an employee' })
   @ApiQuery({ name: 'companyId', required: true })
   allocate(
@@ -64,9 +69,24 @@ export class LeaveController {
     return this.service.allocateLeave(companyId, body.employeeId, body.leaveTypeId, body.fiscalYear, body.totalDays);
   }
 
+  @Post('balances/carryover')
+  @Roles('ADMIN')
+  @ApiOperation({ summary: 'Run year-end leave carryover for all employees' })
+  @ApiQuery({ name: 'companyId', required: true })
+  @ApiQuery({ name: 'fromFiscalYear', required: true, example: '2081-82' })
+  @ApiQuery({ name: 'toFiscalYear', required: true, example: '2082-83' })
+  carryover(
+    @Query('companyId') companyId: string,
+    @Query('fromFiscalYear') fromFiscalYear: string,
+    @Query('toFiscalYear') toFiscalYear: string,
+  ) {
+    return this.service.carryoverLeave(companyId, fromFiscalYear, toFiscalYear);
+  }
+
   // ─── Leave Requests ──────────────────────────────────────────────────────────
 
   @Get('requests')
+  @Roles('STAFF', 'ACCOUNTANT', 'ADMIN')
   @ApiOperation({ summary: 'Get all leave requests' })
   @ApiQuery({ name: 'companyId', required: true })
   @ApiQuery({ name: 'employeeId', required: false })
@@ -80,6 +100,7 @@ export class LeaveController {
   }
 
   @Get('requests/:id')
+  @Roles('STAFF', 'ACCOUNTANT', 'ADMIN')
   @ApiOperation({ summary: 'Get a leave request by id' })
   @ApiQuery({ name: 'companyId', required: true })
   findRequestById(@Param('id') id: string, @Query('companyId') companyId: string) {
@@ -87,6 +108,7 @@ export class LeaveController {
   }
 
   @Post('requests')
+  @Roles('STAFF', 'ACCOUNTANT', 'ADMIN')
   @ApiOperation({ summary: 'Submit a leave request' })
   @ApiQuery({ name: 'companyId', required: true })
   createRequest(
@@ -97,6 +119,7 @@ export class LeaveController {
   }
 
   @Patch('requests/:id/approve')
+  @Roles('ACCOUNTANT', 'ADMIN')
   @ApiOperation({ summary: 'Approve a leave request' })
   @ApiQuery({ name: 'companyId', required: true })
   approve(@Param('id') id: string, @Query('companyId') companyId: string, @Request() req: any) {
@@ -104,6 +127,7 @@ export class LeaveController {
   }
 
   @Patch('requests/:id/reject')
+  @Roles('ACCOUNTANT', 'ADMIN')
   @ApiOperation({ summary: 'Reject a leave request' })
   @ApiQuery({ name: 'companyId', required: true })
   reject(@Param('id') id: string, @Query('companyId') companyId: string, @Request() req: any) {
@@ -111,6 +135,7 @@ export class LeaveController {
   }
 
   @Patch('requests/:id/cancel')
+  @Roles('STAFF', 'ACCOUNTANT', 'ADMIN')
   @ApiOperation({ summary: 'Cancel a leave request' })
   @ApiQuery({ name: 'companyId', required: true })
   cancel(@Param('id') id: string, @Query('companyId') companyId: string) {

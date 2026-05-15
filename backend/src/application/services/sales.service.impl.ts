@@ -209,20 +209,33 @@ export class SalesServiceImpl {
   // ─── Private helpers ──────────────────────────────────────────────────────────
 
   private async generateInvoiceNumber(companyId: string): Promise<string> {
-    const company = await this.prisma.company.update({
+    const company = await this.prisma.company.findUnique({
       where: { id: companyId },
-      data: { invoiceSequence: { increment: 1 } },
-      select: { abbreviation: true, invoiceSequence: true, fiscalYearStart: true },
+      select: { abbreviation: true, invoiceSequence: true, sequenceFiscalYear: true },
+    });
+    if (!company) throw new BadRequestException('Company not found');
+
+    const todayBsStr = adToBs(new Date());
+    const bsYear = parseInt(todayBsStr.split('-')[0]);
+    const bsMonth = parseInt(todayBsStr.split('-')[1]);
+    const fyStart = bsMonth >= 4 ? bsYear : bsYear - 1;
+    const currentFiscalYear = `${fyStart}-${String(fyStart + 1).slice(-2)}`;
+
+    const needsReset = company.sequenceFiscalYear !== currentFiscalYear;
+
+    const updated = await this.prisma.company.update({
+      where: { id: companyId },
+      data: {
+        invoiceSequence: needsReset ? 1 : { increment: 1 },
+        sequenceFiscalYear: currentFiscalYear,
+      },
+      select: { abbreviation: true, invoiceSequence: true },
     });
 
-    const abbr = (company.abbreviation ?? 'INV').toUpperCase();
-    const seq = String(company.invoiceSequence).padStart(4, '0');
-    // Fiscal year in BS — e.g. "2081-82"
-    const now = new Date();
-    const bsYear = now.getFullYear() + 57; // approximate
-    const fiscalYear = `${bsYear}-${String(bsYear + 1).slice(-2)}`;
+    const abbr = (updated.abbreviation ?? 'INV').toUpperCase();
+    const seq = String(updated.invoiceSequence).padStart(4, '0');
 
-    return `${abbr}/${fiscalYear}/${seq}`;
+    return `${abbr}/${currentFiscalYear}/${seq}`;
   }
 
   private async validateStock(companyId: string, items: OrderItem[]) {

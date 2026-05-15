@@ -1,11 +1,11 @@
-import { Controller, Get, Post, Patch, Body, Param, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Body, Param, Query } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { BankGuaranteeServiceImpl } from '../../../../application/services/bank-guarantee.service.impl';
-import { JwtAuthGuard } from '../../../../modules/guards/jwt-auth.guard';
+import { Roles } from '../../../../modules/decorators/roles.decorator';
 
 @ApiTags('Bank Guarantees')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
+@Roles('ACCOUNTANT', 'ADMIN')
 @Controller('api/v1/bank-guarantees')
 export class BankGuaranteeController {
   constructor(private readonly service: BankGuaranteeServiceImpl) {}

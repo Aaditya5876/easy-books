@@ -1,11 +1,11 @@
-import { Controller, Get, Post, Delete, Body, Param, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Delete, Body, Param, Query } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { PettyCashServiceImpl } from '../../../../application/services/petty-cash.service.impl';
-import { JwtAuthGuard } from '../../../../modules/guards/jwt-auth.guard';
+import { Roles } from '../../../../modules/decorators/roles.decorator';
 
 @ApiTags('Petty Cash')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
+@Roles('ACCOUNTANT', 'ADMIN')
 @Controller('api/v1/petty-cash')
 export class PettyCashController {
   constructor(private readonly service: PettyCashServiceImpl) {}

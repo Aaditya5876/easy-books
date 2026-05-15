@@ -1,5 +1,7 @@
 import { Module } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { validateEnv } from '../../core/config';
 import { PinoLoggerModule } from '../../core/utils/logger';
 import { BullRootModule } from '../../core/queue/bull.client';
@@ -24,10 +26,15 @@ import { VendorModule } from './vendor.module';
 import { QuotationModule } from './quotation.module';
 import { MemoModule } from './memo.module';
 import { TaskModule } from './task.module';
+import { UserModule } from './user.module';
+import { DashboardModule } from './dashboard.module';
+import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { RolesGuard } from './guards/roles.guard';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true, validate: validateEnv }),
+    ThrottlerModule.forRoot([{ ttl: 60000, limit: 10 }]),
     PinoLoggerModule,
     BullRootModule,
     AuthModule,
@@ -51,6 +58,14 @@ import { TaskModule } from './task.module';
     QuotationModule,
     MemoModule,
     TaskModule,
+    UserModule,
+    DashboardModule,
+  ],
+  providers: [
+    // Global guards — run on every request in order: Throttler, JWT, then Roles
+    { provide: APP_GUARD, useClass: ThrottlerGuard },
+    { provide: APP_GUARD, useClass: JwtAuthGuard },
+    { provide: APP_GUARD, useClass: RolesGuard },
   ],
 })
 export class AppModule {}

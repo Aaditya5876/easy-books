@@ -1,10 +1,14 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../../core/db/psql/prisma.client';
+import { LedgerPostingService } from './ledger-posting.service';
 import { adToBs } from '@easy-books/shared';
 
 @Injectable()
 export class PettyCashServiceImpl {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly ledgerPosting: LedgerPostingService,
+  ) {}
 
   async findAll(companyId: string) {
     return this.prisma.pettyCashVoucher.findMany({
@@ -29,7 +33,7 @@ export class PettyCashServiceImpl {
     approvedBy?: string;
   }) {
     const dateAd = new Date(data.dateAd);
-    return this.prisma.pettyCashVoucher.create({
+    const voucher = await this.prisma.pettyCashVoucher.create({
       data: {
         companyId,
         voucherNo: data.voucherNo,
@@ -42,6 +46,9 @@ export class PettyCashServiceImpl {
         approvedBy: data.approvedBy,
       },
     });
+
+    await this.ledgerPosting.postPettyCash(companyId, voucher.id);
+    return voucher;
   }
 
   async remove(id: string, companyId: string) {

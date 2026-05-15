@@ -1,16 +1,19 @@
-import { Controller, Post, Get, Body, Req, Res, UseGuards, Inject, HttpCode, HttpStatus, UnauthorizedException } from '@nestjs/common';
+import { Controller, Post, Get, Body, Req, Res, Inject, HttpCode, HttpStatus, UnauthorizedException } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiBody } from '@nestjs/swagger';
+import { Throttle, SkipThrottle } from '@nestjs/throttler';
 import { Request, Response } from 'express';
 import { LoginSchema, RegisterSchema, LoginDTO, RegisterDTO } from '@easy-books/shared';
 import { IAuthService, AUTH_SERVICE } from '../../../../domain/services/auth.service';
-import { JwtAuthGuard } from '../../../../modules/guards/jwt-auth.guard';
 import { ZodValidationPipe } from '../../../../modules/pipes/zod-validation.pipe';
+import { Public } from '../../../../modules/decorators/public.decorator';
 
 @ApiTags('Auth')
+@SkipThrottle()
 @Controller('api/v1/auth')
 export class AuthController {
   constructor(@Inject(AUTH_SERVICE) private readonly authService: IAuthService) {}
 
+  @Public()
   @Post('register')
   @ApiOperation({ summary: 'Register new user and company' })
   @ApiBody({ schema: { type: 'object', required: ['email', 'password', 'name', 'companyName'], properties: { email: { type: 'string', example: 'user@example.com' }, password: { type: 'string', example: 'password123' }, name: { type: 'string', example: 'John Doe' }, companyName: { type: 'string', example: 'My Company' } } } })
@@ -23,9 +26,11 @@ export class AuthController {
     return { success: true, message: 'Registered successfully' };
   }
 
+  @Public()
   @Post('login')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Login with email and password' })
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
+  @ApiOperation({ summary: 'Login with email and password (rate-limited: 5 per minute)' })
   @ApiBody({ schema: { type: 'object', required: ['email', 'password'], properties: { email: { type: 'string', example: 'user@example.com' }, password: { type: 'string', example: 'password123' } } } })
   async login(
     @Body(new ZodValidationPipe(LoginSchema)) dto: LoginDTO,
@@ -36,6 +41,7 @@ export class AuthController {
     return { success: true, message: 'Login successful' };
   }
 
+  @Public()
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Refresh access token using refresh token cookie' })
@@ -52,7 +58,6 @@ export class AuthController {
 
   @Post('logout')
   @HttpCode(HttpStatus.OK)
-  @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Logout and clear cookies' })
   async logout(@Req() req: any, @Res({ passthrough: true }) res: Response) {
@@ -64,7 +69,6 @@ export class AuthController {
   }
 
   @Get('me')
-  @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get current authenticated user' })
   async me(@Req() req: any) {
@@ -74,22 +78,13 @@ export class AuthController {
   private setTokenCookies(res: Response, tokens: { accessToken: string; refreshToken: string; userId: string }) {
     const secure = process.env.NODE_ENV === 'production';
     res.cookie('accessToken', tokens.accessToken, {
-      httpOnly: true,
-      secure,
-      sameSite: 'strict',
-      maxAge: 15 * 60 * 1000,
+      httpOnly: true, secure, sameSite: 'strict', maxAge: 15 * 60 * 1000,
     });
     res.cookie('refreshToken', tokens.refreshToken, {
-      httpOnly: true,
-      secure,
-      sameSite: 'strict',
-      maxAge: 7 * 24 * 60 * 60 * 1000,
+      httpOnly: true, secure, sameSite: 'strict', maxAge: 7 * 24 * 60 * 60 * 1000,
     });
     res.cookie('userId', tokens.userId, {
-      httpOnly: true,
-      secure,
-      sameSite: 'strict',
-      maxAge: 7 * 24 * 60 * 60 * 1000,
+      httpOnly: true, secure, sameSite: 'strict', maxAge: 7 * 24 * 60 * 60 * 1000,
     });
   }
 }

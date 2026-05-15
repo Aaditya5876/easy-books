@@ -175,12 +175,13 @@ model Company {
   isVatRegistered  Boolean  @default(false)
   vatSubmissionFreq String? // "MONTHLY" | "TRIMESTERLY"
   isActive         Boolean  @default(true)
-  // Auto-increment counters for invoice numbering
+  // Auto-increment counters for invoice numbering (reset each fiscal year)
   invoiceSequence  Int      @default(0)
   purchaseSequence Int      @default(0)
   quotationSequence Int     @default(0)
   creditNoteSequence Int    @default(0)
   debitNoteSequence Int     @default(0)
+  sequenceFiscalYear String? // tracks fiscal year for sequence reset, e.g. "2081-82"
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
@@ -206,8 +207,9 @@ model Company {
   leaveTypes          LeaveType[]
   cheques             Cheque[]
   bankGuarantees      BankGuarantee[]
-  pettyCashVouchers   PettyCashVoucher[]
-  payrollSettings     CompanyPayrollSettings?
+  pettyCashVouchers    PettyCashVoucher[]
+  payrollSettings      CompanyPayrollSettings?
+  inventoryAdjustments InventoryAdjustment[]
 
   @@map("companies")
 }
@@ -553,6 +555,7 @@ model InventoryItem {
 
   salesOrderItems    SalesOrderItem[]
   purchaseOrderItems PurchaseOrderItem[]
+  adjustments        InventoryAdjustment[]
 
   @@map("inventory_items")
 }
@@ -824,4 +827,23 @@ model Task {
   updatedAt   DateTime     @updatedAt
 
   @@map("tasks")
+}
+
+model InventoryAdjustment {
+  id              String        @id @default(uuid())
+  companyId       String
+  company         Company       @relation(fields: [companyId], references: [id])
+  inventoryItemId String
+  inventoryItem   InventoryItem @relation(fields: [inventoryItemId], references: [id])
+  adjustmentType  String        // "ADDITION" | "SUBTRACTION" | "RECOUNT"
+  quantityBefore  Decimal       @db.Decimal(12, 3)
+  quantityChange  Decimal       @db.Decimal(12, 3) // positive = addition, negative = subtraction
+  quantityAfter   Decimal       @db.Decimal(12, 3)
+  reason          String?
+  adjustedBy      String?       // userId
+  dateAd          DateTime      @default(now())
+  dateBs          String?
+  createdAt       DateTime      @default(now())
+
+  @@map("inventory_adjustments")
 }

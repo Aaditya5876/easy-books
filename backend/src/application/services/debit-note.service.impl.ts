@@ -1,10 +1,14 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../../core/db/psql/prisma.client';
+import { LedgerPostingService } from './ledger-posting.service';
 import { adToBs } from '@easy-books/shared';
 
 @Injectable()
 export class DebitNoteServiceImpl {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly ledgerPosting: LedgerPostingService,
+  ) {}
 
   async findAll(companyId: string) {
     return this.prisma.debitNote.findMany({
@@ -31,7 +35,7 @@ export class DebitNoteServiceImpl {
     const debitNoteNumber = await this.generateNumber(companyId);
     const dateAd = new Date(data.dateAd);
 
-    return this.prisma.debitNote.create({
+    const dn = await this.prisma.debitNote.create({
       data: {
         companyId,
         vendorId: data.vendorId,
@@ -45,6 +49,9 @@ export class DebitNoteServiceImpl {
         notes: data.notes,
       },
     });
+
+    await this.ledgerPosting.postDebitNote(companyId, dn.id);
+    return dn;
   }
 
   async apply(id: string, companyId: string) {
@@ -63,17 +70,32 @@ export class DebitNoteServiceImpl {
   }
 
   private async generateNumber(companyId: string): Promise<string> {
-    const company = await this.prisma.company.update({
+    const company = await this.prisma.company.findUnique({
       where: { id: companyId },
-      data: { debitNoteSequence: { increment: 1 } },
+      select: { abbreviation: true, debitNoteSequence: true, sequenceFiscalYear: true },
+    });
+    if (!company) throw new BadRequestException('Company not found');
+
+    const todayBs = adToBs(new Date());
+    const bsYear = parseInt(todayBs.split('-')[0]);
+    const bsMonth = parseInt(todayBs.split('-')[1]);
+    const fyStart = bsMonth >= 4 ? bsYear : bsYear - 1;
+    const currentFiscalYear = `${fyStart}-${String(fyStart + 1).slice(-2)}`;
+
+    const needsReset = company.sequenceFiscalYear !== currentFiscalYear;
+
+    const updated = await this.prisma.company.update({
+      where: { id: companyId },
+      data: {
+        debitNoteSequence: needsReset ? 1 : { increment: 1 },
+        sequenceFiscalYear: currentFiscalYear,
+      },
       select: { abbreviation: true, debitNoteSequence: true },
     });
 
-    const abbr = (company.abbreviation ?? 'DN').toUpperCase();
-    const seq = String(company.debitNoteSequence).padStart(4, '0');
-    const bsYear = new Date().getFullYear() + 57;
-    const fiscalYear = `${bsYear}-${String(bsYear + 1).slice(-2)}`;
+    const abbr = (updated.abbreviation ?? 'DN').toUpperCase();
+    const seq = String(updated.debitNoteSequence).padStart(4, '0');
 
-    return `${abbr}/DN/${fiscalYear}/${seq}`;
+    return `${abbr}/DN/${currentFiscalYear}/${seq}`;
   }
 }
