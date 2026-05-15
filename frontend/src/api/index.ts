@@ -152,4 +152,14 @@ export const companyApi = {
   get: (id: string) => apiClient.get(`/api/v1/companies/${id}`),
   create: (data: object) => apiClient.post('/api/v1/companies', data),
   update: (id: string, data: object) => apiClient.put(`/api/v1/companies/${id}`, data),
+  getPayrollSettings: (id: string) => apiClient.get(`/api/v1/companies/${id}/payroll-settings`),
+  upsertPayrollSettings: (id: string, data: object) => apiClient.patch(`/api/v1/companies/${id}/payroll-settings`, data),
+};
+
+// Users (ADMIN only)
+export const usersApi = {
+  list: (cid: string) => apiClient.get('/api/v1/users', { params: { companyId: cid } }),
+  invite: (cid: string, data: object) => apiClient.post('/api/v1/users/invite', data, { params: { companyId: cid } }),
+  changeRole: (userId: string, cid: string, role: string) =>
+    apiClient.patch(`/api/v1/users/${userId}/role`, { role }, { params: { companyId: cid } }),
 };

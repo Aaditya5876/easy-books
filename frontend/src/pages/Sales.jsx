@@ -30,8 +30,11 @@ export default function Sales() {
   const setCol = (key, val) => setColFilters(f => ({ ...f, [key]: val }));
   const [showNew, setShowNew] = useState(false);
   const [form, setForm] = useState({
-    client_name: '', client_contact: '', client_address: '',
+    client_name: '', client_contact: '', client_address: '', client_pan: '',
     invoice_number: '', is_vat: false, payment_type: 'cash',
+    date_ad: new Date().toISOString().split('T')[0],
+    due_date: '',
+    notes: '',
     items: [{ inventory_item_id: '', description: '', quantity: 1, unit: 'Piece', unit_price: 0, total: 0 }],
     labor_items: [{ description: '', amount: 0 }]
   });
@@ -68,8 +71,11 @@ export default function Sales() {
     const salesData = await loadData();
     const nextInvoice = await generateInvoiceNumber(salesData, false);
     setForm({
-      client_name: '', client_contact: '', client_address: '',
+      client_name: '', client_contact: '', client_address: '', client_pan: '',
       invoice_number: nextInvoice, is_vat: false, payment_type: 'cash',
+      date_ad: new Date().toISOString().split('T')[0],
+      due_date: '',
+      notes: '',
       items: [{ inventory_item_id: '', description: '', quantity: 1, unit: 'Piece', unit_price: 0, total: 0 }],
       labor_items: [{ description: '', amount: 0 }]
     });
@@ -128,8 +134,8 @@ export default function Sales() {
   }
 
   async function createOrder(shouldPrint = false) {
-    const today = new Date().toISOString().split('T')[0];
-    const bsDate = adToBs(new Date());
+    const entryDate = form.date_ad || new Date().toISOString().split('T')[0];
+    const bsDate = adToBs(new Date(entryDate));
     const totalLabor = form.labor_items.reduce((s, li) => s + (li.amount || 0), 0);
     const subtotal = form.items.reduce((sum, i) => sum + (i.total || 0), 0) + totalLabor;
     const vatAmount = form.is_vat ? subtotal * 0.13 : 0;
@@ -139,14 +145,17 @@ export default function Sales() {
       client_name: form.client_name,
       client_contact: form.client_contact,
       client_address: form.client_address,
-      date_ad: today,
+      client_pan: form.client_pan,
+      date_ad: entryDate,
       date_bs: bsDate.formatted,
+      due_date: form.due_date || null,
       invoice_number: form.invoice_number,
       payment_type: form.payment_type,
       items: form.items,
       work_description: form.labor_items.map(li => li.description).filter(Boolean).join('; '),
       labor_charges: totalLabor,
       is_vat: form.is_vat,
+      notes: form.notes,
       subtotal,
       vat_amount: vatAmount,
       total_amount: subtotal + vatAmount,
@@ -178,8 +187,11 @@ export default function Sales() {
     }
 
     setForm({
-      client_name: '', client_contact: '', client_address: '',
+      client_name: '', client_contact: '', client_address: '', client_pan: '',
       invoice_number: '', is_vat: false, payment_type: 'cash',
+      date_ad: new Date().toISOString().split('T')[0],
+      due_date: '',
+      notes: '',
       items: [{ inventory_item_id: '', description: '', quantity: 1, unit: 'Piece', unit_price: 0, total: 0 }],
       labor_items: [{ description: '', amount: 0 }]
     });
@@ -197,8 +209,8 @@ export default function Sales() {
         .header{display:flex;justify-content:space-between;margin-bottom:24px}
       </style></head><body>
       <div class='header'>
-        <div><h1>INVOICE</h1><div class='meta'>Invoice #: <b>${form.invoice_number}</b></div><div class='meta'>Date: ${today} | BS: ${bsDate.formatted}</div></div>
-        <div style='text-align:right'><div class='meta'>Client: <b>${form.client_name}</b></div><div class='meta'>${form.client_contact || ''}</div><div class='meta'>${form.client_address || ''}</div></div>
+        <div><h1>${form.is_vat ? 'TAX INVOICE' : 'INVOICE'}</h1><div class='meta'>Invoice #: <b>${form.invoice_number}</b></div><div class='meta'>Date: ${entryDate} | BS: ${bsDate.formatted}</div>${form.due_date ? `<div class='meta'>Due: ${form.due_date}</div>` : ''}</div>
+        <div style='text-align:right'><div class='meta'>Client: <b>${form.client_name}</b></div><div class='meta'>${form.client_contact || ''}</div><div class='meta'>${form.client_address || ''}</div>${form.client_pan ? `<div class='meta'>PAN/VAT: ${form.client_pan}</div>` : ''}</div>
       </div>
       ${form.labor_items.some(li => li.description) ? `<div class='meta' style='margin-bottom:12px'>Work: ${form.labor_items.map(li => li.description).filter(Boolean).join('; ')}</div>` : ''}
       <table><thead><tr><th>#</th><th>Description</th><th>Qty</th><th>Unit Price</th><th>Total</th></tr></thead><tbody>
@@ -208,8 +220,10 @@ export default function Sales() {
         ${totalLabor > 0 ? `<div class='meta'>Labor: NPR ${totalLabor.toLocaleString()}</div>` : ''}
         ${form.is_vat ? `<div class='meta'>VAT (13%): NPR ${vatAmount.toLocaleString()}</div>` : ''}
         <div style='font-weight:bold;font-size:15px;margin-top:8px'>TOTAL: NPR ${total.toLocaleString()}</div>
-        ${form.is_vat ? `<div class='meta'>VAT Bill</div>` : ''}
-      </div></body></html>`);
+        ${form.is_vat ? `<div class='meta'>Tax Invoice</div>` : ''}
+      </div>
+      ${form.notes ? `<div class='meta' style='margin-top:16px;padding-top:12px;border-top:1px solid #eee'>Notes: ${form.notes}</div>` : ''}
+      </body></html>`);
       win.document.close();
       win.print();
     }
@@ -255,10 +269,33 @@ export default function Sales() {
           <div className="space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div><Label>Client Name *</Label><Input value={form.client_name} onChange={e => setForm({ ...form, client_name: e.target.value })} /></div>
-              <div><Label>Contact</Label><Input value={form.client_contact} onChange={e => setForm({ ...form, client_contact: e.target.value })} /></div>
-              <div><Label>Address</Label><Input value={form.client_address} onChange={e => setForm({ ...form, client_address: e.target.value })} /></div>
+              <div><Label>Contact <span className="text-muted-foreground text-xs">(optional)</span></Label><Input value={form.client_contact} onChange={e => setForm({ ...form, client_contact: e.target.value })} /></div>
+              <div><Label>Address <span className="text-muted-foreground text-xs">(optional)</span></Label><Input value={form.client_address} onChange={e => setForm({ ...form, client_address: e.target.value })} /></div>
             </div>
-            <div><Label>Invoice Number</Label><Input value={form.invoice_number} onChange={e => setForm({ ...form, invoice_number: e.target.value })} /></div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div>
+                <Label>Invoice Date *</Label>
+                <Input type="date" value={form.date_ad} onChange={e => setForm({ ...form, date_ad: e.target.value })} />
+              </div>
+              <div>
+                <Label>Due Date <span className="text-muted-foreground text-xs">(credit)</span></Label>
+                <Input type="date" value={form.due_date} onChange={e => setForm({ ...form, due_date: e.target.value })} />
+              </div>
+              <div>
+                <Label>Invoice Number</Label>
+                <Input value={form.invoice_number} onChange={e => setForm({ ...form, invoice_number: e.target.value })} />
+              </div>
+              <div>
+                <Label>Client PAN/VAT <span className="text-muted-foreground text-xs">(optional)</span></Label>
+                <Input value={form.client_pan} onChange={e => setForm({ ...form, client_pan: e.target.value })} placeholder="e.g. 123456789" />
+              </div>
+            </div>
+
+            <div>
+              <Label>Notes / Remarks <span className="text-muted-foreground text-xs">(optional)</span></Label>
+              <Input value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} placeholder="Special instructions, payment terms..." />
+            </div>
 
             {/* Payment Type */}
             <div className="flex items-center gap-4">

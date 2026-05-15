@@ -29,10 +29,13 @@ export default function Purchase() {
   const setCol = (key, val) => setColFilters(f => ({ ...f, [key]: val }));
   const [showNew, setShowNew] = useState(false);
   const [form, setForm] = useState({
-    vendor_name: '', vendor_contact: '', vendor_address: '',
+    vendor_name: '', vendor_contact: '', vendor_address: '', vendor_pan: '',
     order_number: '', ordered_by: '',
+    date_ad: new Date().toISOString().split('T')[0],
+    due_date: '',
     payment_type: 'cash',
     is_vat: false,
+    notes: '',
     items: [{ description: '', quantity: 1, unit: 'Piece', unit_price: 0, total: 0 }],
     labor_items: [{ description: '', amount: 0 }]
   });
@@ -85,8 +88,8 @@ export default function Purchase() {
   }
 
   async function createOrder() {
-    const today = new Date().toISOString().split('T')[0];
-    const bsDate = adToBs(new Date());
+    const entryDate = form.date_ad || new Date().toISOString().split('T')[0];
+    const bsDate = adToBs(new Date(entryDate));
     const laborTotal = form.labor_items.reduce((s, li) => s + (li.amount || 0), 0);
     const subtotal = form.items.reduce((sum, i) => sum + (i.total || 0), 0) + laborTotal;
     const vatAmount = form.is_vat ? subtotal * 0.13 : 0;
@@ -96,14 +99,17 @@ export default function Purchase() {
       vendor_name: form.vendor_name,
       vendor_contact: form.vendor_contact,
       vendor_address: form.vendor_address,
-      date_ad: today,
+      vendor_pan: form.vendor_pan,
+      date_ad: entryDate,
       date_bs: bsDate.formatted,
+      due_date: form.due_date || null,
       order_number: form.order_number,
       ordered_by: form.ordered_by,
       items: form.items,
       work_description: form.labor_items.map(li => li.description).filter(Boolean).join(', '),
       payment_type: form.payment_type,
       is_vat: form.is_vat,
+      notes: form.notes,
       subtotal,
       vat_amount: vatAmount,
       total_amount: subtotal + vatAmount,
@@ -138,10 +144,13 @@ export default function Purchase() {
     }
 
     setForm({
-      vendor_name: '', vendor_contact: '', vendor_address: '',
+      vendor_name: '', vendor_contact: '', vendor_address: '', vendor_pan: '',
       order_number: '', ordered_by: '',
+      date_ad: new Date().toISOString().split('T')[0],
+      due_date: '',
       payment_type: 'cash',
       is_vat: false,
+      notes: '',
       items: [{ description: '', quantity: 1, unit: 'Piece', unit_price: 0, total: 0 }],
       labor_items: [{ description: '', amount: 0 }]
     });
@@ -224,23 +233,42 @@ export default function Purchase() {
                 <Input value={form.vendor_name} onChange={e => setForm({ ...form, vendor_name: e.target.value })} />
               </div>
               <div>
-                <Label>Contact</Label>
+                <Label>Contact <span className="text-muted-foreground text-xs">(optional)</span></Label>
                 <Input value={form.vendor_contact} onChange={e => setForm({ ...form, vendor_contact: e.target.value })} />
               </div>
               <div>
-                <Label>Address</Label>
+                <Label>Address <span className="text-muted-foreground text-xs">(optional)</span></Label>
                 <Input value={form.vendor_address} onChange={e => setForm({ ...form, vendor_address: e.target.value })} />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div>
+                <Label>Bill Date *</Label>
+                <Input type="date" value={form.date_ad} onChange={e => setForm({ ...form, date_ad: e.target.value })} />
+              </div>
+              <div>
+                <Label>Due Date <span className="text-muted-foreground text-xs">(credit)</span></Label>
+                <Input type="date" value={form.due_date} onChange={e => setForm({ ...form, due_date: e.target.value })} />
+              </div>
+              <div>
+                <Label>Order / Bill No. <span className="text-muted-foreground text-xs">(optional)</span></Label>
+                <Input value={form.order_number} onChange={e => setForm({ ...form, order_number: e.target.value })} placeholder="Vendor's bill #" />
+              </div>
+              <div>
+                <Label>Vendor PAN/VAT <span className="text-muted-foreground text-xs">(optional)</span></Label>
+                <Input value={form.vendor_pan} onChange={e => setForm({ ...form, vendor_pan: e.target.value })} placeholder="e.g. 123456789" />
               </div>
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label>Order Number</Label>
-                <Input value={form.order_number} onChange={e => setForm({ ...form, order_number: e.target.value })} />
+                <Label>Ordered By <span className="text-muted-foreground text-xs">(optional)</span></Label>
+                <Input value={form.ordered_by} onChange={e => setForm({ ...form, ordered_by: e.target.value })} />
               </div>
               <div>
-                <Label>Ordered By</Label>
-                <Input value={form.ordered_by} onChange={e => setForm({ ...form, ordered_by: e.target.value })} />
+                <Label>Notes <span className="text-muted-foreground text-xs">(optional)</span></Label>
+                <Input value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} placeholder="Remarks, special instructions..." />
               </div>
             </div>
 

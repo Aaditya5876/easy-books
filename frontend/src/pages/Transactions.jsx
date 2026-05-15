@@ -36,7 +36,8 @@ export default function Transactions() {
   const [form, setForm] = useState({
     category: 'income', amount: 0, description: '',
     bank_name: '', bank_account_number: '', cheque_number: '', cheque_date: '',
-    cheque_issue_date: '', party_name: '', status: 'completed'
+    cheque_issue_date: '', party_name: '', status: 'completed',
+    date_ad: new Date().toISOString().split('T')[0], reference_number: '',
   });
 
   useEffect(() => {
@@ -70,20 +71,21 @@ export default function Transactions() {
   }
 
   async function createTransaction() {
-    const today = new Date().toISOString().split('T')[0];
-    const bsDate = adToBs(new Date());
+    const entryDate = form.date_ad || new Date().toISOString().split('T')[0];
+    const bsDate = adToBs(new Date(entryDate));
     const type = activeTab === 'all' ? 'cash' : activeTab;
     await api.Transaction.create({
       ...form,
       type,
       company_id: companyId,
-      date_ad: today,
+      date_ad: entryDate,
       date_bs: bsDate.formatted,
     });
     setForm({
       category: 'income', amount: 0, description: '',
       bank_name: '', bank_account_number: '', cheque_number: '', cheque_date: '',
-      cheque_issue_date: '', party_name: '', status: 'completed'
+      cheque_issue_date: '', party_name: '', status: 'completed',
+      date_ad: new Date().toISOString().split('T')[0], reference_number: '',
     });
     setShowNew(false);
     loadData();
@@ -300,22 +302,31 @@ export default function Transactions() {
         <DialogContent className="max-w-md max-h-[85vh] overflow-y-auto">
           <DialogHeader><DialogTitle>New Transaction</DialogTitle></DialogHeader>
           <div className="space-y-4">
-            <div>
-              <Label>Category</Label>
-              <Select value={form.category} onValueChange={v => setForm({ ...form, category: v })}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="income">Income</SelectItem>
-                  <SelectItem value="expense">Expense</SelectItem>
-                  <SelectItem value="transfer">Transfer</SelectItem>
-                  <SelectItem value="investment">Investment</SelectItem>
-                  <SelectItem value="hand-outs">Hand-outs</SelectItem>
-                </SelectContent>
-              </Select>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Date *</Label>
+                <Input type="date" value={form.date_ad} onChange={e => setForm({ ...form, date_ad: e.target.value })} />
+              </div>
+              <div>
+                <Label>Category</Label>
+                <Select value={form.category} onValueChange={v => setForm({ ...form, category: v })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="income">Income</SelectItem>
+                    <SelectItem value="expense">Expense</SelectItem>
+                    <SelectItem value="transfer">Transfer</SelectItem>
+                    <SelectItem value="investment">Investment</SelectItem>
+                    <SelectItem value="hand-outs">Hand-outs</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
             <div><Label>Amount (NPR) *</Label><Input type="number" value={form.amount} onChange={e => setForm({ ...form, amount: parseFloat(e.target.value) || 0 })} /></div>
             <div><Label>Description *</Label><Input value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} /></div>
-            <div><Label>Party Name</Label><Input value={form.party_name} onChange={e => setForm({ ...form, party_name: e.target.value })} /></div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label>Party Name</Label><Input value={form.party_name} onChange={e => setForm({ ...form, party_name: e.target.value })} /></div>
+              <div><Label>Reference No. <span className="text-muted-foreground text-xs">(optional)</span></Label><Input value={form.reference_number} onChange={e => setForm({ ...form, reference_number: e.target.value })} placeholder="e.g. Bill/Voucher #" /></div>
+            </div>
             {(activeTab === 'bank' || activeTab === 'qr') && (
               <div className="space-y-3">
                 {bankAccounts.length > 0 && (

@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/select";
 
 const CRM_STATUSES = ['lead', 'prospect', 'active', 'inactive'];
+const PAYMENT_TERMS = ['Immediate', 'NET-15', 'NET-30', 'NET-45', 'NET-60'];
 
 export default function Clients() {
   const companyId = getActiveCompanyId();
@@ -25,7 +26,7 @@ export default function Clients() {
   const [colFilters, setColFilters] = useState({ name: '', contact_person: '', crm_status: '' });
   const setCol = (key, val) => setColFilters(f => ({ ...f, [key]: val }));
   const [showAdd, setShowAdd] = useState(false);
-  const [form, setForm] = useState({ name: '', contact_person: '', phone: '', email: '', address: '', pan_vat: '', crm_status: 'active', notes: '' });
+  const [form, setForm] = useState({ name: '', contact_person: '', phone: '', email: '', address: '', pan_vat: '', crm_status: 'active', opening_balance: '', credit_limit: '', payment_terms: 'Immediate', notes: '' });
 
   useEffect(() => {
     if (companyId) loadData();
@@ -39,8 +40,13 @@ export default function Clients() {
   }
 
   async function addClient() {
-    await api.Client.create({ ...form, company_id: companyId });
-    setForm({ name: '', contact_person: '', phone: '', email: '', address: '', pan_vat: '', crm_status: 'active', notes: '' });
+    await api.Client.create({
+      ...form,
+      company_id: companyId,
+      opening_balance: form.opening_balance ? parseFloat(form.opening_balance) : 0,
+      credit_limit: form.credit_limit ? parseFloat(form.credit_limit) : null,
+    });
+    setForm({ name: '', contact_person: '', phone: '', email: '', address: '', pan_vat: '', crm_status: 'active', opening_balance: '', credit_limit: '', payment_terms: 'Immediate', notes: '' });
     setShowAdd(false);
     loadData();
   }
@@ -105,7 +111,7 @@ export default function Clients() {
             </div>
             <div><Label>Email</Label><Input value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} /></div>
             <div><Label>Address</Label><Input value={form.address} onChange={e => setForm({ ...form, address: e.target.value })} /></div>
-            <div><Label>PAN/VAT No.</Label><Input value={form.pan_vat} onChange={e => setForm({ ...form, pan_vat: e.target.value })} /></div>
+            <div><Label>PAN/VAT No. <span className="text-muted-foreground text-xs">(optional)</span></Label><Input value={form.pan_vat} onChange={e => setForm({ ...form, pan_vat: e.target.value })} placeholder="e.g. 123456789" /></div>
             <div>
               <Label>CRM Status</Label>
               <Select value={form.crm_status} onValueChange={v => setForm({ ...form, crm_status: v })}>
@@ -115,7 +121,27 @@ export default function Clients() {
                 </SelectContent>
               </Select>
             </div>
-            <div><Label>Notes</Label><Textarea value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} rows={2} /></div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Opening Balance (NPR) <span className="text-muted-foreground text-xs">(optional)</span></Label>
+                <Input type="number" placeholder="0.00" value={form.opening_balance} onChange={e => setForm({ ...form, opening_balance: e.target.value })} />
+                <p className="text-xs text-muted-foreground mt-1">Amount client already owes you</p>
+              </div>
+              <div>
+                <Label>Credit Limit (NPR) <span className="text-muted-foreground text-xs">(optional)</span></Label>
+                <Input type="number" placeholder="e.g. 100000" value={form.credit_limit} onChange={e => setForm({ ...form, credit_limit: e.target.value })} />
+              </div>
+            </div>
+            <div>
+              <Label>Payment Terms</Label>
+              <Select value={form.payment_terms} onValueChange={v => setForm({ ...form, payment_terms: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {PAYMENT_TERMS.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div><Label>Notes <span className="text-muted-foreground text-xs">(optional)</span></Label><Textarea value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} rows={2} /></div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowAdd(false)}>Cancel</Button>

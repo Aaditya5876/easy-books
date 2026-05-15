@@ -1,10 +1,10 @@
 import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { 
-  LayoutDashboard, BookOpen, ArrowLeftRight, Users, UserCheck, 
-  Package, ShoppingCart, Receipt, FileText, MessageSquare, 
+import {
+  LayoutDashboard, BookOpen, ArrowLeftRight, Users, UserCheck,
+  Package, ShoppingCart, Receipt, FileText, MessageSquare,
   FileSpreadsheet, UserCircle, CalendarCheck, Banknote,
-  ChevronLeft, ChevronRight, Building2, ChevronDown
+  ChevronLeft, ChevronRight, Building2, ChevronDown, ClipboardList
 } from 'lucide-react';
 import { cn } from "@/lib/utils";
 
@@ -30,6 +30,7 @@ const navSections = [
       { icon: Package, label: 'Inventory', path: '/inventory' },
       { icon: ShoppingCart, label: 'Purchase', path: '/purchase' },
       { icon: Receipt, label: 'Sales', path: '/sales' },
+      { icon: ClipboardList, label: 'Quotations', path: '/quotations' },
     ]
   },
 

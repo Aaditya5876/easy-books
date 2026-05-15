@@ -31,7 +31,7 @@ export default function Ledger() {
   const [showNewAccount, setShowNewAccount] = useState(false);
   const [showAccountDetail, setShowAccountDetail] = useState(null);
   const [showNewEntry, setShowNewEntry] = useState(false);
-  const [newAccount, setNewAccount] = useState({ account_name: '', contact_name: '', contact_phone: '', address: '', notes: '' });
+  const [newAccount, setNewAccount] = useState({ account_name: '', contact_name: '', contact_phone: '', address: '', pan_vat: '', opening_balance: '', notes: '' });
   const [newEntry, setNewEntry] = useState({ description: '', debit: 0, credit: 0, reference_id: '', date_ad: new Date().toISOString().split('T')[0] });
 
   useEffect(() => {
@@ -56,10 +56,12 @@ export default function Ledger() {
       ...newAccount,
       company_id: companyId,
       account_type: activeTab,
+      opening_balance: newAccount.opening_balance ? parseFloat(newAccount.opening_balance) : 0,
+      current_balance: newAccount.opening_balance ? parseFloat(newAccount.opening_balance) : 0,
       fiscal_year: '2081/2082',
       is_active: true,
     });
-    setNewAccount({ account_name: '', contact_name: '', contact_phone: '', address: '', notes: '' });
+    setNewAccount({ account_name: '', contact_name: '', contact_phone: '', address: '', pan_vat: '', opening_balance: '', notes: '' });
     setShowNewAccount(false);
     loadData();
   }
@@ -185,27 +187,37 @@ export default function Ledger() {
           <DialogHeader>
             <DialogTitle>New {activeTab.charAt(0).toUpperCase() + activeTab.slice(1)} Account</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4">
+          <div className="space-y-3">
             <div>
               <Label>Account Name *</Label>
-              <Input value={newAccount.account_name} onChange={e => setNewAccount({ ...newAccount, account_name: e.target.value })} placeholder="Party name" />
+              <Input value={newAccount.account_name} onChange={e => setNewAccount({ ...newAccount, account_name: e.target.value })} placeholder="Party or account name" />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label>Contact Person</Label>
+                <Label>Opening Balance <span className="text-muted-foreground text-xs">(optional)</span></Label>
+                <Input type="number" placeholder="0.00" value={newAccount.opening_balance} onChange={e => setNewAccount({ ...newAccount, opening_balance: e.target.value })} />
+              </div>
+              <div>
+                <Label>PAN / VAT No. <span className="text-muted-foreground text-xs">(optional)</span></Label>
+                <Input placeholder="e.g. 123456789" value={newAccount.pan_vat} onChange={e => setNewAccount({ ...newAccount, pan_vat: e.target.value })} />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Contact Person <span className="text-muted-foreground text-xs">(optional)</span></Label>
                 <Input value={newAccount.contact_name} onChange={e => setNewAccount({ ...newAccount, contact_name: e.target.value })} />
               </div>
               <div>
-                <Label>Phone</Label>
+                <Label>Phone <span className="text-muted-foreground text-xs">(optional)</span></Label>
                 <Input value={newAccount.contact_phone} onChange={e => setNewAccount({ ...newAccount, contact_phone: e.target.value })} />
               </div>
             </div>
             <div>
-              <Label>Address</Label>
+              <Label>Address <span className="text-muted-foreground text-xs">(optional)</span></Label>
               <Input value={newAccount.address} onChange={e => setNewAccount({ ...newAccount, address: e.target.value })} />
             </div>
             <div>
-              <Label>Notes</Label>
+              <Label>Notes <span className="text-muted-foreground text-xs">(optional)</span></Label>
               <Textarea value={newAccount.notes} onChange={e => setNewAccount({ ...newAccount, notes: e.target.value })} rows={2} />
             </div>
           </div>

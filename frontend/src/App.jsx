@@ -25,6 +25,7 @@ import Settings from './pages/Settings';
 import Employees from './pages/Employees';
 import Attendance from './pages/Attendance';
 import Payroll from './pages/Payroll';
+import Quotations from './pages/Quotations';
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isAuthenticated, navigateToLogin } = useAuth();
@@ -53,6 +54,7 @@ const AuthenticatedApp = () => {
         <Route path="/inventory" element={<Inventory />} />
         <Route path="/purchase" element={<Purchase />} />
         <Route path="/sales" element={<Sales />} />
+        <Route path="/quotations" element={<Quotations />} />
         <Route path="/memo" element={<Memo />} />
         <Route path="/communication" element={<Communication />} />
         <Route path="/templates" element={<Templates />} />
