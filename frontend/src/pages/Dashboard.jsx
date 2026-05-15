@@ -1,14 +1,15 @@
 import { useState, useEffect } from 'react';
 import { api } from '@/api/adapter';
+import { dashboardApi } from '@/api';
 import { getActiveCompanyId } from '@/lib/companyContext';
-import { 
-  Package, ShoppingCart, Receipt, Wallet, AlertTriangle, 
-  TrendingUp, FileText, Building2
+import {
+  Package, ShoppingCart, Receipt, Wallet, AlertTriangle,
+  TrendingUp, FileText, Building2, Users, ReceiptText, Bell
 } from 'lucide-react';
 import StatCard from '../components/dashboard/StatCard';
 import QuickActions from '../components/dashboard/QuickActions';
 import RecentActivity from '../components/dashboard/RecentActivity';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
 
 const CHART_COLORS = ['hsl(217, 71%, 53%)', 'hsl(160, 60%, 45%)', 'hsl(38, 92%, 50%)', 'hsl(280, 65%, 60%)'];
 
@@ -31,6 +32,10 @@ export default function Dashboard() {
   const [inventorySoldValue, setInventorySoldValue] = useState(0);
   const [inventoryInHandValue, setInventoryInHandValue] = useState(0);
   const [agingItems, setAgingItems] = useState([]);
+  const [salesTrend, setSalesTrend] = useState([]);
+  const [alertsSummary, setAlertsSummary] = useState(null);
+  const [hrSummary, setHrSummary] = useState(null);
+  const [vatSummary, setVatSummary] = useState(null);
   const companyId = getActiveCompanyId();
 
   useEffect(() => {
@@ -43,7 +48,8 @@ export default function Dashboard() {
       return;
     }
 
-    const [inventory, purchases, sales, transactions, quotations, banks, clients] = await Promise.all([
+    const [inventory, purchases, sales, transactions, quotations, banks, clients,
+           trendRes, alertsRes, hrRes, vatRes] = await Promise.all([
       api.InventoryItem.filter({ company_id: companyId }),
       api.PurchaseOrder.filter({ company_id: companyId }, '-created_date', 20),
       api.SalesOrder.filter({ company_id: companyId }, '-created_date', 200),
@@ -51,6 +57,10 @@ export default function Dashboard() {
       api.Quotation.filter({ company_id: companyId }),
       api.BankAccount.filter({ company_id: companyId }),
       api.Client.filter({ company_id: companyId }),
+      dashboardApi.salesTrend(companyId).catch(() => ({ data: [] })),
+      dashboardApi.alerts(companyId).catch(() => ({ data: null })),
+      dashboardApi.hrSummary(companyId).catch(() => ({ data: null })),
+      dashboardApi.vatSummary(companyId).catch(() => ({ data: null })),
     ]);
 
     const lowStockItems = inventory.filter(i => i.quantity <= (i.low_stock_threshold || 5));
@@ -63,11 +73,11 @@ export default function Dashboard() {
     
     const bankBalance = banks.reduce((sum, b) => sum + (b.current_balance || 0), 0);
 
-    // Quotation stats by remark
-    const quotationRemarks = ['Quoted', 'Work-done', 'Cancelled', 'Revised', 'Billed'];
-    const qStats = quotationRemarks.map(remark => ({
-      name: remark,
-      value: quotations.filter(q => q.remark === remark).length
+    // Quotation stats by status (new Quotations page) + memo remark fallback
+    const quotationStatuses = ['pending', 'sent', 'accepted', 'rejected', 'expired'];
+    const qStats = quotationStatuses.map(s => ({
+      name: s.charAt(0).toUpperCase() + s.slice(1),
+      value: quotations.filter(q => q.status === s).length,
     })).filter(q => q.value > 0);
 
     setStats({
@@ -77,9 +87,16 @@ export default function Dashboard() {
       totalSales: totalSalesAmt,
       cashInHand: cashIn - cashOut,
       bankBalance,
-      pendingQuotations: quotations.filter(q => q.remark === 'Quoted').length,
+      pendingQuotations: quotations.filter(q => q.status === 'pending' || q.status === 'sent').length,
       activeClients: clients.filter(c => c.crm_status === 'active').length,
     });
+
+    // Backend-powered sections
+    const trend = trendRes?.data?.data ?? trendRes?.data ?? [];
+    setSalesTrend(Array.isArray(trend) ? trend : []);
+    setAlertsSummary(alertsRes?.data?.data ?? alertsRes?.data ?? null);
+    setHrSummary(hrRes?.data?.data ?? hrRes?.data ?? null);
+    setVatSummary(vatRes?.data?.data ?? vatRes?.data ?? null);
 
     setInventoryItems(inventory.sort((a, b) => (a.quantity || 0) - (b.quantity || 0)).slice(0, 5));
     setQuotationStats(qStats);
@@ -198,7 +215,109 @@ export default function Dashboard() {
         <StatCard icon={TrendingUp} label="Active Clients" value={stats.activeClients} />
       </div>
 
+      {/* Operational Alerts */}
+      {alertsSummary && (alertsSummary.lowStockCount > 0 || alertsSummary.bgExpiringSoon > 0 || alertsSummary.staleChequesCount > 0) && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <Bell className="w-4 h-4 text-amber-600" />
+            <p className="text-sm font-semibold text-amber-800">Operational Alerts</p>
+          </div>
+          <div className="flex flex-wrap gap-4">
+            {alertsSummary.lowStockCount > 0 && (
+              <div className="flex items-center gap-2 text-sm text-amber-700">
+                <Package className="w-4 h-4" />
+                <span><strong>{alertsSummary.lowStockCount}</strong> items below low stock threshold</span>
+              </div>
+            )}
+            {alertsSummary.bgExpiringSoon > 0 && (
+              <div className="flex items-center gap-2 text-sm text-amber-700">
+                <AlertTriangle className="w-4 h-4" />
+                <span><strong>{alertsSummary.bgExpiringSoon}</strong> bank guarantees expiring within 30 days</span>
+              </div>
+            )}
+            {alertsSummary.staleChequesCount > 0 && (
+              <div className="flex items-center gap-2 text-sm text-amber-700">
+                <ReceiptText className="w-4 h-4" />
+                <span><strong>{alertsSummary.staleChequesCount}</strong> cheques deposited but not cleared ({'>'}7 days)</span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
+      {/* Sales Trend & VAT + HR Summary */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* 6-Month Sales Trend */}
+        <div className="lg:col-span-2 bg-card rounded-xl border border-border p-6">
+          <h3 className="text-sm font-semibold text-foreground mb-1">6-Month Sales Trend</h3>
+          <p className="text-xs text-muted-foreground mb-4">Revenue vs Expenses</p>
+          {salesTrend.length > 0 ? (
+            <ResponsiveContainer width="100%" height={200}>
+              <BarChart data={salesTrend}>
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                <XAxis dataKey="month" tick={{ fontSize: 11 }} />
+                <YAxis tick={{ fontSize: 11 }} tickFormatter={v => `${(v/1000).toFixed(0)}k`} />
+                <Tooltip formatter={v => `NPR ${Number(v).toLocaleString()}`} />
+                <Legend />
+                <Bar dataKey="revenue" name="Revenue" fill="hsl(160, 60%, 45%)" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="expenses" name="Expenses" fill="hsl(0, 84%, 60%)" radius={[4, 4, 0, 0]} opacity={0.75} />
+              </BarChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="flex items-center justify-center h-[200px] text-muted-foreground text-sm">No trend data yet</div>
+          )}
+        </div>
+
+        {/* HR + VAT Summary */}
+        <div className="space-y-4">
+          {hrSummary && (
+            <div className="bg-card rounded-xl border border-border p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <Users className="w-4 h-4 text-muted-foreground" />
+                <h3 className="text-sm font-semibold text-foreground">HR Summary</h3>
+              </div>
+              <div className="space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Present Today</span>
+                  <span className="font-semibold">{hrSummary.presentToday ?? '—'}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Pending Leaves</span>
+                  <span className="font-semibold">{hrSummary.pendingLeaves ?? '—'}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Payroll Processed</span>
+                  <span className="font-semibold">{hrSummary.payrollProcessed ? 'Yes' : 'Pending'}</span>
+                </div>
+              </div>
+            </div>
+          )}
+          {vatSummary && (
+            <div className="bg-card rounded-xl border border-border p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <ReceiptText className="w-4 h-4 text-muted-foreground" />
+                <h3 className="text-sm font-semibold text-foreground">VAT Summary</h3>
+              </div>
+              <div className="space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">VAT Collected</span>
+                  <span className="font-semibold text-green-600">NPR {(vatSummary.collected || 0).toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">VAT Paid</span>
+                  <span className="font-semibold text-red-600">NPR {(vatSummary.paid || 0).toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between text-sm font-medium border-t pt-2">
+                  <span>Net Payable</span>
+                  <span className={(vatSummary.collected - vatSummary.paid) >= 0 ? 'text-red-600' : 'text-green-600'}>
+                    NPR {Math.abs((vatSummary.collected || 0) - (vatSummary.paid || 0)).toLocaleString()}
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
 
       {/* Inventory Summary Row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

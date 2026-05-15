@@ -18,6 +18,10 @@ export const inventoryApi = {
   create: (data: object) => apiClient.post('/api/v1/inventory', data),
   update: (id: string, data: object) => apiClient.put(`/api/v1/inventory/${id}`, data, { params: { companyId: companyId() } }),
   remove: (id: string) => apiClient.delete(`/api/v1/inventory/${id}`, { params: { companyId: companyId() } }),
+  adjust: (id: string, data: { adjustmentType: string; quantity: number; reason: string }) =>
+    apiClient.patch(`/api/v1/inventory/${id}/adjust`, data, { params: { companyId: companyId() } }),
+  getAdjustments: (id: string) =>
+    apiClient.get(`/api/v1/inventory/${id}/adjustments`, { params: { companyId: companyId() } }),
 };
 
 // Sales
@@ -142,6 +146,15 @@ export const taskApi = {
   create: (data: object) => apiClient.post('/api/v1/tasks', data),
   update: (id: string, data: object) => apiClient.put(`/api/v1/tasks/${id}`, data, { params: { companyId: companyId() } }),
   remove: (id: string) => apiClient.delete(`/api/v1/tasks/${id}`, { params: { companyId: companyId() } }),
+};
+
+// Dashboard
+export const dashboardApi = {
+  salesTrend: (cid: string) => apiClient.get('/api/v1/dashboard/sales-trend', { params: { companyId: cid } }),
+  alerts: (cid: string) => apiClient.get('/api/v1/dashboard/alerts', { params: { companyId: cid } }),
+  hrSummary: (cid: string) => apiClient.get('/api/v1/dashboard/hr-summary', { params: { companyId: cid } }),
+  recentActivity: (cid: string) => apiClient.get('/api/v1/dashboard/recent-activity', { params: { companyId: cid } }),
+  vatSummary: (cid: string) => apiClient.get('/api/v1/dashboard/vat-summary', { params: { companyId: cid } }),
 };
 
 // Companies

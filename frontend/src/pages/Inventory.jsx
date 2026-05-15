@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { api, apiAuth } from '@/api/adapter';
+import { inventoryApi } from '@/api';
 import { getActiveCompanyId } from '@/lib/companyContext';
 import { adToBs } from '@/lib/nepaliDate';
 import PageHeader from '../components/shared/PageHeader';
@@ -8,13 +9,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter
 } from "@/components/ui/dialog";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue
 } from "@/components/ui/select";
-import { AlertTriangle, Package, ImagePlus, X, Trash2, Tag } from 'lucide-react';
+import { AlertTriangle, Package, ImagePlus, X, Trash2, Tag, ArrowUpDown, History } from 'lucide-react';
 
 const UNITS = ['Piece', 'Set', 'Liter', 'ml', 'Kg', 'gm', 'NOS'];
 
@@ -69,6 +71,11 @@ export default function Inventory() {
   const [uploadingUpdateImage, setUploadingUpdateImage] = useState(false);
   const [showUpdatePasswordDialog, setShowUpdatePasswordDialog] = useState(false);
   const [updatePassword, setUpdatePassword] = useState('');
+  const [showAdjustDialog, setShowAdjustDialog] = useState(false);
+  const [adjForm, setAdjForm] = useState({ type: 'ADDITION', quantity: '', reason: '' });
+  const [adjSubmitting, setAdjSubmitting] = useState(false);
+  const [showAdjLogDialog, setShowAdjLogDialog] = useState(false);
+  const [adjLog, setAdjLog] = useState([]);
 
   const f = getFields(company?.business_type);
 
@@ -165,6 +172,44 @@ export default function Inventory() {
     loadItems();
   };
 
+  async function handleAdjustClick() {
+    if (!selectedItem) { alert('Please select an item from the table first.'); return; }
+    setAdjForm({ type: 'ADDITION', quantity: '', reason: '' });
+    setShowAdjustDialog(true);
+  }
+
+  async function submitAdjustment() {
+    if (!adjForm.quantity || !adjForm.reason.trim()) return;
+    setAdjSubmitting(true);
+    try {
+      await inventoryApi.adjust(selectedItem.id, {
+        adjustmentType: adjForm.type,
+        quantity: parseFloat(adjForm.quantity),
+        reason: adjForm.reason.trim(),
+      });
+      setShowAdjustDialog(false);
+      setSelectedItem(null);
+      loadItems();
+    } catch (err) {
+      alert(err?.response?.data?.message || 'Adjustment failed');
+    } finally {
+      setAdjSubmitting(false);
+    }
+  }
+
+  async function handleViewLog() {
+    if (!selectedItem) { alert('Please select an item from the table first.'); return; }
+    try {
+      const res = await inventoryApi.getAdjustments(selectedItem.id);
+      const data = res?.data?.data ?? res?.data ?? [];
+      setAdjLog(Array.isArray(data) ? data : []);
+      setShowAdjLogDialog(true);
+    } catch {
+      setAdjLog([]);
+      setShowAdjLogDialog(true);
+    }
+  }
+
   async function addItem() {
     const today = new Date().toISOString().split('T')[0];
     const bsDate = adToBs(new Date());
@@ -242,6 +287,12 @@ export default function Inventory() {
         onAdd={() => setShowAdd(true)}
         addLabel="Add Stock"
       >
+        <Button onClick={handleAdjustClick} variant="outline" className="gap-2" disabled={!selectedItem}>
+          <ArrowUpDown className="w-4 h-4" />Adjust Stock
+        </Button>
+        <Button onClick={handleViewLog} variant="ghost" className="gap-2" disabled={!selectedItem}>
+          <History className="w-4 h-4" />Log
+        </Button>
         <Button onClick={handleUpdateClick} variant="outline" className="gap-2">
           <Tag className="w-4 h-4" />Update
         </Button>
@@ -386,6 +437,118 @@ export default function Inventory() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowConfirmDialog(false)}>No, Cancel</Button>
             <Button variant="destructive" onClick={handleConfirmDelete}>Yes, Delete</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Adjust Stock Dialog */}
+      <Dialog open={showAdjustDialog} onOpenChange={setShowAdjustDialog}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ArrowUpDown className="w-4 h-4" />
+              Adjust Stock — {selectedItem?.item_name || selectedItem?.description}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="bg-secondary rounded-lg px-4 py-2 text-sm flex justify-between">
+              <span className="text-muted-foreground">Current Quantity</span>
+              <span className="font-semibold">{selectedItem?.quantity ?? 0} {selectedItem?.unit}</span>
+            </div>
+            <div>
+              <Label>Adjustment Type</Label>
+              <Select value={adjForm.type} onValueChange={v => setAdjForm({ ...adjForm, type: v })}>
+                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ADDITION">Addition — add to current stock</SelectItem>
+                  <SelectItem value="SUBTRACTION">Subtraction — remove from current stock</SelectItem>
+                  <SelectItem value="RECOUNT">Recount — set exact quantity</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>
+                {adjForm.type === 'RECOUNT' ? 'New Quantity' : 'Quantity to ' + (adjForm.type === 'ADDITION' ? 'Add' : 'Remove')} *
+              </Label>
+              <Input
+                type="number"
+                className="mt-1"
+                placeholder="0"
+                value={adjForm.quantity}
+                onChange={e => setAdjForm({ ...adjForm, quantity: e.target.value })}
+              />
+              {adjForm.quantity && adjForm.type !== 'RECOUNT' && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  New quantity will be:{' '}
+                  <strong>
+                    {adjForm.type === 'ADDITION'
+                      ? (selectedItem?.quantity || 0) + parseFloat(adjForm.quantity || 0)
+                      : Math.max(0, (selectedItem?.quantity || 0) - parseFloat(adjForm.quantity || 0))}
+                  </strong>{' '}{selectedItem?.unit}
+                </p>
+              )}
+            </div>
+            <div>
+              <Label>Reason *</Label>
+              <Textarea
+                className="mt-1"
+                rows={2}
+                placeholder="e.g. Physical stock count, damaged goods, returned items..."
+                value={adjForm.reason}
+                onChange={e => setAdjForm({ ...adjForm, reason: e.target.value })}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowAdjustDialog(false)}>Cancel</Button>
+            <Button
+              onClick={submitAdjustment}
+              disabled={adjSubmitting || !adjForm.quantity || !adjForm.reason.trim()}
+            >
+              {adjSubmitting ? 'Saving...' : 'Save Adjustment'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Adjustment Log Dialog */}
+      <Dialog open={showAdjLogDialog} onOpenChange={setShowAdjLogDialog}>
+        <DialogContent className="max-w-lg max-h-[80vh] overflow-hidden flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <History className="w-4 h-4" />
+              Adjustment Log — {selectedItem?.item_name || selectedItem?.description}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="flex-1 overflow-y-auto">
+            {adjLog.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-8">No adjustments recorded yet.</p>
+            ) : (
+              <div className="space-y-2">
+                {adjLog.map((entry, idx) => (
+                  <div key={entry.id ?? idx} className="flex items-start gap-3 p-3 bg-secondary/50 rounded-lg text-sm">
+                    <span className={`shrink-0 font-bold text-xs px-2 py-0.5 rounded-full ${
+                      entry.adjustmentType === 'ADDITION' ? 'bg-green-100 text-green-700' :
+                      entry.adjustmentType === 'SUBTRACTION' ? 'bg-red-100 text-red-700' :
+                      'bg-blue-100 text-blue-700'
+                    }`}>
+                      {entry.adjustmentType === 'ADDITION' ? '+' : entry.adjustmentType === 'SUBTRACTION' ? '−' : '⟳'}
+                      {entry.quantity}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs text-muted-foreground truncate">{entry.reason}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        Before: {entry.quantityBefore} → After: {entry.quantityAfter}
+                        {entry.createdAt && ` · ${new Date(entry.createdAt).toLocaleDateString()}`}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowAdjLogDialog(false)}>Close</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
