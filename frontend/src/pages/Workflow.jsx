@@ -28,6 +28,8 @@ export default function Workflow() {
     assigned_contact: '',
     department: '',
     workflow_type: 'job_card',
+    transaction_type: 'sales',
+    vendor_client_name: '',
   });
 
   useEffect(() => {
@@ -42,16 +44,24 @@ export default function Workflow() {
   }
 
   async function createTask() {
-    const user = await apiAuth.me();
-    await api.Task.create({
-      ...form,
-      company_id: companyId,
-      assigned_by: user.email,
-      status: 'pending',
-    });
-    setForm({ title: '', description: '', assigned_to: '', due_date: '', due_time: '', priority: 'medium', assigned_name: '', assigned_contact: '', department: '', workflow_type: 'job_card' });
-    setShowNew(false);
-    loadData();
+    try {
+      console.log('createTask called', form);
+      const user = await apiAuth.me();
+      const payload = {
+        ...form,
+        company_id: companyId,
+        assigned_by: user.email,
+        status: 'pending',
+      };
+      console.log('creating task with payload', payload);
+      await api.Task.create(payload);
+      setForm({ title: '', description: '', assigned_to: '', due_date: '', due_time: '', priority: 'medium', assigned_name: '', assigned_contact: '', department: '', workflow_type: 'job_card', transaction_type: 'sales', vendor_client_name: '' });
+      setShowNew(false);
+      await loadData();
+    } catch (err) {
+      console.error('Error creating task', err);
+      alert('Error creating task: ' + (err?.message || err));
+    }
   }
 
   async function updateTaskStatus(taskId, status) {
@@ -205,6 +215,33 @@ export default function Workflow() {
           <DialogHeader><DialogTitle>Create Workflow Task</DialogTitle></DialogHeader>
           <div className="space-y-3">
             <div><Label>Task Title *</Label><Input value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} /></div>
+            <div>
+              <Label>Type</Label>
+              <Select value={form.workflow_type} onValueChange={v => setForm({ ...form, workflow_type: v })}>
+                <SelectTrigger><SelectValue placeholder="Select type..." /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="job_card">Job Card</SelectItem>
+                  <SelectItem value="order_slip">Order Slip</SelectItem>
+                  <SelectItem value="general_assessments">General Assessments</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Transaction</Label>
+              <Select value={form.transaction_type} onValueChange={v => setForm({ ...form, transaction_type: v })}>
+                <SelectTrigger><SelectValue placeholder="Select transaction..." /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="sales">Sales</SelectItem>
+                  <SelectItem value="purchase">Purchase</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {form.transaction_type && (
+              <div>
+                <Label>{form.transaction_type === 'purchase' ? 'Vendor' : 'Client'}</Label>
+                <Input value={form.vendor_client_name} onChange={e => setForm({ ...form, vendor_client_name: e.target.value })} placeholder={form.transaction_type === 'purchase' ? 'Vendor name' : 'Client name'} />
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-3">
               <div><Label>Assigned To</Label><Input value={form.assigned_name} onChange={e => setForm({ ...form, assigned_name: e.target.value })} placeholder="Full name" /></div>
               <div><Label>Contact</Label><Input value={form.assigned_contact} onChange={e => setForm({ ...form, assigned_contact: e.target.value })} placeholder="Phone / Email" /></div>
@@ -228,17 +265,7 @@ export default function Workflow() {
                 </SelectContent>
               </Select>
             </div>
-            <div>
-              <Label>Type</Label>
-              <Select value={form.workflow_type} onValueChange={v => setForm({ ...form, workflow_type: v })}>
-                <SelectTrigger><SelectValue placeholder="Select type..." /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="job_card">Job Card</SelectItem>
-                  <SelectItem value="order_slip">Order Slip</SelectItem>
-                  <SelectItem value="general_assessments">General Assessments</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+            
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowNew(false)}>Cancel</Button>
