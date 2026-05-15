@@ -9,6 +9,9 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import PageLoader from '../components/PageLoader';
+import EmptyState from '../components/EmptyState';
+import { UserCircle } from 'lucide-react';
 
 const statusColors = { active: 'bg-green-100 text-green-700', inactive: 'bg-slate-100 text-slate-600', on_leave: 'bg-amber-100 text-amber-700', resigned: 'bg-red-100 text-red-700' };
 
@@ -57,12 +60,16 @@ export default function Employees() {
     )},
   ];
 
-  if (loading) return <div className="flex items-center justify-center py-20"><div className="w-8 h-8 border-4 border-primary/20 border-t-primary rounded-full animate-spin" /></div>;
+  if (loading) return <PageLoader />;
 
   return (
     <div className="space-y-6 animate-fade-in">
       <PageHeader title="Employees" subtitle="Manage employee records" onAdd={() => setShowForm(true)} addLabel="Add Employee" />
-      <DataTable columns={columns} data={filtered} emptyMessage="No employees added yet" />
+      {employees.length === 0 ? (
+        <EmptyState icon={UserCircle} title="No employees yet" description="Add your first employee to start tracking attendance and payroll." action={<Button onClick={() => setShowForm(true)}>Add Employee</Button>} />
+      ) : (
+        <DataTable columns={columns} data={filtered} emptyMessage="No employees match your search." />
+      )}
 
       <Dialog open={showForm} onOpenChange={setShowForm}>
         <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">

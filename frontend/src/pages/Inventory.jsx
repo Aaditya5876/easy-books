@@ -17,6 +17,8 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue
 } from "@/components/ui/select";
 import { AlertTriangle, Package, ImagePlus, X, Trash2, Tag, ArrowUpDown, History } from 'lucide-react';
+import PageLoader from '../components/PageLoader';
+import EmptyState from '../components/EmptyState';
 
 const UNITS = ['Piece', 'Set', 'Liter', 'ml', 'Kg', 'gm', 'NOS'];
 
@@ -273,11 +275,7 @@ export default function Inventory() {
 
   const lowStockCount = items.filter(i => (i.quantity || 0) <= (i.low_stock_threshold || 5)).length;
 
-  if (loading) return (
-    <div className="flex items-center justify-center py-20">
-      <div className="w-8 h-8 border-4 border-primary/20 border-t-primary rounded-full animate-spin" />
-    </div>
-  );
+  if (loading) return <PageLoader />;
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -311,6 +309,9 @@ export default function Inventory() {
         </div>
       )}
 
+      {items.length === 0 ? (
+        <EmptyState icon={Package} title="No inventory items yet" description="Add your first stock item to start tracking your inventory." action={<Button onClick={() => setShowAdd(true)}>Add Stock</Button>} />
+      ) : (
       <DataTable
         columns={columns}
         data={filtered}
@@ -331,6 +332,7 @@ export default function Inventory() {
         </>}
         emptyMessage="No inventory items yet. Click 'Add Stock' to add items."
       />
+      )}
 
       {/* Update Password Dialog */}
       <Dialog open={showUpdatePasswordDialog} onOpenChange={setShowUpdatePasswordDialog}>

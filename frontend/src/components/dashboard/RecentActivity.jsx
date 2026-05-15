@@ -18,7 +18,7 @@ const colorMap = {
 export default function RecentActivity({ activities = [] }) {
   if (activities.length === 0) {
     return (
-      <div className="bg-card rounded-xl border border-border p-6">
+      <div className="glass-card rounded-xl p-6">
         <h3 className="text-sm font-semibold text-foreground mb-4">Recent Activity</h3>
         <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
           <ArrowLeftRight className="w-8 h-8 mb-2 opacity-30" />
@@ -30,7 +30,7 @@ export default function RecentActivity({ activities = [] }) {
   }
 
   return (
-    <div className="bg-card rounded-xl border border-border p-6">
+    <div className="glass-card rounded-xl p-6">
       <h3 className="text-sm font-semibold text-foreground mb-4">Recent Activity</h3>
       <div className="space-y-3">
         {activities.slice(0, 8).map((activity, idx) => {

@@ -85,6 +85,7 @@ export const payrollApi = {
   create: (data: object) => apiClient.post('/api/v1/payroll', data),
   update: (id: string, data: object) => apiClient.put(`/api/v1/payroll/${id}`, data, { params: { companyId: companyId() } }),
   process: (month: string) => apiClient.post('/api/v1/payroll/process', { companyId: companyId(), month }),
+  gratuity: (employeeId: string) => apiClient.get('/api/v1/payroll/gratuity', { params: { companyId: companyId(), employeeId } }),
 };
 
 // Ledger
@@ -119,6 +120,7 @@ export const quotationApi = {
   create: (data: object) => apiClient.post('/api/v1/quotations', data),
   update: (id: string, data: object) => apiClient.put(`/api/v1/quotations/${id}`, data, { params: { companyId: companyId() } }),
   remove: (id: string) => apiClient.delete(`/api/v1/quotations/${id}`, { params: { companyId: companyId() } }),
+  convert: (id: string) => apiClient.post(`/api/v1/quotations/${id}/convert`, {}, { params: { companyId: companyId() } }),
 };
 
 // Memos

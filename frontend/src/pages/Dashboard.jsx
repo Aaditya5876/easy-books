@@ -282,7 +282,7 @@ export default function Dashboard() {
       {/* Sales Trend & VAT + HR Summary */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* 6-Month Sales Trend */}
-        <div className="lg:col-span-2 bg-card rounded-xl border border-border p-6">
+        <div className="lg:col-span-2 glass-card rounded-xl p-6">
           <h3 className="text-sm font-semibold text-foreground mb-1">6-Month Sales Trend</h3>
           <p className="text-xs text-muted-foreground mb-4">Revenue vs Expenses</p>
           {salesTrend.length > 0 ? (
@@ -305,7 +305,7 @@ export default function Dashboard() {
         {/* HR + VAT Summary */}
         <div className="space-y-4">
           {hrSummary && (
-            <div className="bg-card rounded-xl border border-border p-4">
+            <div className="glass-card rounded-xl p-4">
               <div className="flex items-center gap-2 mb-3">
                 <Users className="w-4 h-4 text-muted-foreground" />
                 <h3 className="text-sm font-semibold text-foreground">HR Summary</h3>
@@ -327,7 +327,7 @@ export default function Dashboard() {
             </div>
           )}
           {vatSummary && (
-            <div className="bg-card rounded-xl border border-border p-4">
+            <div className="glass-card rounded-xl p-4">
               <div className="flex items-center gap-2 mb-3">
                 <ReceiptText className="w-4 h-4 text-muted-foreground" />
                 <h3 className="text-sm font-semibold text-foreground">VAT Summary</h3>
@@ -356,7 +356,7 @@ export default function Dashboard() {
       {/* Inventory Summary Row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Top 10 Selling Items */}
-        <div className="bg-card rounded-xl border border-border p-6">
+        <div className="glass-card rounded-xl p-6">
           <h3 className="text-sm font-semibold text-foreground mb-1">Top 10 Highest Selling Items</h3>
           <p className="text-xs text-muted-foreground mb-4">By sales value</p>
           {topSellingItems.length > 0 ? (
@@ -379,7 +379,7 @@ export default function Dashboard() {
 
         {/* Inventory Value & Aging */}
         <div className="space-y-4">
-          <div className="bg-card rounded-xl border border-border p-6">
+          <div className="glass-card rounded-xl p-6">
             <h3 className="text-sm font-semibold text-foreground mb-3">Inventory Value Summary</h3>
             <div className="grid grid-cols-2 gap-4">
               <div className="bg-primary/5 rounded-lg p-4">
@@ -393,7 +393,7 @@ export default function Dashboard() {
             </div>
           </div>
 
-          <div className="bg-card rounded-xl border border-border p-6">
+          <div className="glass-card rounded-xl p-6">
             <div className="flex items-center gap-2 mb-3">
               <AlertTriangle className="w-4 h-4 text-warning" />
               <h3 className="text-sm font-semibold text-foreground">Aging Inventory</h3>
@@ -423,7 +423,7 @@ export default function Dashboard() {
       {/* Charts and Activity Row */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Low Stock Items */}
-        <div className="bg-card rounded-xl border border-border p-6">
+        <div className="glass-card rounded-xl p-6">
           <h3 className="text-sm font-semibold text-foreground mb-4">Inventory Status</h3>
           {inventoryItems.length > 0 ? (
             <ResponsiveContainer width="100%" height={220}>
@@ -448,7 +448,7 @@ export default function Dashboard() {
         </div>
 
         {/* Quotation Status */}
-        <div className="bg-card rounded-xl border border-border p-6">
+        <div className="glass-card rounded-xl p-6">
           <h3 className="text-sm font-semibold text-foreground mb-4">Quotation Status</h3>
           {quotationStats.length > 0 ? (
             <ResponsiveContainer width="100%" height={220}>

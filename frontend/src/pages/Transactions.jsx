@@ -16,6 +16,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue
 } from "@/components/ui/select";
 import { Banknote, CreditCard, QrCode, FileCheck, Plus, X, Building2, Eye, EyeOff, ExternalLink } from 'lucide-react';
+import PageLoader from '../components/PageLoader';
 import FloatingBankBrowser from '../components/FloatingBankBrowser';
 
 export default function Transactions() {
@@ -148,7 +149,7 @@ export default function Transactions() {
     )},
   ];
 
-  if (loading) return <div className="flex items-center justify-center py-20"><div className="w-8 h-8 border-4 border-primary/20 border-t-primary rounded-full animate-spin" /></div>;
+  if (loading) return <PageLoader />;
 
   return (
     <div className="space-y-6 animate-fade-in">

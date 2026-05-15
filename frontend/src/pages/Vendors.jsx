@@ -13,6 +13,9 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue
 } from "@/components/ui/select";
+import PageLoader from '../components/PageLoader';
+import EmptyState from '../components/EmptyState';
+import { Users } from 'lucide-react';
 
 const PAYMENT_TERMS = ['Immediate', 'NET-15', 'NET-30', 'NET-45', 'NET-60'];
 
@@ -69,12 +72,16 @@ export default function Vendors() {
     )},
   ];
 
-  if (loading) return <div className="flex items-center justify-center py-20"><div className="w-8 h-8 border-4 border-primary/20 border-t-primary rounded-full animate-spin" /></div>;
+  if (loading) return <PageLoader />;
 
   return (
     <div className="space-y-6 animate-fade-in">
       <PageHeader title="Vendors" subtitle={`${vendors.length} vendors`} searchValue={search} onSearchChange={setSearch} onAdd={() => setShowAdd(true)} addLabel="Add Vendor" />
-      <DataTable columns={columns} data={filtered} emptyMessage="No vendors yet. Vendors are auto-created from purchase entries." />
+      {vendors.length === 0 ? (
+        <EmptyState icon={Users} title="No vendors yet" description="Add your first vendor to start tracking purchases." action={<Button onClick={() => setShowAdd(true)}>Add Vendor</Button>} />
+      ) : (
+        <DataTable columns={columns} data={filtered} emptyMessage="No vendors match your search." />
+      )}
       <Dialog open={showAdd} onOpenChange={setShowAdd}>
         <DialogContent className="max-w-md">
           <DialogHeader><DialogTitle>Add Vendor</DialogTitle></DialogHeader>

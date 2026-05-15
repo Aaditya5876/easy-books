@@ -32,7 +32,7 @@ export default function QuickActions() {
           <button
             key={action.path}
             onClick={() => navigate(action.path)}
-            className="flex flex-col items-center gap-2 p-4 bg-card rounded-xl border border-border hover:shadow-md hover:-translate-y-0.5 transition-all group"
+            className="flex flex-col items-center gap-2 p-4 glass-card rounded-xl hover:shadow-md hover:-translate-y-0.5 transition-all group"
           >
             <div className={cn(
               "w-10 h-10 rounded-xl flex items-center justify-center text-white transition-transform group-hover:scale-110",

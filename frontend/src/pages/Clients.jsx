@@ -14,6 +14,9 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue
 } from "@/components/ui/select";
+import PageLoader from '../components/PageLoader';
+import EmptyState from '../components/EmptyState';
+import { UserCheck } from 'lucide-react';
 
 const CRM_STATUSES = ['lead', 'prospect', 'active', 'inactive'];
 const PAYMENT_TERMS = ['Immediate', 'NET-15', 'NET-30', 'NET-45', 'NET-60'];
@@ -82,7 +85,7 @@ export default function Clients() {
     )},
   ];
 
-  if (loading) return <div className="flex items-center justify-center py-20"><div className="w-8 h-8 border-4 border-primary/20 border-t-primary rounded-full animate-spin" /></div>;
+  if (loading) return <PageLoader />;
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -98,7 +101,11 @@ export default function Clients() {
         ))}
       </div>
 
-      <DataTable columns={columns} data={filtered} emptyMessage="No clients yet. Clients are auto-created from sales entries." />
+      {clients.length === 0 ? (
+        <EmptyState icon={UserCheck} title="No clients yet" description="Add your first client to start managing your sales relationships." action={<Button onClick={() => setShowAdd(true)}>Add Client</Button>} />
+      ) : (
+        <DataTable columns={columns} data={filtered} emptyMessage="No clients match your search." />
+      )}
 
       <Dialog open={showAdd} onOpenChange={setShowAdd}>
         <DialogContent className="max-w-md">

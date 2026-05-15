@@ -13,7 +13,9 @@ import { Switch } from "@/components/ui/switch";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter
 } from "@/components/ui/dialog";
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus, Trash2, ShoppingCart } from 'lucide-react';
+import PageLoader from '../components/PageLoader';
+import EmptyState from '../components/EmptyState';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue
 } from "@/components/ui/select";
@@ -198,13 +200,7 @@ export default function Purchase() {
     )},
   ];
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-20">
-        <div className="w-8 h-8 border-4 border-primary/20 border-t-primary rounded-full animate-spin" />
-      </div>
-    );
-  }
+  if (loading) return <PageLoader />;
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -217,7 +213,11 @@ export default function Purchase() {
         addLabel="New Purchase"
       />
 
-      <DataTable columns={columns} data={filtered} emptyMessage="No purchase orders yet" />
+      {orders.length === 0 ? (
+        <EmptyState icon={ShoppingCart} title="No purchase orders yet" description="Add your first purchase order to track your expenses." action={<Button onClick={() => setShowNew(true)}>New Purchase</Button>} />
+      ) : (
+        <DataTable columns={columns} data={filtered} emptyMessage="No purchase orders match your search." />
+      )}
 
       {/* New Purchase Dialog */}
       <Dialog open={showNew} onOpenChange={setShowNew}>

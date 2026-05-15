@@ -89,8 +89,9 @@ export default function Login() {
   const strength = passwordStrength(regForm.password);
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
-      <Card className="w-full max-w-sm shadow-lg">
+    <div className="min-h-screen flex items-center justify-center p-4"
+      style={{ background: 'radial-gradient(ellipse at 60% 0%, hsl(217 71% 24% / 0.18) 0%, transparent 60%), radial-gradient(ellipse at 0% 100%, hsl(38 92% 50% / 0.08) 0%, transparent 55%), hsl(220 20% 97%)' }}>
+      <Card className="w-full max-w-sm shadow-xl glass-card border-border/60">
         <CardHeader className="text-center pb-2">
           <div className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center mx-auto mb-3">
             <span className="text-primary-foreground font-bold text-lg">E</span>

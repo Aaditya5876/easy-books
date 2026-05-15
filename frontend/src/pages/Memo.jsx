@@ -17,6 +17,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue
 } from "@/components/ui/select";
 import { ExternalLink, Upload, ImageIcon, Loader2 } from 'lucide-react';
+import PageLoader from '../components/PageLoader';
 
 const CATEGORIES = [
   { value: 'quotation', label: 'Quotations' },
@@ -168,7 +169,7 @@ export default function Memo() {
     ) : '-' },
   ];
 
-  if (loading) return <div className="flex items-center justify-center py-20"><div className="w-8 h-8 border-4 border-primary/20 border-t-primary rounded-full animate-spin" /></div>;
+  if (loading) return <PageLoader />;
 
   return (
     <div className="space-y-6 animate-fade-in">

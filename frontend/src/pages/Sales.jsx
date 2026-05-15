@@ -16,7 +16,9 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue
 } from "@/components/ui/select";
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus, Trash2, Receipt } from 'lucide-react';
+import PageLoader from '../components/PageLoader';
+import EmptyState from '../components/EmptyState';
 
 const UNITS = ['Piece', 'Set', 'Liter', 'ml', 'Kg', 'gm', 'NOS'];
 
@@ -254,14 +256,16 @@ export default function Sales() {
     { key: 'status', label: 'Status', filterValue: colFilters.status, onFilterChange: v => setCol('status', v), filterPlaceholder: 'e.g. confirmed', render: (row) => <Badge>{row.status}</Badge> },
   ];
 
-  if (loading) {
-    return <div className="flex items-center justify-center py-20"><div className="w-8 h-8 border-4 border-primary/20 border-t-primary rounded-full animate-spin" /></div>;
-  }
+  if (loading) return <PageLoader />;
 
   return (
     <div className="space-y-6 animate-fade-in">
       <PageHeader title="Sales" subtitle="Sales orders and invoices" searchValue={search} onSearchChange={setSearch} onAdd={openNewSale} addLabel="New Sale" />
-      <DataTable columns={columns} data={filtered} emptyMessage="No sales orders yet" />
+      {orders.length === 0 ? (
+        <EmptyState icon={Receipt} title="No sales orders yet" description="Create your first invoice to get started." action={<Button onClick={openNewSale}>New Sale</Button>} />
+      ) : (
+        <DataTable columns={columns} data={filtered} emptyMessage="No sales orders match your search." />
+      )}
 
       <Dialog open={showNew} onOpenChange={setShowNew}>
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">

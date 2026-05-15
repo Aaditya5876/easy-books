@@ -1,15 +1,18 @@
 import { useState, useEffect } from 'react';
 import { api } from '@/api/adapter';
+import { payrollApi } from '@/api';
 import { getActiveCompanyId } from '@/lib/companyContext';
 import PageHeader from '../components/shared/PageHeader';
 import DataTable from '../components/shared/DataTable';
+import PageLoader from '../components/PageLoader';
+import EmptyState from '../components/EmptyState';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { FileText, RefreshCw, Download } from 'lucide-react';
+import { FileText, RefreshCw, Download, Calculator } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 
 const statusColors = { draft: 'bg-slate-100 text-slate-600', approved: 'bg-blue-100 text-blue-700', paid: 'bg-green-100 text-green-700' };
@@ -42,6 +45,10 @@ export default function Payroll() {
   const [showDetail, setShowDetail] = useState(null);
   const [colFilters, setColFilters] = useState({ employee_name: '', status: '' });
   const setCol = (key, val) => setColFilters(f => ({ ...f, [key]: val }));
+  const [showGratuity, setShowGratuity] = useState(false);
+  const [gratuityEmpId, setGratuityEmpId] = useState('');
+  const [gratuityResult, setGratuityResult] = useState(null);
+  const [gratuityLoading, setGratuityLoading] = useState(false);
 
   useEffect(() => { if (companyId) load(); }, [companyId]);
 
@@ -108,6 +115,20 @@ export default function Payroll() {
     }
     setGenerating(false);
     load();
+  }
+
+  async function calculateGratuity() {
+    if (!gratuityEmpId) return;
+    setGratuityLoading(true);
+    setGratuityResult(null);
+    try {
+      const res = await payrollApi.gratuity(gratuityEmpId);
+      setGratuityResult(res.data?.data ?? res.data);
+    } catch (err) {
+      setGratuityResult({ error: err?.response?.data?.message || 'Calculation failed' });
+    } finally {
+      setGratuityLoading(false);
+    }
   }
 
   async function updateStatus(id, status) {
@@ -201,7 +222,7 @@ export default function Payroll() {
     )},
   ];
 
-  if (loading) return <div className="flex items-center justify-center py-20"><div className="w-8 h-8 border-4 border-primary/20 border-t-primary rounded-full animate-spin" /></div>;
+  if (loading) return <PageLoader />;
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -213,6 +234,9 @@ export default function Payroll() {
               {getMonthOptions().map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}
             </SelectContent>
           </Select>
+          <Button variant="outline" onClick={() => { setShowGratuity(true); setGratuityResult(null); setGratuityEmpId(''); }} className="gap-2">
+            <Calculator className="w-4 h-4" /> Gratuity
+          </Button>
           <Button onClick={generatePayroll} disabled={generating} className="gap-2">
             <RefreshCw className={`w-4 h-4 ${generating ? 'animate-spin' : ''}`} />
             {generating ? 'Generating...' : 'Generate Payroll'}
@@ -221,15 +245,73 @@ export default function Payroll() {
       </PageHeader>
 
       {monthPayrolls.length === 0 && (
-        <div className="bg-card rounded-xl border border-border p-12 text-center">
-          <FileText className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
-          <p className="text-muted-foreground">No payroll for {selectedMonth}. Click "Generate Payroll" to calculate.</p>
-        </div>
+        <EmptyState
+          icon={FileText}
+          title={`No payroll for ${selectedMonth}`}
+          description='Click "Generate Payroll" to calculate salaries for this month.'
+          action={
+            <Button onClick={generatePayroll} disabled={generating} className="gap-2">
+              <RefreshCw className={`w-4 h-4 ${generating ? 'animate-spin' : ''}`} />
+              {generating ? 'Generating...' : 'Generate Payroll'}
+            </Button>
+          }
+        />
       )}
 
       {monthPayrolls.length > 0 && (
         <DataTable columns={columns} data={monthPayrolls} emptyMessage="No payroll records" />
       )}
+
+      {/* Gratuity Dialog */}
+      <Dialog open={showGratuity} onOpenChange={setShowGratuity}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><Calculator className="w-4 h-4" /> Gratuity Calculator</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-xs text-muted-foreground">Nepal Labour Act 2074 — requires 3+ years of continuous service.</p>
+            <div className="space-y-1.5">
+              <Label>Select Employee</Label>
+              <Select value={gratuityEmpId} onValueChange={setGratuityEmpId}>
+                <SelectTrigger><SelectValue placeholder="Choose employee…" /></SelectTrigger>
+                <SelectContent>
+                  {employees.map(e => <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <Button onClick={calculateGratuity} disabled={!gratuityEmpId || gratuityLoading} className="w-full gap-2">
+              {gratuityLoading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Calculator className="w-4 h-4" />}
+              {gratuityLoading ? 'Calculating…' : 'Calculate'}
+            </Button>
+            {gratuityResult && !gratuityResult.error && (
+              <div className="glass-card rounded-xl p-4 space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Eligible</span>
+                  <span className={gratuityResult.eligible ? 'text-green-600 font-semibold' : 'text-red-500'}>
+                    {gratuityResult.eligible ? 'Yes' : 'No (< 3 years)'}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Service</span>
+                  <span className="font-medium">{gratuityResult.monthsWorked ?? gratuityResult.months_worked ?? 0} months</span>
+                </div>
+                <div className="flex justify-between border-t pt-2">
+                  <span className="text-muted-foreground">Gratuity Amount</span>
+                  <span className="font-bold text-lg text-green-700">
+                    NPR {(gratuityResult.gratuityAmount ?? gratuityResult.gratuity_amount ?? 0).toLocaleString()}
+                  </span>
+                </div>
+              </div>
+            )}
+            {gratuityResult?.error && (
+              <p className="text-sm text-destructive bg-destructive/10 rounded-lg p-3">{gratuityResult.error}</p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowGratuity(false)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Detail Dialog */}
       {showDetail && (

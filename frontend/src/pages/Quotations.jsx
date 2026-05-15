@@ -1,9 +1,12 @@
 import { useState, useEffect } from 'react';
 import { api } from '@/api/adapter';
+import { quotationApi } from '@/api';
 import { getActiveCompanyId } from '@/lib/companyContext';
 import { adToBs, getCurrentFiscalYear } from '@/lib/nepaliDate';
 import PageHeader from '../components/shared/PageHeader';
 import DataTable from '../components/shared/DataTable';
+import PageLoader from '../components/PageLoader';
+import EmptyState from '../components/EmptyState';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,7 +18,7 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue
 } from "@/components/ui/select";
-import { Plus, Trash2, ArrowRight } from 'lucide-react';
+import { Plus, Trash2, ArrowRight, ClipboardList } from 'lucide-react';
 
 const UNITS = ['Piece', 'Set', 'Liter', 'ml', 'Kg', 'gm', 'NOS'];
 const STATUSES = ['pending', 'sent', 'accepted', 'rejected', 'expired'];
@@ -148,44 +151,10 @@ export default function Quotations() {
   async function convertToSale(quotation) {
     setConverting(quotation.id);
     try {
-      const today = new Date().toISOString().split('T')[0];
-      const bsDate = adToBs(new Date());
-      const existingSales = await api.SalesOrder.filter({ company_id: companyId });
-      const fyLabel = getCurrentFiscalYear();
-      const shortLabel = fyLabel.replace(/\d{2}(\d{2})\/(\d{2})(\d{2})/, '$1/$3');
-      const prefix = quotation.is_vat ? `VAT-${shortLabel}-` : `INV-${shortLabel}-`;
-      const maxSerial = existingSales
-        .filter(o => o.invoice_number?.startsWith(prefix))
-        .reduce((m, o) => {
-          const n = parseInt(o.invoice_number?.replace(prefix, '') || '0');
-          return n > m ? n : m;
-        }, 0);
-      const invoiceNumber = `${prefix}${String(maxSerial + 1).padStart(3, '0')}`;
-      const laborTotal = (quotation.labor_items || []).reduce((s, li) => s + (li.amount || 0), 0);
-
-      await api.SalesOrder.create({
-        company_id: companyId,
-        client_name: quotation.client_name,
-        client_contact: quotation.client_contact,
-        client_address: quotation.client_address,
-        client_pan: quotation.client_pan,
-        date_ad: today,
-        date_bs: bsDate.formatted,
-        invoice_number: invoiceNumber,
-        payment_type: quotation.payment_type || 'cash',
-        items: quotation.items || [],
-        work_description: (quotation.labor_items || []).map(li => li.description).filter(Boolean).join('; '),
-        labor_charges: laborTotal,
-        is_vat: quotation.is_vat,
-        notes: quotation.notes,
-        subtotal: quotation.subtotal,
-        vat_amount: quotation.vat_amount,
-        total_amount: quotation.total_amount,
-        status: 'confirmed',
-      });
-
-      await api.Quotation.update(quotation.id, { status: 'accepted' });
-      loadData();
+      await quotationApi.convert(quotation.id);
+      await loadData();
+    } catch (err) {
+      alert(err?.response?.data?.message || 'Failed to convert quotation to sale');
     } finally {
       setConverting(null);
     }
@@ -241,7 +210,7 @@ export default function Quotations() {
     )},
   ];
 
-  if (loading) return <div className="flex items-center justify-center py-20"><div className="w-8 h-8 border-4 border-primary/20 border-t-primary rounded-full animate-spin" /></div>;
+  if (loading) return <PageLoader />;
 
   return (
     <div className="space-y-6 animate-fade-in">
