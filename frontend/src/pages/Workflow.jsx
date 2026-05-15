@@ -27,6 +27,7 @@ export default function Workflow() {
     assigned_name: '',
     assigned_contact: '',
     department: '',
+    workflow_type: 'job_card',
   });
 
   useEffect(() => {
@@ -48,7 +49,7 @@ export default function Workflow() {
       assigned_by: user.email,
       status: 'pending',
     });
-    setForm({ title: '', description: '', assigned_to: '', due_date: '', due_time: '', priority: 'medium', assigned_name: '', assigned_contact: '', department: '' });
+    setForm({ title: '', description: '', assigned_to: '', due_date: '', due_time: '', priority: 'medium', assigned_name: '', assigned_contact: '', department: '', workflow_type: 'job_card' });
     setShowNew(false);
     loadData();
   }
@@ -224,6 +225,17 @@ export default function Workflow() {
                   <SelectItem value="medium">Medium</SelectItem>
                   <SelectItem value="high">High</SelectItem>
                   <SelectItem value="urgent">Urgent</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Type</Label>
+              <Select value={form.workflow_type} onValueChange={v => setForm({ ...form, workflow_type: v })}>
+                <SelectTrigger><SelectValue placeholder="Select type..." /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="job_card">Job Card</SelectItem>
+                  <SelectItem value="order_slip">Order Slip</SelectItem>
+                  <SelectItem value="general_assessments">General Assessments</SelectItem>
                 </SelectContent>
               </Select>
             </div>
