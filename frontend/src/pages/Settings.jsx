@@ -20,6 +20,18 @@ const ROLE_COLORS = {
   SUPER_ADMIN: 'bg-purple-100 text-purple-700',
 };
 
+const BUSINESS_TYPES = [
+  { value: 'RETAIL', label: 'Retail / General Store' },
+  { value: 'PHARMACY', label: 'Pharmacy / Medical' },
+  { value: 'ELECTRONICS', label: 'Electronics / Hardware' },
+  { value: 'FOOD_BEVERAGE', label: 'Restaurant / Tea Shop / Bakery' },
+  { value: 'SERVICES', label: 'Services / Consulting / IT' },
+  { value: 'MANUFACTURING', label: 'Manufacturing / Production' },
+  { value: 'OTHER', label: 'Other' },
+];
+
+const BUSINESS_TYPE_LABELS = Object.fromEntries(BUSINESS_TYPES.map(b => [b.value, b.label]));
+
 export default function Settings() {
   const { user } = useAuth();
   const isAdmin = user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN';
@@ -219,6 +231,11 @@ export default function Settings() {
                     <div className="flex items-center gap-2">
                       <h3 className="font-semibold">{c.name}</h3>
                       {c.id === activeCompanyId && <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full">Active</span>}
+                      {c.business_type && (
+                        <span className="text-xs bg-secondary text-muted-foreground px-2 py-0.5 rounded-full">
+                          {BUSINESS_TYPE_LABELS[c.business_type] || c.business_type}
+                        </span>
+                      )}
                     </div>
                     <p className="text-sm text-muted-foreground">{c.address || 'No address'}</p>
                     <div className="flex gap-4 mt-1 text-xs text-muted-foreground">
@@ -361,7 +378,17 @@ export default function Settings() {
           <div className="space-y-3">
             <LogoUpload value={companyForm.logo_url} onChange={url => setCompanyForm(f => ({ ...f, logo_url: url }))} onFile={e => handleLogoUpload(e, false)} uploading={uploadingLogo} />
             <div><Label>Company Name *</Label><Input value={companyForm.name} onChange={e => setCompanyForm({ ...companyForm, name: e.target.value })} /></div>
-            <div><Label>Business Type</Label><Input placeholder="e.g. pharmacy, tea-shop" value={companyForm.business_type} onChange={e => setCompanyForm({ ...companyForm, business_type: e.target.value })} /></div>
+            <div>
+              <Label>Business Type</Label>
+              <select
+                className="w-full border rounded-md px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring mt-1"
+                value={companyForm.business_type}
+                onChange={e => setCompanyForm({ ...companyForm, business_type: e.target.value })}
+              >
+                <option value="">Select business type…</option>
+                {BUSINESS_TYPES.map(bt => <option key={bt.value} value={bt.value}>{bt.label}</option>)}
+              </select>
+            </div>
             <div><Label>Registration Number</Label><Input value={companyForm.registration_number} onChange={e => setCompanyForm({ ...companyForm, registration_number: e.target.value })} /></div>
             <div><Label>Address</Label><Input value={companyForm.address} onChange={e => setCompanyForm({ ...companyForm, address: e.target.value })} /></div>
             <div className="grid grid-cols-2 gap-3">
@@ -385,7 +412,17 @@ export default function Settings() {
             <div className="space-y-3">
               <LogoUpload value={editingCompany.logo_url} onChange={url => setEditingCompany(c => ({ ...c, logo_url: url }))} onFile={e => handleLogoUpload(e, true)} uploading={uploadingLogo} />
               <div><Label>Company Name</Label><Input value={editingCompany.name} onChange={e => setEditingCompany({ ...editingCompany, name: e.target.value })} /></div>
-              <div><Label>Business Type</Label><Input placeholder="e.g. pharmacy, tea-shop" value={editingCompany.business_type || ''} onChange={e => setEditingCompany({ ...editingCompany, business_type: e.target.value })} /></div>
+              <div>
+                <Label>Business Type</Label>
+                <select
+                  className="w-full border rounded-md px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring mt-1"
+                  value={editingCompany.business_type || ''}
+                  onChange={e => setEditingCompany({ ...editingCompany, business_type: e.target.value })}
+                >
+                  <option value="">Select business type…</option>
+                  {BUSINESS_TYPES.map(bt => <option key={bt.value} value={bt.value}>{bt.label}</option>)}
+                </select>
+              </div>
               <div><Label>Registration Number</Label><Input value={editingCompany.registration_number || ''} onChange={e => setEditingCompany({ ...editingCompany, registration_number: e.target.value })} /></div>
               <div><Label>Address</Label><Input value={editingCompany.address || ''} onChange={e => setEditingCompany({ ...editingCompany, address: e.target.value })} /></div>
               <div className="grid grid-cols-2 gap-3">

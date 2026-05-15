@@ -43,6 +43,7 @@ export default function Login() {
     confirmPassword: '',
     companyName: '',
     businessType: '',
+    otherBusinessDesc: '',
     registrationNumber: '',
     defaultUnitType: '',
   });
@@ -76,7 +77,10 @@ export default function Login() {
     }
     setLoading(true);
     try {
-      const { confirmPassword, ...payload } = regForm;
+      const { confirmPassword, otherBusinessDesc, ...payload } = regForm;
+      if (payload.businessType === 'OTHER' && otherBusinessDesc.trim()) {
+        payload.businessType = otherBusinessDesc.trim();
+      }
       await authApi.register(payload);
       window.location.href = '/';
     } catch (err) {
@@ -209,7 +213,7 @@ export default function Login() {
                 <select
                   className="w-full border rounded-md px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring"
                   value={regForm.businessType}
-                  onChange={e => setRegForm({ ...regForm, businessType: e.target.value })}
+                  onChange={e => setRegForm({ ...regForm, businessType: e.target.value, otherBusinessDesc: '' })}
                   required
                 >
                   <option value="">Select business type…</option>
@@ -217,6 +221,14 @@ export default function Login() {
                     <option key={bt.value} value={bt.value}>{bt.label}</option>
                   ))}
                 </select>
+                {regForm.businessType === 'OTHER' && (
+                  <Input
+                    placeholder="Describe your business (e.g. Tailoring Shop, Laundry)"
+                    value={regForm.otherBusinessDesc}
+                    onChange={e => setRegForm({ ...regForm, otherBusinessDesc: e.target.value })}
+                    autoFocus
+                  />
+                )}
               </div>
 
               <div className="space-y-1.5">

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { api, apiAuth } from '@/api/adapter';
-import { inventoryApi } from '@/api';
+import { inventoryApi, companyApi } from '@/api';
 import { getActiveCompanyId } from '@/lib/companyContext';
 import { adToBs } from '@/lib/nepaliDate';
 import PageHeader from '../components/shared/PageHeader';
@@ -42,6 +42,16 @@ const BUSINESS_LABELS = {
   location: 'Stock Location',
 };
 
+const PLACEHOLDERS = {
+  RETAIL:        { item_name: 'e.g. Sugar, Salt, Soap', description: 'Additional details', brand: 'e.g. Sunkoshi, Dabur', application: 'e.g. Daily use', supplier_name: 'e.g. Sunrise Traders' },
+  PHARMACY:      { item_name: 'e.g. Paracetamol 500mg, Amoxicillin', description: 'Dosage form, strength', brand: 'e.g. Cipla, Sun Pharma', application: 'e.g. Pain relief, Antibiotic', supplier_name: 'e.g. Mediline Pharma' },
+  ELECTRONICS:   { item_name: 'e.g. USB Cable, Power Bank', description: 'Specifications', brand: 'e.g. Samsung, Xiaomi', model_no: 'e.g. USB-C-3.0-BLK', application: 'e.g. Charging, Display', supplier_name: 'e.g. Digital World' },
+  FOOD_BEVERAGE: { item_name: 'e.g. Masala Tea, Milk Tea, Coffee', description: 'e.g. Served hot, 250ml', brand: '', model_no: '', application: '', supplier_name: 'e.g. Nepal Tea Estate' },
+  SERVICES:      { item_name: 'e.g. Consultation, Design Package', description: 'Scope of service', brand: '', model_no: '', application: 'e.g. IT Support, Accounting', supplier_name: 'e.g. TechVision Pvt. Ltd.' },
+  MANUFACTURING: { item_name: 'e.g. Raw Steel, Cotton Yarn', description: 'Grade or specification', brand: 'e.g. SAIL, Birla', model_no: 'e.g. IS:2062 Grade A', application: 'e.g. Structural frames, Weaving', supplier_name: 'e.g. Industrial Supply Co.' },
+  OTHER:         { item_name: 'e.g. Item name', description: 'Additional details or notes', brand: 'e.g. Brand name', model_no: 'e.g. Model or part number', application: 'e.g. Usage or purpose', supplier_name: 'e.g. Supplier name' },
+};
+
 function getFields(businessType) {
   return FIELDS[businessType?.toUpperCase()] ?? FIELDS.OTHER;
 }
@@ -78,8 +88,13 @@ export default function Inventory() {
   const [adjSubmitting, setAdjSubmitting] = useState(false);
   const [showAdjLogDialog, setShowAdjLogDialog] = useState(false);
   const [adjLog, setAdjLog] = useState([]);
+  const [showExtraFields, setShowExtraFields] = useState(false);
 
-  const f = getFields(company?.business_type);
+  const isOtherType = company?.business_type?.toUpperCase() === 'OTHER';
+  const f = isOtherType && !showExtraFields
+    ? { brand: false, modelNo: false, application: false, expiry: false, aging: false, location: false }
+    : getFields(company?.business_type);
+  const p = PLACEHOLDERS[company?.business_type?.toUpperCase()] ?? PLACEHOLDERS.OTHER;
 
   async function handleImageUpload(e) {
     const file = e.target.files?.[0];
@@ -95,12 +110,12 @@ export default function Inventory() {
 
   async function loadItems() {
     setLoading(true);
-    const [data, companies] = await Promise.all([
+    const [data, companyRes] = await Promise.all([
       api.InventoryItem.filter({ company_id: companyId }),
-      api.Company.list(),
+      companyApi.get(companyId).catch(() => null),
     ]);
     setItems(data);
-    setCompany(companies.find(c => c.id === companyId) ?? null);
+    setCompany(companyRes?.data ?? null);
     setLoading(false);
   }
 
@@ -282,7 +297,7 @@ export default function Inventory() {
       <PageHeader
         title="Inventory"
         subtitle={`${items.length} items · ${lowStockCount} low stock alerts`}
-        onAdd={() => setShowAdd(true)}
+        onAdd={() => { setShowExtraFields(false); setShowAdd(true); }}
         addLabel="Add Stock"
       >
         <Button onClick={handleAdjustClick} variant="outline" className="gap-2" disabled={!selectedItem}>
@@ -310,7 +325,7 @@ export default function Inventory() {
       )}
 
       {items.length === 0 ? (
-        <EmptyState icon={Package} title="No inventory items yet" description="Add your first stock item to start tracking your inventory." action={<Button onClick={() => setShowAdd(true)}>Add Stock</Button>} />
+        <EmptyState icon={Package} title="No inventory items yet" description="Add your first stock item to start tracking your inventory." action={<Button onClick={() => { setShowExtraFields(false); setShowAdd(true); }}>Add Stock</Button>} />
       ) : (
       <DataTable
         columns={columns}
@@ -556,7 +571,7 @@ export default function Inventory() {
       </Dialog>
 
       {/* Add Item Dialog */}
-      <Dialog open={showAdd} onOpenChange={setShowAdd}>
+      <Dialog open={showAdd} onOpenChange={(v) => { setShowAdd(v); if (!v) setShowExtraFields(false); }}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-hidden">
           <DialogHeader className="pb-2 border-b">
             <DialogTitle className="flex items-center gap-2">
@@ -565,7 +580,9 @@ export default function Inventory() {
             </DialogTitle>
             {company?.business_type && (
               <p className="text-xs text-muted-foreground">
-                Fields shown for <span className="font-medium">{company.business_type}</span> businesses.
+                Fields shown for <span className="font-medium">
+                  {({ RETAIL: 'Retail', PHARMACY: 'Pharmacy', ELECTRONICS: 'Electronics', FOOD_BEVERAGE: 'Tea Shop / Bakery', SERVICES: 'Services', MANUFACTURING: 'Manufacturing', OTHER: 'Other' })[company.business_type] || company.business_type}
+                </span> businesses.
                 Change in <a href="/settings" className="text-primary underline">Settings</a> to adjust.
               </p>
             )}
@@ -601,12 +618,12 @@ export default function Inventory() {
                 <div>
                   <Label className="text-sm">Item Name *</Label>
                   <Input value={form.item_name} onChange={e => setForm({ ...form, item_name: e.target.value })}
-                    placeholder="e.g. Rice, Paracetamol, USB Cable" className="mt-1" />
+                    placeholder={p.item_name} className="mt-1" />
                 </div>
                 <div>
                   <Label className="text-sm">Description <span className="text-muted-foreground text-xs">(optional)</span></Label>
                   <Input value={form.description} onChange={e => setForm({ ...form, description: e.target.value })}
-                    placeholder="Additional details or notes" className="mt-1" />
+                    placeholder={p.description} className="mt-1" />
                 </div>
 
                 {/* Brand — business-type conditional */}
@@ -615,13 +632,13 @@ export default function Inventory() {
                     <div>
                       <Label className="text-sm">Brand <span className="text-muted-foreground text-xs">(optional)</span></Label>
                       <Input value={form.brand} onChange={e => setForm({ ...form, brand: e.target.value })}
-                        placeholder="e.g. Cipla, Samsung" className="mt-1" />
+                        placeholder={p.brand || 'e.g. Brand name'} className="mt-1" />
                     </div>
                     {f.modelNo && (
                       <div>
                         <Label className="text-sm">Model / Part No. <span className="text-muted-foreground text-xs">(optional)</span></Label>
                         <Input value={form.model_no} onChange={e => setForm({ ...form, model_no: e.target.value })}
-                          placeholder="e.g. USB-C-3.0" className="mt-1" />
+                          placeholder={p.model_no || 'e.g. USB-C-3.0'} className="mt-1" />
                       </div>
                     )}
                   </div>
@@ -632,8 +649,19 @@ export default function Inventory() {
                   <div>
                     <Label className="text-sm">Usage / Purpose <span className="text-muted-foreground text-xs">(optional)</span></Label>
                     <Input value={form.application} onChange={e => setForm({ ...form, application: e.target.value })}
-                      placeholder="e.g. Pain relief, Fever reduction" className="mt-1" />
+                      placeholder={p.application || 'e.g. Usage or purpose'} className="mt-1" />
                   </div>
+                )}
+
+                {/* Expand toggle for OTHER business type */}
+                {isOtherType && !showExtraFields && (
+                  <button
+                    type="button"
+                    onClick={() => setShowExtraFields(true)}
+                    className="text-xs text-primary underline underline-offset-2 hover:text-primary/80 transition-colors"
+                  >
+                    + Show additional fields (brand, model, usage, expiry…)
+                  </button>
                 )}
               </div>
 
@@ -698,7 +726,7 @@ export default function Inventory() {
                     <div>
                       <Label className="text-sm">Supplier Name <span className="text-muted-foreground text-xs">(optional)</span></Label>
                       <Input value={form.supplier_name} onChange={e => setForm({ ...form, supplier_name: e.target.value })}
-                        placeholder="e.g. ABC Traders" className="mt-1" />
+                        placeholder={p.supplier_name || 'e.g. ABC Traders'} className="mt-1" />
                     </div>
                   </div>
                   {f.aging && (
