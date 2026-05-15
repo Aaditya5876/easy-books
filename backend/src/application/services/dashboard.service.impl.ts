@@ -103,7 +103,7 @@ export class DashboardServiceImpl {
 
   async getLowStockItems(companyId: string) {
     const items = await this.prisma.inventoryItem.findMany({
-      where: { companyId, lowStockThreshold: { not: null } },
+      where: { companyId },
       select: { id: true, itemName: true, partNumber: true, quantity: true, lowStockThreshold: true, unit: true },
       orderBy: { quantity: 'asc' },
     });
