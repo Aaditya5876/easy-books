@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTheme } from 'next-themes';
 import { api, apiAuth } from '@/api/adapter';
-import { 
-  Search, Bell, Settings, LogOut, Building2, ChevronDown, Plus, Menu, Wrench, Calculator, RefreshCw, CalendarDays, UserCircle, CalendarCheck, UsersRound, Banknote
+import {
+  Search, Bell, Settings, LogOut, Building2, ChevronDown, Plus, Menu, Wrench, Calculator, RefreshCw, CalendarDays, UserCircle, CalendarCheck, UsersRound, Banknote, Sun, Moon
 } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import {
@@ -18,6 +19,7 @@ import { getTodayBS } from '@/lib/nepaliDate';
 
 export default function TopBar({ onMobileMenuToggle, onToolOpen }) {
   const navigate = useNavigate();
+  const { resolvedTheme, setTheme } = useTheme();
   const [user, setUser] = useState(null);
   const [companies, setCompanies] = useState([]);
   const [activeCompany, setActiveCompany] = useState(null);
@@ -51,7 +53,7 @@ export default function TopBar({ onMobileMenuToggle, onToolOpen }) {
   const todayBS = getTodayBS();
 
   return (
-    <header className="h-16 bg-card border-b border-border flex items-center justify-between px-4 lg:px-6 shrink-0 sticky top-0 z-30">
+    <header className="h-16 backdrop-blur-xl bg-card/80 border-b border-border/60 flex items-center justify-between px-4 lg:px-6 shrink-0 sticky top-0 z-30">
       {/* Left side */}
       <div className="flex items-center gap-3">
         <button 
@@ -157,6 +159,16 @@ export default function TopBar({ onMobileMenuToggle, onToolOpen }) {
           className="text-muted-foreground hover:text-foreground"
         >
           <Search className="w-4 h-4" />
+        </Button>
+
+        {/* Dark mode toggle */}
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')}
+          className="text-muted-foreground hover:text-foreground"
+        >
+          {resolvedTheme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
         </Button>
 
         {/* Notifications */}

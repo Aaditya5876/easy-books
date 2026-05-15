@@ -11,12 +11,18 @@ import { cn } from "@/lib/utils";
 const navSections = [
   {
     label: 'Main',
+    labelColor: 'text-sidebar-muted',
+    activeClass: 'bg-sidebar-primary text-sidebar-primary-foreground shadow-sm',
+    activeIconClass: 'text-white',
     items: [
       { icon: LayoutDashboard, label: 'Dashboard', path: '/' },
     ]
   },
   {
     label: 'Accounts',
+    labelColor: 'text-blue-400',
+    activeClass: 'bg-blue-600 text-white shadow-sm shadow-blue-900/30',
+    activeIconClass: 'text-white',
     items: [
       { icon: BookOpen, label: 'Ledger', path: '/ledger' },
       { icon: ArrowLeftRight, label: 'Transactions', path: '/transactions' },
@@ -24,6 +30,9 @@ const navSections = [
   },
   {
     label: 'Business',
+    labelColor: 'text-emerald-400',
+    activeClass: 'bg-emerald-600 text-white shadow-sm shadow-emerald-900/30',
+    activeIconClass: 'text-white',
     items: [
       { icon: Users, label: 'Vendors', path: '/vendors' },
       { icon: UserCheck, label: 'Clients', path: '/clients' },
@@ -33,16 +42,17 @@ const navSections = [
       { icon: ClipboardList, label: 'Quotations', path: '/quotations' },
     ]
   },
-
   {
     label: 'Records',
+    labelColor: 'text-violet-400',
+    activeClass: 'bg-violet-600 text-white shadow-sm shadow-violet-900/30',
+    activeIconClass: 'text-white',
     items: [
       { icon: FileText, label: 'Memo', path: '/memo' },
       { icon: MessageSquare, label: 'Communication', path: '/communication' },
       { icon: FileSpreadsheet, label: 'Templates', path: '/templates' },
     ]
   },
-
 ];
 
 export default function SidebarNav({ collapsed, onToggle }) {
@@ -84,7 +94,10 @@ export default function SidebarNav({ collapsed, onToggle }) {
             {!collapsed && (
               <button
                 onClick={() => toggleSection(sIdx)}
-                className="flex items-center justify-between w-full px-2 py-1.5 text-[10px] uppercase tracking-widest text-sidebar-muted hover:text-sidebar-foreground transition-colors"
+                className={cn(
+                  "flex items-center justify-between w-full px-2 py-1.5 text-[10px] uppercase tracking-widest hover:text-sidebar-foreground transition-colors",
+                  section.labelColor
+                )}
               >
                 {section.label}
                 <ChevronDown className={cn(
@@ -97,7 +110,7 @@ export default function SidebarNav({ collapsed, onToggle }) {
               <div className="space-y-0.5">
                 {section.items.map(item => {
                   const Icon = item.icon;
-                  const isActive = location.pathname === item.path || 
+                  const isActive = location.pathname === item.path ||
                     (item.path !== '/' && location.pathname.startsWith(item.path));
                   return (
                     <Link
@@ -106,7 +119,7 @@ export default function SidebarNav({ collapsed, onToggle }) {
                       className={cn(
                         "flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all group relative",
                         isActive
-                          ? "bg-sidebar-primary text-sidebar-primary-foreground shadow-sm"
+                          ? section.activeClass
                           : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
                       )}
                     >
