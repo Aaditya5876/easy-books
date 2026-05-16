@@ -47,7 +47,15 @@ export class CompanyServiceImpl {
   async update(id: string, data: any) {
     const company = await this.prisma.company.findFirst({ where: { id } });
     if (!company) throw new NotFoundException('Company not found');
-    return this.prisma.company.update({ where: { id }, data });
+    const {
+      id: _id, isDefault, createdAt, updatedAt,
+      userCompanies, employees, attendance, payrolls,
+      bankAccounts, transactions, ledgerAccounts, ledgerEntries,
+      inventoryItems, salesOrders, purchaseOrders, payments,
+      payrollSettings,
+      ...updateData
+    } = data;
+    return this.prisma.company.update({ where: { id }, data: updateData });
   }
 
   async remove(id: string) {
