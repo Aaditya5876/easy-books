@@ -12,7 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { FileText, RefreshCw, Download, Calculator } from 'lucide-react';
+import { FileText, RefreshCw, Download, Calculator, Save } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 
 const statusColors = { draft: 'bg-slate-100 text-slate-600', approved: 'bg-blue-100 text-blue-700', paid: 'bg-green-100 text-green-700' };
@@ -43,6 +43,8 @@ export default function Payroll() {
   const [generating, setGenerating] = useState(false);
   const [selectedMonth, setSelectedMonth] = useState(getMonthOptions()[0]);
   const [showDetail, setShowDetail] = useState(null);
+  const [detailBonus, setDetailBonus] = useState(0);
+  const [detailOtherDed, setDetailOtherDed] = useState(0);
   const [colFilters, setColFilters] = useState({ employee_name: '', status: '' });
   const setCol = (key, val) => setColFilters(f => ({ ...f, [key]: val }));
   const [showGratuity, setShowGratuity] = useState(false);
@@ -131,6 +133,24 @@ export default function Payroll() {
     }
   }
 
+  const liveNet = showDetail ? Math.max(0,
+    (showDetail.base_salary || 0) + detailBonus
+    - (showDetail.absent_deduction || 0)
+    - (showDetail.late_deduction || 0)
+    - detailOtherDed
+  ) : 0;
+
+  async function savePayrollAdjustments() {
+    if (!showDetail) return;
+    await api.Payroll.update(showDetail.id, {
+      bonus: detailBonus,
+      other_deductions: detailOtherDed,
+      net_salary: liveNet,
+    });
+    setShowDetail(null);
+    load();
+  }
+
   async function updateStatus(id, status) {
     await api.Payroll.update(id, { status });
     load();
@@ -214,7 +234,7 @@ export default function Payroll() {
     )},
     { key: 'actions', label: 'Actions', render: r => (
       <div className="flex gap-2">
-        <Button size="sm" variant="outline" onClick={e => { e.stopPropagation(); setShowDetail(r); }}>Details</Button>
+        <Button size="sm" variant="outline" onClick={e => { e.stopPropagation(); setShowDetail(r); setDetailBonus(r.bonus || 0); setDetailOtherDed(r.other_deductions || 0); }}>Details</Button>
         <Button size="sm" variant="outline" onClick={e => { e.stopPropagation(); exportPDF(r); }}>
           <Download className="w-3 h-3 mr-1" /> PDF
         </Button>
@@ -331,11 +351,20 @@ export default function Payroll() {
               </div>
               <div className="border rounded-lg p-3 space-y-1.5">
                 <div className="flex justify-between"><span>Base Salary</span><span className="font-medium">NPR {showDetail.base_salary?.toLocaleString()}</span></div>
-                <div className="flex justify-between"><span>Bonus</span><span className="font-medium text-green-700">+ NPR {(showDetail.bonus || 0).toLocaleString()}</span></div>
+                <div className="flex justify-between items-center">
+                  <span>Bonus</span>
+                  <Input type="number" value={detailBonus} onChange={e => setDetailBonus(parseFloat(e.target.value) || 0)} className="w-28 h-7 text-sm text-right" />
+                </div>
                 <div className="flex justify-between"><span>Absent Deduction</span><span className="font-medium text-red-600">- NPR {showDetail.absent_deduction?.toLocaleString()}</span></div>
                 <div className="flex justify-between"><span>Late Deduction</span><span className="font-medium text-red-600">- NPR {showDetail.late_deduction?.toLocaleString()}</span></div>
-                <div className="flex justify-between"><span>Other Deductions</span><span className="font-medium text-red-600">- NPR {(showDetail.other_deductions || 0).toLocaleString()}</span></div>
-                <div className="border-t pt-1.5 flex justify-between font-bold text-base"><span>Net Salary</span><span className="text-green-700">NPR {showDetail.net_salary?.toLocaleString()}</span></div>
+                <div className="flex justify-between items-center">
+                  <span>Other Deductions</span>
+                  <Input type="number" value={detailOtherDed} onChange={e => setDetailOtherDed(parseFloat(e.target.value) || 0)} className="w-28 h-7 text-sm text-right" />
+                </div>
+                <div className="border-t pt-1.5 flex justify-between font-bold text-base">
+                  <span>Net Salary</span>
+                  <span className="text-green-700">NPR {liveNet.toLocaleString()}</span>
+                </div>
               </div>
               <div className="flex gap-2">
                 <Select value={showDetail.status} onValueChange={v => { updateStatus(showDetail.id, v); setShowDetail({ ...showDetail, status: v }); }}>
@@ -350,7 +379,8 @@ export default function Payroll() {
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setShowDetail(null)}>Close</Button>
-              <Button onClick={() => exportPDF(showDetail)} className="gap-2"><Download className="w-4 h-4" /> Export PDF</Button>
+              <Button variant="outline" onClick={savePayrollAdjustments} className="gap-2"><Save className="w-4 h-4" />Save Adjustments</Button>
+              <Button onClick={() => exportPDF(showDetail)} className="gap-2"><Download className="w-4 h-4" />Export PDF</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>

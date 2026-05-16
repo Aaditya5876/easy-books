@@ -9,8 +9,14 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import PageLoader from '../components/PageLoader';
+import { CalendarDays } from 'lucide-react';
 
-const statusColors = { present: 'bg-green-100 text-green-700', absent: 'bg-red-100 text-red-700', half_day: 'bg-amber-100 text-amber-700', on_leave: 'bg-blue-100 text-blue-700' };
+const statusColors = {
+  present: 'bg-green-100 text-green-700',
+  absent: 'bg-red-100 text-red-700',
+  half_day: 'bg-amber-100 text-amber-700',
+  on_leave: 'bg-blue-100 text-blue-700',
+};
 
 export default function Attendance() {
   const companyId = getActiveCompanyId();
@@ -20,7 +26,15 @@ export default function Attendance() {
   const [showForm, setShowForm] = useState(false);
   const [colFilters, setColFilters] = useState({ employee_name: '', date: '', status: '' });
   const setCol = (key, val) => setColFilters(f => ({ ...f, [key]: val }));
-  const [form, setForm] = useState({ employee_id: '', employee_name: '', date: new Date().toISOString().split('T')[0], check_in: '', check_out: '', status: 'present', notes: '' });
+  const [form, setForm] = useState({
+    employee_id: '',
+    employee_name: '',
+    date: new Date().toISOString().split('T')[0],
+    check_in: '',
+    check_out: '',
+    status: 'present',
+    notes: '',
+  });
 
   useEffect(() => { if (companyId) load(); }, [companyId]);
 
@@ -37,7 +51,15 @@ export default function Attendance() {
 
   async function save() {
     await api.Attendance.create({ ...form, company_id: companyId });
-    setForm({ employee_id: '', employee_name: '', date: new Date().toISOString().split('T')[0], check_in: '', check_out: '', status: 'present', notes: '' });
+    setForm({
+      employee_id: '',
+      employee_name: '',
+      date: new Date().toISOString().split('T')[0],
+      check_in: '',
+      check_out: '',
+      status: 'present',
+      notes: '',
+    });
     setShowForm(false);
     load();
   }
@@ -55,25 +77,53 @@ export default function Attendance() {
 
   const columns = [
     { key: 'date', label: 'Date', filterValue: colFilters.date, filterType: 'date', onFilterChange: v => setCol('date', v) },
-    { key: 'employee_name', label: 'Employee', filterValue: colFilters.employee_name, onFilterChange: v => setCol('employee_name', v), render: r => <span className="font-medium">{r.employee_name}</span> },
+    {
+      key: 'employee_name',
+      label: 'Employee',
+      filterValue: colFilters.employee_name,
+      onFilterChange: v => setCol('employee_name', v),
+      render: r => <span className="font-medium">{r.employee_name}</span>,
+    },
     { key: 'check_in', label: 'Check In' },
     { key: 'check_out', label: 'Check Out' },
-    { key: 'status', label: 'Status', filterValue: colFilters.status, onFilterChange: v => setCol('status', v), render: r => (
-      <span className={`text-xs px-2 py-0.5 rounded-full font-medium capitalize ${statusColors[r.status] || ''}`}>{r.status?.replace('_', ' ')}</span>
-    )},
-    { key: 'notes', label: 'Notes', render: r => <span className="text-muted-foreground text-xs">{r.notes || '—'}</span> },
+    {
+      key: 'status',
+      label: 'Status',
+      filterValue: colFilters.status,
+      onFilterChange: v => setCol('status', v),
+      render: r => (
+        <span className={`text-xs px-2 py-0.5 rounded-full font-medium capitalize ${statusColors[r.status] || ''}`}>
+          {r.status?.replace('_', ' ')}
+        </span>
+      ),
+    },
+    {
+      key: 'notes',
+      label: 'Notes',
+      render: r => <span className="text-muted-foreground text-xs">{r.notes || '—'}</span>,
+    },
   ];
 
   if (loading) return <PageLoader />;
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <PageHeader title="Attendance" subtitle="Track employee attendance" onAdd={() => setShowForm(true)} addLabel="Mark Attendance" />
+      <PageHeader
+        title="Attendance"
+        subtitle="Track employee attendance"
+        onAdd={() => setShowForm(true)}
+        addLabel="Mark Attendance"
+      />
       <DataTable columns={columns} data={filtered} emptyMessage="No attendance records yet" />
 
-      <Dialog open={showForm} onOpenChange={setShowForm}>
-        <DialogContent className="max-w-md">
-          <DialogHeader><DialogTitle>Mark Attendance</DialogTitle></DialogHeader>
+      <Dialog open={showForm} onOpenChange={open => { setShowForm(open); }}>
+        <DialogContent className="glass-card max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <CalendarDays className="w-5 h-5 text-primary" />
+              Mark Attendance
+            </DialogTitle>
+          </DialogHeader>
           <div className="space-y-3">
             <div>
               <Label>Employee *</Label>
@@ -84,10 +134,22 @@ export default function Attendance() {
                 </SelectContent>
               </Select>
             </div>
-            <div><Label>Date *</Label><Input type="date" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} /></div>
+            <div>
+              <Label>Date *</Label>
+              <Input type="date" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} />
+            </div>
+            <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground border-b pb-1 mt-2">
+              Time & Status
+            </h4>
             <div className="grid grid-cols-2 gap-3">
-              <div><Label>Check In</Label><Input type="time" value={form.check_in} onChange={e => setForm({ ...form, check_in: e.target.value })} /></div>
-              <div><Label>Check Out</Label><Input type="time" value={form.check_out} onChange={e => setForm({ ...form, check_out: e.target.value })} /></div>
+              <div>
+                <Label>Check In</Label>
+                <Input type="time" value={form.check_in} onChange={e => setForm({ ...form, check_in: e.target.value })} />
+              </div>
+              <div>
+                <Label>Check Out</Label>
+                <Input type="time" value={form.check_out} onChange={e => setForm({ ...form, check_out: e.target.value })} />
+              </div>
             </div>
             <div>
               <Label>Status</Label>
@@ -101,7 +163,10 @@ export default function Attendance() {
                 </SelectContent>
               </Select>
             </div>
-            <div><Label>Notes</Label><Input value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} /></div>
+            <div>
+              <Label>Notes</Label>
+              <Input value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} />
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowForm(false)}>Cancel</Button>

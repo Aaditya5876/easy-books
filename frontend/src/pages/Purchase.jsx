@@ -13,7 +13,7 @@ import { Switch } from "@/components/ui/switch";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter
 } from "@/components/ui/dialog";
-import { Plus, Trash2, ShoppingCart } from 'lucide-react';
+import { Plus, Trash2, ShoppingCart, User, FileText } from 'lucide-react';
 import PageLoader from '../components/PageLoader';
 import EmptyState from '../components/EmptyState';
 import {
@@ -21,6 +21,18 @@ import {
 } from "@/components/ui/select";
 
 const UNITS = ['Piece', 'Set', 'Liter', 'ml', 'Kg', 'gm', 'NOS'];
+
+const EMPTY_FORM = {
+  vendor_name: '', vendor_contact: '', vendor_address: '', vendor_pan: '',
+  order_number: '', ordered_by: '',
+  date_ad: new Date().toISOString().split('T')[0],
+  due_date: '',
+  payment_type: 'cash',
+  is_vat: false,
+  notes: '',
+  items: [{ description: '', quantity: 1, unit: 'Piece', unit_price: 0, total: 0 }],
+  labor_items: [{ description: '', amount: 0 }]
+};
 
 export default function Purchase() {
   const companyId = getActiveCompanyId();
@@ -30,21 +42,19 @@ export default function Purchase() {
   const [colFilters, setColFilters] = useState({ vendor_name: '', order_number: '', status: '' });
   const setCol = (key, val) => setColFilters(f => ({ ...f, [key]: val }));
   const [showNew, setShowNew] = useState(false);
-  const [form, setForm] = useState({
-    vendor_name: '', vendor_contact: '', vendor_address: '', vendor_pan: '',
-    order_number: '', ordered_by: '',
-    date_ad: new Date().toISOString().split('T')[0],
-    due_date: '',
-    payment_type: 'cash',
-    is_vat: false,
-    notes: '',
-    items: [{ description: '', quantity: 1, unit: 'Piece', unit_price: 0, total: 0 }],
-    labor_items: [{ description: '', amount: 0 }]
-  });
+  const [vendors, setVendors] = useState([]);
+  const [form, setForm] = useState({ ...EMPTY_FORM });
 
   useEffect(() => {
     if (companyId) loadData();
   }, [companyId]);
+
+  // Load vendors when dialog opens
+  useEffect(() => {
+    if (showNew && companyId) {
+      api.Vendor.filter({ company_id: companyId }).then(setVendors).catch(() => setVendors([]));
+    }
+  }, [showNew, companyId]);
 
   async function loadData() {
     setLoading(true);
@@ -138,24 +148,14 @@ export default function Purchase() {
           quantity: item.quantity || 0,
           unit: item.unit || 'Piece',
           unit_purchase_price: item.unit_price || 0,
-          date_of_purchase: today,
+          date_of_purchase: entryDate,
           date_of_purchase_bs: bsDate.formatted,
           supplier_name: form.vendor_name,
         });
       }
     }
 
-    setForm({
-      vendor_name: '', vendor_contact: '', vendor_address: '', vendor_pan: '',
-      order_number: '', ordered_by: '',
-      date_ad: new Date().toISOString().split('T')[0],
-      due_date: '',
-      payment_type: 'cash',
-      is_vat: false,
-      notes: '',
-      items: [{ description: '', quantity: 1, unit: 'Piece', unit_price: 0, total: 0 }],
-      labor_items: [{ description: '', amount: 0 }]
-    });
+    setForm({ ...EMPTY_FORM, date_ad: new Date().toISOString().split('T')[0] });
     setShowNew(false);
     loadData();
   }
@@ -169,7 +169,8 @@ export default function Purchase() {
   );
 
   const totalLabor = form.labor_items.reduce((s, li) => s + (li.amount || 0), 0);
-  const subtotal = form.items.reduce((sum, i) => sum + (i.total || 0), 0) + totalLabor;
+  const itemsSubtotal = form.items.reduce((sum, i) => sum + (i.total || 0), 0);
+  const subtotal = itemsSubtotal + totalLabor;
   const vatAmount = form.is_vat ? subtotal * 0.13 : 0;
 
   const columns = [
@@ -214,176 +215,352 @@ export default function Purchase() {
       />
 
       {orders.length === 0 ? (
-        <EmptyState icon={ShoppingCart} title="No purchase orders yet" description="Add your first purchase order to track your expenses." action={<Button onClick={() => setShowNew(true)}>New Purchase</Button>} />
+        <EmptyState
+          icon={ShoppingCart}
+          title="No purchase orders yet"
+          description="Add your first purchase order to track your expenses."
+          action={<Button onClick={() => setShowNew(true)}>New Purchase</Button>}
+        />
       ) : (
         <DataTable columns={columns} data={filtered} emptyMessage="No purchase orders match your search." />
       )}
 
       {/* New Purchase Dialog */}
-      <Dialog open={showNew} onOpenChange={setShowNew}>
-        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+      <Dialog open={showNew} onOpenChange={open => { setShowNew(open); if (!open) setForm({ ...EMPTY_FORM, date_ad: new Date().toISOString().split('T')[0] }); }}>
+        <DialogContent className="max-w-5xl max-h-[90vh] overflow-hidden glass-card">
           <DialogHeader>
-            <DialogTitle>New Purchase Entry</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              <ShoppingCart className="w-5 h-5 text-primary" />
+              New Purchase Entry
+            </DialogTitle>
           </DialogHeader>
-          <div className="space-y-4">
-            {/* Vendor Info */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div>
-                <Label>Vendor Name *</Label>
-                <Input value={form.vendor_name} onChange={e => setForm({ ...form, vendor_name: e.target.value })} />
-              </div>
-              <div>
-                <Label>Contact <span className="text-muted-foreground text-xs">(optional)</span></Label>
-                <Input value={form.vendor_contact} onChange={e => setForm({ ...form, vendor_contact: e.target.value })} />
-              </div>
-              <div>
-                <Label>Address <span className="text-muted-foreground text-xs">(optional)</span></Label>
-                <Input value={form.vendor_address} onChange={e => setForm({ ...form, vendor_address: e.target.value })} />
-              </div>
-            </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              <div>
-                <Label>Bill Date *</Label>
-                <Input type="date" value={form.date_ad} onChange={e => setForm({ ...form, date_ad: e.target.value })} />
-              </div>
-              <div>
-                <Label>Due Date <span className="text-muted-foreground text-xs">(credit)</span></Label>
-                <Input type="date" value={form.due_date} onChange={e => setForm({ ...form, due_date: e.target.value })} />
-              </div>
-              <div>
-                <Label>Order / Bill No. <span className="text-muted-foreground text-xs">(optional)</span></Label>
-                <Input value={form.order_number} onChange={e => setForm({ ...form, order_number: e.target.value })} placeholder="Vendor's bill #" />
-              </div>
-              <div>
-                <Label>Vendor PAN/VAT <span className="text-muted-foreground text-xs">(optional)</span></Label>
-                <Input value={form.vendor_pan} onChange={e => setForm({ ...form, vendor_pan: e.target.value })} placeholder="e.g. 123456789" />
-              </div>
-            </div>
+          <div className="grid grid-cols-2 gap-6 overflow-hidden">
+            {/* ── Left column: bill header ── */}
+            <div className="space-y-3 overflow-y-auto max-h-[calc(85vh-180px)] pr-1">
 
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label>Ordered By <span className="text-muted-foreground text-xs">(optional)</span></Label>
-                <Input value={form.ordered_by} onChange={e => setForm({ ...form, ordered_by: e.target.value })} />
-              </div>
-              <div>
-                <Label>Notes <span className="text-muted-foreground text-xs">(optional)</span></Label>
-                <Input value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} placeholder="Remarks, special instructions..." />
-              </div>
-            </div>
+              {/* Vendor Details section */}
+              <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground border-b pb-1 flex items-center gap-1">
+                <User className="w-3 h-3" /> Vendor Details
+              </h4>
 
-            {/* Payment Type */}
-            <div className="flex items-center gap-4">
-              <Label className="text-sm font-semibold shrink-0">Payment Type</Label>
-              <div className="flex gap-3">
-                {['cash', 'cheque', 'credit'].map(type => (
-                  <label key={type} className="flex items-center gap-1.5 cursor-pointer">
-                    <input
-                      type="radio"
-                      name="payment_type"
-                      value={type}
-                      checked={form.payment_type === type}
-                      onChange={() => setForm({ ...form, payment_type: type })}
-                      className="accent-primary"
-                    />
-                    <span className="text-sm capitalize">{type}</span>
-                  </label>
-                ))}
-              </div>
-            </div>
-
-            {/* VAT Toggle */}
-            <div className="flex items-center gap-3 p-3 bg-secondary rounded-lg">
-              <Switch checked={form.is_vat} onCheckedChange={v => setForm({ ...form, is_vat: v })} />
-              <Label>VAT Bill (13%)</Label>
-            </div>
-
-            {/* Items */}
-            <div>
-              <div className="flex justify-between items-center mb-2">
-                <Label className="text-sm font-semibold">Items</Label>
-                <Button size="sm" variant="outline" onClick={addItem}><Plus className="w-3 h-3 mr-1" />Add Item</Button>
-              </div>
-              <div className="space-y-2">
-                {form.items.map((item, idx) => (
-                  <div key={idx} className="flex gap-2 items-end p-3 bg-secondary/50 rounded-lg">
-                    <div style={{width: 220, minWidth: 80, resize: 'horizontal', overflow: 'hidden'}}>
-                      {idx === 0 && <Label className="text-xs">Description</Label>}
-                      <Input value={item.description} onChange={e => updateItem(idx, 'description', e.target.value)} placeholder="Item description" />
-                    </div>
-                    <div style={{width: 70, minWidth: 50, resize: 'horizontal', overflow: 'hidden'}}>
-                      {idx === 0 && <Label className="text-xs">Qty</Label>}
-                      <Input type="number" value={item.quantity} onChange={e => updateItem(idx, 'quantity', parseInt(e.target.value) || 0)} />
-                    </div>
-                    <div style={{width: 100, minWidth: 70, resize: 'horizontal', overflow: 'hidden'}}>
-                      {idx === 0 && <Label className="text-xs">Unit</Label>}
-                      {(!item.unit || UNITS.includes(item.unit)) ? (
-                        <Select value={item.unit || 'Piece'} onValueChange={v => v === '__custom__' ? updateItem(idx, 'unit', '') : updateItem(idx, 'unit', v)}>
-                          <SelectTrigger><SelectValue /></SelectTrigger>
-                          <SelectContent>
-                            {UNITS.map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}
-                            <SelectItem value="__custom__">Custom...</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      ) : (
-                        <div className="flex gap-1">
-                          <Input value={item.unit} onChange={e => updateItem(idx, 'unit', e.target.value)} placeholder="Unit" autoFocus />
-                          <Button type="button" variant="outline" size="sm" className="shrink-0" onClick={() => updateItem(idx, 'unit', 'Piece')}>↩</Button>
-                        </div>
-                      )}
-                    </div>
-                    <div style={{width: 120, minWidth: 70, resize: 'horizontal', overflow: 'hidden'}}>
-                      {idx === 0 && <Label className="text-xs">Buy Price</Label>}
-                      <Input type="number" value={item.unit_price} onChange={e => updateItem(idx, 'unit_price', parseFloat(e.target.value) || 0)} />
-                    </div>
-                    <div style={{width: 120, minWidth: 70, resize: 'horizontal', overflow: 'hidden'}}>
-                      {idx === 0 && <Label className="text-xs">Sell Price</Label>}
-                      <Input type="number" value={item.unit_selling_price || ''} onChange={e => updateItem(idx, 'unit_selling_price', parseFloat(e.target.value) || 0)} placeholder="0" />
-                    </div>
-                    <div style={{width: 140, minWidth: 80, resize: 'horizontal', overflow: 'hidden'}}>
-                      {idx === 0 && <Label className="text-xs">Total</Label>}
-                      <Input value={`NPR ${(item.total || 0).toLocaleString()}`} disabled className="font-mono" />
-                    </div>
-                    <div style={{width: 36}} className="flex justify-end">
-                      <Button size="icon" variant="ghost" onClick={() => removeItem(idx)} disabled={form.items.length <= 1}>
-                        <Trash2 className="w-4 h-4 text-muted-foreground" />
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div>
-              <div className="flex justify-between items-center mb-2">
-                <Label className="text-sm font-semibold">Work / Labour Charges</Label>
-                <Button size="sm" variant="outline" onClick={addLaborItem}><Plus className="w-3 h-3 mr-1" />Add Row</Button>
-              </div>
-              {form.labor_items.map((li, idx) => (
-                <div key={idx} className="grid grid-cols-12 gap-2 items-end p-3 bg-secondary/50 rounded-lg mb-2">
-                  <div className="col-span-7">
-                    {idx === 0 && <Label className="text-xs">Work Description</Label>}
-                    <Input value={li.description} onChange={e => updateLaborItem(idx, 'description', e.target.value)} placeholder="e.g. Installation, Repair..." />
-                  </div>
-                  <div className="col-span-3">
-                    {idx === 0 && <Label className="text-xs">Amount (NPR)</Label>}
-                    <Input type="number" value={li.amount} onChange={e => updateLaborItem(idx, 'amount', parseFloat(e.target.value) || 0)} />
-                  </div>
-                  <div className="col-span-2 flex justify-end">
-                    <Button size="icon" variant="ghost" onClick={() => removeLaborItem(idx)} disabled={form.labor_items.length <= 1}><Trash2 className="w-4 h-4" /></Button>
-                  </div>
+              {/* Saved vendor picker */}
+              {vendors.length > 0 && (
+                <div>
+                  <Label className="text-xs">Select Saved Vendor</Label>
+                  <Select onValueChange={v => {
+                    const vend = vendors.find(x => x.id === v);
+                    if (vend) setForm(f => ({
+                      ...f,
+                      vendor_name: vend.name || '',
+                      vendor_contact: vend.contact_person || vend.phone || '',
+                      vendor_address: vend.address || '',
+                      vendor_pan: vend.pan_vat || ''
+                    }));
+                  }}>
+                    <SelectTrigger className="h-8 text-sm">
+                      <SelectValue placeholder="Select saved vendor (or type below)" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {vendors.map(v => (
+                        <SelectItem key={v.id} value={v.id}>{v.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
-              ))}
+              )}
+
+              <div>
+                <Label className="text-xs">Vendor Name *</Label>
+                <Input
+                  className="h-8 text-sm"
+                  value={form.vendor_name}
+                  onChange={e => setForm({ ...form, vendor_name: e.target.value })}
+                  placeholder="Vendor / Supplier name"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <Label className="text-xs">Contact <span className="text-muted-foreground">(optional)</span></Label>
+                  <Input
+                    className="h-8 text-sm"
+                    value={form.vendor_contact}
+                    onChange={e => setForm({ ...form, vendor_contact: e.target.value })}
+                    placeholder="Phone / email"
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs">PAN / VAT <span className="text-muted-foreground">(optional)</span></Label>
+                  <Input
+                    className="h-8 text-sm"
+                    value={form.vendor_pan}
+                    onChange={e => setForm({ ...form, vendor_pan: e.target.value })}
+                    placeholder="e.g. 123456789"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <Label className="text-xs">Address <span className="text-muted-foreground">(optional)</span></Label>
+                <Input
+                  className="h-8 text-sm"
+                  value={form.vendor_address}
+                  onChange={e => setForm({ ...form, vendor_address: e.target.value })}
+                  placeholder="Vendor address"
+                />
+              </div>
+
+              {/* Bill Details section */}
+              <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground border-b pb-1 mt-2 flex items-center gap-1">
+                <FileText className="w-3 h-3" /> Bill Details
+              </h4>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <Label className="text-xs">Bill Date *</Label>
+                  <Input
+                    type="date"
+                    className="h-8 text-sm"
+                    value={form.date_ad}
+                    onChange={e => setForm({ ...form, date_ad: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs">Due Date <span className="text-muted-foreground">(credit)</span></Label>
+                  <Input
+                    type="date"
+                    className="h-8 text-sm"
+                    value={form.due_date}
+                    onChange={e => setForm({ ...form, due_date: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <Label className="text-xs">Order / Bill No. <span className="text-muted-foreground">(optional)</span></Label>
+                  <Input
+                    className="h-8 text-sm"
+                    value={form.order_number}
+                    onChange={e => setForm({ ...form, order_number: e.target.value })}
+                    placeholder="Vendor's bill #"
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs">Ordered By <span className="text-muted-foreground">(optional)</span></Label>
+                  <Input
+                    className="h-8 text-sm"
+                    value={form.ordered_by}
+                    onChange={e => setForm({ ...form, ordered_by: e.target.value })}
+                    placeholder="Your staff name"
+                  />
+                </div>
+              </div>
+
+              {/* Payment Type */}
+              <div>
+                <Label className="text-xs font-semibold">Payment Type</Label>
+                <div className="flex gap-4 mt-1">
+                  {['cash', 'cheque', 'credit'].map(type => (
+                    <label key={type} className="flex items-center gap-1.5 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="payment_type"
+                        value={type}
+                        checked={form.payment_type === type}
+                        onChange={() => setForm({ ...form, payment_type: type })}
+                        className="accent-primary"
+                      />
+                      <span className="text-sm capitalize">{type}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {/* VAT Toggle */}
+              <div className="flex items-center gap-3 p-2.5 bg-secondary rounded-lg">
+                <Switch checked={form.is_vat} onCheckedChange={v => setForm({ ...form, is_vat: v })} />
+                <Label className="text-sm">VAT Bill (13%)</Label>
+              </div>
+
+              {/* Notes */}
+              <div>
+                <Label className="text-xs">Notes <span className="text-muted-foreground">(optional)</span></Label>
+                <Input
+                  className="h-8 text-sm"
+                  value={form.notes}
+                  onChange={e => setForm({ ...form, notes: e.target.value })}
+                  placeholder="Remarks, special instructions..."
+                />
+              </div>
             </div>
 
-            <div className="bg-secondary rounded-lg p-4 space-y-2">
-              <div className="flex justify-between text-sm"><span>Items Subtotal</span><span className="font-mono">NPR {form.items.reduce((s, i) => s + (i.total || 0), 0).toLocaleString()}</span></div>
-              {totalLabor > 0 && <div className="flex justify-between text-sm"><span>Labour Total</span><span className="font-mono">NPR {totalLabor.toLocaleString()}</span></div>}
-              {form.is_vat && <div className="flex justify-between text-sm"><span>VAT (13%)</span><span className="font-mono">NPR {vatAmount.toLocaleString()}</span></div>}
-              <div className="flex justify-between font-bold border-t pt-2"><span>Total</span><span className="font-mono">NPR {(subtotal + vatAmount).toLocaleString()}</span></div>
+            {/* ── Right column: items ── */}
+            <div className="overflow-y-auto max-h-[calc(85vh-180px)]">
+
+              {/* Items */}
+              <div className="mb-3">
+                <div className="flex justify-between items-center mb-2">
+                  <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground border-b pb-1 flex-1">
+                    Items
+                  </h4>
+                  <Button size="sm" variant="outline" className="h-7 text-xs ml-2" onClick={addItem}>
+                    <Plus className="w-3 h-3 mr-1" />Add Item
+                  </Button>
+                </div>
+
+                {/* Header row */}
+                <div className="grid grid-cols-12 gap-1 text-xs font-medium text-muted-foreground px-1 mb-1">
+                  <div className="col-span-5">Description</div>
+                  <div className="col-span-2">Qty</div>
+                  <div className="col-span-2">Unit</div>
+                  <div className="col-span-2">Buy Price</div>
+                  <div className="col-span-1"></div>
+                </div>
+
+                <div className="space-y-1">
+                  {form.items.map((item, i) => (
+                    <div key={i} className="grid grid-cols-12 gap-1 items-center">
+                      <div className="col-span-5">
+                        <Input
+                          placeholder="Item description"
+                          value={item.description}
+                          onChange={e => updateItem(i, 'description', e.target.value)}
+                          className="h-8 text-sm"
+                        />
+                      </div>
+                      <div className="col-span-2">
+                        <Input
+                          type="number"
+                          value={item.quantity}
+                          onChange={e => updateItem(i, 'quantity', parseInt(e.target.value) || 0)}
+                          className="h-8 text-sm"
+                        />
+                      </div>
+                      <div className="col-span-2">
+                        {(!item.unit || UNITS.includes(item.unit)) ? (
+                          <Select
+                            value={item.unit || 'Piece'}
+                            onValueChange={v => v === '__custom__' ? updateItem(i, 'unit', '') : updateItem(i, 'unit', v)}
+                          >
+                            <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              {UNITS.map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}
+                              <SelectItem value="__custom__">Custom...</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        ) : (
+                          <div className="flex gap-1">
+                            <Input
+                              value={item.unit}
+                              onChange={e => updateItem(i, 'unit', e.target.value)}
+                              placeholder="Unit"
+                              className="h-8 text-xs"
+                              autoFocus
+                            />
+                            <Button type="button" variant="outline" size="sm" className="h-8 px-1 shrink-0 text-xs" onClick={() => updateItem(i, 'unit', 'Piece')}>↩</Button>
+                          </div>
+                        )}
+                      </div>
+                      <div className="col-span-2">
+                        <Input
+                          type="number"
+                          value={item.unit_price}
+                          onChange={e => updateItem(i, 'unit_price', parseFloat(e.target.value) || 0)}
+                          className="h-8 text-sm"
+                        />
+                      </div>
+                      <div className="col-span-1">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={() => removeItem(i)}
+                          disabled={form.items.length <= 1}
+                        >
+                          <Trash2 className="w-3 h-3 text-destructive" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Labour Charges */}
+              <div className="mb-3">
+                <div className="flex justify-between items-center mb-2">
+                  <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground border-b pb-1 flex-1">
+                    Work / Labour Charges
+                  </h4>
+                  <Button size="sm" variant="outline" className="h-7 text-xs ml-2" onClick={addLaborItem}>
+                    <Plus className="w-3 h-3 mr-1" />Add Row
+                  </Button>
+                </div>
+
+                <div className="space-y-1">
+                  {form.labor_items.map((li, idx) => (
+                    <div key={idx} className="grid grid-cols-12 gap-1 items-center">
+                      <div className="col-span-8">
+                        <Input
+                          value={li.description}
+                          onChange={e => updateLaborItem(idx, 'description', e.target.value)}
+                          placeholder="e.g. Installation, Repair..."
+                          className="h-8 text-sm"
+                        />
+                      </div>
+                      <div className="col-span-3">
+                        <Input
+                          type="number"
+                          value={li.amount}
+                          onChange={e => updateLaborItem(idx, 'amount', parseFloat(e.target.value) || 0)}
+                          className="h-8 text-sm"
+                          placeholder="Amount"
+                        />
+                      </div>
+                      <div className="col-span-1">
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-8 w-8"
+                          onClick={() => removeLaborItem(idx)}
+                          disabled={form.labor_items.length <= 1}
+                        >
+                          <Trash2 className="w-3 h-3 text-destructive" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Summary */}
+              <div className="bg-secondary rounded-lg p-3 space-y-1.5 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Items Subtotal</span>
+                  <span className="font-mono">NPR {itemsSubtotal.toLocaleString()}</span>
+                </div>
+                {totalLabor > 0 && (
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Labour Total</span>
+                    <span className="font-mono">NPR {totalLabor.toLocaleString()}</span>
+                  </div>
+                )}
+                {form.is_vat && (
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">VAT (13%)</span>
+                    <span className="font-mono">NPR {vatAmount.toLocaleString()}</span>
+                  </div>
+                )}
+                <div className="flex justify-between font-bold border-t pt-2">
+                  <span>Total</span>
+                  <span className="font-mono">NPR {(subtotal + vatAmount).toLocaleString()}</span>
+                </div>
+              </div>
             </div>
           </div>
-          <DialogFooter>
+
+          <DialogFooter className="mt-2">
             <Button variant="outline" onClick={() => setShowNew(false)}>Cancel</Button>
             <Button onClick={createOrder} disabled={!form.vendor_name}>Save Purchase</Button>
           </DialogFooter>

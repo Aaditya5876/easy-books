@@ -382,12 +382,20 @@ export default function Settings() {
               <Label>Business Type</Label>
               <select
                 className="w-full border rounded-md px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring mt-1"
-                value={companyForm.business_type}
+                value={BUSINESS_TYPES.some(b => b.value === companyForm.business_type) ? companyForm.business_type : (companyForm.business_type ? 'OTHER' : '')}
                 onChange={e => setCompanyForm({ ...companyForm, business_type: e.target.value })}
               >
                 <option value="">Select business type…</option>
                 {BUSINESS_TYPES.map(bt => <option key={bt.value} value={bt.value}>{bt.label}</option>)}
               </select>
+              {companyForm.business_type === 'OTHER' && (
+                <Input className="mt-2" placeholder="Describe your business (e.g. Tailoring Shop, Laundry)" autoFocus
+                  value='' onChange={e => setCompanyForm({ ...companyForm, business_type: e.target.value })} />
+              )}
+              {companyForm.business_type && !BUSINESS_TYPES.some(b => b.value === companyForm.business_type) && companyForm.business_type !== 'OTHER' && (
+                <Input className="mt-2" placeholder="Describe your business"
+                  value={companyForm.business_type} onChange={e => setCompanyForm({ ...companyForm, business_type: e.target.value })} />
+              )}
             </div>
             <div><Label>Registration Number</Label><Input value={companyForm.registration_number} onChange={e => setCompanyForm({ ...companyForm, registration_number: e.target.value })} /></div>
             <div><Label>Address</Label><Input value={companyForm.address} onChange={e => setCompanyForm({ ...companyForm, address: e.target.value })} /></div>
@@ -416,12 +424,20 @@ export default function Settings() {
                 <Label>Business Type</Label>
                 <select
                   className="w-full border rounded-md px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring mt-1"
-                  value={editingCompany.business_type || ''}
+                  value={BUSINESS_TYPES.some(b => b.value === editingCompany.business_type) ? editingCompany.business_type : (editingCompany.business_type ? 'OTHER' : '')}
                   onChange={e => setEditingCompany({ ...editingCompany, business_type: e.target.value })}
                 >
                   <option value="">Select business type…</option>
                   {BUSINESS_TYPES.map(bt => <option key={bt.value} value={bt.value}>{bt.label}</option>)}
                 </select>
+                {editingCompany.business_type === 'OTHER' && (
+                  <Input className="mt-2" placeholder="Describe your business (e.g. Tailoring Shop, Laundry)" autoFocus
+                    value='' onChange={e => setEditingCompany({ ...editingCompany, business_type: e.target.value })} />
+                )}
+                {editingCompany.business_type && !BUSINESS_TYPES.some(b => b.value === editingCompany.business_type) && editingCompany.business_type !== 'OTHER' && (
+                  <Input className="mt-2" placeholder="Describe your business"
+                    value={editingCompany.business_type} onChange={e => setEditingCompany({ ...editingCompany, business_type: e.target.value })} />
+                )}
               </div>
               <div><Label>Registration Number</Label><Input value={editingCompany.registration_number || ''} onChange={e => setEditingCompany({ ...editingCompany, registration_number: e.target.value })} /></div>
               <div><Label>Address</Label><Input value={editingCompany.address || ''} onChange={e => setEditingCompany({ ...editingCompany, address: e.target.value })} /></div>

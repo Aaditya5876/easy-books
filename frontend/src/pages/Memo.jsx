@@ -8,7 +8,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter
@@ -16,46 +15,114 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue
 } from "@/components/ui/select";
-import { ExternalLink, Upload, ImageIcon, Loader2 } from 'lucide-react';
+import { ExternalLink, FileText } from 'lucide-react';
 import PageLoader from '../components/PageLoader';
 
+// ─── Category config ──────────────────────────────────────────────────────────
+const CATEGORY_CONFIG = {
+  quotation: {
+    label: 'Quotation',
+    fields: ['client_name', 'client_contact', 'valid_until', 'status', 'amount'],
+    statusOptions: ['Quoted', 'Work-done', 'Cancelled', 'Revised', 'Billed'],
+  },
+  purchase_bill: {
+    label: 'Purchase Bill',
+    fields: ['vendor_name', 'vendor_contact', 'bill_number', 'vendor_pan', 'amount', 'file'],
+  },
+  sales_bill: {
+    label: 'Sales Bill',
+    fields: ['client_name', 'client_contact', 'invoice_number', 'amount', 'file'],
+  },
+  job_card: {
+    label: 'Job Card',
+    fields: ['client_name', 'client_contact', 'assigned_to', 'start_date', 'end_date', 'description'],
+  },
+  order_slip: {
+    label: 'Order Slip',
+    fields: ['client_name', 'client_contact', 'delivery_date', 'description', 'amount'],
+  },
+  extra_work: {
+    label: 'Extra Work / Pending',
+    fields: ['client_name', 'client_contact', 'due_date', 'description', 'amount'],
+  },
+  supporting_doc: {
+    label: 'Supporting Document',
+    fields: ['doc_type', 'linked_reference', 'description', 'file'],
+  },
+};
+
 const CATEGORIES = [
-  { value: 'quotation', label: 'Quotations' },
-  { value: 'purchase_bill', label: 'Purchase Bills' },
-  { value: 'sales_bill', label: 'Sales Bills' },
-  { value: 'job_card', label: 'Job Cards' },
-  { value: 'order_slip', label: 'Order Slips' },
-  { value: 'extra_work', label: 'Extra Work / Pending' },
+  { value: 'quotation',      label: 'Quotations' },
+  { value: 'purchase_bill',  label: 'Purchase Bills' },
+  { value: 'sales_bill',     label: 'Sales Bills' },
+  { value: 'job_card',       label: 'Job Cards' },
+  { value: 'order_slip',     label: 'Order Slips' },
+  { value: 'extra_work',     label: 'Extra Work / Pending' },
   { value: 'supporting_doc', label: 'Supporting Documents' },
 ];
 
 const REMARKS = ['Quoted', 'Work-done', 'Cancelled', 'Revised', 'Billed'];
 
+const today = new Date().toISOString().split('T')[0];
+
+const EMPTY_FORM = {
+  category: 'purchase_bill',
+  date_ad: today,
+  reference_id: '',
+  // shared client fields
+  client_name: '', client_contact: '', client_address: '',
+  // vendor fields (purchase_bill)
+  vendor_name: '', vendor_contact: '', vendor_pan: '',
+  // bill/invoice numbers
+  bill_number: '', invoice_number: '',
+  // job card
+  assigned_to: '', start_date: '', end_date: '',
+  // order/extra work
+  delivery_date: '', due_date: '',
+  // supporting doc
+  doc_type: '', linked_reference: '',
+  // quotation
+  valid_until: '', status: '',
+  // common
+  description: '', amount: '', document_url: '',
+};
+
+// ─── Remark colour map ────────────────────────────────────────────────────────
+const remarkColors = {
+  Quoted:      'bg-blue-100 text-blue-700',
+  'Work-done': 'bg-green-100 text-green-700',
+  Cancelled:   'bg-red-100 text-red-700',
+  Revised:     'bg-amber-100 text-amber-700',
+  Billed:      'bg-purple-100 text-purple-700',
+};
+
+// ─── Small helper: section divider label ─────────────────────────────────────
+function SectionLabel({ children }) {
+  return (
+    <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground border-b pb-1 mt-1">
+      {children}
+    </h4>
+  );
+}
+
+// ─── Main component ───────────────────────────────────────────────────────────
 export default function Memo() {
   const companyId = getActiveCompanyId();
-  const [documents, setDocuments] = useState([]);
-  const [quotations, setQuotations] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('quotation');
-  const [search, setSearch] = useState('');
-  const [colFilters, setColFilters] = useState({ client_name: '', reference_id: '', status: '' });
+  const [documents, setDocuments]         = useState([]);
+  const [loading, setLoading]             = useState(true);
+  const [activeTab, setActiveTab]         = useState('quotation');
+  const [search, setSearch]               = useState('');
+  const [colFilters, setColFilters]       = useState({ client_name: '', reference_id: '', status: '' });
   const setCol = (key, val) => setColFilters(f => ({ ...f, [key]: val }));
-  const [showAdd, setShowAdd] = useState(false);
-  const [form, setForm] = useState({
-    title: '', category: 'quotation', client_name: '', client_contact: '', client_address: '', description: '', status: 'Quoted', document_url: '', amount: '', date_ad: new Date().toISOString().split('T')[0]
-  });
-  const [uploading, setUploading] = useState(false);
-  const [selectedDoc, setSelectedDoc] = useState(null);
+  const [showAdd, setShowAdd]             = useState(false);
+  const [form, setForm]                   = useState(EMPTY_FORM);
+  const [selectedDoc, setSelectedDoc]     = useState(null);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
-  async function handleFileUpload(e) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setUploading(true);
-    const file_url = URL.createObjectURL(file);
-    setForm(f => ({ ...f, document_url: file_url }));
-    setUploading(false);
-  }
+  // keep form.category in sync when tab changes so Add opens on the right category
+  useEffect(() => {
+    setForm(f => ({ ...f, category: activeTab }));
+  }, [activeTab]);
 
   useEffect(() => {
     if (companyId) loadData();
@@ -63,37 +130,65 @@ export default function Memo() {
 
   async function loadData() {
     setLoading(true);
-    const [docs, quots] = await Promise.all([
-      api.Memo.filter({ company_id: companyId }),
-      api.Quotation.filter({ company_id: companyId }),
-    ]);
+    const docs = await api.Memo.filter({ company_id: companyId });
     setDocuments(docs);
-    setQuotations(quots);
     setLoading(false);
   }
 
+  // ── Add document ────────────────────────────────────────────────────────────
   async function addDocument() {
-    if (!form.client_name.trim()) {
+    const cat = form.category;
+    // Basic required-field guard
+    if (cat === 'purchase_bill' && !form.vendor_name?.trim()) {
+      alert('Vendor name is required');
+      return;
+    }
+    if (cat !== 'purchase_bill' && cat !== 'supporting_doc' && !form.client_name?.trim()) {
       alert('Client name is required');
       return;
     }
+
     try {
       const bsDate = adToBs(new Date(form.date_ad));
+
+      // Build reference_id from the right sub-field
+      let ref = form.reference_id || '';
+      if (cat === 'purchase_bill') ref = form.bill_number || '';
+      if (cat === 'sales_bill')    ref = form.invoice_number || '';
+
       await api.Memo.create({
-        category: form.category,
-        client_name: form.client_name,
-        client_contact: form.client_contact,
-        client_address: form.client_address,
-        description: form.description,
-        document_url: form.document_url,
-        reference_id: form.reference_id,
-        amount: form.amount ? parseFloat(form.amount) : null,
-        date_ad: form.date_ad,
-        date_bs: bsDate.formatted,
-        status: form.status || null,
-        company_id: companyId,
+        category:        cat,
+        date_ad:         form.date_ad,
+        date_bs:         bsDate.formatted,
+        reference_id:    ref,
+        // client
+        client_name:     form.client_name,
+        client_contact:  form.client_contact,
+        client_address:  form.client_address,
+        // vendor
+        vendor_name:     form.vendor_name,
+        vendor_contact:  form.vendor_contact,
+        vendor_pan:      form.vendor_pan,
+        // job card
+        assigned_to:     form.assigned_to,
+        start_date:      form.start_date || null,
+        end_date:        form.end_date   || null,
+        // dates
+        delivery_date:   form.delivery_date || null,
+        due_date:        form.due_date      || null,
+        valid_until:     form.valid_until   || null,
+        // supporting doc
+        doc_type:        form.doc_type,
+        linked_reference: form.linked_reference,
+        // common
+        description:     form.description,
+        amount:          form.amount ? parseFloat(form.amount) : null,
+        document_url:    form.document_url,
+        status:          form.status || null,
+        company_id:      companyId,
       });
-      setForm({ title: '', category: 'quotation', client_name: '', client_contact: '', client_address: '', description: '', status: 'Quoted', document_url: '', amount: '', date_ad: new Date().toISOString().split('T')[0] });
+
+      setForm({ ...EMPTY_FORM, category: cat, date_ad: today });
       setShowAdd(false);
       await loadData();
     } catch (error) {
@@ -102,109 +197,254 @@ export default function Memo() {
     }
   }
 
-  async function uploadDocument(file) {
-    return URL.createObjectURL(file);
-  }
-
-  const remarkColors = {
-    Quoted: 'bg-blue-100 text-blue-700',
-    'Work-done': 'bg-green-100 text-green-700',
-    Cancelled: 'bg-red-100 text-red-700',
-    Revised: 'bg-amber-100 text-amber-700',
-    Billed: 'bg-purple-100 text-purple-700',
-  };
-
-  const filteredDocs = documents.filter(d => {
-    if (d.category !== activeTab) return false;
-    const matchesSearch = d.client_name?.toLowerCase().includes(search.toLowerCase()) ||
-      d.description?.toLowerCase().includes(search.toLowerCase());
-    if (!matchesSearch) return false;
-    if (colFilters.client_name && !d.client_name?.toLowerCase().includes(colFilters.client_name.toLowerCase())) return false;
-    if (colFilters.reference_id && !(d.reference_id || '').toLowerCase().includes(colFilters.reference_id.toLowerCase())) return false;
-    if (colFilters.status && !(d.status || '').toLowerCase().includes(colFilters.status.toLowerCase())) return false;
-    return true;
-  });
-
-  const filteredQuotations = filteredDocs; // quotation tab uses MemoDocument with category='quotation'
-
+  // ── Status update (quotation rows) ─────────────────────────────────────────
   async function updateRemark(id, remark) {
     await api.Memo.update(id, { status: remark });
     setDocuments(prev => prev.map(d => d.id === id ? { ...d, status: remark } : d));
   }
 
+  // ── Filtered rows ───────────────────────────────────────────────────────────
+  const filteredDocs = documents.filter(d => {
+    if (d.category !== activeTab) return false;
+    const hay = `${d.client_name} ${d.vendor_name} ${d.description}`.toLowerCase();
+    if (!hay.includes(search.toLowerCase())) return false;
+    if (colFilters.client_name  && !(d.client_name || '').toLowerCase().includes(colFilters.client_name.toLowerCase())) return false;
+    if (colFilters.reference_id && !(d.reference_id || '').toLowerCase().includes(colFilters.reference_id.toLowerCase())) return false;
+    if (colFilters.status       && !(d.status || '').toLowerCase().includes(colFilters.status.toLowerCase())) return false;
+    return true;
+  });
+
+  // ── Column definitions ──────────────────────────────────────────────────────
   const quotationColumns = [
     { key: 'date_ad', label: 'Date', render: (row) => (
-      <div className="text-xs"><div>{row.date_ad}</div><div className="text-muted-foreground">{row.date_bs}</div></div>
+      <div className="text-xs">
+        <div>{row.date_ad}</div>
+        <div className="text-muted-foreground">{row.date_bs}</div>
+      </div>
     )},
-    { key: 'reference_id', label: 'Reference #', filterValue: colFilters.reference_id, onFilterChange: v => setCol('reference_id', v), render: (row) => <span className="text-sm font-mono">{row.reference_id || '-'}</span> },
-    { key: 'client_name', label: 'Client', filterValue: colFilters.client_name, onFilterChange: v => setCol('client_name', v), render: (row) => <span className="font-medium">{row.client_name}</span> },
+    { key: 'reference_id', label: 'Reference #',
+      filterValue: colFilters.reference_id, onFilterChange: v => setCol('reference_id', v),
+      render: (row) => <span className="text-sm font-mono">{row.reference_id || '-'}</span> },
+    { key: 'client_name', label: 'Client',
+      filterValue: colFilters.client_name, onFilterChange: v => setCol('client_name', v),
+      render: (row) => <span className="font-medium">{row.client_name}</span> },
     { key: 'client_contact', label: 'Contact' },
-    { key: 'amount', label: 'Amount', render: (row) => <span className="font-mono">{row.amount ? `NPR ${(row.amount).toLocaleString()}` : '-'}</span> },
-    { key: 'status', label: 'Remark', filterValue: colFilters.status, onFilterChange: v => setCol('status', v), filterPlaceholder: 'e.g. Quoted', render: (row) => (
-      <select
-        value={row.status || ''}
-        onChange={e => { e.stopPropagation(); updateRemark(row.id, e.target.value); }}
-        onClick={e => e.stopPropagation()}
-        className={`text-xs px-2 py-0.5 rounded-full font-medium border-0 cursor-pointer outline-none ${remarkColors[row.status] || 'bg-gray-100 text-gray-600'}`}
-      >
-        <option value="">— select —</option>
-        {REMARKS.map(r => <option key={r} value={r}>{r}</option>)}
-      </select>
-    )},
-    { key: 'document_url', label: 'Doc', render: (row) => row.document_url ? (
-      <a href={row.document_url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline flex items-center gap-1"><ExternalLink className="w-3 h-3" />View</a>
-    ) : '-' },
+    { key: 'amount', label: 'Amount',
+      render: (row) => <span className="font-mono">{row.amount ? `NPR ${row.amount.toLocaleString()}` : '-'}</span> },
+    { key: 'status', label: 'Remark',
+      filterValue: colFilters.status, onFilterChange: v => setCol('status', v),
+      filterPlaceholder: 'e.g. Quoted',
+      render: (row) => (
+        <select
+          value={row.status || ''}
+          onChange={e => { e.stopPropagation(); updateRemark(row.id, e.target.value); }}
+          onClick={e => e.stopPropagation()}
+          className={`text-xs px-2 py-0.5 rounded-full font-medium border-0 cursor-pointer outline-none ${remarkColors[row.status] || 'bg-gray-100 text-gray-600'}`}
+        >
+          <option value="">— select —</option>
+          {REMARKS.map(r => <option key={r} value={r}>{r}</option>)}
+        </select>
+      )},
+    { key: 'document_url', label: 'Doc',
+      render: (row) => row.document_url ? (
+        <a href={row.document_url} target="_blank" rel="noopener noreferrer"
+           className="text-primary hover:underline flex items-center gap-1">
+          <ExternalLink className="w-3 h-3" />View
+        </a>
+      ) : '-' },
   ];
 
-  const docColumns = [
+  const purchaseBillColumns = [
     { key: 'date_ad', label: 'Date', render: (row) => (
       <div className="text-xs"><div>{row.date_ad}</div><div className="text-muted-foreground">{row.date_bs}</div></div>
     )},
-    { key: 'reference_id', label: 'Reference #', filterValue: colFilters.reference_id, onFilterChange: v => setCol('reference_id', v), render: (row) => <span className="text-sm font-mono">{row.reference_id || '-'}</span> },
-    { key: 'client_name', label: 'Client', filterValue: colFilters.client_name, onFilterChange: v => setCol('client_name', v) },
-    { key: 'description', label: 'Description', render: (row) => <span className="text-sm truncate max-w-[200px] block">{row.description}</span> },
-    { key: 'amount', label: 'Amount', render: (row) => <span className="font-mono">{row.amount ? `NPR ${(row.amount).toLocaleString()}` : '-'}</span> },
-    { key: 'document_url', label: 'Document', render: (row) => row.document_url ? (
-      <a href={row.document_url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline flex items-center gap-1"><ExternalLink className="w-3 h-3" />View</a>
-    ) : '-' },
+    { key: 'reference_id', label: 'Bill #',
+      filterValue: colFilters.reference_id, onFilterChange: v => setCol('reference_id', v),
+      render: (row) => <span className="text-sm font-mono">{row.reference_id || '-'}</span> },
+    { key: 'vendor_name', label: 'Vendor',
+      filterValue: colFilters.client_name, onFilterChange: v => setCol('client_name', v),
+      render: (row) => <span className="font-medium">{row.vendor_name || '-'}</span> },
+    { key: 'vendor_contact', label: 'Contact',
+      render: (row) => row.vendor_contact || '-' },
+    { key: 'vendor_pan', label: 'PAN',
+      render: (row) => <span className="font-mono">{row.vendor_pan || '-'}</span> },
+    { key: 'amount', label: 'Amount',
+      render: (row) => <span className="font-mono">{row.amount ? `NPR ${row.amount.toLocaleString()}` : '-'}</span> },
+    { key: 'document_url', label: 'Document',
+      render: (row) => row.document_url ? (
+        <a href={row.document_url} target="_blank" rel="noopener noreferrer"
+           className="text-primary hover:underline flex items-center gap-1">
+          <ExternalLink className="w-3 h-3" />View
+        </a>
+      ) : '-' },
   ];
+
+  const salesBillColumns = [
+    { key: 'date_ad', label: 'Date', render: (row) => (
+      <div className="text-xs"><div>{row.date_ad}</div><div className="text-muted-foreground">{row.date_bs}</div></div>
+    )},
+    { key: 'reference_id', label: 'Invoice #',
+      filterValue: colFilters.reference_id, onFilterChange: v => setCol('reference_id', v),
+      render: (row) => <span className="text-sm font-mono">{row.reference_id || '-'}</span> },
+    { key: 'client_name', label: 'Client',
+      filterValue: colFilters.client_name, onFilterChange: v => setCol('client_name', v),
+      render: (row) => <span className="font-medium">{row.client_name}</span> },
+    { key: 'client_contact', label: 'Contact' },
+    { key: 'amount', label: 'Amount',
+      render: (row) => <span className="font-mono">{row.amount ? `NPR ${row.amount.toLocaleString()}` : '-'}</span> },
+    { key: 'document_url', label: 'Document',
+      render: (row) => row.document_url ? (
+        <a href={row.document_url} target="_blank" rel="noopener noreferrer"
+           className="text-primary hover:underline flex items-center gap-1">
+          <ExternalLink className="w-3 h-3" />View
+        </a>
+      ) : '-' },
+  ];
+
+  const jobCardColumns = [
+    { key: 'date_ad', label: 'Date', render: (row) => (
+      <div className="text-xs"><div>{row.date_ad}</div><div className="text-muted-foreground">{row.date_bs}</div></div>
+    )},
+    { key: 'client_name', label: 'Client',
+      filterValue: colFilters.client_name, onFilterChange: v => setCol('client_name', v),
+      render: (row) => <span className="font-medium">{row.client_name}</span> },
+    { key: 'client_contact', label: 'Contact' },
+    { key: 'assigned_to', label: 'Assigned To',
+      render: (row) => row.assigned_to || '-' },
+    { key: 'start_date', label: 'Start', render: (row) => row.start_date || '-' },
+    { key: 'end_date',   label: 'End',   render: (row) => row.end_date   || '-' },
+    { key: 'description', label: 'Description',
+      render: (row) => <span className="text-sm truncate max-w-[200px] block">{row.description || '-'}</span> },
+  ];
+
+  const orderSlipColumns = [
+    { key: 'date_ad', label: 'Date', render: (row) => (
+      <div className="text-xs"><div>{row.date_ad}</div><div className="text-muted-foreground">{row.date_bs}</div></div>
+    )},
+    { key: 'client_name', label: 'Client',
+      filterValue: colFilters.client_name, onFilterChange: v => setCol('client_name', v),
+      render: (row) => <span className="font-medium">{row.client_name}</span> },
+    { key: 'client_contact', label: 'Contact' },
+    { key: 'delivery_date', label: 'Delivery Date', render: (row) => row.delivery_date || '-' },
+    { key: 'description', label: 'Description',
+      render: (row) => <span className="text-sm truncate max-w-[200px] block">{row.description || '-'}</span> },
+    { key: 'amount', label: 'Amount',
+      render: (row) => <span className="font-mono">{row.amount ? `NPR ${row.amount.toLocaleString()}` : '-'}</span> },
+  ];
+
+  const extraWorkColumns = [
+    { key: 'date_ad', label: 'Date', render: (row) => (
+      <div className="text-xs"><div>{row.date_ad}</div><div className="text-muted-foreground">{row.date_bs}</div></div>
+    )},
+    { key: 'client_name', label: 'Client',
+      filterValue: colFilters.client_name, onFilterChange: v => setCol('client_name', v),
+      render: (row) => <span className="font-medium">{row.client_name}</span> },
+    { key: 'client_contact', label: 'Contact' },
+    { key: 'due_date', label: 'Due Date', render: (row) => row.due_date || '-' },
+    { key: 'description', label: 'Description',
+      render: (row) => <span className="text-sm truncate max-w-[200px] block">{row.description || '-'}</span> },
+    { key: 'amount', label: 'Amount',
+      render: (row) => <span className="font-mono">{row.amount ? `NPR ${row.amount.toLocaleString()}` : '-'}</span> },
+  ];
+
+  const supportingDocColumns = [
+    { key: 'date_ad', label: 'Date', render: (row) => (
+      <div className="text-xs"><div>{row.date_ad}</div><div className="text-muted-foreground">{row.date_bs}</div></div>
+    )},
+    { key: 'doc_type', label: 'Type',
+      render: (row) => row.doc_type ? <span className="capitalize">{row.doc_type}</span> : '-' },
+    { key: 'linked_reference', label: 'Linked Ref',
+      render: (row) => <span className="font-mono">{row.linked_reference || '-'}</span> },
+    { key: 'description', label: 'Description',
+      render: (row) => <span className="text-sm truncate max-w-[200px] block">{row.description || '-'}</span> },
+    { key: 'document_url', label: 'File',
+      render: (row) => row.document_url ? (
+        <a href={row.document_url} target="_blank" rel="noopener noreferrer"
+           className="text-primary hover:underline flex items-center gap-1">
+          <ExternalLink className="w-3 h-3" />View
+        </a>
+      ) : '-' },
+  ];
+
+  const columnsByTab = {
+    quotation:      quotationColumns,
+    purchase_bill:  purchaseBillColumns,
+    sales_bill:     salesBillColumns,
+    job_card:       jobCardColumns,
+    order_slip:     orderSlipColumns,
+    extra_work:     extraWorkColumns,
+    supporting_doc: supportingDocColumns,
+  };
+
+  // ── Helpers ─────────────────────────────────────────────────────────────────
+  const f = (key, placeholder, type = 'text', extra = {}) => (
+    <Input
+      type={type}
+      placeholder={placeholder}
+      value={form[key]}
+      onChange={e => setForm(prev => ({ ...prev, [key]: e.target.value }))}
+      {...extra}
+    />
+  );
 
   if (loading) return <PageLoader />;
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <PageHeader title="Memo" subtitle="Document records and scanned files" searchValue={search} onSearchChange={setSearch} onAdd={() => setShowAdd(true)} addLabel="Add Document" onDelete={() => { if (!selectedDoc) { alert('Please select a document to delete'); return; } setShowDeleteDialog(true); }} deleteLabel="Delete Selected" />
+      <PageHeader
+        title="Memo"
+        subtitle="Document records and scanned files"
+        searchValue={search}
+        onSearchChange={setSearch}
+        onAdd={() => setShowAdd(true)}
+        addLabel="Add Document"
+        onDelete={() => {
+          if (!selectedDoc) { alert('Please select a document to delete'); return; }
+          setShowDeleteDialog(true);
+        }}
+        deleteLabel="Delete Selected"
+      />
 
+      {/* Quotation summary tiles */}
       {activeTab === 'quotation' && (
-      <div className="grid grid-cols-5 gap-3">
-        {REMARKS.map(remark => (
-          <div key={remark} className="bg-card rounded-xl border p-3 text-center">
-            <p className="text-xl font-bold">{documents.filter(q => q.category === 'quotation' && q.status === remark).length}</p>
-            <p className="text-[10px] text-muted-foreground mt-0.5">{remark}</p>
-          </div>
-        ))}
-      </div>
+        <div className="grid grid-cols-5 gap-3">
+          {REMARKS.map(remark => (
+            <div key={remark} className="bg-card rounded-xl border p-3 text-center">
+              <p className="text-xl font-bold">
+                {documents.filter(q => q.category === 'quotation' && q.status === remark).length}
+              </p>
+              <p className="text-[10px] text-muted-foreground mt-0.5">{remark}</p>
+            </div>
+          ))}
+        </div>
       )}
 
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
+      {/* Tab navigation */}
+      <Tabs value={activeTab} onValueChange={v => { setActiveTab(v); setColFilters({ client_name: '', reference_id: '', status: '' }); }}>
         <TabsList className="flex-wrap">
           {CATEGORIES.map(c => (
             <TabsTrigger key={c.value} value={c.value}>{c.label}</TabsTrigger>
           ))}
         </TabsList>
         <TabsContent value={activeTab} className="mt-4">
-          {activeTab === 'quotation' ? (
-            <DataTable columns={quotationColumns} data={filteredQuotations} emptyMessage="No quotations yet" />
-          ) : (
-            <DataTable columns={docColumns} data={filteredDocs} emptyMessage={`No ${CATEGORIES.find(c => c.value === activeTab)?.label || 'documents'} yet`} onRowClick={setSelectedDoc} />
-          )}
+          <DataTable
+            columns={columnsByTab[activeTab]}
+            data={filteredDocs}
+            emptyMessage={`No ${CATEGORIES.find(c => c.value === activeTab)?.label || 'documents'} yet`}
+            onRowClick={setSelectedDoc}
+          />
         </TabsContent>
       </Tabs>
 
+      {/* ── Delete dialog ──────────────────────────────────────────────────── */}
       <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
         <DialogContent className="max-w-sm">
           <DialogHeader><DialogTitle>Delete Document?</DialogTitle></DialogHeader>
-          <p className="text-sm text-muted-foreground">Are you sure you want to delete <strong>{selectedDoc?.client_name}</strong>? This action cannot be undone.</p>
+          <p className="text-sm text-muted-foreground">
+            Are you sure you want to delete{' '}
+            <strong>{selectedDoc?.client_name || selectedDoc?.vendor_name || 'this document'}</strong>?{' '}
+            This action cannot be undone.
+          </p>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowDeleteDialog(false)}>Cancel</Button>
             <Button variant="destructive" onClick={async () => {
@@ -217,66 +457,261 @@ export default function Memo() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={showAdd} onOpenChange={setShowAdd}>
-        <DialogContent className="max-w-sm max-h-[90vh] flex flex-col">
-          <DialogHeader><DialogTitle>Add Document Record</DialogTitle></DialogHeader>
-          <div className="overflow-y-auto flex-1 pr-1 space-y-3">
-            <div>
-              <Label>Category</Label>
-              <Select value={form.category} onValueChange={v => setForm({ ...form, category: v })}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {CATEGORIES.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>Date *</Label>
-              <Input type="date" value={form.date_ad} onChange={e => setForm({ ...form, date_ad: e.target.value })} />
-              {form.date_ad && (
-                <p className="text-xs text-muted-foreground mt-1">BS: {adToBs(new Date(form.date_ad)).formatted}</p>
-              )}
-            </div>
-            <div>
-              <Label>Reference Number</Label>
-              <Input placeholder="e.g., REF-001" value={form.reference_id || ''} onChange={e => setForm({ ...form, reference_id: e.target.value })} />
-            </div>
+      {/* ── Add Document dialog ────────────────────────────────────────────── */}
+      <Dialog open={showAdd} onOpenChange={open => {
+        setShowAdd(open);
+        if (!open) setForm({ ...EMPTY_FORM, category: activeTab, date_ad: today });
+      }}>
+        <DialogContent className="glass-card max-w-sm max-h-[90vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FileText className="w-5 h-5 text-primary" />
+              Add Document Record
+            </DialogTitle>
+          </DialogHeader>
 
-            <div className="space-y-2">
-              <Label className="text-sm font-semibold">Client Details</Label>
-              <Input placeholder="Client Name" value={form.client_name} onChange={e => setForm({ ...form, client_name: e.target.value })} />
-              <Input placeholder="Contact / Phone" value={form.client_contact} onChange={e => setForm({ ...form, client_contact: e.target.value })} />
-              <Input placeholder="Address" value={form.client_address} onChange={e => setForm({ ...form, client_address: e.target.value })} />
-            </div>
-            <div><Label>Description</Label><Textarea value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} rows={2} /></div>
-            <div><Label>Amount</Label><Input type="number" placeholder="0.00" value={form.amount} onChange={e => setForm({ ...form, amount: e.target.value })} /></div>
-            <div>
-              <Label>Attach File / Image</Label>
-              <div className="flex items-center gap-2 mt-1">
-                <label className="flex items-center gap-2 cursor-pointer border border-input rounded-md px-3 py-2 text-sm hover:bg-secondary transition-colors">
-                  {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <ImageIcon className="w-4 h-4" />}
-                  {uploading ? 'Uploading...' : 'Choose File'}
-                  <input type="file" accept="image/*,application/pdf" className="hidden" onChange={handleFileUpload} disabled={uploading} />
-                </label>
-                {form.document_url && (
-                  <a href={form.document_url} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline flex items-center gap-1">
-                    <ExternalLink className="w-3 h-3" />View
-                  </a>
+          <div className="overflow-y-auto flex-1 pr-1 space-y-3">
+
+            {/* ── Always: category + date ── */}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Category</Label>
+                <Select
+                  value={form.category}
+                  onValueChange={v => setForm(prev => ({ ...prev, category: v }))}
+                >
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {CATEGORIES.map(c => (
+                      <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Date *</Label>
+                <Input
+                  type="date"
+                  value={form.date_ad}
+                  onChange={e => setForm(prev => ({ ...prev, date_ad: e.target.value }))}
+                />
+                {form.date_ad && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    BS: {adToBs(new Date(form.date_ad)).formatted}
+                  </p>
                 )}
               </div>
             </div>
+
+            {/* ── Reference number — purchase_bill, sales_bill, quotation ── */}
+            {['purchase_bill', 'sales_bill', 'quotation'].includes(form.category) && (
+              <div>
+                <Label>
+                  {form.category === 'purchase_bill'
+                    ? 'Bill Number'
+                    : form.category === 'sales_bill'
+                    ? 'Invoice Number'
+                    : 'Reference No.'}
+                </Label>
+                {f(
+                  form.category === 'purchase_bill'
+                    ? 'bill_number'
+                    : form.category === 'sales_bill'
+                    ? 'invoice_number'
+                    : 'reference_id',
+                  form.category === 'purchase_bill'
+                    ? 'e.g. BILL-001'
+                    : form.category === 'sales_bill'
+                    ? 'e.g. INV-001'
+                    : 'e.g. QT-001'
+                )}
+              </div>
+            )}
+
+            {/* ── Vendor fields — purchase_bill only ── */}
+            {form.category === 'purchase_bill' && (
+              <>
+                <SectionLabel>Vendor Details</SectionLabel>
+                <div>
+                  <Label>Vendor Name *</Label>
+                  {f('vendor_name', 'Vendor / Supplier name')}
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label>Vendor Contact</Label>
+                    {f('vendor_contact', 'Phone / Email')}
+                  </div>
+                  <div>
+                    <Label>Vendor PAN</Label>
+                    {f('vendor_pan', 'PAN number')}
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* ── Client fields — quotation, sales_bill, job_card, order_slip, extra_work ── */}
+            {['quotation', 'sales_bill', 'job_card', 'order_slip', 'extra_work'].includes(form.category) && (
+              <>
+                <SectionLabel>Party Details</SectionLabel>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label>Client Name *</Label>
+                    {f('client_name', 'Full name')}
+                  </div>
+                  <div>
+                    <Label>Contact</Label>
+                    {f('client_contact', 'Phone / Email')}
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* ── Job card specific ── */}
+            {form.category === 'job_card' && (
+              <>
+                <SectionLabel>Job Details</SectionLabel>
+                <div>
+                  <Label>Assigned To</Label>
+                  {f('assigned_to', 'Team member name')}
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label>Start Date</Label>
+                    {f('start_date', '', 'date')}
+                  </div>
+                  <div>
+                    <Label>End Date</Label>
+                    {f('end_date', '', 'date')}
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* ── Order slip — delivery date ── */}
+            {form.category === 'order_slip' && (
+              <div>
+                <Label>Delivery Date</Label>
+                {f('delivery_date', '', 'date')}
+              </div>
+            )}
+
+            {/* ── Extra work — due date ── */}
+            {form.category === 'extra_work' && (
+              <div>
+                <Label>Due Date</Label>
+                {f('due_date', '', 'date')}
+              </div>
+            )}
+
+            {/* ── Valid until — quotation ── */}
             {form.category === 'quotation' && (
               <div>
-                <Label>Remark</Label>
-                <Select value={form.status || ''} onValueChange={v => setForm({ ...form, status: v })}>
-                  <SelectTrigger><SelectValue placeholder="Select remark..." /></SelectTrigger>
+                <Label>Valid Until</Label>
+                {f('valid_until', '', 'date')}
+              </div>
+            )}
+
+            {/* ── Supporting doc fields ── */}
+            {form.category === 'supporting_doc' && (
+              <>
+                <SectionLabel>Document Details</SectionLabel>
+                <div>
+                  <Label>Document Type</Label>
+                  <Select
+                    value={form.doc_type}
+                    onValueChange={v => setForm(prev => ({ ...prev, doc_type: v }))}
+                  >
+                    <SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="contract">Contract</SelectItem>
+                      <SelectItem value="receipt">Receipt</SelectItem>
+                      <SelectItem value="certificate">Certificate</SelectItem>
+                      <SelectItem value="other">Other</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>Linked Reference</Label>
+                  {f('linked_reference', 'e.g. INV-001 or BILL-005')}
+                </div>
+              </>
+            )}
+
+            {/* ── Description — all except purchase_bill and sales_bill ── */}
+            {!['purchase_bill', 'sales_bill'].includes(form.category) && (
+              <div>
+                <Label>Description</Label>
+                <Textarea
+                  value={form.description}
+                  onChange={e => setForm(prev => ({ ...prev, description: e.target.value }))}
+                  rows={2}
+                  placeholder="Short notes…"
+                />
+              </div>
+            )}
+
+            {/* ── Amount — all except job_card and supporting_doc ── */}
+            {!['job_card', 'supporting_doc'].includes(form.category) && (
+              <div>
+                <Label>Amount (NPR)</Label>
+                <Input
+                  type="number"
+                  placeholder="0.00"
+                  value={form.amount}
+                  onChange={e => setForm(prev => ({ ...prev, amount: e.target.value }))}
+                />
+              </div>
+            )}
+
+            {/* ── File upload — purchase_bill, sales_bill, supporting_doc ── */}
+            {['purchase_bill', 'sales_bill', 'supporting_doc'].includes(form.category) && (
+              <div>
+                <Label>
+                  Attach File{' '}
+                  <span className="text-muted-foreground text-xs">(optional)</span>
+                </Label>
+                <Input
+                  type="file"
+                  accept="image/*,.pdf"
+                  className="mt-1"
+                  onChange={e => {
+                    const file = e.target.files?.[0];
+                    if (file) setForm(prev => ({ ...prev, document_url: URL.createObjectURL(file) }));
+                  }}
+                />
+                {form.document_url && (
+                  <a
+                    href={form.document_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs text-primary underline mt-1 flex items-center gap-1"
+                  >
+                    <ExternalLink className="w-3 h-3" />View attached file
+                  </a>
+                )}
+              </div>
+            )}
+
+            {/* ── Status / Remark — quotation only ── */}
+            {form.category === 'quotation' && (
+              <div>
+                <Label>Status</Label>
+                <Select
+                  value={form.status}
+                  onValueChange={v => setForm(prev => ({ ...prev, status: v }))}
+                >
+                  <SelectTrigger><SelectValue placeholder="Select status…" /></SelectTrigger>
                   <SelectContent>
-                    {REMARKS.map(r => <SelectItem key={r} value={r}>{r}</SelectItem>)}
+                    {CATEGORY_CONFIG.quotation.statusOptions.map(s => (
+                      <SelectItem key={s} value={s}>{s}</SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
             )}
+
           </div>
+
           <DialogFooter className="pt-2">
             <Button variant="outline" onClick={() => setShowAdd(false)}>Cancel</Button>
             <Button onClick={addDocument}>Save</Button>
