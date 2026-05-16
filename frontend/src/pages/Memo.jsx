@@ -15,7 +15,8 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue
 } from "@/components/ui/select";
-import { ExternalLink, FileText } from 'lucide-react';
+import { ExternalLink, FileText, Calendar, Hash, User, Phone, Building2, Layers, Tag, Link2 } from 'lucide-react';
+import { motion } from 'framer-motion';
 import PageLoader from '../components/PageLoader';
 
 // ─── Category config ──────────────────────────────────────────────────────────
@@ -377,15 +378,24 @@ export default function Memo() {
   };
 
   // ── Helpers ─────────────────────────────────────────────────────────────────
-  const f = (key, placeholder, type = 'text', extra = {}) => (
-    <Input
-      type={type}
-      placeholder={placeholder}
-      value={form[key]}
-      onChange={e => setForm(prev => ({ ...prev, [key]: e.target.value }))}
-      {...extra}
-    />
-  );
+  const f = (key, placeholder, type = 'text', Icon = null) => {
+    const input = (
+      <Input
+        type={type}
+        placeholder={placeholder}
+        value={form[key]}
+        className={`h-9 text-sm${Icon ? ' pl-8' : ''}`}
+        onChange={e => setForm(prev => ({ ...prev, [key]: e.target.value }))}
+      />
+    );
+    if (!Icon) return input;
+    return (
+      <div className="relative">
+        <Icon className="input-icon" />
+        {input}
+      </div>
+    );
+  };
 
   if (loading) return <PageLoader />;
 
@@ -462,105 +472,101 @@ export default function Memo() {
         setShowAdd(open);
         if (!open) setForm({ ...EMPTY_FORM, category: activeTab, date_ad: today });
       }}>
-        <DialogContent className="glass-card max-w-sm max-h-[90vh] flex flex-col">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <FileText className="w-5 h-5 text-primary" />
+        <DialogContent className="glass-dialog max-w-2xl overflow-hidden">
+          <div className="h-1 bg-gradient-to-r from-violet-400 to-fuchsia-500 -mx-6 -mt-6 mb-4" />
+          <DialogHeader className="mb-1">
+            <DialogTitle className="flex items-center gap-2 text-base font-semibold">
+              <FileText className="w-4 h-4 text-violet-500" />
               Add Document Record
             </DialogTitle>
           </DialogHeader>
 
-          <div className="overflow-y-auto flex-1 pr-1 space-y-3">
-
+          <motion.div
+            className="overflow-y-auto max-h-[60vh] pr-1 space-y-3"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.22 }}
+          >
             {/* ── Always: category + date ── */}
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label>Category</Label>
-                <Select
-                  value={form.category}
-                  onValueChange={v => setForm(prev => ({ ...prev, category: v }))}
-                >
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {CATEGORIES.map(c => (
-                      <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium">Category</Label>
+                <div className="relative">
+                  <Layers className="input-icon" />
+                  <Select value={form.category} onValueChange={v => setForm(prev => ({ ...prev, category: v }))}>
+                    <SelectTrigger className="pl-8 h-9 text-sm"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {CATEGORIES.map(c => (
+                        <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
-              <div>
-                <Label>Date *</Label>
-                <Input
-                  type="date"
-                  value={form.date_ad}
-                  onChange={e => setForm(prev => ({ ...prev, date_ad: e.target.value }))}
-                />
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium">Date *</Label>
+                <div className="relative">
+                  <Calendar className="input-icon" />
+                  <Input
+                    type="date"
+                    className="pl-8 h-9 text-sm"
+                    value={form.date_ad}
+                    onChange={e => setForm(prev => ({ ...prev, date_ad: e.target.value }))}
+                  />
+                </div>
                 {form.date_ad && (
-                  <p className="text-xs text-muted-foreground mt-1">
-                    BS: {adToBs(new Date(form.date_ad)).formatted}
-                  </p>
+                  <p className="text-xs text-muted-foreground">BS: {adToBs(new Date(form.date_ad)).formatted}</p>
                 )}
               </div>
             </div>
 
-            {/* ── Reference number — purchase_bill, sales_bill, quotation ── */}
+            {/* ── Reference number ── */}
             {['purchase_bill', 'sales_bill', 'quotation'].includes(form.category) && (
-              <div>
-                <Label>
-                  {form.category === 'purchase_bill'
-                    ? 'Bill Number'
-                    : form.category === 'sales_bill'
-                    ? 'Invoice Number'
-                    : 'Reference No.'}
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium">
+                  {form.category === 'purchase_bill' ? 'Bill Number' : form.category === 'sales_bill' ? 'Invoice Number' : 'Reference No.'}
                 </Label>
                 {f(
-                  form.category === 'purchase_bill'
-                    ? 'bill_number'
-                    : form.category === 'sales_bill'
-                    ? 'invoice_number'
-                    : 'reference_id',
-                  form.category === 'purchase_bill'
-                    ? 'e.g. BILL-001'
-                    : form.category === 'sales_bill'
-                    ? 'e.g. INV-001'
-                    : 'e.g. QT-001'
+                  form.category === 'purchase_bill' ? 'bill_number' : form.category === 'sales_bill' ? 'invoice_number' : 'reference_id',
+                  form.category === 'purchase_bill' ? 'e.g. BILL-001' : form.category === 'sales_bill' ? 'e.g. INV-001' : 'e.g. QT-001',
+                  'text', Hash
                 )}
               </div>
             )}
 
-            {/* ── Vendor fields — purchase_bill only ── */}
+            {/* ── Vendor fields ── */}
             {form.category === 'purchase_bill' && (
               <>
                 <SectionLabel>Vendor Details</SectionLabel>
-                <div>
-                  <Label>Vendor Name *</Label>
-                  {f('vendor_name', 'Vendor / Supplier name')}
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium">Vendor Name *</Label>
+                  {f('vendor_name', 'Vendor / Supplier name', 'text', Building2)}
                 </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <Label>Vendor Contact</Label>
-                    {f('vendor_contact', 'Phone / Email')}
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium">Vendor Contact</Label>
+                    {f('vendor_contact', 'Phone / Email', 'text', Phone)}
                   </div>
-                  <div>
-                    <Label>Vendor PAN</Label>
-                    {f('vendor_pan', 'PAN number')}
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium">Vendor PAN</Label>
+                    {f('vendor_pan', 'PAN number', 'text', Hash)}
                   </div>
                 </div>
               </>
             )}
 
-            {/* ── Client fields — quotation, sales_bill, job_card, order_slip, extra_work ── */}
+            {/* ── Client fields ── */}
             {['quotation', 'sales_bill', 'job_card', 'order_slip', 'extra_work'].includes(form.category) && (
               <>
                 <SectionLabel>Party Details</SectionLabel>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <Label>Client Name *</Label>
-                    {f('client_name', 'Full name')}
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium">Client Name *</Label>
+                    {f('client_name', 'Full name', 'text', User)}
                   </div>
-                  <div>
-                    <Label>Contact</Label>
-                    {f('client_contact', 'Phone / Email')}
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium">Contact</Label>
+                    {f('client_contact', 'Phone / Email', 'text', Phone)}
                   </div>
                 </div>
               </>
@@ -570,44 +576,44 @@ export default function Memo() {
             {form.category === 'job_card' && (
               <>
                 <SectionLabel>Job Details</SectionLabel>
-                <div>
-                  <Label>Assigned To</Label>
-                  {f('assigned_to', 'Team member name')}
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium">Assigned To</Label>
+                  {f('assigned_to', 'Team member name', 'text', User)}
                 </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <Label>Start Date</Label>
-                    {f('start_date', '', 'date')}
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium">Start Date</Label>
+                    {f('start_date', '', 'date', Calendar)}
                   </div>
-                  <div>
-                    <Label>End Date</Label>
-                    {f('end_date', '', 'date')}
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium">End Date</Label>
+                    {f('end_date', '', 'date', Calendar)}
                   </div>
                 </div>
               </>
             )}
 
-            {/* ── Order slip — delivery date ── */}
+            {/* ── Order slip ── */}
             {form.category === 'order_slip' && (
-              <div>
-                <Label>Delivery Date</Label>
-                {f('delivery_date', '', 'date')}
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium">Delivery Date</Label>
+                {f('delivery_date', '', 'date', Calendar)}
               </div>
             )}
 
-            {/* ── Extra work — due date ── */}
+            {/* ── Extra work ── */}
             {form.category === 'extra_work' && (
-              <div>
-                <Label>Due Date</Label>
-                {f('due_date', '', 'date')}
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium">Due Date</Label>
+                {f('due_date', '', 'date', Calendar)}
               </div>
             )}
 
-            {/* ── Valid until — quotation ── */}
+            {/* ── Quotation valid until ── */}
             {form.category === 'quotation' && (
-              <div>
-                <Label>Valid Until</Label>
-                {f('valid_until', '', 'date')}
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium">Valid Until</Label>
+                {f('valid_until', '', 'date', Calendar)}
               </div>
             )}
 
@@ -615,92 +621,94 @@ export default function Memo() {
             {form.category === 'supporting_doc' && (
               <>
                 <SectionLabel>Document Details</SectionLabel>
-                <div>
-                  <Label>Document Type</Label>
-                  <Select
-                    value={form.doc_type}
-                    onValueChange={v => setForm(prev => ({ ...prev, doc_type: v }))}
-                  >
-                    <SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="contract">Contract</SelectItem>
-                      <SelectItem value="receipt">Receipt</SelectItem>
-                      <SelectItem value="certificate">Certificate</SelectItem>
-                      <SelectItem value="other">Other</SelectItem>
-                    </SelectContent>
-                  </Select>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium">Document Type</Label>
+                  <div className="relative">
+                    <Tag className="input-icon" />
+                    <Select value={form.doc_type} onValueChange={v => setForm(prev => ({ ...prev, doc_type: v }))}>
+                      <SelectTrigger className="pl-8 h-9 text-sm"><SelectValue placeholder="Select type" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="contract">Contract</SelectItem>
+                        <SelectItem value="receipt">Receipt</SelectItem>
+                        <SelectItem value="certificate">Certificate</SelectItem>
+                        <SelectItem value="other">Other</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
-                <div>
-                  <Label>Linked Reference</Label>
-                  {f('linked_reference', 'e.g. INV-001 or BILL-005')}
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium">Linked Reference</Label>
+                  {f('linked_reference', 'e.g. INV-001 or BILL-005', 'text', Link2)}
                 </div>
               </>
             )}
 
-            {/* ── Description — all except purchase_bill and sales_bill ── */}
+            {/* ── Description ── */}
             {!['purchase_bill', 'sales_bill'].includes(form.category) && (
-              <div>
-                <Label>Description</Label>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium flex items-center gap-1.5">
+                  <FileText className="w-3.5 h-3.5 text-muted-foreground" />
+                  Description
+                </Label>
                 <Textarea
                   value={form.description}
                   onChange={e => setForm(prev => ({ ...prev, description: e.target.value }))}
                   rows={2}
+                  className="text-sm resize-none"
                   placeholder="Short notes…"
                 />
               </div>
             )}
 
-            {/* ── Amount — all except job_card and supporting_doc ── */}
+            {/* ── Amount with NPR prefix ── */}
             {!['job_card', 'supporting_doc'].includes(form.category) && (
-              <div>
-                <Label>Amount (NPR)</Label>
-                <Input
-                  type="number"
-                  placeholder="0.00"
-                  value={form.amount}
-                  onChange={e => setForm(prev => ({ ...prev, amount: e.target.value }))}
-                />
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium">Amount</Label>
+                <div className="flex items-stretch">
+                  <span className="inline-flex items-center px-3 bg-muted text-xs font-medium border border-r-0 border-input rounded-l-md text-muted-foreground select-none">
+                    NPR
+                  </span>
+                  <Input
+                    type="number"
+                    placeholder="0.00"
+                    className="rounded-l-none h-9 flex-1 text-sm"
+                    value={form.amount}
+                    onChange={e => setForm(prev => ({ ...prev, amount: e.target.value }))}
+                  />
+                </div>
               </div>
             )}
 
-            {/* ── File upload — purchase_bill, sales_bill, supporting_doc ── */}
+            {/* ── File upload ── */}
             {['purchase_bill', 'sales_bill', 'supporting_doc'].includes(form.category) && (
-              <div>
-                <Label>
-                  Attach File{' '}
-                  <span className="text-muted-foreground text-xs">(optional)</span>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium">
+                  Attach File <span className="text-muted-foreground font-normal">(optional)</span>
                 </Label>
                 <Input
                   type="file"
                   accept="image/*,.pdf"
-                  className="mt-1"
+                  className="h-9 text-sm"
                   onChange={e => {
                     const file = e.target.files?.[0];
                     if (file) setForm(prev => ({ ...prev, document_url: URL.createObjectURL(file) }));
                   }}
                 />
                 {form.document_url && (
-                  <a
-                    href={form.document_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-xs text-primary underline mt-1 flex items-center gap-1"
-                  >
+                  <a href={form.document_url} target="_blank" rel="noopener noreferrer"
+                     className="text-xs text-primary underline flex items-center gap-1">
                     <ExternalLink className="w-3 h-3" />View attached file
                   </a>
                 )}
               </div>
             )}
 
-            {/* ── Status / Remark — quotation only ── */}
+            {/* ── Quotation status ── */}
             {form.category === 'quotation' && (
-              <div>
-                <Label>Status</Label>
-                <Select
-                  value={form.status}
-                  onValueChange={v => setForm(prev => ({ ...prev, status: v }))}
-                >
-                  <SelectTrigger><SelectValue placeholder="Select status…" /></SelectTrigger>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium">Status</Label>
+                <Select value={form.status} onValueChange={v => setForm(prev => ({ ...prev, status: v }))}>
+                  <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Select status…" /></SelectTrigger>
                   <SelectContent>
                     {CATEGORY_CONFIG.quotation.statusOptions.map(s => (
                       <SelectItem key={s} value={s}>{s}</SelectItem>
@@ -709,12 +717,11 @@ export default function Memo() {
                 </Select>
               </div>
             )}
+          </motion.div>
 
-          </div>
-
-          <DialogFooter className="pt-2">
-            <Button variant="outline" onClick={() => setShowAdd(false)}>Cancel</Button>
-            <Button onClick={addDocument}>Save</Button>
+          <DialogFooter className="pt-3 mt-2 border-t border-border/50">
+            <Button variant="outline" size="sm" onClick={() => setShowAdd(false)}>Cancel</Button>
+            <Button size="sm" onClick={addDocument}>Save Document</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
