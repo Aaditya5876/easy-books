@@ -15,9 +15,29 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue
 } from "@/components/ui/select";
-import { Banknote, CreditCard, QrCode, FileCheck, Plus, X, Building2, Eye, EyeOff, ExternalLink } from 'lucide-react';
+import {
+  Banknote, CreditCard, QrCode, FileCheck, Plus, X, Building2,
+  Eye, EyeOff, ExternalLink, FileText, User, Calendar, Hash,
+  Landmark, Globe, Lock,
+} from 'lucide-react';
+import { motion } from 'framer-motion';
 import PageLoader from '../components/PageLoader';
 import FloatingBankBrowser from '../components/FloatingBankBrowser';
+
+const CATEGORIES = [
+  { v: 'income',     label: 'Income',     color: 'border-green-400 text-green-700',  active: 'bg-green-50 border-green-500' },
+  { v: 'expense',    label: 'Expense',    color: 'border-red-400 text-red-700',      active: 'bg-red-50 border-red-500' },
+  { v: 'transfer',   label: 'Transfer',   color: 'border-blue-400 text-blue-700',    active: 'bg-blue-50 border-blue-500' },
+  { v: 'investment', label: 'Investment', color: 'border-violet-400 text-violet-700',active: 'bg-violet-50 border-violet-500' },
+  { v: 'hand-outs',  label: 'Hand-outs',  color: 'border-amber-400 text-amber-700',  active: 'bg-amber-50 border-amber-500' },
+];
+
+const PAY_METHODS = [
+  { id: 'cash',   label: 'Cash',          emoji: '💵' },
+  { id: 'bank',   label: 'Bank Transfer', emoji: '🏦' },
+  { id: 'cheque', label: 'Cheque',        emoji: '📋' },
+  { id: 'qr',     label: 'QR / UPI',      emoji: '📱' },
+];
 
 export default function Transactions() {
   const companyId = getActiveCompanyId();
@@ -29,10 +49,15 @@ export default function Transactions() {
   const [colFilters, setColFilters] = useState({ description: '', party_name: '', category: '', status: '' });
   const setCol = (key, val) => setColFilters(f => ({ ...f, [key]: val }));
   const [showNew, setShowNew] = useState(false);
+  const [payMethod, setPayMethod] = useState('cash');
   const [activeBankId, setActiveBankId] = useState(null);
   const [showAddBank, setShowAddBank] = useState(false);
   const [browserAccount, setBrowserAccount] = useState(null);
-  const [bankForm, setBankForm] = useState({ bank_name: '', account_number: '', account_type: 'current', branch: '', current_balance: 0, portal_url: '', portal_username: '', portal_password: '' });
+  const [bankForm, setBankForm] = useState({
+    bank_name: '', account_number: '', account_type: 'current',
+    branch: '', current_balance: 0,
+    portal_url: '', portal_username: '', portal_password: '',
+  });
   const [showPassword, setShowPassword] = useState(false);
   const [form, setForm] = useState({
     category: 'income', amount: 0, description: '',
@@ -59,7 +84,11 @@ export default function Transactions() {
 
   async function createBankAccount() {
     const acct = await api.BankAccount.create({ ...bankForm, company_id: companyId, is_active: true });
-    setBankForm({ bank_name: '', account_number: '', account_type: 'current', branch: '', current_balance: 0, portal_url: '', portal_username: '', portal_password: '' });
+    setBankForm({
+      bank_name: '', account_number: '', account_type: 'current',
+      branch: '', current_balance: 0,
+      portal_url: '', portal_username: '', portal_password: '',
+    });
     setShowAddBank(false);
     setActiveBankId(acct.id);
     loadData();
@@ -153,7 +182,21 @@ export default function Transactions() {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <PageHeader title="Transactions" subtitle="Cash, Bank, QR & Cheque records" searchValue={search} onSearchChange={setSearch} onAdd={() => setShowNew(true)} addLabel="New Transaction" />
+      <PageHeader
+        title="Transactions"
+        subtitle="Cash, Bank, QR & Cheque records"
+        searchValue={search}
+        onSearchChange={setSearch}
+        onAdd={() => {
+          setPayMethod(
+            activeTab === 'bank' ? 'bank' :
+            activeTab === 'cheque' ? 'cheque' :
+            activeTab === 'qr' ? 'qr' : 'cash'
+          );
+          setShowNew(true);
+        }}
+        addLabel="New Transaction"
+      />
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         <div className="bg-card rounded-xl border p-4">
@@ -232,10 +275,10 @@ export default function Transactions() {
                     <div><p className="text-xs text-muted-foreground">Type</p><p className="capitalize">{acct.account_type}</p></div>
                     <div><p className="text-xs text-muted-foreground">Balance</p><p className="font-bold text-green-600">NPR {(acct.current_balance || 0).toLocaleString()}</p></div>
                     {acct.portal_url && (
-                    <div className="col-span-2 sm:col-span-4 flex items-center gap-3 pt-1 border-t">
-                    <button onClick={() => setBrowserAccount(acct)} className="flex items-center gap-1 text-sm text-primary hover:underline">
-                      <ExternalLink className="w-3.5 h-3.5" /> Open Bank Portal
-                    </button>
+                      <div className="col-span-2 sm:col-span-4 flex items-center gap-3 pt-1 border-t">
+                        <button onClick={() => setBrowserAccount(acct)} className="flex items-center gap-1 text-sm text-primary hover:underline">
+                          <ExternalLink className="w-3.5 h-3.5" /> Open Bank Portal
+                        </button>
                         {acct.portal_username && <span className="text-xs text-muted-foreground">User: <span className="font-mono">{acct.portal_username}</span></span>}
                       </div>
                     )}
@@ -247,45 +290,174 @@ export default function Transactions() {
 
             {/* Add Bank Account Dialog */}
             <Dialog open={showAddBank} onOpenChange={setShowAddBank}>
-              <DialogContent className="max-w-sm max-h-[85vh] overflow-y-auto">
-                <DialogHeader><DialogTitle>Add Bank Account</DialogTitle></DialogHeader>
-                <div className="space-y-3">
-                  <div><Label>Bank Name *</Label><Input value={bankForm.bank_name} onChange={e => setBankForm({ ...bankForm, bank_name: e.target.value })} /></div>
-                  <div><Label>Account Number *</Label><Input value={bankForm.account_number} onChange={e => setBankForm({ ...bankForm, account_number: e.target.value })} /></div>
-                  <div>
-                    <Label>Account Type</Label>
-                    <Select value={bankForm.account_type} onValueChange={v => setBankForm({ ...bankForm, account_type: v })}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="current">Current</SelectItem>
-                        <SelectItem value="savings">Savings</SelectItem>
-                        <SelectItem value="fixed">Fixed</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div><Label>Branch</Label><Input value={bankForm.branch} onChange={e => setBankForm({ ...bankForm, branch: e.target.value })} /></div>
-                  <div><Label>Opening Balance (NPR)</Label><Input type="number" value={bankForm.current_balance} onChange={e => setBankForm({ ...bankForm, current_balance: parseFloat(e.target.value) || 0 })} /></div>
-                  <div className="border-t pt-3 mt-1">
-                    <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wide">Saved Login (like Chrome)</p>
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-2">
-                        <div className="flex-1"><Label>Bank Portal URL</Label><Input placeholder="https://netbanking.example.com" value={bankForm.portal_url} onChange={e => setBankForm({ ...bankForm, portal_url: e.target.value })} /></div>
-                        {bankForm.portal_url && <a href={bankForm.portal_url} target="_blank" rel="noreferrer" className="mt-5 text-primary"><ExternalLink className="w-4 h-4" /></a>}
-                      </div>
-                      <div><Label>Username / Customer ID</Label><Input value={bankForm.portal_username} onChange={e => setBankForm({ ...bankForm, portal_username: e.target.value })} /></div>
-                      <div>
-                        <Label>Password</Label>
-                        <div className="relative">
-                          <Input type={showPassword ? 'text' : 'password'} value={bankForm.portal_password} onChange={e => setBankForm({ ...bankForm, portal_password: e.target.value })} className="pr-9" />
-                          <button type="button" onClick={() => setShowPassword(v => !v)} className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground">
-                            {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                          </button>
-                        </div>
+              <DialogContent className="glass-dialog max-w-2xl overflow-hidden">
+                <div className="h-1 bg-gradient-to-r from-amber-400 to-orange-500 -mx-6 -mt-6 mb-4" />
+                <DialogHeader>
+                  <DialogTitle className="flex items-center gap-2">
+                    <Landmark className="w-5 h-5 text-primary" /> Add Bank Account
+                  </DialogTitle>
+                </DialogHeader>
+
+                <div className="grid grid-cols-2 gap-6 mt-2">
+                  {/* LEFT — Bank Details */}
+                  <motion.div
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.22, ease: 'easeOut' }}
+                    className="space-y-3"
+                  >
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1.5">
+                      <Landmark className="w-3.5 h-3.5" /> Bank Details
+                    </p>
+
+                    {/* Bank Name */}
+                    <div>
+                      <Label className="text-xs font-medium">Bank Name *</Label>
+                      <div className="relative mt-1">
+                        <Landmark className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                        <Input
+                          className="pl-8 h-9 text-sm"
+                          placeholder="e.g. Nepal Investment Bank"
+                          value={bankForm.bank_name}
+                          onChange={e => setBankForm({ ...bankForm, bank_name: e.target.value })}
+                        />
                       </div>
                     </div>
-                  </div>
+
+                    {/* Account Type chips */}
+                    <div>
+                      <Label className="text-xs font-medium">Account Type</Label>
+                      <div className="flex gap-2 mt-1">
+                        {['current', 'savings', 'fixed'].map(t => (
+                          <button
+                            key={t}
+                            type="button"
+                            onClick={() => setBankForm({ ...bankForm, account_type: t })}
+                            className={`sel-chip capitalize text-xs px-3 py-1.5 rounded-md ${
+                              bankForm.account_type === t
+                                ? 'border-primary bg-primary/10 text-primary border-2'
+                                : 'border-border text-muted-foreground border'
+                            }`}
+                          >
+                            {t.charAt(0).toUpperCase() + t.slice(1)}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Branch */}
+                    <div>
+                      <Label className="text-xs font-medium">Branch</Label>
+                      <div className="relative mt-1">
+                        <Building2 className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                        <Input
+                          className="pl-8 h-9 text-sm"
+                          placeholder="Branch name (optional)"
+                          value={bankForm.branch}
+                          onChange={e => setBankForm({ ...bankForm, branch: e.target.value })}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Opening Balance */}
+                    <div>
+                      <Label className="text-xs font-medium">Opening Balance</Label>
+                      <div className="flex items-stretch mt-1">
+                        <span className="flex items-center px-2.5 text-xs font-bold text-muted-foreground bg-muted border border-r-0 border-input rounded-l-md select-none shrink-0">NPR</span>
+                        <Input
+                          type="number"
+                          className="rounded-l-none h-9 text-sm flex-1"
+                          placeholder="0.00"
+                          value={bankForm.current_balance}
+                          onChange={e => setBankForm({ ...bankForm, current_balance: parseFloat(e.target.value) || 0 })}
+                        />
+                      </div>
+                    </div>
+                  </motion.div>
+
+                  {/* RIGHT — Portal Login */}
+                  <motion.div
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.22, ease: 'easeOut', delay: 0.06 }}
+                    className="space-y-3"
+                  >
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1.5">
+                      <Lock className="w-3.5 h-3.5" /> Portal Login
+                    </p>
+
+                    {/* Account Number */}
+                    <div>
+                      <Label className="text-xs font-medium">Account Number *</Label>
+                      <div className="relative mt-1">
+                        <Hash className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                        <Input
+                          className="pl-8 h-9 text-sm"
+                          placeholder="Account number"
+                          value={bankForm.account_number}
+                          onChange={e => setBankForm({ ...bankForm, account_number: e.target.value })}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Portal URL */}
+                    <div>
+                      <Label className="text-xs font-medium">Portal URL</Label>
+                      <div className="flex items-center gap-2 mt-1">
+                        <div className="relative flex-1">
+                          <Globe className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                          <Input
+                            className="pl-8 h-9 text-sm"
+                            placeholder="https://netbanking.example.com"
+                            value={bankForm.portal_url}
+                            onChange={e => setBankForm({ ...bankForm, portal_url: e.target.value })}
+                          />
+                        </div>
+                        {bankForm.portal_url && (
+                          <a href={bankForm.portal_url} target="_blank" rel="noreferrer" className="text-primary shrink-0">
+                            <ExternalLink className="w-4 h-4" />
+                          </a>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Username */}
+                    <div>
+                      <Label className="text-xs font-medium">Username / Customer ID</Label>
+                      <div className="relative mt-1">
+                        <User className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                        <Input
+                          className="pl-8 h-9 text-sm"
+                          placeholder="Username"
+                          value={bankForm.portal_username}
+                          onChange={e => setBankForm({ ...bankForm, portal_username: e.target.value })}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Password */}
+                    <div>
+                      <Label className="text-xs font-medium">Password</Label>
+                      <div className="relative mt-1">
+                        <Input
+                          type={showPassword ? 'text' : 'password'}
+                          className="h-9 text-sm pr-9"
+                          value={bankForm.portal_password}
+                          onChange={e => setBankForm({ ...bankForm, portal_password: e.target.value })}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword(v => !v)}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground"
+                        >
+                          {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                      </div>
+                    </div>
+                  </motion.div>
                 </div>
-                <DialogFooter>
+
+                <DialogFooter className="mt-4">
                   <Button variant="outline" onClick={() => setShowAddBank(false)}>Cancel</Button>
                   <Button onClick={createBankAccount} disabled={!bankForm.bank_name || !bankForm.account_number}>Add Account</Button>
                 </DialogFooter>
@@ -299,85 +471,224 @@ export default function Transactions() {
         )}
       </Tabs>
 
+      {/* New Transaction Dialog */}
       <Dialog open={showNew} onOpenChange={setShowNew}>
-        <DialogContent className="max-w-md max-h-[85vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>New Transaction</DialogTitle></DialogHeader>
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-3">
+        <DialogContent className="glass-dialog max-w-4xl overflow-hidden">
+          <div className="h-1 bg-gradient-to-r from-amber-400 to-orange-500 -mx-6 -mt-6 mb-4" />
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Banknote className="w-5 h-5 text-primary" /> New Transaction
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="grid grid-cols-2 gap-6 mt-2">
+            {/* LEFT — Transaction Details */}
+            <motion.div
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.22, ease: 'easeOut' }}
+              className="space-y-3"
+            >
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1.5">
+                <Banknote className="w-3.5 h-3.5" /> Transaction Details
+              </p>
+
+              {/* Large NPR Amount */}
               <div>
-                <Label>Date *</Label>
-                <Input type="date" value={form.date_ad} onChange={e => setForm({ ...form, date_ad: e.target.value })} />
+                <Label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Amount *</Label>
+                <div className="flex items-stretch mt-1">
+                  <span className="flex items-center px-3 text-sm font-bold text-muted-foreground bg-muted border border-r-0 border-input rounded-l-md shrink-0">NPR</span>
+                  <Input
+                    type="number"
+                    className="rounded-l-none h-11 text-lg font-semibold flex-1"
+                    value={form.amount}
+                    onChange={e => setForm({ ...form, amount: parseFloat(e.target.value) || 0 })}
+                    placeholder="0.00"
+                  />
+                </div>
               </div>
+
+              {/* Category chips */}
               <div>
-                <Label>Category</Label>
-                <Select value={form.category} onValueChange={v => setForm({ ...form, category: v })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="income">Income</SelectItem>
-                    <SelectItem value="expense">Expense</SelectItem>
-                    <SelectItem value="transfer">Transfer</SelectItem>
-                    <SelectItem value="investment">Investment</SelectItem>
-                    <SelectItem value="hand-outs">Hand-outs</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div><Label>Amount (NPR) *</Label><Input type="number" value={form.amount} onChange={e => setForm({ ...form, amount: parseFloat(e.target.value) || 0 })} /></div>
-            <div><Label>Description *</Label><Input value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} /></div>
-            <div className="grid grid-cols-2 gap-3">
-              <div><Label>Party Name</Label><Input value={form.party_name} onChange={e => setForm({ ...form, party_name: e.target.value })} /></div>
-              <div><Label>Reference No. <span className="text-muted-foreground text-xs">(optional)</span></Label><Input value={form.reference_number} onChange={e => setForm({ ...form, reference_number: e.target.value })} placeholder="e.g. Bill/Voucher #" /></div>
-            </div>
-            {(activeTab === 'bank' || activeTab === 'qr') && (
-              <div className="space-y-3">
-                {bankAccounts.length > 0 && (
-                  <div>
-                    <Label>Select Bank Account</Label>
-                    <Select
-                      value={form.bank_account_number}
-                      onValueChange={v => {
-                        const acct = bankAccounts.find(b => b.account_number === v);
-                        setForm({ ...form, bank_name: acct?.bank_name || '', bank_account_number: v });
-                      }}
+                <Label className="text-xs font-medium">Category</Label>
+                <div className="flex flex-wrap gap-1.5 mt-1">
+                  {CATEGORIES.map(c => (
+                    <button
+                      key={c.v}
+                      type="button"
+                      onClick={() => setForm({ ...form, category: c.v })}
+                      className={`sel-chip text-xs px-3 py-1.5 rounded-md ${
+                        form.category === c.v
+                          ? c.active + ' border-2'
+                          : c.color + ' border opacity-70'
+                      }`}
                     >
-                      <SelectTrigger><SelectValue placeholder="Choose account..." /></SelectTrigger>
-                      <SelectContent>
-                        {bankAccounts.map(b => (
-                          <SelectItem key={b.id} value={b.account_number}>
-                            {b.bank_name} — {b.account_number} ({b.account_type})
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <p className="text-xs text-muted-foreground mt-1">Or enter manually below</p>
-                  </div>
-                )}
-                <div className="grid grid-cols-2 gap-3">
-                  <div><Label>Bank Name</Label><Input value={form.bank_name} onChange={e => setForm({ ...form, bank_name: e.target.value })} /></div>
-                  <div><Label>Account No.</Label><Input value={form.bank_account_number} onChange={e => setForm({ ...form, bank_account_number: e.target.value })} /></div>
+                      {c.label}
+                    </button>
+                  ))}
                 </div>
-                {bankAccounts.length === 0 && (
-                  <p className="text-xs text-muted-foreground">No bank accounts saved. Go to <a href="/settings" className="underline text-primary">Settings</a> to add bank accounts.</p>
-                )}
               </div>
-            )}
-            {activeTab === 'cheque' && (
-              <>
-                <div className="grid grid-cols-2 gap-3">
-                  <div><Label>Cheque Number</Label><Input value={form.cheque_number} onChange={e => setForm({ ...form, cheque_number: e.target.value })} /></div>
-                  <div><Label>Cheque Date</Label><Input type="date" value={form.cheque_date} onChange={e => setForm({ ...form, cheque_date: e.target.value })} /></div>
+
+              {/* Description */}
+              <div>
+                <Label className="text-xs font-medium">Description *</Label>
+                <div className="relative mt-1">
+                  <FileText className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                  <Input
+                    className="pl-8 h-9 text-sm"
+                    placeholder="What is this transaction for?"
+                    value={form.description}
+                    onChange={e => setForm({ ...form, description: e.target.value })}
+                  />
                 </div>
-                <div><Label>Cheque Issue Date</Label><Input type="date" value={form.cheque_issue_date} onChange={e => setForm({ ...form, cheque_issue_date: e.target.value })} /></div>
-                <div><Label>Bank Name</Label><Input value={form.bank_name} onChange={e => setForm({ ...form, bank_name: e.target.value })} /></div>
-              </>
-            )}
+              </div>
+
+              {/* Party Name */}
+              <div>
+                <Label className="text-xs font-medium">Party Name</Label>
+                <div className="relative mt-1">
+                  <User className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                  <Input
+                    className="pl-8 h-9 text-sm"
+                    placeholder="Vendor, customer, or party (optional)"
+                    value={form.party_name}
+                    onChange={e => setForm({ ...form, party_name: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              {/* Date */}
+              <div>
+                <Label className="text-xs font-medium">Date *</Label>
+                <div className="relative mt-1">
+                  <Calendar className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                  <Input
+                    type="date"
+                    className="pl-8 h-9 text-sm"
+                    value={form.date_ad}
+                    onChange={e => setForm({ ...form, date_ad: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              {/* Reference No. */}
+              <div>
+                <Label className="text-xs font-medium">Reference No.</Label>
+                <div className="relative mt-1">
+                  <Hash className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                  <Input
+                    className="pl-8 h-9 text-sm"
+                    placeholder="e.g. Bill/Voucher # (optional)"
+                    value={form.reference_number}
+                    onChange={e => setForm({ ...form, reference_number: e.target.value })}
+                  />
+                </div>
+              </div>
+            </motion.div>
+
+            {/* RIGHT — Payment Method */}
+            <motion.div
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.22, ease: 'easeOut', delay: 0.06 }}
+              className="space-y-3"
+            >
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1.5">
+                <CreditCard className="w-3.5 h-3.5" /> Payment Method
+              </p>
+
+              {/* 2×2 Payment method tiles */}
+              <div className="grid grid-cols-2 gap-2 mt-1">
+                {PAY_METHODS.map(m => (
+                  <button
+                    key={m.id}
+                    type="button"
+                    onClick={() => setPayMethod(m.id)}
+                    className={`pay-card flex flex-col items-center gap-1 py-3 rounded-lg border transition-all ${
+                      payMethod === m.id
+                        ? 'border-primary bg-primary/10 text-primary shadow-sm'
+                        : 'border-border text-muted-foreground hover:bg-muted'
+                    }`}
+                  >
+                    <span className="text-2xl">{m.emoji}</span>
+                    <span className="text-xs font-medium">{m.label}</span>
+                  </button>
+                ))}
+              </div>
+
+              {/* Conditional fields */}
+              {(payMethod === 'bank' || payMethod === 'qr') && (
+                <div className="space-y-3 pt-1">
+                  {bankAccounts.length > 0 && (
+                    <div>
+                      <Label className="text-xs font-medium">Select Bank Account</Label>
+                      <Select
+                        value={form.bank_account_number}
+                        onValueChange={v => {
+                          const acct = bankAccounts.find(b => b.account_number === v);
+                          setForm({ ...form, bank_name: acct?.bank_name || '', bank_account_number: v });
+                        }}
+                      >
+                        <SelectTrigger className="h-9 text-sm mt-1"><SelectValue placeholder="Choose account..." /></SelectTrigger>
+                        <SelectContent>
+                          {bankAccounts.map(b => (
+                            <SelectItem key={b.id} value={b.account_number}>
+                              {b.bank_name} — {b.account_number} ({b.account_type})
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground mt-1">Or enter manually below</p>
+                    </div>
+                  )}
+                  <div>
+                    <Label className="text-xs font-medium">Bank Name</Label>
+                    <Input className="h-9 text-sm mt-1" value={form.bank_name} onChange={e => setForm({ ...form, bank_name: e.target.value })} />
+                  </div>
+                  <div>
+                    <Label className="text-xs font-medium">Account No.</Label>
+                    <Input className="h-9 text-sm mt-1" value={form.bank_account_number} onChange={e => setForm({ ...form, bank_account_number: e.target.value })} />
+                  </div>
+                  {bankAccounts.length === 0 && (
+                    <p className="text-xs text-muted-foreground">No bank accounts saved. Go to <a href="/settings" className="underline text-primary">Settings</a> to add bank accounts.</p>
+                  )}
+                </div>
+              )}
+
+              {payMethod === 'cheque' && (
+                <div className="space-y-3 pt-1">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <Label className="text-xs font-medium">Cheque Number</Label>
+                      <Input className="h-9 text-sm mt-1" value={form.cheque_number} onChange={e => setForm({ ...form, cheque_number: e.target.value })} />
+                    </div>
+                    <div>
+                      <Label className="text-xs font-medium">Cheque Date</Label>
+                      <Input type="date" className="h-9 text-sm mt-1" value={form.cheque_date} onChange={e => setForm({ ...form, cheque_date: e.target.value })} />
+                    </div>
+                  </div>
+                  <div>
+                    <Label className="text-xs font-medium">Issue Date</Label>
+                    <Input type="date" className="h-9 text-sm mt-1" value={form.cheque_issue_date} onChange={e => setForm({ ...form, cheque_issue_date: e.target.value })} />
+                  </div>
+                  <div>
+                    <Label className="text-xs font-medium">Bank Name</Label>
+                    <Input className="h-9 text-sm mt-1" value={form.bank_name} onChange={e => setForm({ ...form, bank_name: e.target.value })} />
+                  </div>
+                </div>
+              )}
+
+              {/* cash: nothing extra */}
+            </motion.div>
           </div>
-          <DialogFooter>
+
+          <DialogFooter className="mt-4">
             <Button variant="outline" onClick={() => setShowNew(false)}>Cancel</Button>
             <Button onClick={createTransaction} disabled={!form.amount || !form.description}>Save</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
       {browserAccount && <FloatingBankBrowser account={browserAccount} onClose={() => setBrowserAccount(null)} />}
     </div>
   );

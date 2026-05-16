@@ -12,7 +12,8 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { FileText, RefreshCw, Download, Calculator, Save } from 'lucide-react';
+import { FileText, RefreshCw, Download, Calculator, Save, CalendarDays, Banknote } from 'lucide-react';
+import { motion } from 'framer-motion';
 import { jsPDF } from 'jspdf';
 
 const statusColors = { draft: 'bg-slate-100 text-slate-600', approved: 'bg-blue-100 text-blue-700', paid: 'bg-green-100 text-green-700' };
@@ -284,49 +285,52 @@ export default function Payroll() {
 
       {/* Gratuity Dialog */}
       <Dialog open={showGratuity} onOpenChange={setShowGratuity}>
-        <DialogContent className="max-w-sm">
+        <DialogContent className="glass-dialog max-w-sm overflow-hidden">
+          <div className="h-1 bg-gradient-to-r from-purple-400 to-violet-500 -mx-6 -mt-6 mb-4" />
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2"><Calculator className="w-4 h-4" /> Gratuity Calculator</DialogTitle>
+            <DialogTitle className="flex items-center gap-2"><Calculator className="w-5 h-5 text-primary" /> Gratuity Calculator</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4">
-            <p className="text-xs text-muted-foreground">Nepal Labour Act 2074 — requires 3+ years of continuous service.</p>
-            <div className="space-y-1.5">
-              <Label>Select Employee</Label>
-              <Select value={gratuityEmpId} onValueChange={setGratuityEmpId}>
-                <SelectTrigger><SelectValue placeholder="Choose employee…" /></SelectTrigger>
-                <SelectContent>
-                  {employees.map(e => <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <Button onClick={calculateGratuity} disabled={!gratuityEmpId || gratuityLoading} className="w-full gap-2">
-              {gratuityLoading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Calculator className="w-4 h-4" />}
-              {gratuityLoading ? 'Calculating…' : 'Calculate'}
-            </Button>
-            {gratuityResult && !gratuityResult.error && (
-              <div className="glass-card rounded-xl p-4 space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Eligible</span>
-                  <span className={gratuityResult.eligible ? 'text-green-600 font-semibold' : 'text-red-500'}>
-                    {gratuityResult.eligible ? 'Yes' : 'No (< 3 years)'}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Service</span>
-                  <span className="font-medium">{gratuityResult.monthsWorked ?? gratuityResult.months_worked ?? 0} months</span>
-                </div>
-                <div className="flex justify-between border-t pt-2">
-                  <span className="text-muted-foreground">Gratuity Amount</span>
-                  <span className="font-bold text-lg text-green-700">
-                    NPR {(gratuityResult.gratuityAmount ?? gratuityResult.gratuity_amount ?? 0).toLocaleString()}
-                  </span>
-                </div>
+          <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.22, ease: 'easeOut' }}>
+            <div className="space-y-4">
+              <p className="text-xs text-muted-foreground">Nepal Labour Act 2074 — requires 3+ years of continuous service.</p>
+              <div className="space-y-1.5">
+                <Label>Select Employee</Label>
+                <Select value={gratuityEmpId} onValueChange={setGratuityEmpId}>
+                  <SelectTrigger><SelectValue placeholder="Choose employee…" /></SelectTrigger>
+                  <SelectContent>
+                    {employees.map(e => <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
               </div>
-            )}
-            {gratuityResult?.error && (
-              <p className="text-sm text-destructive bg-destructive/10 rounded-lg p-3">{gratuityResult.error}</p>
-            )}
-          </div>
+              <Button onClick={calculateGratuity} disabled={!gratuityEmpId || gratuityLoading} className="w-full gap-2">
+                {gratuityLoading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Calculator className="w-4 h-4" />}
+                {gratuityLoading ? 'Calculating…' : 'Calculate'}
+              </Button>
+              {gratuityResult && !gratuityResult.error && (
+                <div className="glass-card rounded-xl p-4 space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Eligible</span>
+                    <span className={gratuityResult.eligible ? 'text-green-600 font-semibold' : 'text-red-500'}>
+                      {gratuityResult.eligible ? 'Yes' : 'No (< 3 years)'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Service</span>
+                    <span className="font-medium">{gratuityResult.monthsWorked ?? gratuityResult.months_worked ?? 0} months</span>
+                  </div>
+                  <div className="flex justify-between border-t pt-2">
+                    <span className="text-muted-foreground">Gratuity Amount</span>
+                    <span className="font-bold text-lg text-green-700">
+                      NPR {(gratuityResult.gratuityAmount ?? gratuityResult.gratuity_amount ?? 0).toLocaleString()}
+                    </span>
+                  </div>
+                </div>
+              )}
+              {gratuityResult?.error && (
+                <p className="text-sm text-destructive bg-destructive/10 rounded-lg p-3">{gratuityResult.error}</p>
+              )}
+            </div>
+          </motion.div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowGratuity(false)}>Close</Button>
           </DialogFooter>
@@ -336,47 +340,79 @@ export default function Payroll() {
       {/* Detail Dialog */}
       {showDetail && (
         <Dialog open={!!showDetail} onOpenChange={() => setShowDetail(null)}>
-          <DialogContent className="max-w-md">
+          <DialogContent className="glass-dialog max-w-2xl overflow-hidden">
+            <div className="h-1 bg-gradient-to-r from-purple-400 to-violet-500 -mx-6 -mt-6 mb-4" />
             <DialogHeader>
-              <DialogTitle>Pay Slip — {showDetail.employee_name}</DialogTitle>
+              <DialogTitle className="flex items-center gap-2">
+                <FileText className="w-5 h-5 text-primary" />Pay Slip — {showDetail.employee_name}
+              </DialogTitle>
             </DialogHeader>
-            <div className="space-y-3 text-sm">
-              <div className="grid grid-cols-2 gap-2 bg-secondary/40 rounded-lg p-3">
-                <div><span className="text-muted-foreground">Month</span><p className="font-medium">{showDetail.month}</p></div>
-                <div><span className="text-muted-foreground">Working Days</span><p className="font-medium">{showDetail.working_days}</p></div>
-                <div><span className="text-muted-foreground">Present</span><p className="font-medium text-green-700">{showDetail.days_present}</p></div>
-                <div><span className="text-muted-foreground">Absent</span><p className="font-medium text-red-600">{showDetail.days_absent}</p></div>
-                <div><span className="text-muted-foreground">Half Days</span><p className="font-medium text-amber-600">{showDetail.days_half}</p></div>
-                <div><span className="text-muted-foreground">Late (min)</span><p className="font-medium">{showDetail.late_minutes}</p></div>
-              </div>
-              <div className="border rounded-lg p-3 space-y-1.5">
-                <div className="flex justify-between"><span>Base Salary</span><span className="font-medium">NPR {showDetail.base_salary?.toLocaleString()}</span></div>
-                <div className="flex justify-between items-center">
-                  <span>Bonus</span>
-                  <Input type="number" value={detailBonus} onChange={e => setDetailBonus(parseFloat(e.target.value) || 0)} className="w-28 h-7 text-sm text-right" />
+            <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.22, ease: 'easeOut' }}>
+              <div className="grid grid-cols-2 gap-5">
+                {/* LEFT — Attendance Summary */}
+                <div className="space-y-2">
+                  <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1.5 border-b pb-1.5 mb-2">
+                    <CalendarDays className="w-3.5 h-3.5" />Attendance
+                  </h4>
+                  <div className="grid grid-cols-2 gap-2">
+                    {[
+                      { label: 'Month', value: showDetail.month, color: '' },
+                      { label: 'Working Days', value: showDetail.working_days, color: '' },
+                      { label: 'Present', value: showDetail.days_present, color: 'text-green-600 font-semibold' },
+                      { label: 'Absent', value: showDetail.days_absent, color: 'text-red-500 font-semibold' },
+                      { label: 'Half Days', value: showDetail.days_half, color: 'text-amber-600 font-semibold' },
+                      { label: 'Late (min)', value: showDetail.late_minutes, color: '' },
+                    ].map(({ label, value, color }) => (
+                      <div key={label} className="glass-card rounded-lg p-2.5">
+                        <p className="text-xs text-muted-foreground">{label}</p>
+                        <p className={`text-sm font-semibold mt-0.5 ${color}`}>{value ?? '—'}</p>
+                      </div>
+                    ))}
+                  </div>
+                  <Select value={showDetail.status} onValueChange={v => { updateStatus(showDetail.id, v); setShowDetail({ ...showDetail, status: v }); }}>
+                    <SelectTrigger className="w-full mt-1"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="draft">Draft</SelectItem>
+                      <SelectItem value="approved">Approved</SelectItem>
+                      <SelectItem value="paid">Paid</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
-                <div className="flex justify-between"><span>Absent Deduction</span><span className="font-medium text-red-600">- NPR {showDetail.absent_deduction?.toLocaleString()}</span></div>
-                <div className="flex justify-between"><span>Late Deduction</span><span className="font-medium text-red-600">- NPR {showDetail.late_deduction?.toLocaleString()}</span></div>
-                <div className="flex justify-between items-center">
-                  <span>Other Deductions</span>
-                  <Input type="number" value={detailOtherDed} onChange={e => setDetailOtherDed(parseFloat(e.target.value) || 0)} className="w-28 h-7 text-sm text-right" />
-                </div>
-                <div className="border-t pt-1.5 flex justify-between font-bold text-base">
-                  <span>Net Salary</span>
-                  <span className="text-green-700">NPR {liveNet.toLocaleString()}</span>
+
+                {/* RIGHT — Salary Breakdown */}
+                <div className="space-y-2">
+                  <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1.5 border-b pb-1.5 mb-2">
+                    <Banknote className="w-3.5 h-3.5" />Salary Breakdown
+                  </h4>
+                  <div className="bg-secondary/50 rounded-xl p-3 space-y-2.5 text-sm">
+                    <div className="flex justify-between items-center">
+                      <span className="text-muted-foreground">Base Salary</span>
+                      <span className="font-semibold">NPR {showDetail.base_salary?.toLocaleString()}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span>Bonus</span>
+                      <Input type="number" value={detailBonus} onChange={e => setDetailBonus(parseFloat(e.target.value) || 0)} className="w-32 h-8 text-sm text-right" />
+                    </div>
+                    <div className="flex justify-between items-center text-red-600">
+                      <span>Absent Deduction</span>
+                      <span className="font-medium">− NPR {showDetail.absent_deduction?.toLocaleString()}</span>
+                    </div>
+                    <div className="flex justify-between items-center text-red-600">
+                      <span>Late Deduction</span>
+                      <span className="font-medium">− NPR {showDetail.late_deduction?.toLocaleString()}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span>Other Deductions</span>
+                      <Input type="number" value={detailOtherDed} onChange={e => setDetailOtherDed(parseFloat(e.target.value) || 0)} className="w-32 h-8 text-sm text-right" />
+                    </div>
+                    <div className="border-t pt-2.5 flex justify-between items-center">
+                      <span className="font-bold text-base">Net Salary</span>
+                      <span className="font-bold text-xl text-green-700">NPR {liveNet.toLocaleString()}</span>
+                    </div>
+                  </div>
                 </div>
               </div>
-              <div className="flex gap-2">
-                <Select value={showDetail.status} onValueChange={v => { updateStatus(showDetail.id, v); setShowDetail({ ...showDetail, status: v }); }}>
-                  <SelectTrigger className="flex-1"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="draft">Draft</SelectItem>
-                    <SelectItem value="approved">Approved</SelectItem>
-                    <SelectItem value="paid">Paid</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
+            </motion.div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setShowDetail(null)}>Close</Button>
               <Button variant="outline" onClick={savePayrollAdjustments} className="gap-2"><Save className="w-4 h-4" />Save Adjustments</Button>

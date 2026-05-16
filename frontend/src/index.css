@@ -112,11 +112,70 @@
     @apply backdrop-blur-xl bg-background/75 border border-border/50;
   }
   .glass-card {
-    @apply backdrop-blur-sm bg-card/85 border border-border/50 shadow-sm;
+    @apply backdrop-blur-xl bg-card/90 border border-border/40 shadow-lg;
+    box-shadow: 0 8px 32px -8px rgb(0 0 0 / 0.12), inset 0 1px 0 rgb(255 255 255 / 0.1);
   }
   .glass-subtle {
     @apply backdrop-blur-md bg-card/60 border border-border/30;
   }
+  /* Deep glassmorphism for all dialogs/modals */
+  .glass-dialog {
+    @apply backdrop-blur-2xl bg-card/96 border border-border/40;
+    box-shadow:
+      0 32px 64px -12px rgb(0 0 0 / 0.25),
+      0 0 0 1px rgb(255 255 255 / 0.07) inset,
+      0 1px 0 rgb(255 255 255 / 0.14) inset;
+  }
+  /* Icon inside input helpers */
+  .input-icon {
+    @apply absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none;
+  }
+  .input-with-icon {
+    @apply pl-8;
+  }
+  /* Payment method cards */
+  .pay-card {
+    @apply flex flex-col items-center justify-center gap-1.5 p-3 rounded-xl border-2 cursor-pointer transition-all duration-150 hover:border-primary/50 hover:bg-primary/5 select-none;
+  }
+  /* Priority / category selector chips */
+  .sel-chip {
+    @apply flex-1 px-3 py-1.5 rounded-lg text-xs font-semibold border-2 cursor-pointer transition-all duration-150 select-none text-center;
+  }
+}
+
+/* Login page animated background orbs */
+@keyframes float-orb {
+  0%, 100% { transform: translateY(0px) scale(1); }
+  50% { transform: translateY(-20px) scale(1.04); }
+}
+@keyframes float-orb-slow {
+  0%, 100% { transform: translateY(0px) scale(1); }
+  50% { transform: translateY(14px) scale(0.97); }
+}
+.login-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(60px);
+  pointer-events: none;
+  z-index: 0;
+}
+.login-orb-1 {
+  width: 380px; height: 380px;
+  background: hsl(217 71% 24% / 0.18);
+  top: -100px; right: -80px;
+  animation: float-orb 8s ease-in-out infinite;
+}
+.login-orb-2 {
+  width: 280px; height: 280px;
+  background: hsl(38 92% 50% / 0.1);
+  bottom: -60px; left: -60px;
+  animation: float-orb-slow 11s ease-in-out infinite;
+}
+.login-orb-3 {
+  width: 200px; height: 200px;
+  background: hsl(280 65% 60% / 0.07);
+  top: 40%; left: 30%;
+  animation: float-orb 14s ease-in-out infinite reverse;
 }
 
 /* Custom scrollbar */

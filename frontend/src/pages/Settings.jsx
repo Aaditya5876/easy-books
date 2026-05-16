@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { motion } from 'framer-motion';
 import { api } from '@/api/adapter';
 import { usersApi, companyApi } from '@/api';
 import { useAuth } from '@/lib/AuthContext';
@@ -11,7 +12,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter
 } from "@/components/ui/dialog";
-import { Building2, Plus, Trash2, Save, ImagePlus, X, UserPlus, Copy, Check, Shield } from 'lucide-react';
+import {
+  Building2, Plus, Trash2, Save, ImagePlus, X, UserPlus, Copy, Check, Shield,
+  Phone, Mail, MapPin, Hash, User
+} from 'lucide-react';
 
 const ROLE_COLORS = {
   ADMIN: 'bg-red-100 text-red-700',
@@ -373,39 +377,111 @@ export default function Settings() {
 
       {/* ── Add Company Dialog ────────────────────────────────────────────── */}
       <Dialog open={showAddCompany} onOpenChange={setShowAddCompany}>
-        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>Add Company</DialogTitle></DialogHeader>
-          <div className="space-y-3">
-            <LogoUpload value={companyForm.logo_url} onChange={url => setCompanyForm(f => ({ ...f, logo_url: url }))} onFile={e => handleLogoUpload(e, false)} uploading={uploadingLogo} />
-            <div><Label>Company Name *</Label><Input value={companyForm.name} onChange={e => setCompanyForm({ ...companyForm, name: e.target.value })} /></div>
-            <div>
-              <Label>Business Type</Label>
-              <select
-                className="w-full border rounded-md px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring mt-1"
-                value={BUSINESS_TYPES.some(b => b.value === companyForm.business_type) ? companyForm.business_type : (companyForm.business_type ? 'OTHER' : '')}
-                onChange={e => setCompanyForm({ ...companyForm, business_type: e.target.value })}
-              >
-                <option value="">Select business type…</option>
-                {BUSINESS_TYPES.map(bt => <option key={bt.value} value={bt.value}>{bt.label}</option>)}
-              </select>
-              {companyForm.business_type === 'OTHER' && (
-                <Input className="mt-2" placeholder="Describe your business (e.g. Tailoring Shop, Laundry)" autoFocus
-                  value='' onChange={e => setCompanyForm({ ...companyForm, business_type: e.target.value })} />
-              )}
-              {companyForm.business_type && !BUSINESS_TYPES.some(b => b.value === companyForm.business_type) && companyForm.business_type !== 'OTHER' && (
-                <Input className="mt-2" placeholder="Describe your business"
-                  value={companyForm.business_type} onChange={e => setCompanyForm({ ...companyForm, business_type: e.target.value })} />
-              )}
-            </div>
-            <div><Label>Registration Number</Label><Input value={companyForm.registration_number} onChange={e => setCompanyForm({ ...companyForm, registration_number: e.target.value })} /></div>
-            <div><Label>Address</Label><Input value={companyForm.address} onChange={e => setCompanyForm({ ...companyForm, address: e.target.value })} /></div>
-            <div className="grid grid-cols-2 gap-3">
-              <div><Label>Phone</Label><Input value={companyForm.phone} onChange={e => setCompanyForm({ ...companyForm, phone: e.target.value })} /></div>
-              <div><Label>Email</Label><Input value={companyForm.email} onChange={e => setCompanyForm({ ...companyForm, email: e.target.value })} /></div>
-            </div>
-            <div><Label>PAN/VAT Number</Label><Input value={companyForm.pan_vat} onChange={e => setCompanyForm({ ...companyForm, pan_vat: e.target.value })} /></div>
+        <DialogContent className="glass-dialog max-w-3xl overflow-hidden">
+          <div className="h-1 bg-gradient-to-r from-blue-800 to-blue-500 -mx-6 -mt-6 mb-4" />
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Building2 className="w-5 h-5 text-primary" />Add Company
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="grid grid-cols-2 gap-6 max-h-[65vh] overflow-hidden mt-2">
+            {/* LEFT — Company Info */}
+            <motion.div
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.22 }}
+              className="space-y-3 overflow-y-auto pr-1"
+            >
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                <Building2 className="w-3.5 h-3.5" />Company Info
+              </p>
+
+              <LogoUpload value={companyForm.logo_url} onChange={url => setCompanyForm(f => ({ ...f, logo_url: url }))} onFile={e => handleLogoUpload(e, false)} uploading={uploadingLogo} />
+
+              <div className="space-y-1">
+                <Label>Company Name *</Label>
+                <div className="relative">
+                  <Building2 className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                  <Input className="pl-8 h-9 text-sm" value={companyForm.name} onChange={e => setCompanyForm({ ...companyForm, name: e.target.value })} />
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <Label>Business Type</Label>
+                <select
+                  className="w-full border rounded-md px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring mt-1"
+                  value={BUSINESS_TYPES.some(b => b.value === companyForm.business_type) ? companyForm.business_type : (companyForm.business_type ? 'OTHER' : '')}
+                  onChange={e => setCompanyForm({ ...companyForm, business_type: e.target.value })}
+                >
+                  <option value="">Select business type…</option>
+                  {BUSINESS_TYPES.map(bt => <option key={bt.value} value={bt.value}>{bt.label}</option>)}
+                </select>
+                {companyForm.business_type === 'OTHER' && (
+                  <Input className="mt-2" placeholder="Describe your business (e.g. Tailoring Shop, Laundry)" autoFocus
+                    value='' onChange={e => setCompanyForm({ ...companyForm, business_type: e.target.value })} />
+                )}
+                {companyForm.business_type && !BUSINESS_TYPES.some(b => b.value === companyForm.business_type) && companyForm.business_type !== 'OTHER' && (
+                  <Input className="mt-2" placeholder="Describe your business"
+                    value={companyForm.business_type} onChange={e => setCompanyForm({ ...companyForm, business_type: e.target.value })} />
+                )}
+              </div>
+
+              <div className="space-y-1">
+                <Label>Registration Number</Label>
+                <div className="relative">
+                  <Hash className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                  <Input className="pl-8 h-9 text-sm" value={companyForm.registration_number} onChange={e => setCompanyForm({ ...companyForm, registration_number: e.target.value })} />
+                </div>
+              </div>
+            </motion.div>
+
+            {/* RIGHT — Contact Details */}
+            <motion.div
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.22, delay: 0.06 }}
+              className="space-y-3 overflow-y-auto pr-1"
+            >
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                <Phone className="w-3.5 h-3.5" />Contact Details
+              </p>
+
+              <div className="space-y-1">
+                <Label>Address</Label>
+                <div className="relative">
+                  <MapPin className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                  <Input className="pl-8 h-9 text-sm" value={companyForm.address} onChange={e => setCompanyForm({ ...companyForm, address: e.target.value })} />
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <Label>Phone</Label>
+                <div className="relative">
+                  <Phone className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                  <Input className="pl-8 h-9 text-sm" value={companyForm.phone} onChange={e => setCompanyForm({ ...companyForm, phone: e.target.value })} />
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <Label>Email</Label>
+                <div className="relative">
+                  <Mail className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                  <Input className="pl-8 h-9 text-sm" value={companyForm.email} onChange={e => setCompanyForm({ ...companyForm, email: e.target.value })} />
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <Label>PAN/VAT Number</Label>
+                <div className="relative">
+                  <Hash className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                  <Input className="pl-8 h-9 text-sm" value={companyForm.pan_vat} onChange={e => setCompanyForm({ ...companyForm, pan_vat: e.target.value })} />
+                </div>
+              </div>
+            </motion.div>
           </div>
-          <DialogFooter>
+
+          <DialogFooter className="mt-4">
             <Button variant="outline" onClick={() => setShowAddCompany(false)}>Cancel</Button>
             <Button onClick={addCompany} disabled={!companyForm.name}>Create</Button>
           </DialogFooter>
@@ -414,41 +490,113 @@ export default function Settings() {
 
       {/* ── Edit Company Dialog ───────────────────────────────────────────── */}
       <Dialog open={!!editingCompany} onOpenChange={() => setEditingCompany(null)}>
-        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>Edit Company</DialogTitle></DialogHeader>
+        <DialogContent className="glass-dialog max-w-3xl overflow-hidden">
+          <div className="h-1 bg-gradient-to-r from-blue-800 to-blue-500 -mx-6 -mt-6 mb-4" />
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Building2 className="w-5 h-5 text-primary" />Edit Company
+            </DialogTitle>
+          </DialogHeader>
+
           {editingCompany && (
-            <div className="space-y-3">
-              <LogoUpload value={editingCompany.logo_url} onChange={url => setEditingCompany(c => ({ ...c, logo_url: url }))} onFile={e => handleLogoUpload(e, true)} uploading={uploadingLogo} />
-              <div><Label>Company Name</Label><Input value={editingCompany.name} onChange={e => setEditingCompany({ ...editingCompany, name: e.target.value })} /></div>
-              <div>
-                <Label>Business Type</Label>
-                <select
-                  className="w-full border rounded-md px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring mt-1"
-                  value={BUSINESS_TYPES.some(b => b.value === editingCompany.business_type) ? editingCompany.business_type : (editingCompany.business_type ? 'OTHER' : '')}
-                  onChange={e => setEditingCompany({ ...editingCompany, business_type: e.target.value })}
-                >
-                  <option value="">Select business type…</option>
-                  {BUSINESS_TYPES.map(bt => <option key={bt.value} value={bt.value}>{bt.label}</option>)}
-                </select>
-                {editingCompany.business_type === 'OTHER' && (
-                  <Input className="mt-2" placeholder="Describe your business (e.g. Tailoring Shop, Laundry)" autoFocus
-                    value='' onChange={e => setEditingCompany({ ...editingCompany, business_type: e.target.value })} />
-                )}
-                {editingCompany.business_type && !BUSINESS_TYPES.some(b => b.value === editingCompany.business_type) && editingCompany.business_type !== 'OTHER' && (
-                  <Input className="mt-2" placeholder="Describe your business"
-                    value={editingCompany.business_type} onChange={e => setEditingCompany({ ...editingCompany, business_type: e.target.value })} />
-                )}
-              </div>
-              <div><Label>Registration Number</Label><Input value={editingCompany.registration_number || ''} onChange={e => setEditingCompany({ ...editingCompany, registration_number: e.target.value })} /></div>
-              <div><Label>Address</Label><Input value={editingCompany.address || ''} onChange={e => setEditingCompany({ ...editingCompany, address: e.target.value })} /></div>
-              <div className="grid grid-cols-2 gap-3">
-                <div><Label>Phone</Label><Input value={editingCompany.phone || ''} onChange={e => setEditingCompany({ ...editingCompany, phone: e.target.value })} /></div>
-                <div><Label>Email</Label><Input value={editingCompany.email || ''} onChange={e => setEditingCompany({ ...editingCompany, email: e.target.value })} /></div>
-              </div>
-              <div><Label>PAN/VAT Number</Label><Input value={editingCompany.pan_vat || ''} onChange={e => setEditingCompany({ ...editingCompany, pan_vat: e.target.value })} /></div>
+            <div className="grid grid-cols-2 gap-6 max-h-[65vh] overflow-hidden mt-2">
+              {/* LEFT — Company Info */}
+              <motion.div
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.22 }}
+                className="space-y-3 overflow-y-auto pr-1"
+              >
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                  <Building2 className="w-3.5 h-3.5" />Company Info
+                </p>
+
+                <LogoUpload value={editingCompany.logo_url} onChange={url => setEditingCompany(c => ({ ...c, logo_url: url }))} onFile={e => handleLogoUpload(e, true)} uploading={uploadingLogo} />
+
+                <div className="space-y-1">
+                  <Label>Company Name</Label>
+                  <div className="relative">
+                    <Building2 className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                    <Input className="pl-8 h-9 text-sm" value={editingCompany.name} onChange={e => setEditingCompany({ ...editingCompany, name: e.target.value })} />
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <Label>Business Type</Label>
+                  <select
+                    className="w-full border rounded-md px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring mt-1"
+                    value={BUSINESS_TYPES.some(b => b.value === editingCompany.business_type) ? editingCompany.business_type : (editingCompany.business_type ? 'OTHER' : '')}
+                    onChange={e => setEditingCompany({ ...editingCompany, business_type: e.target.value })}
+                  >
+                    <option value="">Select business type…</option>
+                    {BUSINESS_TYPES.map(bt => <option key={bt.value} value={bt.value}>{bt.label}</option>)}
+                  </select>
+                  {editingCompany.business_type === 'OTHER' && (
+                    <Input className="mt-2" placeholder="Describe your business (e.g. Tailoring Shop, Laundry)" autoFocus
+                      value='' onChange={e => setEditingCompany({ ...editingCompany, business_type: e.target.value })} />
+                  )}
+                  {editingCompany.business_type && !BUSINESS_TYPES.some(b => b.value === editingCompany.business_type) && editingCompany.business_type !== 'OTHER' && (
+                    <Input className="mt-2" placeholder="Describe your business"
+                      value={editingCompany.business_type} onChange={e => setEditingCompany({ ...editingCompany, business_type: e.target.value })} />
+                  )}
+                </div>
+
+                <div className="space-y-1">
+                  <Label>Registration Number</Label>
+                  <div className="relative">
+                    <Hash className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                    <Input className="pl-8 h-9 text-sm" value={editingCompany.registration_number || ''} onChange={e => setEditingCompany({ ...editingCompany, registration_number: e.target.value })} />
+                  </div>
+                </div>
+              </motion.div>
+
+              {/* RIGHT — Contact Details */}
+              <motion.div
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.22, delay: 0.06 }}
+                className="space-y-3 overflow-y-auto pr-1"
+              >
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                  <Phone className="w-3.5 h-3.5" />Contact Details
+                </p>
+
+                <div className="space-y-1">
+                  <Label>Address</Label>
+                  <div className="relative">
+                    <MapPin className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                    <Input className="pl-8 h-9 text-sm" value={editingCompany.address || ''} onChange={e => setEditingCompany({ ...editingCompany, address: e.target.value })} />
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <Label>Phone</Label>
+                  <div className="relative">
+                    <Phone className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                    <Input className="pl-8 h-9 text-sm" value={editingCompany.phone || ''} onChange={e => setEditingCompany({ ...editingCompany, phone: e.target.value })} />
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <Label>Email</Label>
+                  <div className="relative">
+                    <Mail className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                    <Input className="pl-8 h-9 text-sm" value={editingCompany.email || ''} onChange={e => setEditingCompany({ ...editingCompany, email: e.target.value })} />
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <Label>PAN/VAT Number</Label>
+                  <div className="relative">
+                    <Hash className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                    <Input className="pl-8 h-9 text-sm" value={editingCompany.pan_vat || ''} onChange={e => setEditingCompany({ ...editingCompany, pan_vat: e.target.value })} />
+                  </div>
+                </div>
+              </motion.div>
             </div>
           )}
-          <DialogFooter>
+
+          <DialogFooter className="mt-4">
             <Button variant="outline" onClick={() => setEditingCompany(null)}>Cancel</Button>
             <Button onClick={updateCompany}><Save className="w-4 h-4 mr-1" />Save</Button>
           </DialogFooter>
@@ -457,32 +605,77 @@ export default function Settings() {
 
       {/* ── Invite User Dialog ────────────────────────────────────────────── */}
       <Dialog open={showInvite && !tempPassword} onOpenChange={v => { if (!v) { setShowInvite(false); setInviteForm({ name: '', email: '', role: 'STAFF' }); } }}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader><DialogTitle>Invite Team Member</DialogTitle></DialogHeader>
-          <form onSubmit={handleInvite} className="space-y-3">
-            <div>
-              <Label>Full Name *</Label>
-              <Input placeholder="Ram Sharma" value={inviteForm.name}
-                onChange={e => setInviteForm({ ...inviteForm, name: e.target.value })} required />
-            </div>
-            <div>
-              <Label>Email *</Label>
-              <Input type="email" placeholder="ram@company.com" value={inviteForm.email}
-                onChange={e => setInviteForm({ ...inviteForm, email: e.target.value })} required />
-            </div>
-            <div>
-              <Label>Role *</Label>
-              <select
-                className="w-full border rounded-md px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring"
-                value={inviteForm.role}
-                onChange={e => setInviteForm({ ...inviteForm, role: e.target.value })}
-              >
-                <option value="STAFF">Staff — Day-to-day operations</option>
-                <option value="ACCOUNTANT">Accountant — Full financial access</option>
-              </select>
-            </div>
-            <p className="text-xs text-muted-foreground">A temporary password will be generated. Share it with the user so they can log in.</p>
-            <DialogFooter>
+        <DialogContent className="glass-dialog max-w-md overflow-hidden">
+          <div className="h-1 bg-gradient-to-r from-blue-800 to-blue-500 -mx-6 -mt-6 mb-4" />
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <UserPlus className="w-5 h-5 text-primary" />Invite Team Member
+            </DialogTitle>
+          </DialogHeader>
+
+          <form onSubmit={handleInvite}>
+            <motion.div
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.22 }}
+              className="space-y-4 mt-2"
+            >
+              {/* Full Name */}
+              <div className="space-y-1">
+                <Label>Full Name *</Label>
+                <div className="relative">
+                  <User className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                  <Input
+                    className="pl-8 h-9 text-sm"
+                    placeholder="Ram Sharma"
+                    value={inviteForm.name}
+                    onChange={e => setInviteForm({ ...inviteForm, name: e.target.value })}
+                    required
+                  />
+                </div>
+              </div>
+
+              {/* Email */}
+              <div className="space-y-1">
+                <Label>Email *</Label>
+                <div className="relative">
+                  <Mail className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                  <Input
+                    type="email"
+                    className="pl-8 h-9 text-sm"
+                    placeholder="ram@company.com"
+                    value={inviteForm.email}
+                    onChange={e => setInviteForm({ ...inviteForm, email: e.target.value })}
+                    required
+                  />
+                </div>
+              </div>
+
+              {/* Role chips */}
+              <div className="space-y-2">
+                <Label>Role *</Label>
+                <div className="flex flex-col gap-2">
+                  {[
+                    { v: 'STAFF', label: 'Staff', desc: 'Day-to-day operations' },
+                    { v: 'ACCOUNTANT', label: 'Accountant', desc: 'Full financial access' },
+                  ].map(r => (
+                    <button
+                      key={r.v}
+                      type="button"
+                      onClick={() => setInviteForm({ ...inviteForm, role: r.v })}
+                      className={`flex flex-col items-start p-3 rounded-lg border-2 transition-all text-left w-full ${inviteForm.role === r.v ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/50'}`}
+                    >
+                      <span className="text-sm font-semibold">{r.label}</span>
+                      <span className="text-xs text-muted-foreground">{r.desc}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <p className="text-xs text-muted-foreground">A temporary password will be generated. Share it with the user so they can log in.</p>
+            </motion.div>
+
+            <DialogFooter className="mt-4">
               <Button type="button" variant="outline" onClick={() => { setShowInvite(false); setInviteForm({ name: '', email: '', role: 'STAFF' }); }}>Cancel</Button>
               <Button type="submit" disabled={inviteLoading}>{inviteLoading ? 'Inviting…' : 'Send Invite'}</Button>
             </DialogFooter>

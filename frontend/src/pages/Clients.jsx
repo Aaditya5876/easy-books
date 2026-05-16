@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { motion } from 'framer-motion';
 import { api } from '@/api/adapter';
 import { getActiveCompanyId } from '@/lib/companyContext';
 import PageHeader from '../components/shared/PageHeader';
@@ -16,7 +17,9 @@ import {
 } from "@/components/ui/select";
 import PageLoader from '../components/PageLoader';
 import EmptyState from '../components/EmptyState';
-import { UserCheck } from 'lucide-react';
+import {
+  UserCheck, Building2, Phone, Mail, MapPin, Hash, Wallet, CreditCard, FileText, Truck, User
+} from 'lucide-react';
 
 const CRM_STATUSES = ['lead', 'prospect', 'active', 'inactive'];
 const PAYMENT_TERMS = ['Immediate', 'NET-15', 'NET-30', 'NET-45', 'NET-60'];
@@ -121,56 +124,136 @@ export default function Clients() {
 
       {/* Add Dialog */}
       <Dialog open={showAdd} onOpenChange={setShowAdd}>
-        <DialogContent className="max-w-md glass-card">
+        <DialogContent className="glass-dialog max-w-3xl overflow-hidden">
+          <div className="h-1 bg-gradient-to-r from-rose-400 to-pink-500 -mx-6 -mt-6 mb-4" />
           <DialogHeader>
-            <DialogTitle>
-              <div className="flex items-center gap-2">
-                <UserCheck className="w-5 h-5 text-primary" />
-                Add Client
-              </div>
+            <DialogTitle className="flex items-center gap-2">
+              <UserCheck className="w-5 h-5 text-primary" />
+              Add Client
             </DialogTitle>
           </DialogHeader>
-          <div className="space-y-3">
-            <div><Label>Client Name *</Label><Input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} /></div>
-            <div className="grid grid-cols-2 gap-3">
-              <div><Label>Contact Person</Label><Input value={form.contact_person} onChange={e => setForm({ ...form, contact_person: e.target.value })} /></div>
-              <div><Label>Phone</Label><Input value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} /></div>
-            </div>
-            <div><Label>Email</Label><Input value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} /></div>
-            <div><Label>Address</Label><Input value={form.address} onChange={e => setForm({ ...form, address: e.target.value })} /></div>
-            <div><Label>PAN/VAT No. <span className="text-muted-foreground text-xs">(optional)</span></Label><Input value={form.pan_vat} onChange={e => setForm({ ...form, pan_vat: e.target.value })} placeholder="e.g. 123456789" /></div>
-            <div>
-              <Label>CRM Status</Label>
-              <Select value={form.crm_status} onValueChange={v => setForm({ ...form, crm_status: v })}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {CRM_STATUSES.map(s => <SelectItem key={s} value={s} className="capitalize">{s}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground border-b pb-1 mt-2">Financial Details</h4>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label>Opening Balance (NPR) <span className="text-muted-foreground text-xs">(optional)</span></Label>
-                <Input type="number" placeholder="0.00" value={form.opening_balance} onChange={e => setForm({ ...form, opening_balance: e.target.value })} />
-                <p className="text-xs text-muted-foreground mt-1">Amount client already owes you</p>
+
+          <div className="grid grid-cols-2 gap-6 max-h-[65vh] overflow-hidden mt-2">
+            {/* LEFT COLUMN */}
+            <motion.div
+              initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.22, ease: 'easeOut' }}
+              className="space-y-3 overflow-y-auto pr-1">
+              <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1.5 border-b pb-1.5 mb-2">
+                <UserCheck className="w-3.5 h-3.5" />
+                Client Details
+              </h4>
+
+              <div className="space-y-1">
+                <Label className="text-xs font-medium">Client Name *</Label>
+                <div className="relative">
+                  <Building2 className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                  <Input className="pl-8 h-9 text-sm" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} />
+                </div>
               </div>
-              <div>
-                <Label>Credit Limit (NPR) <span className="text-muted-foreground text-xs">(optional)</span></Label>
-                <Input type="number" placeholder="e.g. 100000" value={form.credit_limit} onChange={e => setForm({ ...form, credit_limit: e.target.value })} />
+
+              <div className="space-y-1">
+                <Label className="text-xs font-medium">PAN/VAT No.</Label>
+                <div className="relative">
+                  <Hash className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                  <Input className="pl-8 h-9 text-sm" value={form.pan_vat} onChange={e => setForm({ ...form, pan_vat: e.target.value })} placeholder="e.g. 123456789" />
+                </div>
               </div>
-            </div>
-            <div>
-              <Label>Payment Terms</Label>
-              <Select value={form.payment_terms} onValueChange={v => setForm({ ...form, payment_terms: v })}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {PAYMENT_TERMS.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div><Label>Notes <span className="text-muted-foreground text-xs">(optional)</span></Label><Textarea value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} rows={2} /></div>
+
+              <div className="space-y-1">
+                <Label className="text-xs font-medium">CRM Status</Label>
+                <div className="flex flex-wrap gap-1.5 mt-1">
+                  {CRM_STATUSES.map(s => (
+                    <button key={s} type="button"
+                      onClick={() => setForm({ ...form, crm_status: s })}
+                      className={`px-2.5 py-1 rounded-md text-xs font-medium border transition-all capitalize
+                        ${form.crm_status === s ? 'border-primary bg-primary/10 text-primary' : 'border-border text-muted-foreground hover:border-primary/50'}`}>
+                      {s}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <Label className="text-xs font-medium">Payment Terms</Label>
+                <Select value={form.payment_terms} onValueChange={v => setForm({ ...form, payment_terms: v })}>
+                  <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {PAYMENT_TERMS.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            </motion.div>
+
+            {/* RIGHT COLUMN */}
+            <motion.div
+              initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.22, ease: 'easeOut', delay: 0.06 }}
+              className="space-y-3 overflow-y-auto pr-1">
+              <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1.5 border-b pb-1.5 mb-2">
+                <User className="w-3.5 h-3.5" />
+                Contact &amp; Finance
+              </h4>
+
+              <div className="space-y-1">
+                <Label className="text-xs font-medium">Contact Person</Label>
+                <div className="relative">
+                  <User className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                  <Input className="pl-8 h-9 text-sm" value={form.contact_person} onChange={e => setForm({ ...form, contact_person: e.target.value })} />
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <Label className="text-xs font-medium">Phone</Label>
+                <div className="relative">
+                  <Phone className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                  <Input className="pl-8 h-9 text-sm" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} />
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <Label className="text-xs font-medium">Email</Label>
+                <div className="relative">
+                  <Mail className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                  <Input className="pl-8 h-9 text-sm" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} />
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <Label className="text-xs font-medium">Address</Label>
+                <div className="relative">
+                  <MapPin className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                  <Input className="pl-8 h-9 text-sm" value={form.address} onChange={e => setForm({ ...form, address: e.target.value })} />
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <Label className="text-xs font-medium">Opening Balance</Label>
+                <div className="flex items-stretch">
+                  <span className="flex items-center px-2.5 text-xs font-bold text-muted-foreground bg-muted border border-r-0 border-input rounded-l-md select-none shrink-0">NPR</span>
+                  <Input type="number" className="rounded-l-none h-9 text-sm flex-1" placeholder="0.00" value={form.opening_balance} onChange={e => setForm({ ...form, opening_balance: e.target.value })} />
+                </div>
+                <p className="text-xs text-muted-foreground">Amount client already owes you</p>
+              </div>
+
+              <div className="space-y-1">
+                <Label className="text-xs font-medium">Credit Limit</Label>
+                <div className="flex items-stretch">
+                  <span className="flex items-center px-2.5 text-xs font-bold text-muted-foreground bg-muted border border-r-0 border-input rounded-l-md select-none shrink-0">NPR</span>
+                  <Input type="number" className="rounded-l-none h-9 text-sm flex-1" placeholder="e.g. 100000" value={form.credit_limit} onChange={e => setForm({ ...form, credit_limit: e.target.value })} />
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <Label className="text-xs font-medium">Notes</Label>
+                <div className="relative">
+                  <FileText className="absolute left-2.5 top-2.5 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                  <Textarea className="pl-8 text-sm" value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} rows={3} />
+                </div>
+              </div>
+            </motion.div>
           </div>
+
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowAdd(false)}>Cancel</Button>
             <Button onClick={addClient} disabled={!form.name}>Add Client</Button>
@@ -180,58 +263,138 @@ export default function Clients() {
 
       {/* Edit Dialog */}
       <Dialog open={!!editClient} onOpenChange={open => { if (!open) setEditClient(null); }}>
-        <DialogContent className="max-w-md glass-card">
+        <DialogContent className="glass-dialog max-w-3xl overflow-hidden">
+          <div className="h-1 bg-gradient-to-r from-rose-400 to-pink-500 -mx-6 -mt-6 mb-4" />
           <DialogHeader>
-            <DialogTitle>
-              <div className="flex items-center gap-2">
-                <UserCheck className="w-5 h-5 text-primary" />
-                Edit Client
-              </div>
+            <DialogTitle className="flex items-center gap-2">
+              <UserCheck className="w-5 h-5 text-primary" />
+              Edit Client
             </DialogTitle>
           </DialogHeader>
+
           {editClient && (
-            <div className="space-y-3">
-              <div><Label>Client Name *</Label><Input value={editClient.name} onChange={e => setEditClient({ ...editClient, name: e.target.value })} /></div>
-              <div className="grid grid-cols-2 gap-3">
-                <div><Label>Contact Person</Label><Input value={editClient.contact_person || ''} onChange={e => setEditClient({ ...editClient, contact_person: e.target.value })} /></div>
-                <div><Label>Phone</Label><Input value={editClient.phone || ''} onChange={e => setEditClient({ ...editClient, phone: e.target.value })} /></div>
-              </div>
-              <div><Label>Email</Label><Input value={editClient.email || ''} onChange={e => setEditClient({ ...editClient, email: e.target.value })} /></div>
-              <div><Label>Address</Label><Input value={editClient.address || ''} onChange={e => setEditClient({ ...editClient, address: e.target.value })} /></div>
-              <div><Label>PAN/VAT No. <span className="text-muted-foreground text-xs">(optional)</span></Label><Input value={editClient.pan_vat || ''} onChange={e => setEditClient({ ...editClient, pan_vat: e.target.value })} placeholder="e.g. 123456789" /></div>
-              <div>
-                <Label>CRM Status</Label>
-                <Select value={editClient.crm_status} onValueChange={v => setEditClient({ ...editClient, crm_status: v })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {CRM_STATUSES.map(s => <SelectItem key={s} value={s} className="capitalize">{s}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground border-b pb-1 mt-2">Financial Details</h4>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <Label>Opening Balance (NPR) <span className="text-muted-foreground text-xs">(optional)</span></Label>
-                  <Input type="number" placeholder="0.00" value={editClient.opening_balance || ''} onChange={e => setEditClient({ ...editClient, opening_balance: e.target.value })} />
-                  <p className="text-xs text-muted-foreground mt-1">Amount client already owes you</p>
+            <div className="grid grid-cols-2 gap-6 max-h-[65vh] overflow-hidden mt-2">
+              {/* LEFT COLUMN */}
+              <motion.div
+                initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.22, ease: 'easeOut' }}
+                className="space-y-3 overflow-y-auto pr-1">
+                <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1.5 border-b pb-1.5 mb-2">
+                  <UserCheck className="w-3.5 h-3.5" />
+                  Client Details
+                </h4>
+
+                <div className="space-y-1">
+                  <Label className="text-xs font-medium">Client Name *</Label>
+                  <div className="relative">
+                    <Building2 className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                    <Input className="pl-8 h-9 text-sm" value={editClient.name} onChange={e => setEditClient({ ...editClient, name: e.target.value })} />
+                  </div>
                 </div>
-                <div>
-                  <Label>Credit Limit (NPR) <span className="text-muted-foreground text-xs">(optional)</span></Label>
-                  <Input type="number" placeholder="e.g. 100000" value={editClient.credit_limit || ''} onChange={e => setEditClient({ ...editClient, credit_limit: e.target.value })} />
+
+                <div className="space-y-1">
+                  <Label className="text-xs font-medium">PAN/VAT No.</Label>
+                  <div className="relative">
+                    <Hash className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                    <Input className="pl-8 h-9 text-sm" value={editClient.pan_vat || ''} onChange={e => setEditClient({ ...editClient, pan_vat: e.target.value })} placeholder="e.g. 123456789" />
+                  </div>
                 </div>
-              </div>
-              <div>
-                <Label>Payment Terms</Label>
-                <Select value={editClient.payment_terms} onValueChange={v => setEditClient({ ...editClient, payment_terms: v })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {PAYMENT_TERMS.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div><Label>Notes <span className="text-muted-foreground text-xs">(optional)</span></Label><Textarea value={editClient.notes || ''} onChange={e => setEditClient({ ...editClient, notes: e.target.value })} rows={2} /></div>
+
+                <div className="space-y-1">
+                  <Label className="text-xs font-medium">CRM Status</Label>
+                  <div className="flex flex-wrap gap-1.5 mt-1">
+                    {CRM_STATUSES.map(s => (
+                      <button key={s} type="button"
+                        onClick={() => setEditClient({ ...editClient, crm_status: s })}
+                        className={`px-2.5 py-1 rounded-md text-xs font-medium border transition-all capitalize
+                          ${editClient.crm_status === s ? 'border-primary bg-primary/10 text-primary' : 'border-border text-muted-foreground hover:border-primary/50'}`}>
+                        {s}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <Label className="text-xs font-medium">Payment Terms</Label>
+                  <Select value={editClient.payment_terms} onValueChange={v => setEditClient({ ...editClient, payment_terms: v })}>
+                    <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {PAYMENT_TERMS.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </motion.div>
+
+              {/* RIGHT COLUMN */}
+              <motion.div
+                initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.22, ease: 'easeOut', delay: 0.06 }}
+                className="space-y-3 overflow-y-auto pr-1">
+                <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1.5 border-b pb-1.5 mb-2">
+                  <User className="w-3.5 h-3.5" />
+                  Contact &amp; Finance
+                </h4>
+
+                <div className="space-y-1">
+                  <Label className="text-xs font-medium">Contact Person</Label>
+                  <div className="relative">
+                    <User className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                    <Input className="pl-8 h-9 text-sm" value={editClient.contact_person || ''} onChange={e => setEditClient({ ...editClient, contact_person: e.target.value })} />
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <Label className="text-xs font-medium">Phone</Label>
+                  <div className="relative">
+                    <Phone className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                    <Input className="pl-8 h-9 text-sm" value={editClient.phone || ''} onChange={e => setEditClient({ ...editClient, phone: e.target.value })} />
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <Label className="text-xs font-medium">Email</Label>
+                  <div className="relative">
+                    <Mail className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                    <Input className="pl-8 h-9 text-sm" value={editClient.email || ''} onChange={e => setEditClient({ ...editClient, email: e.target.value })} />
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <Label className="text-xs font-medium">Address</Label>
+                  <div className="relative">
+                    <MapPin className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                    <Input className="pl-8 h-9 text-sm" value={editClient.address || ''} onChange={e => setEditClient({ ...editClient, address: e.target.value })} />
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <Label className="text-xs font-medium">Opening Balance</Label>
+                  <div className="flex items-stretch">
+                    <span className="flex items-center px-2.5 text-xs font-bold text-muted-foreground bg-muted border border-r-0 border-input rounded-l-md select-none shrink-0">NPR</span>
+                    <Input type="number" className="rounded-l-none h-9 text-sm flex-1" placeholder="0.00" value={editClient.opening_balance || ''} onChange={e => setEditClient({ ...editClient, opening_balance: e.target.value })} />
+                  </div>
+                  <p className="text-xs text-muted-foreground">Amount client already owes you</p>
+                </div>
+
+                <div className="space-y-1">
+                  <Label className="text-xs font-medium">Credit Limit</Label>
+                  <div className="flex items-stretch">
+                    <span className="flex items-center px-2.5 text-xs font-bold text-muted-foreground bg-muted border border-r-0 border-input rounded-l-md select-none shrink-0">NPR</span>
+                    <Input type="number" className="rounded-l-none h-9 text-sm flex-1" placeholder="e.g. 100000" value={editClient.credit_limit || ''} onChange={e => setEditClient({ ...editClient, credit_limit: e.target.value })} />
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <Label className="text-xs font-medium">Notes</Label>
+                  <div className="relative">
+                    <FileText className="absolute left-2.5 top-2.5 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                    <Textarea className="pl-8 text-sm" value={editClient.notes || ''} onChange={e => setEditClient({ ...editClient, notes: e.target.value })} rows={3} />
+                  </div>
+                </div>
+              </motion.div>
             </div>
           )}
+
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditClient(null)}>Cancel</Button>
             <Button onClick={updateClient} disabled={!editClient?.name}>Save Changes</Button>

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { motion } from 'framer-motion';
 import { api, apiAuth } from '@/api/adapter';
 import { inventoryApi } from '@/api';
 import { getActiveCompanyId } from '@/lib/companyContext';
@@ -16,7 +17,10 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue
 } from "@/components/ui/select";
-import { AlertTriangle, Package, ImagePlus, X, Trash2, Tag, ArrowUpDown, History } from 'lucide-react';
+import {
+  AlertTriangle, Package, ImagePlus, X, Trash2, Tag, ArrowUpDown, History,
+  FileText, Award, Hash, Layers, Truck, MapPin, Calendar, Clock, MessageSquare
+} from 'lucide-react';
 import PageLoader from '../components/PageLoader';
 import EmptyState from '../components/EmptyState';
 
@@ -370,14 +374,21 @@ export default function Inventory() {
 
       {/* Update Price/Location/Image Dialog */}
       <Dialog open={showUpdateDialog} onOpenChange={setShowUpdateDialog}>
-        <DialogContent className="max-w-lg max-h-[85vh] overflow-hidden">
-          <DialogHeader className="pb-2 border-b">
+        <DialogContent className="glass-dialog max-w-lg overflow-hidden">
+          <div className="h-1 bg-gradient-to-r from-cyan-400 to-sky-500 -mx-6 -mt-6 mb-4" />
+          <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Tag className="w-5 h-5 text-primary" />
               Update Item — {selectedItem?.item_name || selectedItem?.description}
             </DialogTitle>
           </DialogHeader>
-          <div className="space-y-4 overflow-y-auto max-h-[calc(85vh-120px)] py-4">
+          <motion.div
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.2 }}
+            className="space-y-5 overflow-y-auto max-h-[calc(85vh-140px)] py-2 pr-1"
+          >
+            {/* Image upload */}
             <div>
               <Label className="text-sm font-medium mb-2 block">Product Image</Label>
               {updateForm.image_url ? (
@@ -396,29 +407,64 @@ export default function Inventory() {
                 </label>
               )}
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label className="text-sm font-medium">Purchase Price (NPR)</Label>
-                <Input type="number" value={updateForm.unit_purchase_price}
+
+            {/* Purchase Price */}
+            <div>
+              <Label className="text-sm font-medium mb-1.5 block">Purchase Price</Label>
+              <div className="flex items-stretch">
+                <span className="flex items-center px-2.5 text-xs font-bold text-muted-foreground bg-muted border border-r-0 border-input rounded-l-md select-none shrink-0">NPR</span>
+                <Input
+                  type="number"
+                  className="rounded-l-none h-9 text-sm flex-1"
+                  value={updateForm.unit_purchase_price}
                   onChange={e => setUpdateForm(f => ({ ...f, unit_purchase_price: parseFloat(e.target.value) || 0 }))}
-                  placeholder="0.00" className="mt-1" />
-              </div>
-              <div>
-                <Label className="text-sm font-medium">Selling Price (NPR)</Label>
-                <Input type="number" value={updateForm.unit_selling_price}
-                  onChange={e => setUpdateForm(f => ({ ...f, unit_selling_price: parseFloat(e.target.value) || 0 }))}
-                  placeholder="0.00" className="mt-1" />
+                  placeholder="0.00"
+                />
               </div>
             </div>
+
+            {/* Selling Price */}
+            <div>
+              <Label className="text-sm font-medium mb-1.5 block">Selling Price</Label>
+              <div className="flex items-stretch">
+                <span className="flex items-center px-2.5 text-xs font-bold text-muted-foreground bg-muted border border-r-0 border-input rounded-l-md select-none shrink-0">NPR</span>
+                <Input
+                  type="number"
+                  className="rounded-l-none h-9 text-sm flex-1"
+                  value={updateForm.unit_selling_price}
+                  onChange={e => setUpdateForm(f => ({ ...f, unit_selling_price: parseFloat(e.target.value) || 0 }))}
+                  placeholder="0.00"
+                />
+              </div>
+              {updateForm.unit_purchase_price > 0 && updateForm.unit_selling_price > 0 && (
+                <div className="flex items-center gap-1.5 text-xs mt-1">
+                  <span className="text-muted-foreground">Margin:</span>
+                  <span className={`font-semibold px-1.5 py-0.5 rounded ${
+                    ((updateForm.unit_selling_price - updateForm.unit_purchase_price) / updateForm.unit_purchase_price * 100) >= 0
+                      ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                  }`}>
+                    {(((updateForm.unit_selling_price - updateForm.unit_purchase_price) / updateForm.unit_purchase_price) * 100).toFixed(1)}%
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {/* Stock Location */}
             {f.location && (
               <div>
-                <Label className="text-sm font-medium">Stock Location</Label>
-                <Input value={updateForm.stock_location}
-                  onChange={e => setUpdateForm(f => ({ ...f, stock_location: e.target.value }))}
-                  placeholder="e.g. Shelf A-3" className="mt-1" />
+                <Label className="text-sm font-medium mb-1.5 block">Stock Location</Label>
+                <div className="relative">
+                  <MapPin className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                  <Input
+                    className="pl-8 h-9 text-sm"
+                    value={updateForm.stock_location}
+                    onChange={e => setUpdateForm(f => ({ ...f, stock_location: e.target.value }))}
+                    placeholder="e.g. Shelf A-3"
+                  />
+                </div>
               </div>
             )}
-          </div>
+          </motion.div>
           <DialogFooter className="border-t pt-4">
             <Button variant="outline" onClick={() => setShowUpdateDialog(false)}>Cancel</Button>
             <Button onClick={handleUpdateSubmit} className="gap-2"><Tag className="w-4 h-4" />Save Changes</Button>
@@ -460,40 +506,62 @@ export default function Inventory() {
 
       {/* Adjust Stock Dialog */}
       <Dialog open={showAdjustDialog} onOpenChange={setShowAdjustDialog}>
-        <DialogContent className="max-w-sm">
+        <DialogContent className="glass-dialog max-w-md overflow-hidden">
+          <div className="h-1 bg-gradient-to-r from-cyan-400 to-sky-500 -mx-6 -mt-6 mb-4" />
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <ArrowUpDown className="w-4 h-4" />
+              <ArrowUpDown className="w-5 h-5 text-primary" />
               Adjust Stock — {selectedItem?.item_name || selectedItem?.description}
             </DialogTitle>
           </DialogHeader>
-          <div className="space-y-4">
+          <motion.div
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.2 }}
+            className="space-y-4"
+          >
+            {/* Current quantity badge */}
             <div className="bg-secondary rounded-lg px-4 py-2 text-sm flex justify-between">
               <span className="text-muted-foreground">Current Quantity</span>
               <span className="font-semibold">{selectedItem?.quantity ?? 0} {selectedItem?.unit}</span>
             </div>
+
+            {/* Adjustment Type chips */}
             <div>
               <Label>Adjustment Type</Label>
-              <Select value={adjForm.type} onValueChange={v => setAdjForm({ ...adjForm, type: v })}>
-                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="ADDITION">Addition — add to current stock</SelectItem>
-                  <SelectItem value="SUBTRACTION">Subtraction — remove from current stock</SelectItem>
-                  <SelectItem value="RECOUNT">Recount — set exact quantity</SelectItem>
-                </SelectContent>
-              </Select>
+              <div className="grid grid-cols-3 gap-2 mt-1">
+                {[
+                  { v: 'ADDITION',    label: '+ Add',     color: 'border-green-400 text-green-700', activeColor: 'bg-green-50 border-green-500' },
+                  { v: 'SUBTRACTION', label: '− Remove',  color: 'border-red-400 text-red-700',   activeColor: 'bg-red-50 border-red-500' },
+                  { v: 'RECOUNT',     label: '↺ Recount', color: 'border-blue-400 text-blue-700', activeColor: 'bg-blue-50 border-blue-500' },
+                ].map(({ v, label, color, activeColor }) => (
+                  <button
+                    key={v}
+                    type="button"
+                    onClick={() => setAdjForm({ ...adjForm, type: v })}
+                    className={`sel-chip ${adjForm.type === v ? activeColor : color + ' opacity-70'}`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
             </div>
+
+            {/* Quantity input */}
             <div>
               <Label>
                 {adjForm.type === 'RECOUNT' ? 'New Quantity' : 'Quantity to ' + (adjForm.type === 'ADDITION' ? 'Add' : 'Remove')} *
               </Label>
-              <Input
-                type="number"
-                className="mt-1"
-                placeholder="0"
-                value={adjForm.quantity}
-                onChange={e => setAdjForm({ ...adjForm, quantity: e.target.value })}
-              />
+              <div className="relative mt-1">
+                <Hash className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                <Input
+                  type="number"
+                  className="pl-8 h-9 text-sm"
+                  placeholder="0"
+                  value={adjForm.quantity}
+                  onChange={e => setAdjForm({ ...adjForm, quantity: e.target.value })}
+                />
+              </div>
               {adjForm.quantity && adjForm.type !== 'RECOUNT' && (
                 <p className="text-xs text-muted-foreground mt-1">
                   New quantity will be:{' '}
@@ -505,17 +573,22 @@ export default function Inventory() {
                 </p>
               )}
             </div>
+
+            {/* Reason */}
             <div>
               <Label>Reason *</Label>
-              <Textarea
-                className="mt-1"
-                rows={2}
-                placeholder="e.g. Physical stock count, damaged goods, returned items..."
-                value={adjForm.reason}
-                onChange={e => setAdjForm({ ...adjForm, reason: e.target.value })}
-              />
+              <div className="relative mt-1">
+                <MessageSquare className="absolute left-2.5 top-2.5 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                <Textarea
+                  className="pl-8 text-sm"
+                  rows={2}
+                  placeholder="e.g. Physical stock count, damaged goods, returned items..."
+                  value={adjForm.reason}
+                  onChange={e => setAdjForm({ ...adjForm, reason: e.target.value })}
+                />
+              </div>
             </div>
-          </div>
+          </motion.div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowAdjustDialog(false)}>Cancel</Button>
             <Button
@@ -572,8 +645,9 @@ export default function Inventory() {
 
       {/* Add Item Dialog */}
       <Dialog open={showAdd} onOpenChange={(v) => { setShowAdd(v); if (!v) setShowExtraFields(false); }}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-hidden">
-          <DialogHeader className="pb-2 border-b">
+        <DialogContent className="glass-dialog max-w-5xl overflow-hidden">
+          <div className="h-1 bg-gradient-to-r from-cyan-400 to-sky-500 -mx-6 -mt-6 mb-4" />
+          <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Package className="w-5 h-5 text-primary" />
               Add New Inventory Item
@@ -588,72 +662,125 @@ export default function Inventory() {
             )}
           </DialogHeader>
 
-          <div className="flex gap-6 max-h-[calc(90vh-120px)] overflow-hidden">
-            {/* Image column */}
-            <div className="w-32 shrink-0">
-              <Label className="text-sm font-medium mb-2 block">Image</Label>
-              {form.image_url ? (
-                <div className="relative">
-                  <img src={form.image_url} alt="preview" className="w-32 h-32 rounded-lg object-cover border shadow-sm" />
-                  <button type="button" onClick={() => setForm(f => ({ ...f, image_url: '' }))}
-                    className="absolute -top-2 -right-2 bg-destructive text-destructive-foreground rounded-full w-6 h-6 flex items-center justify-center shadow-md">
-                    <X className="w-3 h-3" />
-                  </button>
-                </div>
-              ) : (
-                <label className="flex flex-col items-center justify-center w-32 h-32 border-2 border-dashed border-muted-foreground/25 rounded-lg cursor-pointer hover:border-primary/50 hover:bg-primary/5 transition-colors">
-                  <ImagePlus className="w-6 h-6 text-muted-foreground mb-1" />
-                  <span className="text-xs text-muted-foreground text-center">Click to upload</span>
-                  <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} disabled={uploadingImage} />
-                </label>
-              )}
-            </div>
+          <div className="grid grid-cols-2 gap-6 max-h-[72vh] overflow-hidden mt-1">
 
-            {/* Form fields */}
-            <div className="flex-1 overflow-y-auto pr-2 max-h-[calc(90vh-160px)] space-y-4">
+            {/* LEFT column — Item Details */}
+            <div className="overflow-y-auto space-y-4 pr-2">
+              {/* Image upload */}
+              <div>
+                <Label className="text-sm font-medium mb-2 block">Image</Label>
+                {form.image_url ? (
+                  <div className="relative w-32 h-32">
+                    <img src={form.image_url} alt="preview" className="w-32 h-32 rounded-lg object-cover border shadow-sm" />
+                    <button type="button" onClick={() => setForm(f => ({ ...f, image_url: '' }))}
+                      className="absolute -top-2 -right-2 bg-destructive text-destructive-foreground rounded-full w-6 h-6 flex items-center justify-center shadow-md">
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                ) : (
+                  <label className="flex flex-col items-center justify-center w-32 h-32 border-2 border-dashed border-muted-foreground/25 rounded-lg cursor-pointer hover:border-primary/50 hover:bg-primary/5 transition-colors">
+                    <ImagePlus className="w-6 h-6 text-muted-foreground mb-1" />
+                    <span className="text-xs text-muted-foreground text-center">Click to upload</span>
+                    <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} disabled={uploadingImage} />
+                  </label>
+                )}
+              </div>
 
-              {/* Basic — always shown */}
+              {/* Basic Information */}
               <div className="space-y-3">
                 <h4 className="text-sm font-medium border-b pb-1">Basic Information</h4>
+
+                {/* Item Name */}
                 <div>
                   <Label className="text-sm">Item Name *</Label>
-                  <Input value={form.item_name} onChange={e => setForm({ ...form, item_name: e.target.value })}
-                    placeholder={p.item_name} className="mt-1" />
-                </div>
-                <div>
-                  <Label className="text-sm">Description <span className="text-muted-foreground text-xs">(optional)</span></Label>
-                  <Input value={form.description} onChange={e => setForm({ ...form, description: e.target.value })}
-                    placeholder={p.description} className="mt-1" />
+                  <div className="relative mt-1">
+                    <Tag className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                    <Input
+                      className="pl-8 h-9 text-sm"
+                      value={form.item_name}
+                      onChange={e => setForm({ ...form, item_name: e.target.value })}
+                      placeholder={p.item_name}
+                    />
+                  </div>
                 </div>
 
-                {/* Brand — business-type conditional */}
+                {/* Description */}
+                <div>
+                  <Label className="text-sm">Description <span className="text-muted-foreground text-xs">(optional)</span></Label>
+                  <div className="relative mt-1">
+                    <FileText className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                    <Input
+                      className="pl-8 h-9 text-sm"
+                      value={form.description}
+                      onChange={e => setForm({ ...form, description: e.target.value })}
+                      placeholder={p.description}
+                    />
+                  </div>
+                </div>
+
+                {/* Brand */}
                 {f.brand && (
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <Label className="text-sm">Brand <span className="text-muted-foreground text-xs">(optional)</span></Label>
-                      <Input value={form.brand} onChange={e => setForm({ ...form, brand: e.target.value })}
-                        placeholder={p.brand || 'e.g. Brand name'} className="mt-1" />
+                  <div>
+                    <Label className="text-sm">Brand <span className="text-muted-foreground text-xs">(optional)</span></Label>
+                    <div className="relative mt-1">
+                      <Award className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                      <Input
+                        className="pl-8 h-9 text-sm"
+                        value={form.brand}
+                        onChange={e => setForm({ ...form, brand: e.target.value })}
+                        placeholder={p.brand || 'e.g. Brand name'}
+                      />
                     </div>
-                    {f.modelNo && (
-                      <div>
-                        <Label className="text-sm">Model / Part No. <span className="text-muted-foreground text-xs">(optional)</span></Label>
-                        <Input value={form.model_no} onChange={e => setForm({ ...form, model_no: e.target.value })}
-                          placeholder={p.model_no || 'e.g. USB-C-3.0'} className="mt-1" />
-                      </div>
-                    )}
                   </div>
                 )}
 
-                {/* Application / Usage — pharmacy & manufacturing */}
+                {/* Model / Part No */}
+                {f.modelNo && (
+                  <div>
+                    <Label className="text-sm">Model / Part No. <span className="text-muted-foreground text-xs">(optional)</span></Label>
+                    <div className="relative mt-1">
+                      <Hash className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                      <Input
+                        className="pl-8 h-9 text-sm"
+                        value={form.model_no}
+                        onChange={e => setForm({ ...form, model_no: e.target.value })}
+                        placeholder={p.model_no || 'e.g. USB-C-3.0'}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* Application */}
                 {f.application && (
                   <div>
                     <Label className="text-sm">Usage / Purpose <span className="text-muted-foreground text-xs">(optional)</span></Label>
-                    <Input value={form.application} onChange={e => setForm({ ...form, application: e.target.value })}
-                      placeholder={p.application || 'e.g. Usage or purpose'} className="mt-1" />
+                    <div className="relative mt-1">
+                      <Layers className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                      <Input
+                        className="pl-8 h-9 text-sm"
+                        value={form.application}
+                        onChange={e => setForm({ ...form, application: e.target.value })}
+                        placeholder={p.application || 'e.g. Usage or purpose'}
+                      />
+                    </div>
                   </div>
                 )}
 
-                {/* Expand toggle for OTHER business type */}
+                {/* Supplier Name */}
+                <div>
+                  <Label className="text-sm">Supplier Name <span className="text-muted-foreground text-xs">(optional)</span></Label>
+                  <div className="relative mt-1">
+                    <Truck className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                    <Input
+                      className="pl-8 h-9 text-sm"
+                      value={form.supplier_name}
+                      onChange={e => setForm({ ...form, supplier_name: e.target.value })}
+                      placeholder={p.supplier_name || 'e.g. ABC Traders'}
+                    />
+                  </div>
+                </div>
+
+                {/* Show additional fields toggle for OTHER type */}
                 {isOtherType && !showExtraFields && (
                   <button
                     type="button"
@@ -664,97 +791,170 @@ export default function Inventory() {
                   </button>
                 )}
               </div>
+            </div>
 
-              {/* Quantity & Pricing — always shown */}
+            {/* RIGHT column — Pricing & Stock */}
+            <div className="overflow-y-auto space-y-4 pr-2">
               <div className="space-y-3">
                 <h4 className="text-sm font-medium border-b pb-1">Quantity & Pricing</h4>
-                <div className="grid grid-cols-3 gap-3">
-                  <div>
-                    <Label className="text-sm">Quantity</Label>
-                    <Input type="number" value={form.quantity} onChange={e => setForm({ ...form, quantity: e.target.value })} placeholder="0" className="mt-1" />
-                  </div>
-                  <div>
-                    <Label className="text-sm">Unit</Label>
-                    {!form.unit || UNITS.includes(form.unit) ? (
-                      <Select value={form.unit} onValueChange={v => setForm({ ...form, unit: v === '__custom__' ? '__custom__' : v })}>
-                        <SelectTrigger className="mt-1"><SelectValue placeholder="Select unit" /></SelectTrigger>
-                        <SelectContent>
-                          {UNITS.map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}
-                          <SelectItem value="__custom__">Custom...</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    ) : (
-                      <div className="flex gap-2 mt-1">
-                        <Input value={form.unit === '__custom__' ? '' : form.unit}
-                          onChange={e => setForm({ ...form, unit: e.target.value })} placeholder="Custom unit" autoFocus />
-                        <Button type="button" variant="outline" size="sm" onClick={() => setForm({ ...form, unit: 'Piece' })}>↩</Button>
-                      </div>
-                    )}
-                  </div>
-                  <div>
-                    <Label className="text-sm">Low Stock Alert</Label>
-                    <Input type="number" value={form.low_stock_threshold}
-                      onChange={e => setForm({ ...form, low_stock_threshold: e.target.value })} placeholder="5" className="mt-1" />
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <Label className="text-sm">Purchase Price (NPR)</Label>
-                    <Input type="number" value={form.unit_purchase_price}
-                      onChange={e => setForm({ ...form, unit_purchase_price: e.target.value })} placeholder="0.00" className="mt-1" />
-                  </div>
-                  <div>
-                    <Label className="text-sm">Selling Price (NPR)</Label>
-                    <Input type="number" value={form.unit_selling_price}
-                      onChange={e => setForm({ ...form, unit_selling_price: e.target.value })} placeholder="0.00" className="mt-1" />
-                  </div>
-                </div>
-              </div>
 
-              {/* Storage & Supplier — conditional on business type */}
-              {(f.location || true) && (
-                <div className="space-y-3">
-                  <h4 className="text-sm font-medium border-b pb-1">Storage & Supplier</h4>
-                  <div className={`grid gap-3 ${f.location ? 'grid-cols-2' : 'grid-cols-1'}`}>
-                    {f.location && (
-                      <div>
-                        <Label className="text-sm">Stock Location <span className="text-muted-foreground text-xs">(optional)</span></Label>
-                        <Input value={form.stock_location} onChange={e => setForm({ ...form, stock_location: e.target.value })}
-                          placeholder="e.g. Shelf A-3" className="mt-1" />
-                      </div>
-                    )}
-                    <div>
-                      <Label className="text-sm">Supplier Name <span className="text-muted-foreground text-xs">(optional)</span></Label>
-                      <Input value={form.supplier_name} onChange={e => setForm({ ...form, supplier_name: e.target.value })}
-                        placeholder={p.supplier_name || 'e.g. ABC Traders'} className="mt-1" />
-                    </div>
+                {/* Quantity */}
+                <div>
+                  <Label className="text-sm">Quantity</Label>
+                  <div className="relative mt-1">
+                    <Package className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                    <Input
+                      type="number"
+                      className="pl-8 h-9 text-sm"
+                      value={form.quantity}
+                      onChange={e => setForm({ ...form, quantity: e.target.value })}
+                      placeholder="0"
+                    />
                   </div>
-                  {f.aging && (
-                    <div>
-                      <Label className="text-sm">Aging Alert (Days) <span className="text-muted-foreground text-xs">(flag slow-moving stock)</span></Label>
-                      <Input type="number" value={form.aging_days} onChange={e => setForm({ ...form, aging_days: e.target.value })} placeholder="90" className="mt-1" />
+                </div>
+
+                {/* Unit */}
+                <div>
+                  <Label className="text-sm">Unit</Label>
+                  {!form.unit || UNITS.includes(form.unit) ? (
+                    <Select value={form.unit} onValueChange={v => setForm({ ...form, unit: v === '__custom__' ? '__custom__' : v })}>
+                      <SelectTrigger className="mt-1 h-9 text-sm"><SelectValue placeholder="Select unit" /></SelectTrigger>
+                      <SelectContent>
+                        {UNITS.map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}
+                        <SelectItem value="__custom__">Custom...</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <div className="flex gap-2 mt-1">
+                      <Input value={form.unit === '__custom__' ? '' : form.unit}
+                        onChange={e => setForm({ ...form, unit: e.target.value })} placeholder="Custom unit" autoFocus className="h-9 text-sm" />
+                      <Button type="button" variant="outline" size="sm" onClick={() => setForm({ ...form, unit: 'Piece' })}>↩</Button>
                     </div>
                   )}
                 </div>
-              )}
 
-              {/* Expiry — only for pharmacy & food */}
-              {f.expiry && (
-                <div className="space-y-3">
-                  <h4 className="text-sm font-medium border-b pb-1">Expiry Information</h4>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <Label className="text-sm">Expiry Date <span className="text-muted-foreground text-xs">(optional)</span></Label>
-                      <Input type="date" value={form.expiry_date || ''} onChange={e => setForm({ ...form, expiry_date: e.target.value })} className="mt-1" />
-                    </div>
-                    <div>
-                      <Label className="text-sm">Alert Before Expiry (Days)</Label>
-                      <Input type="number" placeholder="30" value={form.expiry_alert_days || ''}
-                        onChange={e => setForm({ ...form, expiry_alert_days: e.target.value })} className="mt-1" />
-                    </div>
+                {/* Buy Price */}
+                <div>
+                  <Label className="text-sm">Purchase Price</Label>
+                  <div className="flex items-stretch mt-1">
+                    <span className="flex items-center px-2.5 text-xs font-bold text-muted-foreground bg-muted border border-r-0 border-input rounded-l-md select-none shrink-0">NPR</span>
+                    <Input
+                      type="number"
+                      className="rounded-l-none h-9 text-sm flex-1"
+                      value={form.unit_purchase_price}
+                      onChange={e => setForm({ ...form, unit_purchase_price: e.target.value })}
+                      placeholder="0.00"
+                    />
                   </div>
                 </div>
-              )}
+
+                {/* Sell Price */}
+                <div>
+                  <Label className="text-sm">Selling Price</Label>
+                  <div className="flex items-stretch mt-1">
+                    <span className="flex items-center px-2.5 text-xs font-bold text-muted-foreground bg-muted border border-r-0 border-input rounded-l-md select-none shrink-0">NPR</span>
+                    <Input
+                      type="number"
+                      className="rounded-l-none h-9 text-sm flex-1"
+                      value={form.unit_selling_price}
+                      onChange={e => setForm({ ...form, unit_selling_price: e.target.value })}
+                      placeholder="0.00"
+                    />
+                  </div>
+                  {form.unit_purchase_price > 0 && form.unit_selling_price > 0 && (
+                    <div className="flex items-center gap-1.5 text-xs mt-1">
+                      <span className="text-muted-foreground">Margin:</span>
+                      <span className={`font-semibold px-1.5 py-0.5 rounded ${
+                        ((form.unit_selling_price - form.unit_purchase_price) / form.unit_purchase_price * 100) >= 0
+                          ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                      }`}>
+                        {(((form.unit_selling_price - form.unit_purchase_price) / form.unit_purchase_price) * 100).toFixed(1)}%
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Low Stock Threshold */}
+                <div>
+                  <Label className="text-sm">Low Stock Alert</Label>
+                  <div className="relative mt-1">
+                    <AlertTriangle className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                    <Input
+                      type="number"
+                      className="pl-8 h-9 text-sm"
+                      value={form.low_stock_threshold}
+                      onChange={e => setForm({ ...form, low_stock_threshold: e.target.value })}
+                      placeholder="5"
+                    />
+                  </div>
+                </div>
+
+                {/* Stock Location */}
+                {f.location && (
+                  <div>
+                    <Label className="text-sm">Stock Location <span className="text-muted-foreground text-xs">(optional)</span></Label>
+                    <div className="relative mt-1">
+                      <MapPin className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                      <Input
+                        className="pl-8 h-9 text-sm"
+                        value={form.stock_location}
+                        onChange={e => setForm({ ...form, stock_location: e.target.value })}
+                        placeholder="e.g. Shelf A-3"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* Expiry Date */}
+                {f.expiry && (
+                  <div>
+                    <Label className="text-sm">Expiry Date <span className="text-muted-foreground text-xs">(optional)</span></Label>
+                    <div className="relative mt-1">
+                      <Calendar className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                      <Input
+                        type="date"
+                        className="pl-8 h-9 text-sm"
+                        value={form.expiry_date || ''}
+                        onChange={e => setForm({ ...form, expiry_date: e.target.value })}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* Aging Alert */}
+                {f.aging && (
+                  <div>
+                    <Label className="text-sm">Aging Alert (Days) <span className="text-muted-foreground text-xs">(flag slow-moving stock)</span></Label>
+                    <div className="relative mt-1">
+                      <Clock className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                      <Input
+                        type="number"
+                        className="pl-8 h-9 text-sm"
+                        value={form.aging_days}
+                        onChange={e => setForm({ ...form, aging_days: e.target.value })}
+                        placeholder="90"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* Expiry Alert Days */}
+                {f.expiry && (
+                  <div>
+                    <Label className="text-sm">Alert Before Expiry (Days)</Label>
+                    <div className="relative mt-1">
+                      <AlertTriangle className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                      <Input
+                        type="number"
+                        className="pl-8 h-9 text-sm"
+                        placeholder="30"
+                        value={form.expiry_alert_days || ''}
+                        onChange={e => setForm({ ...form, expiry_alert_days: e.target.value })}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 

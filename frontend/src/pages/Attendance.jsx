@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { motion } from 'framer-motion';
 import { api } from '@/api/adapter';
 import { getActiveCompanyId } from '@/lib/companyContext';
 import PageHeader from '../components/shared/PageHeader';
@@ -9,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import PageLoader from '../components/PageLoader';
-import { CalendarDays } from 'lucide-react';
+import { CalendarDays, Calendar, Clock, Users, MessageSquare } from 'lucide-react';
 
 const statusColors = {
   present: 'bg-green-100 text-green-700',
@@ -117,44 +118,86 @@ export default function Attendance() {
       <DataTable columns={columns} data={filtered} emptyMessage="No attendance records yet" />
 
       <Dialog open={showForm} onOpenChange={open => { setShowForm(open); }}>
-        <DialogContent className="glass-card max-w-md">
+        <DialogContent className="glass-dialog max-w-xl overflow-hidden">
+          <div className="h-1 bg-gradient-to-r from-green-400 to-emerald-500 -mx-6 -mt-6 mb-4" />
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <CalendarDays className="w-5 h-5 text-primary" />
-              Mark Attendance
+              <CalendarDays className="w-5 h-5 text-primary" />Mark Attendance
             </DialogTitle>
           </DialogHeader>
-          <div className="space-y-3">
-            <div>
-              <Label>Employee *</Label>
+
+          <motion.div
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.22 }}
+            className="space-y-3 mt-1"
+          >
+            {/* Employee section */}
+            <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1.5 border-b pb-1.5 mb-2">
+              <Users className="w-3.5 h-3.5" />Select Employee
+            </h4>
+
+            <div className="space-y-1">
+              <Label className="text-xs">Employee *</Label>
               <Select value={form.employee_id} onValueChange={selectEmployee}>
-                <SelectTrigger><SelectValue placeholder="Select employee" /></SelectTrigger>
+                <SelectTrigger className="h-9 text-sm">
+                  <SelectValue placeholder="Select employee" />
+                </SelectTrigger>
                 <SelectContent>
                   {employees.map(e => <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
-            <div>
-              <Label>Date *</Label>
-              <Input type="date" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} />
+
+            <div className="space-y-1">
+              <Label className="text-xs">Date *</Label>
+              <div className="relative">
+                <Calendar className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                <Input
+                  type="date"
+                  className="pl-8 h-9 text-sm"
+                  value={form.date}
+                  onChange={e => setForm({ ...form, date: e.target.value })}
+                />
+              </div>
             </div>
-            <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground border-b pb-1 mt-2">
-              Time & Status
+
+            {/* Time & Status section */}
+            <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1.5 border-b pb-1.5 mb-2 pt-1">
+              <Clock className="w-3.5 h-3.5" />Time &amp; Status
             </h4>
+
             <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label>Check In</Label>
-                <Input type="time" value={form.check_in} onChange={e => setForm({ ...form, check_in: e.target.value })} />
+              <div className="space-y-1">
+                <Label className="text-xs">Check In</Label>
+                <div className="relative">
+                  <Clock className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                  <Input
+                    type="time"
+                    className="pl-8 h-9 text-sm"
+                    value={form.check_in}
+                    onChange={e => setForm({ ...form, check_in: e.target.value })}
+                  />
+                </div>
               </div>
-              <div>
-                <Label>Check Out</Label>
-                <Input type="time" value={form.check_out} onChange={e => setForm({ ...form, check_out: e.target.value })} />
+              <div className="space-y-1">
+                <Label className="text-xs">Check Out</Label>
+                <div className="relative">
+                  <Clock className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                  <Input
+                    type="time"
+                    className="pl-8 h-9 text-sm"
+                    value={form.check_out}
+                    onChange={e => setForm({ ...form, check_out: e.target.value })}
+                  />
+                </div>
               </div>
             </div>
-            <div>
-              <Label>Status</Label>
+
+            <div className="space-y-1">
+              <Label className="text-xs">Status</Label>
               <Select value={form.status} onValueChange={v => setForm({ ...form, status: v })}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="present">Present</SelectItem>
                   <SelectItem value="absent">Absent</SelectItem>
@@ -163,12 +206,21 @@ export default function Attendance() {
                 </SelectContent>
               </Select>
             </div>
-            <div>
-              <Label>Notes</Label>
-              <Input value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} />
+
+            <div className="space-y-1">
+              <Label className="text-xs">Notes</Label>
+              <div className="relative">
+                <MessageSquare className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                <Input
+                  className="pl-8 h-9 text-sm"
+                  value={form.notes}
+                  onChange={e => setForm({ ...form, notes: e.target.value })}
+                />
+              </div>
             </div>
-          </div>
-          <DialogFooter>
+          </motion.div>
+
+          <DialogFooter className="mt-4">
             <Button variant="outline" onClick={() => setShowForm(false)}>Cancel</Button>
             <Button onClick={save} disabled={!form.employee_id || !form.date}>Save</Button>
           </DialogFooter>

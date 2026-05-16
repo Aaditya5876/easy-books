@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { motion } from 'framer-motion';
 import { api, apiAuth } from '@/api/adapter';
 import { getActiveCompanyId } from '@/lib/companyContext';
 import PageHeader from '../components/shared/PageHeader';
@@ -15,8 +16,18 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue
 } from "@/components/ui/select";
-import { MessageSquare, Mail, CheckCircle, Clock, AlertCircle } from 'lucide-react';
+import {
+  MessageSquare, Mail, CheckCircle, Clock, AlertCircle,
+  ClipboardList, Pencil, FileText, Calendar, Users, User, Phone, Building2
+} from 'lucide-react';
 import PageLoader from '../components/PageLoader';
+
+const PRIORITY_CONFIG = [
+  { v: 'low',    label: '● Low',      cls: 'border-slate-300 text-slate-600', act: 'border-slate-500 bg-slate-50 text-slate-700' },
+  { v: 'medium', label: '●● Medium',  cls: 'border-yellow-400 text-yellow-700', act: 'border-yellow-500 bg-yellow-50 text-yellow-800' },
+  { v: 'high',   label: '●●● High',   cls: 'border-orange-400 text-orange-700', act: 'border-orange-500 bg-orange-50 text-orange-800' },
+  { v: 'urgent', label: '🔴 Urgent',  cls: 'border-red-400 text-red-600', act: 'border-red-500 bg-red-50 text-red-700' },
+];
 
 export default function Communication() {
   const companyId = getActiveCompanyId();
@@ -191,6 +202,7 @@ export default function Communication() {
         </TabsContent>
       </Tabs>
 
+      {/* ── Task Detail Dialog ─────────────────────────────────────────────── */}
       <Dialog open={!!selectedTask} onOpenChange={open => !open && setSelectedTask(null)}>
         <DialogContent className="max-w-lg max-h-[80vh] flex flex-col">
           <DialogHeader><DialogTitle className="text-lg">{selectedTask?.title}</DialogTitle></DialogHeader>
@@ -256,75 +268,234 @@ export default function Communication() {
         </DialogContent>
       </Dialog>
 
+      {/* ── Assign New Task Dialog ─────────────────────────────────────────── */}
       <Dialog open={showNew} onOpenChange={setShowNew}>
-        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>Assign New Task</DialogTitle></DialogHeader>
-          <div className="space-y-3">
-            <div><Label>Task Title *</Label><Input value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} /></div>
-            <div className="grid grid-cols-2 gap-3">
-              <div><Label>Assigned To</Label><Input value={form.assigned_name || ''} onChange={e => setForm({ ...form, assigned_name: e.target.value })} placeholder="Full name" /></div>
-              <div><Label>Contact</Label><Input value={form.assigned_contact || ''} onChange={e => setForm({ ...form, assigned_contact: e.target.value })} placeholder="Phone / Email" /></div>
-            </div>
-            <div><Label>Assign To (Email)</Label><Input value={form.assigned_to} onChange={e => setForm({ ...form, assigned_to: e.target.value })} placeholder="team@company.com" /></div>
-            <div><Label>Department</Label><Input value={form.department} onChange={e => setForm({ ...form, department: e.target.value })} placeholder="e.g. Engineering, Sales" /></div>
-            <div>
-              <Label>Party Type</Label>
-              <Select value={form.party_type} onValueChange={async v => {
-                setForm({ ...form, party_type: v, party_name: '', party_contact: '' });
-                if (v === 'client') {
-                  const data = await api.Client.filter({ company_id: companyId });
-                  setPartyOptions(data.map(c => ({ id: c.id, name: c.name, contact: c.phone || c.email || '' })));
-                } else if (v === 'vendor') {
-                  const data = await api.Vendor.filter({ company_id: companyId });
-                  setPartyOptions(data.map(v => ({ id: v.id, name: v.name, contact: v.phone || v.email || '' })));
-                }
-              }}>
-                <SelectTrigger><SelectValue placeholder="Select type..." /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="client">Client</SelectItem>
-                  <SelectItem value="vendor">Vendor</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            {form.party_type && (
-              <div className="space-y-2">
-                <div>
-                  <Label>Select Existing {form.party_type === 'client' ? 'Client' : 'Vendor'}</Label>
-                  <Select value={form.party_name} onValueChange={v => {
-                    const opt = partyOptions.find(o => o.name === v);
-                    setForm({ ...form, party_name: v, party_contact: opt?.contact || '' });
-                  }}>
-                    <SelectTrigger><SelectValue placeholder="Pick from list or type below..." /></SelectTrigger>
-                    <SelectContent>
-                      {partyOptions.map(o => <SelectItem key={o.id} value={o.name}>{o.name}{o.contact ? ` · ${o.contact}` : ''}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div><Label>Name (or type new)</Label><Input value={form.party_name || ''} onChange={e => setForm({ ...form, party_name: e.target.value })} placeholder={form.party_type === 'client' ? 'Client name' : 'Vendor name'} /></div>
-                  <div><Label>Contact</Label><Input value={form.party_contact || ''} onChange={e => setForm({ ...form, party_contact: e.target.value })} placeholder="Phone / Email" /></div>
+        <DialogContent className="glass-dialog max-w-4xl overflow-hidden">
+          <div className="h-1 bg-gradient-to-r from-teal-400 to-cyan-500 -mx-6 -mt-6 mb-4" />
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ClipboardList className="w-5 h-5 text-primary" />Assign New Task
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="grid grid-cols-2 gap-6 max-h-[65vh] overflow-hidden mt-2">
+            {/* LEFT — Task Details */}
+            <motion.div
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.22 }}
+              className="space-y-3 overflow-y-auto pr-1"
+            >
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                <ClipboardList className="w-3.5 h-3.5" />Task Details
+              </p>
+
+              {/* Title */}
+              <div className="space-y-1">
+                <Label>Task Title *</Label>
+                <div className="relative">
+                  <Pencil className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                  <Input
+                    className="pl-8 h-9 text-sm"
+                    value={form.title}
+                    onChange={e => setForm({ ...form, title: e.target.value })}
+                    placeholder="Task title"
+                  />
                 </div>
               </div>
-            )}
-            <div><Label>Description</Label><Textarea value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} rows={3} /></div>
-            <div className="grid grid-cols-2 gap-2">
-                <div><Label>Due Date</Label><Input type="date" value={form.due_date} onChange={e => setForm({ ...form, due_date: e.target.value })} /></div>
-                <div><Label>Due Time</Label><Input type="time" value={form.due_time || ''} onChange={e => setForm({ ...form, due_time: e.target.value })} /></div>
+
+              {/* Description */}
+              <div className="space-y-1">
+                <Label>Description</Label>
+                <div className="relative">
+                  <FileText className="absolute left-2.5 top-3 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                  <Textarea
+                    className="pl-8 text-sm"
+                    value={form.description}
+                    onChange={e => setForm({ ...form, description: e.target.value })}
+                    rows={3}
+                    placeholder="Optional details..."
+                  />
+                </div>
               </div>
-            <div>
+
+              {/* Priority chips */}
+              <div className="space-y-1">
                 <Label>Priority</Label>
-                <Select value={form.priority} onValueChange={v => setForm({ ...form, priority: v })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="low">Low</SelectItem>
-                    <SelectItem value="medium">Medium</SelectItem>
-                    <SelectItem value="high">High</SelectItem>
-                    <SelectItem value="urgent">Urgent</SelectItem>
-                  </SelectContent>
-                </Select>
+                <div className="grid grid-cols-2 gap-2 mt-1">
+                  {PRIORITY_CONFIG.map(p => (
+                    <button
+                      key={p.v}
+                      type="button"
+                      onClick={() => setForm({ ...form, priority: p.v })}
+                      className={`sel-chip text-xs ${form.priority === p.v ? p.act + ' border-2' : p.cls + ' border opacity-75'}`}
+                    >
+                      {p.label}
+                    </button>
+                  ))}
+                </div>
               </div>
+
+              {/* Due Date + Due Time */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label>Due Date</Label>
+                  <div className="relative">
+                    <Calendar className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                    <Input
+                      type="date"
+                      className="pl-8 h-9 text-sm"
+                      value={form.due_date}
+                      onChange={e => setForm({ ...form, due_date: e.target.value })}
+                    />
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <Label>Due Time</Label>
+                  <div className="relative">
+                    <Clock className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                    <Input
+                      type="time"
+                      className="pl-8 h-9 text-sm"
+                      value={form.due_time || ''}
+                      onChange={e => setForm({ ...form, due_time: e.target.value })}
+                    />
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+
+            {/* RIGHT — Assignment */}
+            <motion.div
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.22, delay: 0.06 }}
+              className="space-y-3 overflow-y-auto pr-1"
+            >
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                <Users className="w-3.5 h-3.5" />Assignment
+              </p>
+
+              {/* Assigned To (full name) */}
+              <div className="space-y-1">
+                <Label>Assigned To</Label>
+                <div className="relative">
+                  <User className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                  <Input
+                    className="pl-8 h-9 text-sm"
+                    value={form.assigned_name || ''}
+                    onChange={e => setForm({ ...form, assigned_name: e.target.value })}
+                    placeholder="Full name"
+                  />
+                </div>
+              </div>
+
+              {/* Contact */}
+              <div className="space-y-1">
+                <Label>Contact</Label>
+                <div className="relative">
+                  <Phone className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                  <Input
+                    className="pl-8 h-9 text-sm"
+                    value={form.assigned_contact || ''}
+                    onChange={e => setForm({ ...form, assigned_contact: e.target.value })}
+                    placeholder="Phone number"
+                  />
+                </div>
+              </div>
+
+              {/* Email */}
+              <div className="space-y-1">
+                <Label>Email</Label>
+                <div className="relative">
+                  <Mail className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                  <Input
+                    className="pl-8 h-9 text-sm"
+                    value={form.assigned_to}
+                    onChange={e => setForm({ ...form, assigned_to: e.target.value })}
+                    placeholder="team@company.com"
+                  />
+                </div>
+              </div>
+
+              {/* Department */}
+              <div className="space-y-1">
+                <Label>Department</Label>
+                <div className="relative">
+                  <Building2 className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                  <Input
+                    className="pl-8 h-9 text-sm"
+                    value={form.department}
+                    onChange={e => setForm({ ...form, department: e.target.value })}
+                    placeholder="e.g. Engineering, Sales"
+                  />
+                </div>
+              </div>
+
+              {/* Party Type chips */}
+              <div className="space-y-1">
+                <Label>Party Type</Label>
+                <div className="flex gap-2 mt-1">
+                  {['client', 'vendor'].map(t => (
+                    <button
+                      key={t}
+                      type="button"
+                      onClick={async () => {
+                        setForm({ ...form, party_type: t, party_name: '', party_contact: '' });
+                        if (t === 'client') {
+                          const data = await api.Client.filter({ company_id: companyId });
+                          setPartyOptions(data.map(c => ({ id: c.id, name: c.name, contact: c.phone || c.email || '' })));
+                        } else if (t === 'vendor') {
+                          const data = await api.Vendor.filter({ company_id: companyId });
+                          setPartyOptions(data.map(v => ({ id: v.id, name: v.name, contact: v.phone || v.email || '' })));
+                        }
+                      }}
+                      className={`sel-chip flex-1 capitalize text-xs ${form.party_type === t ? 'border-primary bg-primary/10 text-primary border-2' : 'border-border text-muted-foreground border opacity-70'}`}
+                    >
+                      {t}
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => setForm({ ...form, party_type: '', party_name: '', party_contact: '' })}
+                    className={`sel-chip flex-1 text-xs ${!form.party_type ? 'border-primary bg-primary/10 text-primary border-2' : 'border-border text-muted-foreground border opacity-70'}`}
+                  >
+                    Internal
+                  </button>
+                </div>
+              </div>
+
+              {/* Party fields (when party_type is set) */}
+              {form.party_type && (
+                <div className="space-y-2">
+                  <div>
+                    <Label>Select Existing {form.party_type === 'client' ? 'Client' : 'Vendor'}</Label>
+                    <Select value={form.party_name} onValueChange={v => {
+                      const opt = partyOptions.find(o => o.name === v);
+                      setForm({ ...form, party_name: v, party_contact: opt?.contact || '' });
+                    }}>
+                      <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Pick from list or type below..." /></SelectTrigger>
+                      <SelectContent>
+                        {partyOptions.map(o => <SelectItem key={o.id} value={o.name}>{o.name}{o.contact ? ` · ${o.contact}` : ''}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <Label>Name (or type new)</Label>
+                      <Input className="h-9 text-sm" value={form.party_name || ''} onChange={e => setForm({ ...form, party_name: e.target.value })} placeholder={form.party_type === 'client' ? 'Client name' : 'Vendor name'} />
+                    </div>
+                    <div>
+                      <Label>Contact</Label>
+                      <Input className="h-9 text-sm" value={form.party_contact || ''} onChange={e => setForm({ ...form, party_contact: e.target.value })} placeholder="Phone / Email" />
+                    </div>
+                  </div>
+                </div>
+              )}
+            </motion.div>
           </div>
-          <DialogFooter>
+
+          <DialogFooter className="mt-4">
             <Button variant="outline" onClick={() => setShowNew(false)}>Cancel</Button>
             <Button onClick={createTask} disabled={!form.title}>Assign Task</Button>
           </DialogFooter>

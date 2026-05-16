@@ -14,10 +14,8 @@ import { Badge } from "@/components/ui/badge";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter
 } from "@/components/ui/dialog";
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue
-} from "@/components/ui/select";
-import { BookOpen, Plus, Printer, Share2, Save, Eye } from 'lucide-react';
+import { BookOpen, Plus, Printer, Share2, Save, Eye, User, Phone, Hash, MapPin, FileText, Wallet } from 'lucide-react';
+import { motion } from 'framer-motion';
 import FloatingAccountDetail from '../components/ledger/FloatingAccountDetail';
 
 export default function Ledger() {
@@ -32,7 +30,10 @@ export default function Ledger() {
   const [showNewAccount, setShowNewAccount] = useState(false);
   const [showAccountDetail, setShowAccountDetail] = useState(null);
   const [showNewEntry, setShowNewEntry] = useState(false);
-  const [newAccount, setNewAccount] = useState({ account_name: '', contact_name: '', contact_phone: '', address: '', pan_vat: '', opening_balance: '', notes: '' });
+  const [newAccount, setNewAccount] = useState({
+    account_name: '', contact_name: '', contact_phone: '',
+    address: '', pan_vat: '', opening_balance: '', notes: '', ob_type: 'debit',
+  });
   const [newEntry, setNewEntry] = useState({ description: '', debit: 0, credit: 0, reference_id: '', date_ad: new Date().toISOString().split('T')[0] });
 
   useEffect(() => {
@@ -62,7 +63,10 @@ export default function Ledger() {
       fiscal_year: '2081/2082',
       is_active: true,
     });
-    setNewAccount({ account_name: '', contact_name: '', contact_phone: '', address: '', pan_vat: '', opening_balance: '', notes: '' });
+    setNewAccount({
+      account_name: '', contact_name: '', contact_phone: '',
+      address: '', pan_vat: '', opening_balance: '', notes: '', ob_type: 'debit',
+    });
     setShowNewAccount(false);
     loadData();
   }
@@ -71,7 +75,7 @@ export default function Ledger() {
     if (!showAccountDetail) return;
     const today = new Date().toISOString().split('T')[0];
     const bsDate = adToBs(new Date());
-    
+
     const accountEntries = entries.filter(e => e.account_id === showAccountDetail.id);
     const lastBalance = accountEntries.length > 0 ? accountEntries[0].balance || 0 : (showAccountDetail.opening_balance || 0);
     const newBalance = lastBalance + (newEntry.debit || 0) - (newEntry.credit || 0);
@@ -106,7 +110,7 @@ export default function Ledger() {
     (!colFilters.status || (colFilters.status === 'active' ? a.is_active : !a.is_active))
   );
 
-  const accountEntries = showAccountDetail 
+  const accountEntries = showAccountDetail
     ? [...entries.filter(e => e.account_id === showAccountDetail.id)].reverse()
     : [];
 
@@ -150,8 +154,8 @@ export default function Ledger() {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <PageHeader 
-        title="Ledger" 
+      <PageHeader
+        title="Ledger"
         subtitle="Purchase, Sales & Expense Accounts"
         searchValue={search}
         onSearchChange={setSearch}
@@ -178,45 +182,165 @@ export default function Ledger() {
 
       {/* New Account Dialog */}
       <Dialog open={showNewAccount} onOpenChange={setShowNewAccount}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="glass-dialog max-w-3xl overflow-hidden">
+          <div className="h-1 bg-gradient-to-r from-slate-400 to-gray-500 -mx-6 -mt-6 mb-4" />
           <DialogHeader>
-            <DialogTitle>New {activeTab.charAt(0).toUpperCase() + activeTab.slice(1)} Account</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              <BookOpen className="w-5 h-5 text-primary" />
+              New {activeTab.charAt(0).toUpperCase() + activeTab.slice(1)} Account
+            </DialogTitle>
           </DialogHeader>
-          <div className="space-y-3">
-            <div>
-              <Label>Account Name *</Label>
-              <Input value={newAccount.account_name} onChange={e => setNewAccount({ ...newAccount, account_name: e.target.value })} placeholder="Party or account name" />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
+
+          <div className="grid grid-cols-2 gap-6 mt-2">
+            {/* LEFT column — Account Info */}
+            <motion.div
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.22, ease: 'easeOut' }}
+              className="space-y-3"
+            >
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1.5">
+                <BookOpen className="w-3.5 h-3.5" /> Account Info
+              </p>
+
+              {/* Account Name */}
               <div>
-                <Label>Opening Balance <span className="text-muted-foreground text-xs">(optional)</span></Label>
-                <Input type="number" placeholder="0.00" value={newAccount.opening_balance} onChange={e => setNewAccount({ ...newAccount, opening_balance: e.target.value })} />
+                <Label className="text-xs font-medium">Account Name *</Label>
+                <div className="relative mt-1">
+                  <BookOpen className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                  <Input
+                    className="pl-8 h-9 text-sm"
+                    placeholder="Party or account name"
+                    value={newAccount.account_name}
+                    onChange={e => setNewAccount({ ...newAccount, account_name: e.target.value })}
+                  />
+                </div>
               </div>
+
+              {/* Contact Person */}
               <div>
-                <Label>PAN / VAT No. <span className="text-muted-foreground text-xs">(optional)</span></Label>
-                <Input placeholder="e.g. 123456789" value={newAccount.pan_vat} onChange={e => setNewAccount({ ...newAccount, pan_vat: e.target.value })} />
+                <Label className="text-xs font-medium">Contact Person</Label>
+                <div className="relative mt-1">
+                  <User className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                  <Input
+                    className="pl-8 h-9 text-sm"
+                    placeholder="Contact name (optional)"
+                    value={newAccount.contact_name}
+                    onChange={e => setNewAccount({ ...newAccount, contact_name: e.target.value })}
+                  />
+                </div>
               </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
+
+              {/* Phone */}
               <div>
-                <Label>Contact Person <span className="text-muted-foreground text-xs">(optional)</span></Label>
-                <Input value={newAccount.contact_name} onChange={e => setNewAccount({ ...newAccount, contact_name: e.target.value })} />
+                <Label className="text-xs font-medium">Phone</Label>
+                <div className="relative mt-1">
+                  <Phone className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                  <Input
+                    className="pl-8 h-9 text-sm"
+                    placeholder="Phone number (optional)"
+                    value={newAccount.contact_phone}
+                    onChange={e => setNewAccount({ ...newAccount, contact_phone: e.target.value })}
+                  />
+                </div>
               </div>
+            </motion.div>
+
+            {/* RIGHT column — Financial Details */}
+            <motion.div
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.22, ease: 'easeOut', delay: 0.06 }}
+              className="space-y-3"
+            >
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1.5">
+                <Wallet className="w-3.5 h-3.5" /> Financial Details
+              </p>
+
+              {/* PAN/VAT */}
               <div>
-                <Label>Phone <span className="text-muted-foreground text-xs">(optional)</span></Label>
-                <Input value={newAccount.contact_phone} onChange={e => setNewAccount({ ...newAccount, contact_phone: e.target.value })} />
+                <Label className="text-xs font-medium">PAN / VAT No.</Label>
+                <div className="relative mt-1">
+                  <Hash className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                  <Input
+                    className="pl-8 h-9 text-sm"
+                    placeholder="e.g. 123456789 (optional)"
+                    value={newAccount.pan_vat}
+                    onChange={e => setNewAccount({ ...newAccount, pan_vat: e.target.value })}
+                  />
+                </div>
               </div>
-            </div>
-            <div>
-              <Label>Address <span className="text-muted-foreground text-xs">(optional)</span></Label>
-              <Input value={newAccount.address} onChange={e => setNewAccount({ ...newAccount, address: e.target.value })} />
-            </div>
-            <div>
-              <Label>Notes <span className="text-muted-foreground text-xs">(optional)</span></Label>
-              <Textarea value={newAccount.notes} onChange={e => setNewAccount({ ...newAccount, notes: e.target.value })} rows={2} />
-            </div>
+
+              {/* Address */}
+              <div>
+                <Label className="text-xs font-medium">Address</Label>
+                <div className="relative mt-1">
+                  <MapPin className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                  <Input
+                    className="pl-8 h-9 text-sm"
+                    placeholder="Address (optional)"
+                    value={newAccount.address}
+                    onChange={e => setNewAccount({ ...newAccount, address: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              {/* Opening Balance */}
+              <div>
+                <Label className="text-xs font-medium">Opening Balance</Label>
+                <div className="flex gap-2 mt-1 mb-2">
+                  <label className="flex items-center gap-1.5 text-xs cursor-pointer">
+                    <input
+                      type="radio"
+                      name="ob_type"
+                      value="debit"
+                      checked={newAccount.ob_type !== 'credit'}
+                      onChange={() => setNewAccount({ ...newAccount, ob_type: 'debit' })}
+                      className="accent-primary"
+                    />
+                    <span>Debit (you owe them)</span>
+                  </label>
+                  <label className="flex items-center gap-1.5 text-xs cursor-pointer">
+                    <input
+                      type="radio"
+                      name="ob_type"
+                      value="credit"
+                      checked={newAccount.ob_type === 'credit'}
+                      onChange={() => setNewAccount({ ...newAccount, ob_type: 'credit' })}
+                      className="accent-primary"
+                    />
+                    <span>Credit (they owe you)</span>
+                  </label>
+                </div>
+                <div className="flex items-stretch">
+                  <span className="flex items-center px-2.5 text-xs font-bold text-muted-foreground bg-muted border border-r-0 border-input rounded-l-md select-none shrink-0">NPR</span>
+                  <Input
+                    type="number"
+                    className="rounded-l-none h-9 text-sm flex-1"
+                    placeholder="0.00"
+                    value={newAccount.opening_balance}
+                    onChange={e => setNewAccount({ ...newAccount, opening_balance: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              {/* Notes */}
+              <div>
+                <Label className="text-xs font-medium flex items-center gap-1.5">
+                  <FileText className="w-3.5 h-3.5" /> Notes
+                </Label>
+                <Textarea
+                  className="mt-1 text-sm"
+                  placeholder="Optional notes..."
+                  value={newAccount.notes}
+                  onChange={e => setNewAccount({ ...newAccount, notes: e.target.value })}
+                  rows={2}
+                />
+              </div>
+            </motion.div>
           </div>
-          <DialogFooter>
+
+          <DialogFooter className="mt-4">
             <Button variant="outline" onClick={() => setShowNewAccount(false)}>Cancel</Button>
             <Button onClick={createAccount} disabled={!newAccount.account_name}>Create Account</Button>
           </DialogFooter>
