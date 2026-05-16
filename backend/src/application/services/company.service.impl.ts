@@ -51,7 +51,6 @@ export class CompanyServiceImpl {
           userId,
           companyId: company.id,
           isDefault: !existingDefault,
-          role: 'ADMIN',
         },
       });
     }

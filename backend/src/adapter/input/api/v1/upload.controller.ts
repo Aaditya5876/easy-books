@@ -42,7 +42,7 @@ export class UploadController {
       cb(null, true);
     },
   }))
-  uploadFile(@UploadedFile() file: Express.Multer.File) {
+  uploadFile(@UploadedFile() file: any) {
     if (!file) throw new BadRequestException('No file provided');
     return {
       url: `/uploads/${file.filename}`,
