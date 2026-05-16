@@ -8,6 +8,7 @@ import PageHeader from '../components/shared/PageHeader';
 import DataTable from '../components/shared/DataTable';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { SmartNumberInput } from "@/components/ui/smart-number-input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
@@ -341,11 +342,11 @@ export default function Inventory() {
           {f.modelNo && <td className="px-2 py-1"><Input placeholder="Model No." value={filters.model_no} onChange={e => setFilter('model_no', e.target.value)} className="h-7 text-xs w-full" /></td>}
           <td className="px-2 py-1"><Input placeholder="Description" value={filters.description} onChange={e => setFilter('description', e.target.value)} className="h-7 text-xs w-full" /></td>
           {f.application && <td className="px-2 py-1"><Input placeholder="Usage" value={filters.application} onChange={e => setFilter('application', e.target.value)} className="h-7 text-xs w-full" /></td>}
-          <td className="px-2 py-1"><Input type="number" placeholder="Min Qty" value={filters.qty_min} onChange={e => setFilter('qty_min', e.target.value)} className="h-7 text-xs w-full" /></td>
-          <td className="px-2 py-1"><Input type="number" placeholder="Min Price" value={filters.price_min} onChange={e => setFilter('price_min', e.target.value)} className="h-7 text-xs w-full" /></td>
+          <td className="px-2 py-1"><SmartNumberInput placeholder="Min Qty" value={filters.qty_min} onChange={e => setFilter('qty_min', e.target.value)} className="h-7 text-xs w-full" /></td>
+          <td className="px-2 py-1"><SmartNumberInput placeholder="Min Price" value={filters.price_min} onChange={e => setFilter('price_min', e.target.value)} className="h-7 text-xs w-full" /></td>
           {f.location && <td className="px-2 py-1"><Input placeholder="Location" value={filters.stock_location} onChange={e => setFilter('stock_location', e.target.value)} className="h-7 text-xs w-full" /></td>}
           {f.aging && <td className="px-2 py-1"><div className="flex items-center gap-1">
-            <Input type="number" placeholder="Min aging days" value={filters.date_from} onChange={e => setFilter('date_from', e.target.value)} className="h-7 text-xs w-full" />
+            <SmartNumberInput placeholder="Min aging days" value={filters.date_from} onChange={e => setFilter('date_from', e.target.value)} className="h-7 text-xs w-full" />
             {hasFilters && <Button variant="outline" size="sm" className="h-7 text-xs shrink-0" onClick={() => setFilters({ brand: '', model_no: '', description: '', application: '', qty_min: '', price_min: '', stock_location: '', date_from: '' })}>✕</Button>}
           </div></td>}
         </>}
@@ -413,8 +414,7 @@ export default function Inventory() {
               <Label className="text-sm font-medium mb-1.5 block">Purchase Price</Label>
               <div className="flex items-stretch">
                 <span className="flex items-center px-2.5 text-xs font-bold text-muted-foreground bg-muted border border-r-0 border-input rounded-l-md select-none shrink-0">NPR</span>
-                <Input
-                  type="number"
+                <SmartNumberInput
                   className="rounded-l-none h-9 text-sm flex-1"
                   value={updateForm.unit_purchase_price}
                   onChange={e => setUpdateForm(f => ({ ...f, unit_purchase_price: parseFloat(e.target.value) || 0 }))}
@@ -428,8 +428,7 @@ export default function Inventory() {
               <Label className="text-sm font-medium mb-1.5 block">Selling Price</Label>
               <div className="flex items-stretch">
                 <span className="flex items-center px-2.5 text-xs font-bold text-muted-foreground bg-muted border border-r-0 border-input rounded-l-md select-none shrink-0">NPR</span>
-                <Input
-                  type="number"
+                <SmartNumberInput
                   className="rounded-l-none h-9 text-sm flex-1"
                   value={updateForm.unit_selling_price}
                   onChange={e => setUpdateForm(f => ({ ...f, unit_selling_price: parseFloat(e.target.value) || 0 }))}
@@ -554,8 +553,7 @@ export default function Inventory() {
               </Label>
               <div className="relative mt-1">
                 <Hash className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
-                <Input
-                  type="number"
+                <SmartNumberInput
                   className="pl-8 h-9 text-sm"
                   placeholder="0"
                   value={adjForm.quantity}
@@ -803,8 +801,7 @@ export default function Inventory() {
                   <Label className="text-sm">Quantity</Label>
                   <div className="relative mt-1">
                     <Package className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
-                    <Input
-                      type="number"
+                    <SmartNumberInput
                       className="pl-8 h-9 text-sm"
                       value={form.quantity}
                       onChange={e => setForm({ ...form, quantity: e.target.value })}
@@ -838,8 +835,7 @@ export default function Inventory() {
                   <Label className="text-sm">Purchase Price</Label>
                   <div className="flex items-stretch mt-1">
                     <span className="flex items-center px-2.5 text-xs font-bold text-muted-foreground bg-muted border border-r-0 border-input rounded-l-md select-none shrink-0">NPR</span>
-                    <Input
-                      type="number"
+                    <SmartNumberInput
                       className="rounded-l-none h-9 text-sm flex-1"
                       value={form.unit_purchase_price}
                       onChange={e => setForm({ ...form, unit_purchase_price: e.target.value })}
@@ -853,8 +849,7 @@ export default function Inventory() {
                   <Label className="text-sm">Selling Price</Label>
                   <div className="flex items-stretch mt-1">
                     <span className="flex items-center px-2.5 text-xs font-bold text-muted-foreground bg-muted border border-r-0 border-input rounded-l-md select-none shrink-0">NPR</span>
-                    <Input
-                      type="number"
+                    <SmartNumberInput
                       className="rounded-l-none h-9 text-sm flex-1"
                       value={form.unit_selling_price}
                       onChange={e => setForm({ ...form, unit_selling_price: e.target.value })}
@@ -879,8 +874,7 @@ export default function Inventory() {
                   <Label className="text-sm">Low Stock Alert</Label>
                   <div className="relative mt-1">
                     <AlertTriangle className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
-                    <Input
-                      type="number"
+                    <SmartNumberInput
                       className="pl-8 h-9 text-sm"
                       value={form.low_stock_threshold}
                       onChange={e => setForm({ ...form, low_stock_threshold: e.target.value })}
@@ -927,8 +921,7 @@ export default function Inventory() {
                     <Label className="text-sm">Aging Alert (Days) <span className="text-muted-foreground text-xs">(flag slow-moving stock)</span></Label>
                     <div className="relative mt-1">
                       <Clock className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
-                      <Input
-                        type="number"
+                      <SmartNumberInput
                         className="pl-8 h-9 text-sm"
                         value={form.aging_days}
                         onChange={e => setForm({ ...form, aging_days: e.target.value })}
@@ -944,8 +937,7 @@ export default function Inventory() {
                     <Label className="text-sm">Alert Before Expiry (Days)</Label>
                     <div className="relative mt-1">
                       <AlertTriangle className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
-                      <Input
-                        type="number"
+                      <SmartNumberInput
                         className="pl-8 h-9 text-sm"
                         placeholder="30"
                         value={form.expiry_alert_days || ''}

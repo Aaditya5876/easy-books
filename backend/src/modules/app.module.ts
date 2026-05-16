@@ -28,6 +28,7 @@ import { MemoModule } from './memo.module';
 import { TaskModule } from './task.module';
 import { UserModule } from './user.module';
 import { DashboardModule } from './dashboard.module';
+import { UploadModule } from './upload.module';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { RolesGuard } from './guards/roles.guard';
 
@@ -60,6 +61,7 @@ import { RolesGuard } from './guards/roles.guard';
     TaskModule,
     UserModule,
     DashboardModule,
+    UploadModule,
   ],
   providers: [
     // Global guards — run on every request in order: Throttler, JWT, then Roles

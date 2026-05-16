@@ -4,7 +4,8 @@ import {
   LayoutDashboard, BookOpen, ArrowLeftRight, Users, UserCheck,
   Package, ShoppingCart, Receipt, FileText, MessageSquare,
   FileSpreadsheet, UserCircle, CalendarCheck, Banknote,
-  ChevronLeft, ChevronRight, Building2, ChevronDown, ClipboardList, BarChart2
+  ChevronLeft, ChevronRight, Building2, ChevronDown, ClipboardList, BarChart2,
+  Kanban
 } from 'lucide-react';
 import { cn } from "@/lib/utils";
 
@@ -41,6 +42,15 @@ const navSections = [
       { icon: ShoppingCart, label: 'Purchase', path: '/purchase' },
       { icon: Receipt, label: 'Sales', path: '/sales' },
       { icon: ClipboardList, label: 'Quotations', path: '/quotations' },
+    ]
+  },
+  {
+    label: 'Workflow',
+    labelColor: 'text-amber-400',
+    activeClass: 'bg-amber-600 text-white shadow-sm shadow-amber-900/30',
+    activeIconClass: 'text-white',
+    items: [
+      { icon: Kanban, label: 'Workflow', path: '/workflow' },
     ]
   },
   {

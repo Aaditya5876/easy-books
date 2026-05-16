@@ -8,6 +8,7 @@ import PageLoader from '../components/PageLoader';
 import EmptyState from '../components/EmptyState';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { SmartNumberInput } from "@/components/ui/smart-number-input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -391,7 +392,7 @@ export default function Payroll() {
                     </div>
                     <div className="flex justify-between items-center">
                       <span>Bonus</span>
-                      <Input type="number" value={detailBonus} onChange={e => setDetailBonus(parseFloat(e.target.value) || 0)} className="w-32 h-8 text-sm text-right" />
+                      <SmartNumberInput value={detailBonus} onChange={e => setDetailBonus(parseFloat(e.target.value) || 0)} className="w-32 h-8 text-sm text-right" />
                     </div>
                     <div className="flex justify-between items-center text-red-600">
                       <span>Absent Deduction</span>
@@ -403,7 +404,7 @@ export default function Payroll() {
                     </div>
                     <div className="flex justify-between items-center">
                       <span>Other Deductions</span>
-                      <Input type="number" value={detailOtherDed} onChange={e => setDetailOtherDed(parseFloat(e.target.value) || 0)} className="w-32 h-8 text-sm text-right" />
+                      <SmartNumberInput value={detailOtherDed} onChange={e => setDetailOtherDed(parseFloat(e.target.value) || 0)} className="w-32 h-8 text-sm text-right" />
                     </div>
                     <div className="border-t pt-2.5 flex justify-between items-center">
                       <span className="font-bold text-base">Net Salary</span>

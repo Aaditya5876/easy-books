@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { api } from '@/api/adapter';
+import { memoApi } from '@/api';
 import { getActiveCompanyId } from '@/lib/companyContext';
 import { adToBs } from '@/lib/nepaliDate';
 import PageHeader from '../components/shared/PageHeader';
@@ -19,6 +20,8 @@ import EmptyState from '../components/EmptyState';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue
 } from "@/components/ui/select";
+import { SmartNumberInput } from "@/components/ui/smart-number-input";
+import { FileAttachmentZone } from "@/components/ui/file-attachment-zone";
 
 const UNITS = ['Piece', 'Set', 'Liter', 'ml', 'Kg', 'gm', 'NOS'];
 
@@ -31,7 +34,8 @@ const EMPTY_FORM = {
   is_vat: false,
   notes: '',
   items: [{ description: '', quantity: 1, unit: 'Piece', unit_price: 0, total: 0 }],
-  labor_items: [{ description: '', amount: 0 }]
+  labor_items: [{ description: '', amount: 0 }],
+  attachments: [],
 };
 
 export default function Purchase() {
@@ -153,6 +157,16 @@ export default function Purchase() {
           supplier_name: form.vendor_name,
         });
       }
+    }
+
+    if (form.attachments?.length > 0) {
+      await memoApi.create({
+        companyId,
+        title: `Purchase Bill - ${form.vendor_name || 'Unknown Vendor'} - ${form.order_number || new Date().toLocaleDateString()}`,
+        type: 'purchase_bill',
+        content: `Auto-saved from Purchase entry. Order: ${form.order_number}`,
+        files: form.attachments,
+      }).catch(() => {}); // silent fail if memo fails
     }
 
     setForm({ ...EMPTY_FORM, date_ad: new Date().toISOString().split('T')[0] });
@@ -394,6 +408,17 @@ export default function Purchase() {
                   placeholder="Remarks, special instructions..."
                 />
               </div>
+
+              {/* Attachments */}
+              <div>
+                <Label className="text-xs font-medium">Attachments</Label>
+                <FileAttachmentZone
+                  files={form.attachments || []}
+                  onChange={(files) => setForm({ ...form, attachments: files })}
+                  label="Attach bills, receipts or photos"
+                  className="mt-1"
+                />
+              </div>
             </div>
 
             {/* ── Right column: items ── */}
@@ -431,8 +456,7 @@ export default function Purchase() {
                         />
                       </div>
                       <div className="col-span-2">
-                        <Input
-                          type="number"
+                        <SmartNumberInput
                           value={item.quantity}
                           onChange={e => updateItem(i, 'quantity', parseInt(e.target.value) || 0)}
                           className="h-8 text-sm"
@@ -464,8 +488,7 @@ export default function Purchase() {
                         )}
                       </div>
                       <div className="col-span-2">
-                        <Input
-                          type="number"
+                        <SmartNumberInput
                           value={item.unit_price}
                           onChange={e => updateItem(i, 'unit_price', parseFloat(e.target.value) || 0)}
                           className="h-8 text-sm"
@@ -510,8 +533,7 @@ export default function Purchase() {
                         />
                       </div>
                       <div className="col-span-3">
-                        <Input
-                          type="number"
+                        <SmartNumberInput
                           value={li.amount}
                           onChange={e => updateLaborItem(idx, 'amount', parseFloat(e.target.value) || 0)}
                           className="h-8 text-sm"

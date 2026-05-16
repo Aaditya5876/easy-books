@@ -7,6 +7,7 @@ import { getActiveCompanyId, setActiveCompanyId } from '@/lib/companyContext';
 import PageHeader from '../components/shared/PageHeader';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { SmartNumberInput } from "@/components/ui/smart-number-input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -344,7 +345,7 @@ export default function Settings() {
 
             <div className="space-y-1.5">
               <Label>Working Days per Month</Label>
-              <Input type="number" min={20} max={31} value={prefs.workingDaysPerMonth}
+              <SmartNumberInput min={20} max={31} value={prefs.workingDaysPerMonth}
                 onChange={e => setPrefs({ ...prefs, workingDaysPerMonth: parseInt(e.target.value) || 26 })} />
               <p className="text-xs text-muted-foreground">Used for absent-day salary deduction (default: 26)</p>
             </div>

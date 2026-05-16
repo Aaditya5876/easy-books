@@ -3,9 +3,12 @@ import { AppModule } from './modules/app.module';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { Logger } from 'nestjs-pino';
 import * as cookieParser from 'cookie-parser';
+import { NestExpressApplication } from '@nestjs/platform-express';
+import { join } from 'path';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule, { bufferLogs: true });
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, { bufferLogs: true });
+  app.useStaticAssets(join(process.cwd(), 'uploads'), { prefix: '/uploads' });
 
   app.useLogger(app.get(Logger));
   app.use(cookieParser());
@@ -43,6 +46,7 @@ async function bootstrap() {
     .addTag('Bank Guarantees')
     .addTag('Petty Cash')
     .addTag('Quotations')
+    .addTag('Upload')
     .addTag('Memos')
     .addTag('Tasks')
     .build();

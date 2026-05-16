@@ -9,6 +9,7 @@ import PageLoader from '../components/PageLoader';
 import EmptyState from '../components/EmptyState';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { SmartNumberInput } from "@/components/ui/smart-number-input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
@@ -440,7 +441,7 @@ export default function Quotations() {
                   </div>
                   <div style={{ width: 64 }}>
                     {idx === 0 && <Label className="text-xs">Qty</Label>}
-                    <Input type="number" value={item.quantity} onChange={e => onUpdateItem(idx, 'quantity', parseInt(e.target.value) || 0)} />
+                    <SmartNumberInput value={item.quantity} onChange={e => onUpdateItem(idx, 'quantity', parseInt(e.target.value) || 0)} />
                   </div>
                   <div style={{ width: 90 }}>
                     {idx === 0 && <Label className="text-xs">Unit</Label>}
@@ -451,7 +452,7 @@ export default function Quotations() {
                   </div>
                   <div style={{ width: 100 }}>
                     {idx === 0 && <Label className="text-xs">Unit Price</Label>}
-                    <Input type="number" value={item.unit_price} onChange={e => onUpdateItem(idx, 'unit_price', parseFloat(e.target.value) || 0)} />
+                    <SmartNumberInput value={item.unit_price} onChange={e => onUpdateItem(idx, 'unit_price', parseFloat(e.target.value) || 0)} />
                   </div>
                   <div style={{ width: 110 }}>
                     {idx === 0 && <Label className="text-xs">Total</Label>}
@@ -480,7 +481,7 @@ export default function Quotations() {
                   </div>
                   <div className="col-span-3">
                     {idx === 0 && <Label className="text-xs">Amount (NPR)</Label>}
-                    <Input type="number" value={li.amount} onChange={e => onUpdateLabor(idx, 'amount', parseFloat(e.target.value) || 0)} />
+                    <SmartNumberInput value={li.amount} onChange={e => onUpdateLabor(idx, 'amount', parseFloat(e.target.value) || 0)} />
                   </div>
                   <div className="col-span-2 flex justify-end">
                     <Button size="icon" variant="ghost" onClick={() => onRemoveLabor(idx)} disabled={laborItems.length <= 1}>

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { api } from '@/api/adapter';
+import { memoApi } from '@/api';
 import { getActiveCompanyId } from '@/lib/companyContext';
 import { adToBs, getCurrentFiscalYear } from '@/lib/nepaliDate';
 import PageHeader from '../components/shared/PageHeader';
@@ -18,6 +19,8 @@ import {
 import { Plus, Trash2, Receipt } from 'lucide-react';
 import PageLoader from '../components/PageLoader';
 import EmptyState from '../components/EmptyState';
+import { SmartNumberInput } from "@/components/ui/smart-number-input";
+import { FileAttachmentZone } from "@/components/ui/file-attachment-zone";
 
 const UNITS = ['Piece', 'Set', 'Liter', 'ml', 'Kg', 'gm', 'NOS'];
 
@@ -29,6 +32,7 @@ const EMPTY_FORM = {
   notes: '',
   items: [{ inventory_item_id: '', description: '', quantity: 1, unit: 'Piece', unit_price: 0, total: 0 }],
   labor_items: [{ description: '', amount: 0 }],
+  attachments: [],
 };
 
 export default function Sales() {
@@ -203,6 +207,16 @@ export default function Sales() {
           });
         }
       }
+    }
+
+    if (form.attachments?.length > 0) {
+      await memoApi.create({
+        companyId,
+        title: `Sales Bill - ${form.client_name || 'Unknown Client'} - ${form.invoice_number || new Date().toLocaleDateString()}`,
+        type: 'sales_bill',
+        content: `Auto-saved from Sales entry. Order: ${form.invoice_number}`,
+        files: form.attachments,
+      }).catch(() => {});
     }
 
     setForm({
@@ -434,11 +448,11 @@ export default function Sales() {
                       </div>
                       <div className="col-span-1">
                         {idx === 0 && <Label className="text-xs">Qty</Label>}
-                        <Input type="number" value={item.quantity} onChange={e => updateItem(idx, 'quantity', parseInt(e.target.value) || 0)} />
+                        <SmartNumberInput value={item.quantity} onChange={e => updateItem(idx, 'quantity', parseInt(e.target.value) || 0)} />
                       </div>
                       <div className="col-span-2">
                         {idx === 0 && <Label className="text-xs">Unit Price</Label>}
-                        <Input type="number" value={item.unit_price} onChange={e => updateItem(idx, 'unit_price', parseFloat(e.target.value) || 0)} />
+                        <SmartNumberInput value={item.unit_price} onChange={e => updateItem(idx, 'unit_price', parseFloat(e.target.value) || 0)} />
                       </div>
                       <div className="col-span-2">
                         {idx === 0 && <Label className="text-xs">Total</Label>}
@@ -469,7 +483,7 @@ export default function Sales() {
                       </div>
                       <div className="col-span-3">
                         {idx === 0 && <Label className="text-xs">Amount (NPR)</Label>}
-                        <Input type="number" value={li.amount} onChange={e => updateLaborItem(idx, 'amount', parseFloat(e.target.value) || 0)} />
+                        <SmartNumberInput value={li.amount} onChange={e => updateLaborItem(idx, 'amount', parseFloat(e.target.value) || 0)} />
                       </div>
                       <div className="col-span-2 flex justify-end">
                         <Button size="icon" variant="ghost" onClick={() => removeLaborItem(idx)} disabled={form.labor_items.length <= 1}>
@@ -512,6 +526,17 @@ export default function Sales() {
                   value={form.notes}
                   onChange={e => setForm({ ...form, notes: e.target.value })}
                   placeholder="Special instructions, payment terms..."
+                />
+              </div>
+
+              {/* Attachments */}
+              <div>
+                <Label className="text-xs font-medium">Attachments</Label>
+                <FileAttachmentZone
+                  files={form.attachments || []}
+                  onChange={(files) => setForm({ ...form, attachments: files })}
+                  label="Attach invoices, receipts or photos"
+                  className="mt-1"
                 />
               </div>
             </div>

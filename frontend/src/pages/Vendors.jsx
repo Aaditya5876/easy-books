@@ -6,6 +6,7 @@ import PageHeader from '../components/shared/PageHeader';
 import DataTable from '../components/shared/DataTable';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { SmartNumberInput } from "@/components/ui/smart-number-input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -202,7 +203,7 @@ export default function Vendors() {
                 <Label className="text-xs font-medium">Opening Balance</Label>
                 <div className="flex items-stretch">
                   <span className="flex items-center px-2.5 text-xs font-bold text-muted-foreground bg-muted border border-r-0 border-input rounded-l-md select-none shrink-0">NPR</span>
-                  <Input type="number" className="rounded-l-none h-9 text-sm flex-1" placeholder="0.00" value={form.opening_balance} onChange={e => setForm({ ...form, opening_balance: e.target.value })} />
+                  <SmartNumberInput className="rounded-l-none h-9 text-sm flex-1" placeholder="0.00" value={form.opening_balance} onChange={e => setForm({ ...form, opening_balance: e.target.value })} />
                 </div>
                 <p className="text-xs text-muted-foreground">Amount already owed to vendor</p>
               </div>
@@ -211,7 +212,7 @@ export default function Vendors() {
                 <Label className="text-xs font-medium">Credit Limit</Label>
                 <div className="flex items-stretch">
                   <span className="flex items-center px-2.5 text-xs font-bold text-muted-foreground bg-muted border border-r-0 border-input rounded-l-md select-none shrink-0">NPR</span>
-                  <Input type="number" className="rounded-l-none h-9 text-sm flex-1" placeholder="e.g. 50000" value={form.credit_limit} onChange={e => setForm({ ...form, credit_limit: e.target.value })} />
+                  <SmartNumberInput className="rounded-l-none h-9 text-sm flex-1" placeholder="e.g. 50000" value={form.credit_limit} onChange={e => setForm({ ...form, credit_limit: e.target.value })} />
                 </div>
               </div>
             </motion.div>
@@ -328,7 +329,7 @@ export default function Vendors() {
                   <Label className="text-xs font-medium">Opening Balance</Label>
                   <div className="flex items-stretch">
                     <span className="flex items-center px-2.5 text-xs font-bold text-muted-foreground bg-muted border border-r-0 border-input rounded-l-md select-none shrink-0">NPR</span>
-                    <Input type="number" className="rounded-l-none h-9 text-sm flex-1" placeholder="0.00" value={editVendor.opening_balance || ''} onChange={e => setEditVendor({ ...editVendor, opening_balance: e.target.value })} />
+                    <SmartNumberInput className="rounded-l-none h-9 text-sm flex-1" placeholder="0.00" value={editVendor.opening_balance || ''} onChange={e => setEditVendor({ ...editVendor, opening_balance: e.target.value })} />
                   </div>
                   <p className="text-xs text-muted-foreground">Amount already owed to vendor</p>
                 </div>
@@ -337,7 +338,7 @@ export default function Vendors() {
                   <Label className="text-xs font-medium">Credit Limit</Label>
                   <div className="flex items-stretch">
                     <span className="flex items-center px-2.5 text-xs font-bold text-muted-foreground bg-muted border border-r-0 border-input rounded-l-md select-none shrink-0">NPR</span>
-                    <Input type="number" className="rounded-l-none h-9 text-sm flex-1" placeholder="e.g. 50000" value={editVendor.credit_limit || ''} onChange={e => setEditVendor({ ...editVendor, credit_limit: e.target.value })} />
+                    <SmartNumberInput className="rounded-l-none h-9 text-sm flex-1" placeholder="e.g. 50000" value={editVendor.credit_limit || ''} onChange={e => setEditVendor({ ...editVendor, credit_limit: e.target.value })} />
                   </div>
                 </div>
               </motion.div>

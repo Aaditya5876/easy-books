@@ -171,6 +171,17 @@ export const companyApi = {
   upsertPayrollSettings: (id: string, data: object) => apiClient.patch(`/api/v1/companies/${id}/payroll-settings`, data),
 };
 
+// File Upload
+export const uploadApi = {
+  upload: (file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return apiClient.post('/api/v1/upload', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+};
+
 // Users (ADMIN only)
 export const usersApi = {
   list: (cid: string) => apiClient.get('/api/v1/users', { params: { companyId: cid } }),
