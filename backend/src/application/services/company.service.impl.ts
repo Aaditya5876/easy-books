@@ -40,8 +40,22 @@ export class CompanyServiceImpl {
     return company;
   }
 
-  async create(data: any) {
-    return this.prisma.company.create({ data });
+  async create(data: any, userId?: string) {
+    const company = await this.prisma.company.create({ data });
+    if (userId) {
+      const existingDefault = await this.prisma.userCompany.findFirst({
+        where: { userId, isDefault: true },
+      });
+      await this.prisma.userCompany.create({
+        data: {
+          userId,
+          companyId: company.id,
+          isDefault: !existingDefault,
+          role: 'ADMIN',
+        },
+      });
+    }
+    return company;
   }
 
   async update(id: string, data: any) {

@@ -15,9 +15,10 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue
 } from "@/components/ui/select";
-import { ExternalLink, FileText, Calendar, Hash, User, Phone, Building2, Layers, Tag, Link2 } from 'lucide-react';
+import { ExternalLink, FileText, Calendar, Hash, User, Phone, Building2, Layers, Tag, Link2, Plus } from 'lucide-react';
 import { motion } from 'framer-motion';
 import PageLoader from '../components/PageLoader';
+import EmptyState from '../components/EmptyState';
 
 // ─── Category config ──────────────────────────────────────────────────────────
 const CATEGORY_CONFIG = {
@@ -437,12 +438,25 @@ export default function Memo() {
           ))}
         </TabsList>
         <TabsContent value={activeTab} className="mt-4">
-          <DataTable
-            columns={columnsByTab[activeTab]}
-            data={filteredDocs}
-            emptyMessage={`No ${CATEGORIES.find(c => c.value === activeTab)?.label || 'documents'} yet`}
-            onRowClick={setSelectedDoc}
-          />
+          {filteredDocs.length === 0 ? (
+            <EmptyState
+              icon={FileText}
+              title="No documents yet"
+              description="Add your first document record for this category."
+              action={
+                <Button onClick={() => setShowAdd(true)}>
+                  <Plus className="w-4 h-4 mr-2" />Add First Record
+                </Button>
+              }
+            />
+          ) : (
+            <DataTable
+              columns={columnsByTab[activeTab]}
+              data={filteredDocs}
+              emptyMessage={`No ${CATEGORIES.find(c => c.value === activeTab)?.label || 'documents'} yet`}
+              onRowClick={setSelectedDoc}
+            />
+          )}
         </TabsContent>
       </Tabs>
 

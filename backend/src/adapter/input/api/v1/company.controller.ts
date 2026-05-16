@@ -40,8 +40,8 @@ export class CompanyController {
   @Post()
   @Roles('ADMIN')
   @ApiOperation({ summary: 'Create a company' })
-  create(@Body() body: any) {
-    return this.service.create(body);
+  create(@Body() body: any, @Req() req: any) {
+    return this.service.create(body, req.user.sub);
   }
 
   @Put(':id')

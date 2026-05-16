@@ -18,10 +18,11 @@ import {
 import {
   Banknote, CreditCard, QrCode, FileCheck, Plus, X, Building2,
   Eye, EyeOff, ExternalLink, FileText, User, Calendar, Hash,
-  Landmark, Globe, Lock,
+  Landmark, Globe, Lock, ArrowLeftRight,
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import PageLoader from '../components/PageLoader';
+import EmptyState from '../components/EmptyState';
 import FloatingBankBrowser from '../components/FloatingBankBrowser';
 
 const CATEGORIES = [
@@ -466,7 +467,20 @@ export default function Transactions() {
           </div>
         ) : (
           <TabsContent value={activeTab} className="mt-4">
-            <DataTable columns={columns} data={filtered} emptyMessage="No transactions yet" />
+            {filtered.length === 0 ? (
+              <EmptyState
+                icon={ArrowLeftRight}
+                title="No transactions yet"
+                description="Record your first income or expense transaction."
+                action={
+                  <Button onClick={() => setShowNew(true)}>
+                    <Plus className="w-4 h-4 mr-2" />Add First Record
+                  </Button>
+                }
+              />
+            ) : (
+              <DataTable columns={columns} data={filtered} emptyMessage="No transactions yet" />
+            )}
           </TabsContent>
         )}
       </Tabs>

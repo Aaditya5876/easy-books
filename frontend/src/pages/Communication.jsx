@@ -18,9 +18,10 @@ import {
 } from "@/components/ui/select";
 import {
   MessageSquare, Mail, CheckCircle, Clock, AlertCircle,
-  ClipboardList, Pencil, FileText, Calendar, Users, User, Phone, Building2
+  ClipboardList, Pencil, FileText, Calendar, Users, User, Phone, Building2, Plus
 } from 'lucide-react';
 import PageLoader from '../components/PageLoader';
+import EmptyState from '../components/EmptyState';
 
 const PRIORITY_CONFIG = [
   { v: 'low',    label: '● Low',      cls: 'border-slate-300 text-slate-600', act: 'border-slate-500 bg-slate-50 text-slate-700' },
@@ -184,7 +185,20 @@ export default function Communication() {
               <Button variant="outline" size="sm" onClick={() => setColFilters({ title: '', assigned_to: '', department: '', created_date: '', due_date: '', priority: '', status: '' })}>Clear Filters</Button>
             )}
           </div>
-          <DataTable columns={taskColumns} data={filtered} emptyMessage="No tasks assigned yet" />
+          {tasks.length === 0 ? (
+              <EmptyState
+                icon={MessageSquare}
+                title="No tasks yet"
+                description="Assign your first task to a team member or party."
+                action={
+                  <Button onClick={() => setShowNew(true)}>
+                    <Plus className="w-4 h-4 mr-2" />Add First Record
+                  </Button>
+                }
+              />
+            ) : (
+              <DataTable columns={taskColumns} data={filtered} emptyMessage="No tasks assigned yet" />
+            )}
         </TabsContent>
         <TabsContent value="messages" className="mt-4">
           <div className="bg-card rounded-xl border p-12 text-center">

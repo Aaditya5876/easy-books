@@ -17,6 +17,7 @@ import {
 import { BookOpen, Plus, Printer, Share2, Save, Eye, User, Phone, Hash, MapPin, FileText, Wallet } from 'lucide-react';
 import { motion } from 'framer-motion';
 import FloatingAccountDetail from '../components/ledger/FloatingAccountDetail';
+import EmptyState from '../components/EmptyState';
 
 export default function Ledger() {
   const companyId = getActiveCompanyId();
@@ -171,12 +172,25 @@ export default function Ledger() {
         </TabsList>
 
         <TabsContent value={activeTab} className="mt-4">
-          <DataTable
-            columns={accountColumns}
-            data={filteredAccounts}
-            onRowClick={(row) => setShowAccountDetail(row)}
-            emptyMessage={`No ${activeTab} accounts yet. Click "New Account" to create one.`}
-          />
+          {filteredAccounts.length === 0 ? (
+            <EmptyState
+              icon={BookOpen}
+              title="No accounts yet"
+              description="Add your first ledger account to start tracking balances."
+              action={
+                <Button onClick={() => setShowNewAccount(true)}>
+                  <Plus className="w-4 h-4 mr-2" />Add First Record
+                </Button>
+              }
+            />
+          ) : (
+            <DataTable
+              columns={accountColumns}
+              data={filteredAccounts}
+              onRowClick={(row) => setShowAccountDetail(row)}
+              emptyMessage={`No ${activeTab} accounts yet. Click "New Account" to create one.`}
+            />
+          )}
         </TabsContent>
       </Tabs>
 
