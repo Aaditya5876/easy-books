@@ -4,7 +4,7 @@ import {
   LayoutDashboard, BookOpen, ArrowLeftRight, Users, UserCheck,
   Package, ShoppingCart, Receipt, FileText, MessageSquare,
   FileSpreadsheet, UserCircle, CalendarCheck, Banknote,
-  ChevronLeft, ChevronRight, Building2, ChevronDown, ClipboardList
+  ChevronLeft, ChevronRight, Building2, ChevronDown, ClipboardList, BarChart2
 } from 'lucide-react';
 import { cn } from "@/lib/utils";
 
@@ -16,6 +16,7 @@ const navSections = [
     activeIconClass: 'text-white',
     items: [
       { icon: LayoutDashboard, label: 'Dashboard', path: '/' },
+      { icon: BarChart2, label: 'Reports', path: '/reports' },
     ]
   },
   {

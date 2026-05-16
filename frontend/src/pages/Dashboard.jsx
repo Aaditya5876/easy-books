@@ -1,42 +1,38 @@
 import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { api } from '@/api/adapter';
 import { dashboardApi } from '@/api';
 import { getActiveCompanyId } from '@/lib/companyContext';
 import {
-  Package, ShoppingCart, Receipt, Wallet, AlertTriangle,
-  TrendingUp, FileText, Building2, Users, ReceiptText, Bell
+  Building2, Users, ReceiptText, Bell, Package, AlertTriangle,
+  ArrowDownLeft, ArrowUpRight, ArrowRight, TrendingUp, TrendingDown,
 } from 'lucide-react';
 import StatCard from '../components/dashboard/StatCard';
-import QuickActions from '../components/dashboard/QuickActions';
 import RecentActivity from '../components/dashboard/RecentActivity';
 import { Skeleton } from '@/components/ui/skeleton';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
-
-const CHART_COLORS = ['hsl(217, 71%, 53%)', 'hsl(160, 60%, 45%)', 'hsl(38, 92%, 50%)', 'hsl(280, 65%, 60%)'];
+import { Button } from '@/components/ui/button';
+import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
+} from 'recharts';
 
 export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({
-    totalInventory: 0,
-    lowStock: 0,
-    totalPurchases: 0,
-    totalSales: 0,
-    cashInHand: 0,
     bankBalance: 0,
-    pendingQuotations: 0,
-    activeClients: 0,
   });
-  const [inventoryItems, setInventoryItems] = useState([]);
   const [recentActivities, setRecentActivities] = useState([]);
-  const [quotationStats, setQuotationStats] = useState([]);
-  const [topSellingItems, setTopSellingItems] = useState([]);
-  const [inventorySoldValue, setInventorySoldValue] = useState(0);
-  const [inventoryInHandValue, setInventoryInHandValue] = useState(0);
-  const [agingItems, setAgingItems] = useState([]);
   const [salesTrend, setSalesTrend] = useState([]);
   const [alertsSummary, setAlertsSummary] = useState(null);
   const [hrSummary, setHrSummary] = useState(null);
   const [vatSummary, setVatSummary] = useState(null);
+
+  const [receivablesList, setReceivablesList] = useState([]);
+  const [payablesList, setPayablesList] = useState([]);
+  const [totalReceivable, setTotalReceivable] = useState(0);
+  const [totalPayable, setTotalPayable] = useState(0);
+  const [thisMonthIncome, setThisMonthIncome] = useState(0);
+  const [thisMonthExpense, setThisMonthExpense] = useState(0);
+
   const companyId = getActiveCompanyId();
 
   useEffect(() => {
@@ -49,48 +45,20 @@ export default function Dashboard() {
       return;
     }
 
-    const [inventory, purchases, sales, transactions, quotations, banks, clients,
+    const [purchases, sales, transactions, banks,
            trendRes, alertsRes, hrRes, vatRes] = await Promise.all([
-      api.InventoryItem.filter({ company_id: companyId }),
-      api.PurchaseOrder.filter({ company_id: companyId }, '-created_date', 20),
-      api.SalesOrder.filter({ company_id: companyId }, '-created_date', 200),
-      api.Transaction.filter({ company_id: companyId }, '-created_date', 20),
-      api.Quotation.filter({ company_id: companyId }),
+      api.PurchaseOrder.filter({ company_id: companyId }),
+      api.SalesOrder.filter({ company_id: companyId }),
+      api.Transaction.filter({ company_id: companyId }),
       api.BankAccount.filter({ company_id: companyId }),
-      api.Client.filter({ company_id: companyId }),
       dashboardApi.salesTrend(companyId).catch(() => ({ data: [] })),
       dashboardApi.alerts(companyId).catch(() => ({ data: null })),
       dashboardApi.hrSummary(companyId).catch(() => ({ data: null })),
       dashboardApi.vatSummary(companyId).catch(() => ({ data: null })),
     ]);
 
-    const lowStockItems = inventory.filter(i => i.quantity <= (i.low_stock_threshold || 5));
-    const totalPurchaseAmt = purchases.reduce((sum, p) => sum + (p.total_amount || 0), 0);
-    const totalSalesAmt = sales.reduce((sum, s) => sum + (s.total_amount || 0), 0);
-    
-    const cashTransactions = transactions.filter(t => t.type === 'cash');
-    const cashIn = cashTransactions.filter(t => t.category === 'income').reduce((s, t) => s + (t.amount || 0), 0);
-    const cashOut = cashTransactions.filter(t => t.category === 'expense').reduce((s, t) => s + (t.amount || 0), 0);
-    
     const bankBalance = banks.reduce((sum, b) => sum + (b.current_balance || 0), 0);
-
-    // Quotation stats by status (new Quotations page) + memo remark fallback
-    const quotationStatuses = ['pending', 'sent', 'accepted', 'rejected', 'expired'];
-    const qStats = quotationStatuses.map(s => ({
-      name: s.charAt(0).toUpperCase() + s.slice(1),
-      value: quotations.filter(q => q.status === s).length,
-    })).filter(q => q.value > 0);
-
-    setStats({
-      totalInventory: inventory.length,
-      lowStock: lowStockItems.length,
-      totalPurchases: totalPurchaseAmt,
-      totalSales: totalSalesAmt,
-      cashInHand: cashIn - cashOut,
-      bankBalance,
-      pendingQuotations: quotations.filter(q => q.status === 'pending' || q.status === 'sent').length,
-      activeClients: clients.filter(c => c.crm_status === 'active').length,
-    });
+    setStats({ bankBalance });
 
     // Backend-powered sections
     const trend = trendRes?.data?.data ?? trendRes?.data ?? [];
@@ -99,37 +67,53 @@ export default function Dashboard() {
     setHrSummary(hrRes?.data?.data ?? hrRes?.data ?? null);
     setVatSummary(vatRes?.data?.data ?? vatRes?.data ?? null);
 
-    setInventoryItems(inventory.sort((a, b) => (a.quantity || 0) - (b.quantity || 0)).slice(0, 5));
-    setQuotationStats(qStats);
+    // This month income/expense
+    const thisMonth = new Date().toISOString().slice(0, 7);
+    const thisMonthTx = transactions.filter(t => (t.date_ad || '').startsWith(thisMonth));
+    const calcThisMonthIncome = thisMonthTx.filter(t => t.category === 'income').reduce((s, t) => s + (t.amount || 0), 0);
+    const calcThisMonthExpense = thisMonthTx.filter(t => t.category === 'expense').reduce((s, t) => s + (t.amount || 0), 0);
+    setThisMonthIncome(calcThisMonthIncome);
+    setThisMonthExpense(calcThisMonthExpense);
 
-    // Top selling items
-    const itemSalesMap = {};
-    sales.forEach(order => {
-      (order.items || []).forEach(item => {
-        const key = item.description || item.inventory_item_id || 'Unknown';
-        if (!itemSalesMap[key]) itemSalesMap[key] = { name: key, qty: 0, value: 0 };
-        itemSalesMap[key].qty += item.quantity || 0;
-        itemSalesMap[key].value += item.total || 0;
-      });
+    // Receivables per client
+    const salesByClient = {};
+    sales.forEach(s => {
+      const key = s.client_name || 'Unknown';
+      if (!salesByClient[key]) salesByClient[key] = { name: key, total: 0, paid: 0 };
+      salesByClient[key].total += (s.total_amount || 0);
     });
-    const topSelling = Object.values(itemSalesMap).sort((a, b) => b.value - a.value).slice(0, 10);
-    setTopSellingItems(topSelling);
-
-    // Inventory sold value = total of all sales
-    setInventorySoldValue(totalSalesAmt);
-
-    // Inventory in hand value
-    const inHandValue = inventory.reduce((sum, i) => sum + ((i.quantity || 0) * (i.unit_selling_price || 0)), 0);
-    setInventoryInHandValue(inHandValue);
-
-    // Aging inventory
-    const today = new Date();
-    const aging = inventory.filter(i => {
-      if (!i.date_of_purchase) return false;
-      const days = Math.floor((today - new Date(i.date_of_purchase)) / (1000 * 60 * 60 * 24));
-      return days >= (i.aging_days || 90);
+    transactions.filter(t => t.category === 'income' && t.party_name).forEach(t => {
+      const key = t.party_name;
+      if (salesByClient[key]) salesByClient[key].paid += (t.amount || 0);
     });
-    setAgingItems(aging);
+    const calcReceivablesList = Object.values(salesByClient)
+      .map(c => ({ name: c.name, amount: Math.max(0, c.total - c.paid) }))
+      .filter(c => c.amount > 0)
+      .sort((a, b) => b.amount - a.amount)
+      .slice(0, 8);
+    const calcTotalReceivable = calcReceivablesList.reduce((s, c) => s + c.amount, 0);
+    setReceivablesList(calcReceivablesList);
+    setTotalReceivable(calcTotalReceivable);
+
+    // Payables per vendor
+    const purchasesByVendor = {};
+    purchases.forEach(p => {
+      const key = p.vendor_name || 'Unknown';
+      if (!purchasesByVendor[key]) purchasesByVendor[key] = { name: key, total: 0, paid: 0 };
+      purchasesByVendor[key].total += (p.total_amount || 0);
+    });
+    transactions.filter(t => t.category === 'expense' && t.party_name).forEach(t => {
+      const key = t.party_name;
+      if (purchasesByVendor[key]) purchasesByVendor[key].paid += (t.amount || 0);
+    });
+    const calcPayablesList = Object.values(purchasesByVendor)
+      .map(v => ({ name: v.name, amount: Math.max(0, v.total - v.paid) }))
+      .filter(v => v.amount > 0)
+      .sort((a, b) => b.amount - a.amount)
+      .slice(0, 8);
+    const calcTotalPayable = calcPayablesList.reduce((s, v) => s + v.amount, 0);
+    setPayablesList(calcPayablesList);
+    setTotalPayable(calcTotalPayable);
 
     // Build recent activities
     const activities = [
@@ -167,23 +151,36 @@ export default function Dashboard() {
           <Skeleton className="h-7 w-36 mb-2" />
           <Skeleton className="h-4 w-52" />
         </div>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          {[...Array(8)].map((_, i) => (
-            <div key={i} className="glass-card rounded-xl p-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <Skeleton className="h-4 w-24" />
-                <Skeleton className="h-8 w-8 rounded-lg" />
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+          {[...Array(5)].map((_, i) => (
+            <div key={i} className="glass-card rounded-xl p-5 space-y-3">
+              <div className="flex items-start justify-between">
+                <Skeleton className="h-10 w-10 rounded-lg" />
               </div>
               <Skeleton className="h-7 w-32" />
-              <Skeleton className="h-3 w-16" />
+              <Skeleton className="h-3 w-24" />
             </div>
           ))}
         </div>
+        <div className="grid grid-cols-2 gap-6">
+          {[...Array(2)].map((_, i) => (
+            <div key={i} className="glass-card rounded-xl p-4 space-y-3">
+              <Skeleton className="h-5 w-40" />
+              {[...Array(5)].map((_, j) => (
+                <div key={j} className="flex items-center gap-3">
+                  <Skeleton className="h-4 w-4" />
+                  <Skeleton className="h-4 flex-1" />
+                  <Skeleton className="h-4 w-24" />
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+        <div className="glass-card rounded-xl p-4 space-y-3">
+          <Skeleton className="h-5 w-40" />
+          <Skeleton className="h-48 w-full rounded-lg" />
+        </div>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          <div className="lg:col-span-2 glass-card rounded-xl p-4 space-y-3">
-            <Skeleton className="h-5 w-40" />
-            <Skeleton className="h-48 w-full rounded-lg" />
-          </div>
           <div className="glass-card rounded-xl p-4 space-y-3">
             <Skeleton className="h-5 w-32" />
             {[...Array(5)].map((_, i) => (
@@ -193,6 +190,24 @@ export default function Dashboard() {
                   <Skeleton className="h-3 w-full" />
                   <Skeleton className="h-3 w-2/3" />
                 </div>
+              </div>
+            ))}
+          </div>
+          <div className="glass-card rounded-xl p-4 space-y-3">
+            <Skeleton className="h-5 w-28" />
+            {[...Array(3)].map((_, i) => (
+              <div key={i} className="flex justify-between">
+                <Skeleton className="h-4 w-28" />
+                <Skeleton className="h-4 w-20" />
+              </div>
+            ))}
+          </div>
+          <div className="glass-card rounded-xl p-4 space-y-3">
+            <Skeleton className="h-5 w-28" />
+            {[...Array(3)].map((_, i) => (
+              <div key={i} className="flex justify-between">
+                <Skeleton className="h-4 w-28" />
+                <Skeleton className="h-4 w-20" />
               </div>
             ))}
           </div>
@@ -209,47 +224,156 @@ export default function Dashboard() {
         <p className="text-sm text-muted-foreground mt-1">Business overview at a glance</p>
       </div>
 
-      {/* Stats Grid */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard 
-          icon={Receipt} 
-          label="Total Sales" 
-          value={`NPR ${stats.totalSales.toLocaleString()}`}
-          trend={stats.totalSales > 0 ? "Active" : undefined}
-          trendUp={true}
-        />
-        <StatCard 
-          icon={ShoppingCart} 
-          label="Total Purchases" 
-          value={`NPR ${stats.totalPurchases.toLocaleString()}`}
-        />
-        <StatCard 
-          icon={Wallet} 
-          label="Cash in Hand" 
-          value={`NPR ${stats.cashInHand.toLocaleString()}`}
-        />
-        <StatCard 
-          icon={Building2} 
-          label="Bank Balance" 
+      {/* Row 1 — 5 KPI Cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+        {/* Total Receivable */}
+        <div className="glass-card rounded-xl p-5 hover:shadow-md transition-all">
+          <div className="flex items-start justify-between mb-3">
+            <div className="w-10 h-10 rounded-lg bg-green-500/10 flex items-center justify-center">
+              <ArrowDownLeft className="w-5 h-5 text-green-600" />
+            </div>
+          </div>
+          <p className="text-2xl font-bold text-foreground tracking-tight">NPR {totalReceivable.toLocaleString()}</p>
+          <p className="text-xs text-muted-foreground mt-1">Total Receivable</p>
+        </div>
+
+        {/* Total Payable */}
+        <div className="glass-card rounded-xl p-5 hover:shadow-md transition-all">
+          <div className="flex items-start justify-between mb-3">
+            <div className="w-10 h-10 rounded-lg bg-red-500/10 flex items-center justify-center">
+              <ArrowUpRight className="w-5 h-5 text-red-600" />
+            </div>
+          </div>
+          <p className="text-2xl font-bold text-foreground tracking-tight">NPR {totalPayable.toLocaleString()}</p>
+          <p className="text-xs text-muted-foreground mt-1">Total Payable</p>
+        </div>
+
+        {/* Bank Balance — uses StatCard */}
+        <StatCard
+          icon={Building2}
+          label="Bank Balance"
           value={`NPR ${stats.bankBalance.toLocaleString()}`}
         />
+
+        {/* This Month Income */}
+        <div className="glass-card rounded-xl p-5 hover:shadow-md transition-all">
+          <div className="flex items-start justify-between mb-3">
+            <div className="w-10 h-10 rounded-lg bg-emerald-500/10 flex items-center justify-center">
+              <TrendingUp className="w-5 h-5 text-emerald-600" />
+            </div>
+          </div>
+          <p className="text-2xl font-bold text-foreground tracking-tight">NPR {thisMonthIncome.toLocaleString()}</p>
+          <p className="text-xs text-muted-foreground mt-1">This Month Income</p>
+        </div>
+
+        {/* This Month Expense */}
+        <div className="glass-card rounded-xl p-5 hover:shadow-md transition-all">
+          <div className="flex items-start justify-between mb-3">
+            <div className="w-10 h-10 rounded-lg bg-red-500/10 flex items-center justify-center">
+              <TrendingDown className="w-5 h-5 text-red-600" />
+            </div>
+          </div>
+          <p className="text-2xl font-bold text-foreground tracking-tight">NPR {thisMonthExpense.toLocaleString()}</p>
+          <p className="text-xs text-muted-foreground mt-1">This Month Expense</p>
+        </div>
       </div>
 
-      {/* Second row stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard icon={Package} label="Inventory Items" value={stats.totalInventory} />
-        <StatCard 
-          icon={AlertTriangle} 
-          label="Low Stock Alerts" 
-          value={stats.lowStock}
-          trend={stats.lowStock > 0 ? `${stats.lowStock} items` : undefined}
-          trendUp={false}
-        />
-        <StatCard icon={FileText} label="Pending Quotations" value={stats.pendingQuotations} />
-        <StatCard icon={TrendingUp} label="Active Clients" value={stats.activeClients} />
+      {/* Row 2 — Receivables & Payables panels */}
+      <div className="grid grid-cols-2 gap-6">
+        {/* Paisa Linu Parne — Receivables */}
+        <div className="glass-card rounded-xl p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <ArrowDownLeft className="w-4 h-4 text-green-600" />
+              <h3 className="text-sm font-semibold text-foreground">Paisa Linu Parne</h3>
+            </div>
+            {totalReceivable > 0 && (
+              <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-green-500/10 text-green-700">
+                NPR {totalReceivable.toLocaleString()}
+              </span>
+            )}
+          </div>
+          {receivablesList.length > 0 ? (
+            <div className="space-y-2">
+              {receivablesList.map((client, idx) => (
+                <div key={client.name} className="flex items-center gap-3">
+                  <span className="text-xs font-bold text-muted-foreground w-5 shrink-0">{idx + 1}</span>
+                  <p className="text-xs font-medium truncate flex-1">{client.name}</p>
+                  <span className="text-xs font-mono font-semibold text-green-600 shrink-0">
+                    NPR {client.amount.toLocaleString()}
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-xs text-muted-foreground py-6 text-center">No outstanding receivables</p>
+          )}
+        </div>
+
+        {/* Paisa Dinu Parne — Payables */}
+        <div className="glass-card rounded-xl p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <ArrowUpRight className="w-4 h-4 text-red-600" />
+              <h3 className="text-sm font-semibold text-foreground">Paisa Dinu Parne</h3>
+            </div>
+            {totalPayable > 0 && (
+              <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-red-500/10 text-red-700">
+                NPR {totalPayable.toLocaleString()}
+              </span>
+            )}
+          </div>
+          {payablesList.length > 0 ? (
+            <div className="space-y-2">
+              {payablesList.map((vendor, idx) => (
+                <div key={vendor.name} className="flex items-center gap-3">
+                  <span className="text-xs font-bold text-muted-foreground w-5 shrink-0">{idx + 1}</span>
+                  <p className="text-xs font-medium truncate flex-1">{vendor.name}</p>
+                  <span className="text-xs font-mono font-semibold text-red-600 shrink-0">
+                    NPR {vendor.amount.toLocaleString()}
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-xs text-muted-foreground py-6 text-center">No outstanding payables</p>
+          )}
+        </div>
       </div>
 
-      {/* Operational Alerts */}
+      {/* Row 3 — Income vs Expense chart */}
+      <div className="glass-card rounded-xl p-6">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h3 className="text-sm font-semibold text-foreground">Income vs Expense</h3>
+            <p className="text-xs text-muted-foreground mt-0.5">Last 6 months</p>
+          </div>
+          <Link to="/reports">
+            <Button variant="outline" size="sm" className="gap-1.5">
+              View Full Analysis <ArrowRight className="w-3.5 h-3.5" />
+            </Button>
+          </Link>
+        </div>
+        {salesTrend.length > 0 ? (
+          <ResponsiveContainer width="100%" height={200}>
+            <BarChart data={salesTrend}>
+              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+              <XAxis dataKey="month" tick={{ fontSize: 11 }} />
+              <YAxis tick={{ fontSize: 11 }} tickFormatter={v => `${(v / 1000).toFixed(0)}k`} />
+              <Tooltip formatter={v => `NPR ${Number(v).toLocaleString()}`} />
+              <Legend />
+              <Bar dataKey="revenue" name="Revenue" fill="hsl(160, 60%, 45%)" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="expenses" name="Expenses" fill="hsl(0, 84%, 60%)" radius={[4, 4, 0, 0]} opacity={0.75} />
+            </BarChart>
+          </ResponsiveContainer>
+        ) : (
+          <div className="flex items-center justify-center h-[200px] text-muted-foreground text-sm">
+            No trend data yet
+          </div>
+        )}
+      </div>
+
+      {/* Row 4 — Operational Alerts */}
       {alertsSummary && (alertsSummary.lowStockCount > 0 || alertsSummary.bgExpiringSoon > 0 || alertsSummary.staleChequesCount > 0) && (
         <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
           <div className="flex items-center gap-2 mb-3">
@@ -272,222 +396,67 @@ export default function Dashboard() {
             {alertsSummary.staleChequesCount > 0 && (
               <div className="flex items-center gap-2 text-sm text-amber-700">
                 <ReceiptText className="w-4 h-4" />
-                <span><strong>{alertsSummary.staleChequesCount}</strong> cheques deposited but not cleared ({'>'}7 days)</span>
+                <span><strong>{alertsSummary.staleChequesCount}</strong> cheques deposited but not cleared ({'>'} 7 days)</span>
               </div>
             )}
           </div>
         </div>
       )}
 
-      {/* Sales Trend & VAT + HR Summary */}
+      {/* Row 5 — Recent Activity + HR Summary + VAT Summary */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* 6-Month Sales Trend */}
-        <div className="lg:col-span-2 glass-card rounded-xl p-6">
-          <h3 className="text-sm font-semibold text-foreground mb-1">6-Month Sales Trend</h3>
-          <p className="text-xs text-muted-foreground mb-4">Revenue vs Expenses</p>
-          {salesTrend.length > 0 ? (
-            <ResponsiveContainer width="100%" height={200}>
-              <BarChart data={salesTrend}>
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                <XAxis dataKey="month" tick={{ fontSize: 11 }} />
-                <YAxis tick={{ fontSize: 11 }} tickFormatter={v => `${(v/1000).toFixed(0)}k`} />
-                <Tooltip formatter={v => `NPR ${Number(v).toLocaleString()}`} />
-                <Legend />
-                <Bar dataKey="revenue" name="Revenue" fill="hsl(160, 60%, 45%)" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="expenses" name="Expenses" fill="hsl(0, 84%, 60%)" radius={[4, 4, 0, 0]} opacity={0.75} />
-              </BarChart>
-            </ResponsiveContainer>
-          ) : (
-            <div className="flex items-center justify-center h-[200px] text-muted-foreground text-sm">No trend data yet</div>
-          )}
-        </div>
-
-        {/* HR + VAT Summary */}
-        <div className="space-y-4">
-          {hrSummary && (
-            <div className="glass-card rounded-xl p-4">
-              <div className="flex items-center gap-2 mb-3">
-                <Users className="w-4 h-4 text-muted-foreground" />
-                <h3 className="text-sm font-semibold text-foreground">HR Summary</h3>
-              </div>
-              <div className="space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Present Today</span>
-                  <span className="font-semibold">{hrSummary.presentToday ?? '—'}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Pending Leaves</span>
-                  <span className="font-semibold">{hrSummary.pendingLeaves ?? '—'}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Payroll Processed</span>
-                  <span className="font-semibold">{hrSummary.payrollProcessed ? 'Yes' : 'Pending'}</span>
-                </div>
-              </div>
-            </div>
-          )}
-          {vatSummary && (
-            <div className="glass-card rounded-xl p-4">
-              <div className="flex items-center gap-2 mb-3">
-                <ReceiptText className="w-4 h-4 text-muted-foreground" />
-                <h3 className="text-sm font-semibold text-foreground">VAT Summary</h3>
-              </div>
-              <div className="space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">VAT Collected</span>
-                  <span className="font-semibold text-green-600">NPR {(vatSummary.collected || 0).toLocaleString()}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">VAT Paid</span>
-                  <span className="font-semibold text-red-600">NPR {(vatSummary.paid || 0).toLocaleString()}</span>
-                </div>
-                <div className="flex justify-between text-sm font-medium border-t pt-2">
-                  <span>Net Payable</span>
-                  <span className={(vatSummary.collected - vatSummary.paid) >= 0 ? 'text-red-600' : 'text-green-600'}>
-                    NPR {Math.abs((vatSummary.collected || 0) - (vatSummary.paid || 0)).toLocaleString()}
-                  </span>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Inventory Summary Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Top 10 Selling Items */}
-        <div className="glass-card rounded-xl p-6">
-          <h3 className="text-sm font-semibold text-foreground mb-1">Top 10 Highest Selling Items</h3>
-          <p className="text-xs text-muted-foreground mb-4">By sales value</p>
-          {topSellingItems.length > 0 ? (
-            <div className="space-y-2">
-              {topSellingItems.map((item, idx) => (
-                <div key={item.name} className="flex items-center gap-3">
-                  <span className="text-xs font-bold text-muted-foreground w-5">{idx + 1}</span>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-medium truncate">{item.name}</p>
-                    <p className="text-xs text-muted-foreground">{item.qty} units sold</p>
-                  </div>
-                  <span className="text-xs font-mono font-semibold text-primary">NPR {item.value.toLocaleString()}</span>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="flex items-center justify-center h-32 text-muted-foreground text-sm">No sales data yet</div>
-          )}
-        </div>
-
-        {/* Inventory Value & Aging */}
-        <div className="space-y-4">
-          <div className="glass-card rounded-xl p-6">
-            <h3 className="text-sm font-semibold text-foreground mb-3">Inventory Value Summary</h3>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="bg-primary/5 rounded-lg p-4">
-                <p className="text-xs text-muted-foreground mb-1">Total Sold (by value)</p>
-                <p className="text-lg font-bold text-primary">NPR {inventorySoldValue.toLocaleString()}</p>
-              </div>
-              <div className="bg-success/5 rounded-lg p-4">
-                <p className="text-xs text-muted-foreground mb-1">In Hand (by value)</p>
-                <p className="text-lg font-bold text-success">NPR {inventoryInHandValue.toLocaleString()}</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="glass-card rounded-xl p-6">
-            <div className="flex items-center gap-2 mb-3">
-              <AlertTriangle className="w-4 h-4 text-warning" />
-              <h3 className="text-sm font-semibold text-foreground">Aging Inventory</h3>
-              {agingItems.length > 0 && (
-                <span className="ml-auto text-xs bg-warning/10 text-warning font-semibold px-2 py-0.5 rounded-full">{agingItems.length} items</span>
-              )}
-            </div>
-            {agingItems.length > 0 ? (
-              <div className="space-y-2 max-h-40 overflow-y-auto">
-                {agingItems.map(item => {
-                  const days = Math.floor((new Date() - new Date(item.date_of_purchase)) / (1000 * 60 * 60 * 24));
-                  return (
-                    <div key={item.id} className="flex items-center justify-between">
-                      <p className="text-xs font-medium truncate flex-1">{item.description}</p>
-                      <span className="text-xs text-warning font-semibold ml-2">{days}d old</span>
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <p className="text-xs text-muted-foreground">No aging inventory alerts</p>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Charts and Activity Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Low Stock Items */}
-        <div className="glass-card rounded-xl p-6">
-          <h3 className="text-sm font-semibold text-foreground mb-4">Inventory Status</h3>
-          {inventoryItems.length > 0 ? (
-            <ResponsiveContainer width="100%" height={220}>
-              <BarChart data={inventoryItems.slice(0, 5).map(i => ({
-                name: i.description?.substring(0, 15) || 'Item',
-                qty: i.quantity || 0,
-                threshold: i.low_stock_threshold || 5
-              }))}>
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-                <YAxis tick={{ fontSize: 11 }} />
-                <Tooltip />
-                <Bar dataKey="qty" fill="hsl(217, 71%, 53%)" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="threshold" fill="hsl(0, 84%, 60%)" radius={[4, 4, 0, 0]} opacity={0.4} />
-              </BarChart>
-            </ResponsiveContainer>
-          ) : (
-            <div className="flex items-center justify-center h-[220px] text-muted-foreground text-sm">
-              No inventory data yet
-            </div>
-          )}
-        </div>
-
-        {/* Quotation Status */}
-        <div className="glass-card rounded-xl p-6">
-          <h3 className="text-sm font-semibold text-foreground mb-4">Quotation Status</h3>
-          {quotationStats.length > 0 ? (
-            <ResponsiveContainer width="100%" height={220}>
-              <PieChart>
-                <Pie
-                  data={quotationStats}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={50}
-                  outerRadius={80}
-                  paddingAngle={4}
-                  dataKey="value"
-                >
-                  {quotationStats.map((_, idx) => (
-                    <Cell key={idx} fill={CHART_COLORS[idx % CHART_COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip />
-              </PieChart>
-            </ResponsiveContainer>
-          ) : (
-            <div className="flex items-center justify-center h-[220px] text-muted-foreground text-sm">
-              No quotations yet
-            </div>
-          )}
-          {quotationStats.length > 0 && (
-            <div className="flex flex-wrap gap-2 mt-2">
-              {quotationStats.map((q, idx) => (
-                <div key={q.name} className="flex items-center gap-1.5 text-xs">
-                  <div className="w-2 h-2 rounded-full" style={{ background: CHART_COLORS[idx % CHART_COLORS.length] }} />
-                  <span className="text-muted-foreground">{q.name}: {q.value}</span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
         {/* Recent Activity */}
         <RecentActivity activities={recentActivities} />
+
+        {/* HR Summary */}
+        {hrSummary && (
+          <div className="glass-card rounded-xl p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <Users className="w-4 h-4 text-muted-foreground" />
+              <h3 className="text-sm font-semibold text-foreground">HR Summary</h3>
+            </div>
+            <div className="space-y-2">
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Present Today</span>
+                <span className="font-semibold">{hrSummary.presentToday ?? '—'}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Pending Leaves</span>
+                <span className="font-semibold">{hrSummary.pendingLeaves ?? '—'}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Payroll Processed</span>
+                <span className="font-semibold">{hrSummary.payrollProcessed ? 'Yes' : 'Pending'}</span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* VAT Summary */}
+        {vatSummary && (
+          <div className="glass-card rounded-xl p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <ReceiptText className="w-4 h-4 text-muted-foreground" />
+              <h3 className="text-sm font-semibold text-foreground">VAT Summary</h3>
+            </div>
+            <div className="space-y-2">
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">VAT Collected</span>
+                <span className="font-semibold text-green-600">NPR {(vatSummary.collected || 0).toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">VAT Paid</span>
+                <span className="font-semibold text-red-600">NPR {(vatSummary.paid || 0).toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between text-sm font-medium border-t pt-2">
+                <span>Net Payable</span>
+                <span className={(vatSummary.collected - vatSummary.paid) >= 0 ? 'text-red-600' : 'text-green-600'}>
+                  NPR {Math.abs((vatSummary.collected || 0) - (vatSummary.paid || 0)).toLocaleString()}
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -27,6 +27,7 @@ import Employees from './pages/Employees';
 import Attendance from './pages/Attendance';
 import Payroll from './pages/Payroll';
 import Quotations from './pages/Quotations';
+import Reports from './pages/Reports';
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isAuthenticated, navigateToLogin } = useAuth();
@@ -66,6 +67,7 @@ const AuthenticatedApp = () => {
         <Route path="/employees" element={<Employees />} />
         <Route path="/attendance" element={<Attendance />} />
         <Route path="/payroll" element={<Payroll />} />
+        <Route path="/reports" element={<Reports />} />
         <Route path="*" element={<PageNotFound />} />
       </Route>
     </Routes>
