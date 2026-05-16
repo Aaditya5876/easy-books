@@ -1,5 +1,6 @@
 import { createContext, useState, useContext, useEffect } from 'react';
 import { authApi } from '@/api';
+import { setActiveCompanyId, clearActiveCompany } from '@/lib/companyContext';
 
 const AuthContext = createContext();
 
@@ -13,8 +14,8 @@ export const AuthProvider = ({ children }) => {
       .then((res) => {
         setUser(res.data);
         setIsAuthenticated(true);
-        if (res.data?.companyId) {
-          localStorage.setItem('activeCompanyId', res.data.companyId);
+        if (res.data?.defaultCompanyId) {
+          setActiveCompanyId(res.data.defaultCompanyId);
         }
       })
       .catch(() => {
@@ -29,8 +30,8 @@ export const AuthProvider = ({ children }) => {
     const res = await authApi.me();
     setUser(res.data);
     setIsAuthenticated(true);
-    if (res.data?.companyId) {
-      localStorage.setItem('activeCompanyId', res.data.companyId);
+    if (res.data?.defaultCompanyId) {
+      setActiveCompanyId(res.data.defaultCompanyId);
     }
     return res.data;
   };
@@ -39,7 +40,7 @@ export const AuthProvider = ({ children }) => {
     await authApi.logout().catch(() => {});
     setUser(null);
     setIsAuthenticated(false);
-    localStorage.removeItem('activeCompanyId');
+    clearActiveCompany();
     window.location.href = '/login';
   };
 

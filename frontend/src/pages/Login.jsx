@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Eye, EyeOff } from 'lucide-react';
 import { authApi } from '@/api';
+import { setActiveCompanyId } from '@/lib/companyContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -82,6 +83,10 @@ export default function Login() {
         payload.businessType = otherBusinessDesc.trim();
       }
       await authApi.register(payload);
+      const meRes = await authApi.me();
+      if (meRes.data?.defaultCompanyId) {
+        setActiveCompanyId(meRes.data.defaultCompanyId);
+      }
       window.location.href = '/';
     } catch (err) {
       setError(err?.response?.data?.message || 'Registration failed');

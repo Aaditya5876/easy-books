@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { api, apiAuth } from '@/api/adapter';
-import { inventoryApi, companyApi } from '@/api';
+import { inventoryApi } from '@/api';
 import { getActiveCompanyId } from '@/lib/companyContext';
 import { adToBs } from '@/lib/nepaliDate';
 import PageHeader from '../components/shared/PageHeader';
@@ -110,12 +110,12 @@ export default function Inventory() {
 
   async function loadItems() {
     setLoading(true);
-    const [data, companyRes] = await Promise.all([
+    const [data, companies] = await Promise.all([
       api.InventoryItem.filter({ company_id: companyId }),
-      companyApi.get(companyId).catch(() => null),
+      api.Company.list(),
     ]);
     setItems(data);
-    setCompany(companyRes?.data ?? null);
+    setCompany(companies.find(c => c.id === companyId) ?? null);
     setLoading(false);
   }
 

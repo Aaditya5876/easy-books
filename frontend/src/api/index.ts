@@ -1,6 +1,6 @@
 import apiClient from './client';
 
-const companyId = () => localStorage.getItem('activeCompanyId') || '';
+const companyId = () => localStorage.getItem('easybooks_active_company') || '';
 
 // Auth
 export const authApi = {
