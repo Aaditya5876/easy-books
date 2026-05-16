@@ -10,10 +10,11 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import { Plus, X, ExternalLink, Calendar, User, Tag, AlertCircle, CheckCircle2, Clock } from 'lucide-react';
+import { Plus, X, ExternalLink, Calendar, User, Tag, AlertCircle, CheckCircle2, Clock, Pencil, FileText } from 'lucide-react';
 import { useToast } from "@/components/ui/use-toast";
 import EmptyState from '../components/EmptyState';
 import PageLoader from '../components/PageLoader';
+import { motion } from 'framer-motion';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -333,6 +334,12 @@ function SlideOutPanel({ task, onClose, onSave }) {
 
 // ─── NewTaskDialog ────────────────────────────────────────────────────────────
 
+const PRIORITY_CHIPS = [
+  { v: 'High',   label: '●●● High',   act: 'border-red-500 bg-red-50 text-red-700 border-2',      cls: 'border-red-300 text-red-600 border opacity-75' },
+  { v: 'Medium', label: '●● Medium',  act: 'border-amber-500 bg-amber-50 text-amber-800 border-2', cls: 'border-amber-400 text-amber-700 border opacity-75' },
+  { v: 'Low',    label: '● Low',      act: 'border-green-500 bg-green-50 text-green-700 border-2', cls: 'border-green-400 text-green-600 border opacity-75' },
+];
+
 function NewTaskDialog({ open, onOpenChange, onCreated }) {
   const [form, setForm] = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
@@ -361,7 +368,7 @@ function NewTaskDialog({ open, onOpenChange, onCreated }) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="glass-dialog max-w-lg">
+      <DialogContent className="glass-dialog max-w-3xl overflow-hidden">
         <div className="h-1 bg-gradient-to-r from-amber-500 to-orange-500 -mx-6 -mt-6 mb-4 rounded-t-lg" />
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -370,90 +377,134 @@ function NewTaskDialog({ open, onOpenChange, onCreated }) {
           </DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-4 mt-1">
-          {/* Title */}
-          <div className="space-y-1.5">
-            <Label className="text-xs font-medium">Title <span className="text-red-500">*</span></Label>
-            <Input
-              className="h-9 text-sm"
-              placeholder="What needs to be done?"
-              value={form.title}
-              onChange={e => setField('title', e.target.value)}
-            />
-          </div>
+        <div className="grid grid-cols-2 gap-6 max-h-[65vh] overflow-hidden mt-2">
+          {/* ── Left column: Task Details ── */}
+          <motion.div
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.22 }}
+            className="space-y-3 overflow-y-auto pr-1"
+          >
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+              <CheckCircle2 className="w-3.5 h-3.5" />Task Details
+            </p>
 
-          {/* Description */}
-          <div className="space-y-1.5">
-            <Label className="text-xs font-medium">Description</Label>
-            <Textarea
-              className="text-sm resize-none"
-              rows={3}
-              placeholder="Optional details..."
-              value={form.description}
-              onChange={e => setField('description', e.target.value)}
-            />
-          </div>
-
-          {/* Category + Priority */}
-          <div className="grid grid-cols-2 gap-3">
+            {/* Title */}
             <div className="space-y-1.5">
-              <Label className="text-xs font-medium">Category</Label>
-              <Select value={form.category} onValueChange={v => setField('category', v)}>
-                <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {CATEGORIES.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-                </SelectContent>
-              </Select>
+              <Label className="text-xs font-medium">Title <span className="text-red-500">*</span></Label>
+              <div className="relative">
+                <Pencil className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                <Input
+                  className="pl-8 h-9 text-sm"
+                  placeholder="What needs to be done?"
+                  value={form.title}
+                  onChange={e => setField('title', e.target.value)}
+                />
+              </div>
             </div>
 
+            {/* Description */}
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium">Description</Label>
+              <div className="relative">
+                <FileText className="absolute left-2.5 top-3 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                <Textarea
+                  className="pl-8 text-sm resize-none"
+                  rows={3}
+                  placeholder="Optional details..."
+                  value={form.description}
+                  onChange={e => setField('description', e.target.value)}
+                />
+              </div>
+            </div>
+
+            {/* Priority chips */}
             <div className="space-y-1.5">
               <Label className="text-xs font-medium">Priority</Label>
-              <Select value={form.priority} onValueChange={v => setField('priority', v)}>
-                <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="High">High</SelectItem>
-                  <SelectItem value="Medium">Medium</SelectItem>
-                  <SelectItem value="Low">Low</SelectItem>
-                </SelectContent>
-              </Select>
+              <div className="grid grid-cols-3 gap-2">
+                {PRIORITY_CHIPS.map(p => (
+                  <button
+                    key={p.v}
+                    type="button"
+                    onClick={() => setField('priority', p.v)}
+                    className={`sel-chip text-xs ${form.priority === p.v ? p.act : p.cls}`}
+                  >
+                    {p.label}
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
+          </motion.div>
 
-          {/* Status + Due date */}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label className="text-xs font-medium">Status</Label>
-              <Select value={form.status} onValueChange={v => setField('status', v)}>
-                <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Pending">Pending</SelectItem>
-                  <SelectItem value="In Progress">In Progress</SelectItem>
-                  <SelectItem value="Done">Done</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+          {/* ── Right column: Assignment ── */}
+          <motion.div
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.22, delay: 0.06 }}
+            className="space-y-3 overflow-y-auto pr-1"
+          >
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+              <User className="w-3.5 h-3.5" />Assignment
+            </p>
 
+            {/* Due Date */}
             <div className="space-y-1.5">
               <Label className="text-xs font-medium">Due Date</Label>
-              <Input
-                type="date"
-                className="h-9 text-sm"
-                value={form.due_date}
-                onChange={e => setField('due_date', e.target.value)}
-              />
+              <div className="relative">
+                <Calendar className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                <Input
+                  type="date"
+                  className="pl-8 h-9 text-sm"
+                  value={form.due_date}
+                  onChange={e => setField('due_date', e.target.value)}
+                />
+              </div>
             </div>
-          </div>
 
-          {/* Assigned to */}
-          <div className="space-y-1.5">
-            <Label className="text-xs font-medium">Assigned To</Label>
-            <Input
-              className="h-9 text-sm"
-              placeholder="Name or email..."
-              value={form.assigned_to}
-              onChange={e => setField('assigned_to', e.target.value)}
-            />
-          </div>
+            {/* Assigned To */}
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium">Assigned To</Label>
+              <div className="relative">
+                <User className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                <Input
+                  className="pl-8 h-9 text-sm"
+                  placeholder="Name or email..."
+                  value={form.assigned_to}
+                  onChange={e => setField('assigned_to', e.target.value)}
+                />
+              </div>
+            </div>
+
+            {/* Category */}
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium">Category</Label>
+              <div className="relative">
+                <Tag className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none z-10" />
+                <Select value={form.category} onValueChange={v => setField('category', v)}>
+                  <SelectTrigger className="pl-8 h-9 text-sm"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {CATEGORIES.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {/* Status */}
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium">Status</Label>
+              <div className="relative">
+                <Clock className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none z-10" />
+                <Select value={form.status} onValueChange={v => setField('status', v)}>
+                  <SelectTrigger className="pl-8 h-9 text-sm"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Pending">Pending</SelectItem>
+                    <SelectItem value="In Progress">In Progress</SelectItem>
+                    <SelectItem value="Done">Done</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </motion.div>
         </div>
 
         <DialogFooter className="mt-2">

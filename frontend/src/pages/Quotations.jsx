@@ -552,12 +552,25 @@ export default function Quotations() {
         ))}
       </div>
 
-      <DataTable
-        columns={columns}
-        data={filtered}
-        emptyMessage="No quotations yet. Click 'New Quotation' to create one."
-        onRowClick={openEdit}
-      />
+      {quotations.length === 0 ? (
+        <EmptyState
+          icon={ClipboardList}
+          title="No quotations yet"
+          description="Create your first quotation or proposal for a client."
+          action={
+            <Button onClick={openNew}>
+              <Plus className="w-4 h-4 mr-2" />New Quotation
+            </Button>
+          }
+        />
+      ) : (
+        <DataTable
+          columns={columns}
+          data={filtered}
+          emptyMessage="No quotations match your filters."
+          onRowClick={openEdit}
+        />
+      )}
 
       {/* ── Add Quotation Dialog ── */}
       <Dialog open={showNew} onOpenChange={setShowNew}>

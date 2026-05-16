@@ -486,7 +486,7 @@ export default function Memo() {
         setShowAdd(open);
         if (!open) setForm({ ...EMPTY_FORM, category: activeTab, date_ad: today });
       }}>
-        <DialogContent className="glass-dialog max-w-2xl overflow-hidden">
+        <DialogContent className="glass-dialog max-w-3xl overflow-hidden">
           <div className="h-1 bg-gradient-to-r from-violet-400 to-fuchsia-500 -mx-6 -mt-6 mb-4" />
           <DialogHeader className="mb-1">
             <DialogTitle className="flex items-center gap-2 text-base font-semibold">
@@ -495,14 +495,19 @@ export default function Memo() {
             </DialogTitle>
           </DialogHeader>
 
-          <motion.div
-            className="overflow-y-auto max-h-[60vh] pr-1 space-y-3"
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.22 }}
-          >
-            {/* ── Always: category + date ── */}
-            <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 gap-6 max-h-[65vh] overflow-hidden mt-2">
+            {/* ── Left column: Document Info ── */}
+            <motion.div
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.22 }}
+              className="space-y-3 overflow-y-auto pr-1"
+            >
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                <FileText className="w-3.5 h-3.5" />Document Info
+              </p>
+
+              {/* Category */}
               <div className="space-y-1.5">
                 <Label className="text-xs font-medium">Category</Label>
                 <div className="relative">
@@ -517,6 +522,8 @@ export default function Memo() {
                   </Select>
                 </div>
               </div>
+
+              {/* Date */}
               <div className="space-y-1.5">
                 <Label className="text-xs font-medium">Date *</Label>
                 <div className="relative">
@@ -532,31 +539,65 @@ export default function Memo() {
                   <p className="text-xs text-muted-foreground">BS: {adToBs(new Date(form.date_ad)).formatted}</p>
                 )}
               </div>
-            </div>
 
-            {/* ── Reference number ── */}
-            {['purchase_bill', 'sales_bill', 'quotation'].includes(form.category) && (
-              <div className="space-y-1.5">
-                <Label className="text-xs font-medium">
-                  {form.category === 'purchase_bill' ? 'Bill Number' : form.category === 'sales_bill' ? 'Invoice Number' : 'Reference No.'}
-                </Label>
-                {f(
-                  form.category === 'purchase_bill' ? 'bill_number' : form.category === 'sales_bill' ? 'invoice_number' : 'reference_id',
-                  form.category === 'purchase_bill' ? 'e.g. BILL-001' : form.category === 'sales_bill' ? 'e.g. INV-001' : 'e.g. QT-001',
-                  'text', Hash
-                )}
-              </div>
-            )}
-
-            {/* ── Vendor fields ── */}
-            {form.category === 'purchase_bill' && (
-              <>
-                <SectionLabel>Vendor Details</SectionLabel>
+              {/* Reference number */}
+              {['purchase_bill', 'sales_bill', 'quotation'].includes(form.category) && (
                 <div className="space-y-1.5">
-                  <Label className="text-xs font-medium">Vendor Name *</Label>
-                  {f('vendor_name', 'Vendor / Supplier name', 'text', Building2)}
+                  <Label className="text-xs font-medium">
+                    {form.category === 'purchase_bill' ? 'Bill Number' : form.category === 'sales_bill' ? 'Invoice Number' : 'Reference No.'}
+                  </Label>
+                  {f(
+                    form.category === 'purchase_bill' ? 'bill_number' : form.category === 'sales_bill' ? 'invoice_number' : 'reference_id',
+                    form.category === 'purchase_bill' ? 'e.g. BILL-001' : form.category === 'sales_bill' ? 'e.g. INV-001' : 'e.g. QT-001',
+                    'text', Hash
+                  )}
                 </div>
-                <div className="grid grid-cols-2 gap-4">
+              )}
+
+              {/* Amount with NPR prefix */}
+              {!['job_card', 'supporting_doc'].includes(form.category) && (
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium">Amount</Label>
+                  <div className="flex items-stretch">
+                    <span className="inline-flex items-center px-3 bg-muted text-xs font-medium border border-r-0 border-input rounded-l-md text-muted-foreground select-none">
+                      NPR
+                    </span>
+                    <Input
+                      type="number"
+                      placeholder="0.00"
+                      className="rounded-l-none h-9 flex-1 text-sm"
+                      value={form.amount}
+                      onChange={e => setForm(prev => ({ ...prev, amount: e.target.value }))}
+                    />
+                  </div>
+                </div>
+              )}
+            </motion.div>
+
+            {/* ── Right column: Party / Vendor / Document Details ── */}
+            <motion.div
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.22, delay: 0.06 }}
+              className="space-y-3 overflow-y-auto pr-1"
+            >
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                {form.category === 'purchase_bill' ? (
+                  <><Building2 className="w-3.5 h-3.5" />Vendor Details</>
+                ) : form.category === 'supporting_doc' ? (
+                  <><Link2 className="w-3.5 h-3.5" />Document Details</>
+                ) : (
+                  <><User className="w-3.5 h-3.5" />Party Details</>
+                )}
+              </p>
+
+              {/* Vendor fields (purchase_bill) */}
+              {form.category === 'purchase_bill' && (
+                <>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium">Vendor Name *</Label>
+                    {f('vendor_name', 'Vendor / Supplier name', 'text', Building2)}
+                  </div>
                   <div className="space-y-1.5">
                     <Label className="text-xs font-medium">Vendor Contact</Label>
                     {f('vendor_contact', 'Phone / Email', 'text', Phone)}
@@ -565,15 +606,12 @@ export default function Memo() {
                     <Label className="text-xs font-medium">Vendor PAN</Label>
                     {f('vendor_pan', 'PAN number', 'text', Hash)}
                   </div>
-                </div>
-              </>
-            )}
+                </>
+              )}
 
-            {/* ── Client fields ── */}
-            {['quotation', 'sales_bill', 'job_card', 'order_slip', 'extra_work'].includes(form.category) && (
-              <>
-                <SectionLabel>Party Details</SectionLabel>
-                <div className="grid grid-cols-2 gap-4">
+              {/* Client fields */}
+              {['quotation', 'sales_bill', 'job_card', 'order_slip', 'extra_work'].includes(form.category) && (
+                <>
                   <div className="space-y-1.5">
                     <Label className="text-xs font-medium">Client Name *</Label>
                     {f('client_name', 'Full name', 'text', User)}
@@ -582,156 +620,133 @@ export default function Memo() {
                     <Label className="text-xs font-medium">Contact</Label>
                     {f('client_contact', 'Phone / Email', 'text', Phone)}
                   </div>
-                </div>
-              </>
-            )}
+                </>
+              )}
 
-            {/* ── Job card specific ── */}
-            {form.category === 'job_card' && (
-              <>
-                <SectionLabel>Job Details</SectionLabel>
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-medium">Assigned To</Label>
-                  {f('assigned_to', 'Team member name', 'text', User)}
-                </div>
-                <div className="grid grid-cols-2 gap-4">
+              {/* Job card extra fields */}
+              {form.category === 'job_card' && (
+                <>
                   <div className="space-y-1.5">
-                    <Label className="text-xs font-medium">Start Date</Label>
-                    {f('start_date', '', 'date', Calendar)}
+                    <Label className="text-xs font-medium">Assigned To</Label>
+                    {f('assigned_to', 'Team member name', 'text', User)}
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-medium">Start Date</Label>
+                      {f('start_date', '', 'date', Calendar)}
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-medium">End Date</Label>
+                      {f('end_date', '', 'date', Calendar)}
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {/* Order slip: delivery date */}
+              {form.category === 'order_slip' && (
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium">Delivery Date</Label>
+                  {f('delivery_date', '', 'date', Calendar)}
+                </div>
+              )}
+
+              {/* Extra work: due date */}
+              {form.category === 'extra_work' && (
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium">Due Date</Label>
+                  {f('due_date', '', 'date', Calendar)}
+                </div>
+              )}
+
+              {/* Quotation: valid until + status */}
+              {form.category === 'quotation' && (
+                <>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium">Valid Until</Label>
+                    {f('valid_until', '', 'date', Calendar)}
                   </div>
                   <div className="space-y-1.5">
-                    <Label className="text-xs font-medium">End Date</Label>
-                    {f('end_date', '', 'date', Calendar)}
-                  </div>
-                </div>
-              </>
-            )}
-
-            {/* ── Order slip ── */}
-            {form.category === 'order_slip' && (
-              <div className="space-y-1.5">
-                <Label className="text-xs font-medium">Delivery Date</Label>
-                {f('delivery_date', '', 'date', Calendar)}
-              </div>
-            )}
-
-            {/* ── Extra work ── */}
-            {form.category === 'extra_work' && (
-              <div className="space-y-1.5">
-                <Label className="text-xs font-medium">Due Date</Label>
-                {f('due_date', '', 'date', Calendar)}
-              </div>
-            )}
-
-            {/* ── Quotation valid until ── */}
-            {form.category === 'quotation' && (
-              <div className="space-y-1.5">
-                <Label className="text-xs font-medium">Valid Until</Label>
-                {f('valid_until', '', 'date', Calendar)}
-              </div>
-            )}
-
-            {/* ── Supporting doc fields ── */}
-            {form.category === 'supporting_doc' && (
-              <>
-                <SectionLabel>Document Details</SectionLabel>
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-medium">Document Type</Label>
-                  <div className="relative">
-                    <Tag className="input-icon" />
-                    <Select value={form.doc_type} onValueChange={v => setForm(prev => ({ ...prev, doc_type: v }))}>
-                      <SelectTrigger className="pl-8 h-9 text-sm"><SelectValue placeholder="Select type" /></SelectTrigger>
+                    <Label className="text-xs font-medium">Status</Label>
+                    <Select value={form.status} onValueChange={v => setForm(prev => ({ ...prev, status: v }))}>
+                      <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Select status…" /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="contract">Contract</SelectItem>
-                        <SelectItem value="receipt">Receipt</SelectItem>
-                        <SelectItem value="certificate">Certificate</SelectItem>
-                        <SelectItem value="other">Other</SelectItem>
+                        {CATEGORY_CONFIG.quotation.statusOptions.map(s => (
+                          <SelectItem key={s} value={s}>{s}</SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>
-                </div>
+                </>
+              )}
+
+              {/* Supporting doc fields */}
+              {form.category === 'supporting_doc' && (
+                <>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium">Document Type</Label>
+                    <div className="relative">
+                      <Tag className="input-icon" />
+                      <Select value={form.doc_type} onValueChange={v => setForm(prev => ({ ...prev, doc_type: v }))}>
+                        <SelectTrigger className="pl-8 h-9 text-sm"><SelectValue placeholder="Select type" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="contract">Contract</SelectItem>
+                          <SelectItem value="receipt">Receipt</SelectItem>
+                          <SelectItem value="certificate">Certificate</SelectItem>
+                          <SelectItem value="other">Other</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium">Linked Reference</Label>
+                    {f('linked_reference', 'e.g. INV-001 or BILL-005', 'text', Link2)}
+                  </div>
+                </>
+              )}
+
+              {/* Description (non purchase_bill / sales_bill) */}
+              {!['purchase_bill', 'sales_bill'].includes(form.category) && (
                 <div className="space-y-1.5">
-                  <Label className="text-xs font-medium">Linked Reference</Label>
-                  {f('linked_reference', 'e.g. INV-001 or BILL-005', 'text', Link2)}
-                </div>
-              </>
-            )}
-
-            {/* ── Description ── */}
-            {!['purchase_bill', 'sales_bill'].includes(form.category) && (
-              <div className="space-y-1.5">
-                <Label className="text-xs font-medium flex items-center gap-1.5">
-                  <FileText className="w-3.5 h-3.5 text-muted-foreground" />
-                  Description
-                </Label>
-                <Textarea
-                  value={form.description}
-                  onChange={e => setForm(prev => ({ ...prev, description: e.target.value }))}
-                  rows={2}
-                  className="text-sm resize-none"
-                  placeholder="Short notes…"
-                />
-              </div>
-            )}
-
-            {/* ── Amount with NPR prefix ── */}
-            {!['job_card', 'supporting_doc'].includes(form.category) && (
-              <div className="space-y-1.5">
-                <Label className="text-xs font-medium">Amount</Label>
-                <div className="flex items-stretch">
-                  <span className="inline-flex items-center px-3 bg-muted text-xs font-medium border border-r-0 border-input rounded-l-md text-muted-foreground select-none">
-                    NPR
-                  </span>
-                  <Input
-                    type="number"
-                    placeholder="0.00"
-                    className="rounded-l-none h-9 flex-1 text-sm"
-                    value={form.amount}
-                    onChange={e => setForm(prev => ({ ...prev, amount: e.target.value }))}
+                  <Label className="text-xs font-medium flex items-center gap-1.5">
+                    <FileText className="w-3.5 h-3.5 text-muted-foreground" />
+                    Description
+                  </Label>
+                  <Textarea
+                    value={form.description}
+                    onChange={e => setForm(prev => ({ ...prev, description: e.target.value }))}
+                    rows={2}
+                    className="text-sm resize-none"
+                    placeholder="Short notes…"
                   />
                 </div>
-              </div>
-            )}
+              )}
 
-            {/* ── File upload ── */}
-            {['purchase_bill', 'sales_bill', 'supporting_doc'].includes(form.category) && (
-              <div className="space-y-1.5">
-                <Label className="text-xs font-medium">
-                  Attach File <span className="text-muted-foreground font-normal">(optional)</span>
-                </Label>
-                <Input
-                  type="file"
-                  accept="image/*,.pdf"
-                  className="h-9 text-sm"
-                  onChange={e => {
-                    const file = e.target.files?.[0];
-                    if (file) setForm(prev => ({ ...prev, document_url: URL.createObjectURL(file) }));
-                  }}
-                />
-                {form.document_url && (
-                  <a href={form.document_url} target="_blank" rel="noopener noreferrer"
-                     className="text-xs text-primary underline flex items-center gap-1">
-                    <ExternalLink className="w-3 h-3" />View attached file
-                  </a>
-                )}
-              </div>
-            )}
-
-            {/* ── Quotation status ── */}
-            {form.category === 'quotation' && (
-              <div className="space-y-1.5">
-                <Label className="text-xs font-medium">Status</Label>
-                <Select value={form.status} onValueChange={v => setForm(prev => ({ ...prev, status: v }))}>
-                  <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Select status…" /></SelectTrigger>
-                  <SelectContent>
-                    {CATEGORY_CONFIG.quotation.statusOptions.map(s => (
-                      <SelectItem key={s} value={s}>{s}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-          </motion.div>
+              {/* File upload */}
+              {['purchase_bill', 'sales_bill', 'supporting_doc'].includes(form.category) && (
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium">
+                    Attach File <span className="text-muted-foreground font-normal">(optional)</span>
+                  </Label>
+                  <Input
+                    type="file"
+                    accept="image/*,.pdf"
+                    className="h-9 text-sm"
+                    onChange={e => {
+                      const file = e.target.files?.[0];
+                      if (file) setForm(prev => ({ ...prev, document_url: URL.createObjectURL(file) }));
+                    }}
+                  />
+                  {form.document_url && (
+                    <a href={form.document_url} target="_blank" rel="noopener noreferrer"
+                       className="text-xs text-primary underline flex items-center gap-1">
+                      <ExternalLink className="w-3 h-3" />View attached file
+                    </a>
+                  )}
+                </div>
+              )}
+            </motion.div>
+          </div>
 
           <DialogFooter className="pt-3 mt-2 border-t border-border/50">
             <Button variant="outline" size="sm" onClick={() => setShowAdd(false)}>Cancel</Button>
