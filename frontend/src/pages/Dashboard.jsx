@@ -1,50 +1,50 @@
-import { useState, useEffect } from 'react';
+﻿import { useState, useEffect } from 'react';
 import { api } from '@/api/adapter';
 import { getActiveCompanyId } from '@/lib/companyContext';
-import { 
-  Package, ShoppingCart, Receipt, Wallet, AlertTriangle, 
-  TrendingUp, FileText, Building2
+import {
+  Package,
+  ShoppingCart,
+  Receipt,
+  Wallet,
+  AlertTriangle,
+  Banknote,
+  BarChart3,
+  ClipboardList,
+  CheckCircle2,
+  ArrowLeftRight,
+  Building2,
 } from 'lucide-react';
 import StatCard from '../components/dashboard/StatCard';
-import QuickActions from '../components/dashboard/QuickActions';
-import RecentActivity from '../components/dashboard/RecentActivity';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-
-const CHART_COLORS = ['hsl(217, 71%, 53%)', 'hsl(160, 60%, 45%)', 'hsl(38, 92%, 50%)', 'hsl(280, 65%, 60%)'];
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 
 export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({
     totalInventory: 0,
     lowStock: 0,
+    outOfStock: 0,
     totalPurchases: 0,
     totalSales: 0,
+    totalExpenses: 0,
     cashInHand: 0,
     bankBalance: 0,
-    pendingQuotations: 0,
-    activeClients: 0,
-    totalExpenses: 0,
-    profitLoss: 0,
-    receivableTotal: 0,
-    payableTotal: 0,
-    overdueTasks: 0,
-    chequePayableDue: 0,
-    chequeReceivableDue: 0,
+    totalReceivable: 0,
+    totalPayable: 0,
+    salesCount: 0,
+    purchaseCount: 0,
+    expenseCount: 0,
   });
-  const [inventoryItems, setInventoryItems] = useState([]);
-  const [recentActivities, setRecentActivities] = useState([]);
-  const [quotationStats, setQuotationStats] = useState([]);
+  const [bankAccounts, setBankAccounts] = useState([]);
+  const [ledgerChartData, setLedgerChartData] = useState([]);
+  const [quotationCategories, setQuotationCategories] = useState([]);
+  const [inventoryMovementData, setInventoryMovementData] = useState([]);
   const [topSellingItems, setTopSellingItems] = useState([]);
   const [inventorySoldValue, setInventorySoldValue] = useState(0);
   const [inventoryInHandValue, setInventoryInHandValue] = useState(0);
-  const [agingItems, setAgingItems] = useState([]);
-  const [tasks, setTasks] = useState([]);
-  const [chequeDuePayable, setChequeDuePayable] = useState([]);
-  const [chequeDueReceivable, setChequeDueReceivable] = useState([]);
-  const [workflowReminders, setWorkflowReminders] = useState([]);
-  const [financeChartData, setFinanceChartData] = useState([]);
-  const [receivablePayableData, setReceivablePayableData] = useState([]);
-  const [expenseTypeData, setExpenseTypeData] = useState([]);
+  const [taskLists, setTaskLists] = useState({ inProgress: [], incomplete: [], completedCount: 0 });
+  const [cashFlow, setCashFlow] = useState({ inflow: 0, outflow: 0 });
+  const [chequePayableDue, setChequePayableDue] = useState([]);
+  const [chequeReceivableDue, setChequeReceivableDue] = useState([]);
   const companyId = getActiveCompanyId();
 
   useEffect(() => {
@@ -68,126 +68,109 @@ export default function Dashboard() {
       api.Task.filter({ company_id: companyId }),
     ]);
 
-    const lowStockItems = inventory.filter(i => i.quantity <= (i.low_stock_threshold || 5));
+    const lowStockItems = inventory.filter(i => (i.quantity || 0) <= (i.low_stock_threshold || 5));
+    const outOfStockCount = inventory.filter(i => (i.quantity || 0) <= 0).length;
     const totalPurchaseAmt = purchases.reduce((sum, p) => sum + (p.total_amount || 0), 0);
     const totalSalesAmt = sales.reduce((sum, s) => sum + (s.total_amount || 0), 0);
     const totalExpenses = transactions.filter(t => t.category === 'expense').reduce((sum, t) => sum + (t.amount || 0), 0);
     const totalIncome = transactions.filter(t => t.category === 'income').reduce((sum, t) => sum + (t.amount || 0), 0);
     const receivableTotal = totalIncome;
     const payableTotal = totalExpenses;
-    const profitLossValue = totalSalesAmt - totalPurchaseAmt - totalExpenses;
-
     const cashTransactions = transactions.filter(t => t.type === 'cash');
-    const cashIn = cashTransactions.filter(t => t.category === 'income').reduce((s, t) => s + (t.amount || 0), 0);
-    const cashOut = cashTransactions.filter(t => t.category === 'expense').reduce((s, t) => s + (t.amount || 0), 0);
+    const cashInflow = cashTransactions.filter(t => t.category === 'income').reduce((sum, t) => sum + (t.amount || 0), 0);
+    const cashOutflow = cashTransactions.filter(t => t.category === 'expense').reduce((sum, t) => sum + (t.amount || 0), 0);
     const bankBalance = banks.reduce((sum, b) => sum + (b.current_balance || 0), 0);
+    const expenseCount = transactions.filter(t => t.category === 'expense').length;
 
-    const quotationRemarks = ['Quoted', 'Work-done', 'Cancelled', 'Revised', 'Billed'];
-    const qStats = quotationRemarks.map(remark => ({
-      name: remark,
-      value: quotations.filter(q => q.remark === remark).length
-    })).filter(q => q.value > 0);
-
-    const today = new Date();
-    const todayString = today.toISOString().split('T')[0];
-    const overdueTasks = tasks.filter(t => t.status !== 'completed' && t.due_date && new Date(t.due_date) < today);
-    const dueTodayTasks = tasks.filter(t => t.status !== 'completed' && t.due_date === todayString);
-    const upcomingAppointments = tasks
-      .filter(t => t.status !== 'completed' && t.due_date && new Date(t.due_date) >= today && new Date(t.due_date) <= new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000))
-      .sort((a, b) => new Date(a.due_date) - new Date(b.due_date));
-
-    const chequeDue = transactions.filter(t => t.type === 'cheque' && t.cheque_date && t.status !== 'completed');
-    const chequePayableDueList = chequeDue.filter(t => t.category === 'expense').sort((a, b) => new Date(a.cheque_date) - new Date(b.cheque_date)).slice(0, 5);
-    const chequeReceivableDueList = chequeDue.filter(t => t.category === 'income').sort((a, b) => new Date(a.cheque_date) - new Date(b.cheque_date)).slice(0, 5);
-
-    const expenseTypeGroups = transactions.filter(t => t.category === 'expense').reduce((acc, t) => {
-      const type = t.expense_type || 'other';
-      acc[type] = (acc[type] || 0) + (t.amount || 0);
-      return acc;
-    }, {});
-    const expenseTypes = Object.entries(expenseTypeGroups).map(([name, value]) => ({ name, value }));
-
-    setStats({
-      totalInventory: inventory.length,
-      lowStock: lowStockItems.length,
-      totalPurchases: totalPurchaseAmt,
-      totalSales: totalSalesAmt,
-      cashInHand: cashIn - cashOut,
-      bankBalance,
-      pendingQuotations: quotations.filter(q => q.remark === 'Quoted').length,
-      activeClients: clients.filter(c => c.crm_status === 'active').length,
-      totalExpenses,
-      profitLoss: profitLossValue,
-      receivableTotal,
-      payableTotal,
-      overdueTasks: overdueTasks.length,
-      chequePayableDue: chequePayableDueList.length,
-      chequeReceivableDue: chequeReceivableDueList.length,
+    const quotationLabels = ['Quoted', 'Work-done', 'Cancelled', 'Revised', 'Billed'];
+    const quotationCategories = quotationLabels.map(label => {
+      const items = quotations.filter(q => ((q.remark || '').toLowerCase() === label.toLowerCase()) || ((q.status || '').toLowerCase() === label.toLowerCase()));
+      return {
+        name: label,
+        count: items.length,
+        totalValue: items.reduce((sum, q) => sum + (q.total_amount || q.amount || 0), 0),
+      };
     });
 
-    setInventoryItems(inventory.sort((a, b) => (a.quantity || 0) - (b.quantity || 0)).slice(0, 5));
-    setQuotationStats(qStats);
-    setTasks(tasks);
-    setChequeDuePayable(chequePayableDueList);
-    setChequeDueReceivable(chequeReceivableDueList);
-    setWorkflowReminders([ ...overdueTasks.slice(0, 3), ...dueTodayTasks.slice(0, 3), ...upcomingAppointments.slice(0, 3) ]);
+    const normalizeStatus = status => (status || '').toString().trim().toLowerCase();
+    const completedTasks = tasks.filter(t => ['completed', 'complete'].includes(normalizeStatus(t.status)));
+    const inProgressTasks = tasks.filter(t => ['in-progress', 'in progress', 'ongoing'].includes(normalizeStatus(t.status)));
+    const incompleteTasks = tasks.filter(t => !['completed', 'complete', 'in-progress', 'in progress', 'ongoing'].includes(normalizeStatus(t.status)));
 
     const itemSalesMap = {};
     sales.forEach(order => {
       (order.items || []).forEach(item => {
-        const key = item.description || item.inventory_item_id || 'Unknown';
+        const key = item.description || item.product_name || item.inventory_item_id || 'Unknown Item';
         if (!itemSalesMap[key]) itemSalesMap[key] = { name: key, qty: 0, value: 0 };
         itemSalesMap[key].qty += item.quantity || 0;
         itemSalesMap[key].value += item.total || 0;
       });
     });
     const topSelling = Object.values(itemSalesMap).sort((a, b) => b.value - a.value).slice(0, 10);
-    setTopSellingItems(topSelling);
 
-    setInventorySoldValue(totalSalesAmt);
-    const inHandValue = inventory.reduce((sum, i) => sum + ((i.quantity || 0) * (i.unit_selling_price || 0)), 0);
-    setInventoryInHandValue(inHandValue);
+    const movementMap = {};
+    const addMovement = (date, purchasedQty, soldQty) => {
+      const dt = date ? new Date(date) : null;
+      if (!dt || Number.isNaN(dt.getTime())) return;
+      const monthKey = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}`;
+      const label = dt.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+      if (!movementMap[monthKey]) {
+        movementMap[monthKey] = { monthKey, name: label, purchased: 0, sold: 0 };
+      }
+      movementMap[monthKey].purchased += purchasedQty;
+      movementMap[monthKey].sold += soldQty;
+    };
 
-    const aging = inventory.filter(i => {
-      if (!i.date_of_purchase) return false;
-      const days = Math.floor((today - new Date(i.date_of_purchase)) / (1000 * 60 * 60 * 24));
-      return days >= (i.aging_days || 90);
+    purchases.forEach(order => {
+      const purchasedQty = (order.items || []).reduce((sum, item) => sum + (item.quantity || 0), 0);
+      addMovement(order.date_ad || order.created_date, purchasedQty, 0);
     });
-    setAgingItems(aging);
+    sales.forEach(order => {
+      const soldQty = (order.items || []).reduce((sum, item) => sum + (item.quantity || 0), 0);
+      addMovement(order.date_ad || order.created_date, 0, soldQty);
+    });
 
-    setFinanceChartData([
+    const inventoryMovementData = Object.values(movementMap).sort((a, b) => a.monthKey.localeCompare(b.monthKey));
+    const bankAccounts = banks.map(account => ({
+      id: account.id,
+      name: account.account_name || account.bank_name || account.name || 'Bank Account',
+      balance: account.current_balance || 0,
+    }));
+
+    const chequeDue = transactions.filter(t => t.type === 'cheque' && t.cheque_date && new Date(t.cheque_date) < new Date() && t.status !== 'completed');
+    const chequePayableDueList = chequeDue.filter(t => t.category === 'expense');
+    const chequeReceivableDueList = chequeDue.filter(t => t.category === 'income');
+
+    setStats({
+      totalInventory: inventory.length,
+      lowStock: lowStockItems.length,
+      outOfStock: outOfStockCount,
+      totalPurchases: totalPurchaseAmt,
+      totalSales: totalSalesAmt,
+      totalExpenses,
+      cashInHand: cashInflow - cashOutflow,
+      bankBalance,
+      totalReceivable: receivableTotal,
+      totalPayable: payableTotal,
+      salesCount: sales.length,
+      purchaseCount: purchases.length,
+      expenseCount,
+    });
+    setBankAccounts(bankAccounts);
+    setLedgerChartData([
       { name: 'Sales', value: totalSalesAmt },
       { name: 'Purchases', value: totalPurchaseAmt },
       { name: 'Expenses', value: totalExpenses },
-      { name: 'Profit', value: profitLossValue },
     ]);
-    setReceivablePayableData([
-      { name: 'Receivable', value: receivableTotal },
-      { name: 'Payable', value: payableTotal },
-    ]);
-    setExpenseTypeData(expenseTypes.length ? expenseTypes : [{ name: 'Unknown', value: totalExpenses }]);
-
-    const activities = [
-      ...purchases.slice(0, 5).map(p => ({
-        type: 'purchase',
-        title: `Purchase from ${p.vendor_name}`,
-        subtitle: `NPR ${(p.total_amount || 0).toLocaleString()}`,
-        time: p.date_ad ? new Date(p.date_ad).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '',
-      })),
-      ...sales.slice(0, 5).map(s => ({
-        type: 'sales',
-        title: `Sale to ${s.client_name}`,
-        subtitle: `NPR ${(s.total_amount || 0).toLocaleString()}`,
-        time: s.date_ad ? new Date(s.date_ad).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '',
-      })),
-      ...transactions.slice(0, 5).map(t => ({
-        type: 'transaction',
-        title: `${t.category} - ${t.type}`,
-        subtitle: `NPR ${(t.amount || 0).toLocaleString()}`,
-        time: t.date_ad ? new Date(t.date_ad).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '',
-      })),
-    ];
-    setRecentActivities(activities);
+    setQuotationCategories(quotationCategories);
+    setInventoryMovementData(inventoryMovementData);
+    setTopSellingItems(topSelling);
+    setInventorySoldValue(totalSalesAmt);
+    setInventoryInHandValue(inventory.reduce((sum, i) => sum + ((i.quantity || 0) * (i.unit_selling_price || 0)), 0));
+    setTaskLists({ inProgress: inProgressTasks, incomplete: incompleteTasks, completedCount: completedTasks.length });
+    setCashFlow({ inflow: cashInflow, outflow: cashOutflow });
+    setChequePayableDue(chequePayableDueList);
+    setChequeReceivableDue(chequeReceivableDueList);
     setLoading(false);
   }
 
@@ -205,323 +188,321 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      {/* Header */}
       <div>
         <h1 className="text-2xl font-bold text-foreground tracking-tight">Dashboard</h1>
         <p className="text-sm text-muted-foreground mt-1">Business overview at a glance</p>
       </div>
 
-      {/* Stats Grid */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard 
-          icon={Receipt} 
-          label="Total Sales" 
-          value={`NPR ${stats.totalSales.toLocaleString()}`}
-          trend={stats.totalSales > 0 ? "Active" : undefined}
-          trendUp={true}
-        />
-        <StatCard 
-          icon={ShoppingCart} 
-          label="Total Purchases" 
-          value={`NPR ${stats.totalPurchases.toLocaleString()}`}
-        />
-        <StatCard 
-          icon={Wallet} 
-          label="Cash in Hand" 
-          value={`NPR ${stats.cashInHand.toLocaleString()}`}
-        />
-        <StatCard 
-          icon={Building2} 
-          label="Bank Balance" 
-          value={`NPR ${stats.bankBalance.toLocaleString()}`}
-        />
-      </div>
-
-      {/* Second row stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard icon={Package} label="Inventory Items" value={stats.totalInventory} />
-        <StatCard 
-          icon={AlertTriangle} 
-          label="Low Stock Alerts" 
-          value={stats.lowStock}
-          trend={stats.lowStock > 0 ? `${stats.lowStock} items` : undefined}
-          trendUp={false}
-        />
-        <StatCard icon={FileText} label="Pending Quotations" value={stats.pendingQuotations} />
-        <StatCard icon={TrendingUp} label="Active Clients" value={stats.activeClients} />
-      </div>
-
-      {/* Decision Snapshot */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
         <StatCard
           icon={Receipt}
-          label="Profit / Loss"
-          value={`NPR ${stats.profitLoss.toLocaleString()}`}
-          trend={stats.profitLoss >= 0 ? 'Profit' : 'Loss'}
-          trendUp={stats.profitLoss >= 0}
-        />
-        <StatCard
-          icon={FileText}
-          label="Overdue Workflow"
-          value={stats.overdueTasks}
-          trend={stats.overdueTasks > 0 ? 'Action needed' : 'On track'}
-          trendUp={stats.overdueTasks === 0}
+          label="Total Sales"
+          value={`NPR ${stats.totalSales.toLocaleString()}`}
+          subtitle="Overall sales this fiscal year"
+          trend={stats.totalSales > 0 ? 'Updated' : undefined}
+          trendUp={true}
         />
         <StatCard
           icon={ShoppingCart}
-          label="Cheque Payable Due"
-          value={stats.chequePayableDue}
-          trend={stats.chequePayableDue > 0 ? 'Review now' : 'No due cheques'}
-          trendUp={stats.chequePayableDue === 0}
+          label="Total Purchase"
+          value={`NPR ${stats.totalPurchases.toLocaleString()}`}
+          subtitle="Overall purchases this fiscal year"
+        />
+        <StatCard
+          icon={AlertTriangle}
+          label="Total Expenses"
+          value={`NPR ${stats.totalExpenses.toLocaleString()}`}
+          subtitle="Overall expenses this fiscal year"
+          trendUp={false}
         />
         <StatCard
           icon={Wallet}
-          label="Cheque Receivable Due"
-          value={stats.chequeReceivableDue}
-          trend={stats.chequeReceivableDue > 0 ? 'Collect soon' : 'No due cheques'}
-          trendUp={stats.chequeReceivableDue === 0}
+          label="Cash In Hand"
+          value={`NPR ${stats.cashInHand.toLocaleString()}`}
+          subtitle="Cash excluding bank accounts"
         />
       </div>
 
-      {/* Finance Charts */}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
         <div className="bg-card rounded-xl border border-border p-6">
-          <h3 className="text-sm font-semibold text-foreground mb-4">Sales, Purchases, Expenses & Profit</h3>
-          {financeChartData.length > 0 ? (
-            <ResponsiveContainer width="100%" height={260}>
-              <BarChart data={financeChartData} margin={{ top: 0, right: 0, left: -10, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-                <YAxis tick={{ fontSize: 11 }} />
-                <Tooltip formatter={(value) => [`NPR ${value.toLocaleString()}`, 'Amount']} />
-                <Bar dataKey="value" radius={[6, 6, 0, 0]}>
-                  {financeChartData.map((entry) => {
-                    const color = entry.name === 'Profit' ? 'hsl(160, 60%, 45%)' : entry.name === 'Expenses' ? 'hsl(0, 84%, 60%)' : 'hsl(217, 71%, 53%)';
-                    return <Cell key={entry.name} fill={color} />;
-                  })}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          ) : (
-            <div className="flex items-center justify-center h-[260px] text-muted-foreground text-sm">Insufficient financial data</div>
-          )}
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h3 className="text-sm font-semibold text-foreground">Bank Balance</h3>
+              <p className="text-xs text-muted-foreground">Combined accounts with individual balances</p>
+            </div>
+            <Banknote className="w-5 h-5 text-primary" />
+          </div>
+          <p className="text-3xl font-bold text-foreground">NPR {stats.bankBalance.toLocaleString()}</p>
+          <div className="mt-5 space-y-3">
+            {bankAccounts.length > 0 ? bankAccounts.map(account => (
+              <div key={account.id} className="rounded-2xl bg-muted/40 p-4">
+                <p className="text-sm font-medium text-foreground truncate">{account.name}</p>
+                <p className="text-sm text-muted-foreground">NPR {account.balance.toLocaleString()}</p>
+              </div>
+            )) : (
+              <p className="text-sm text-muted-foreground">No bank accounts available.</p>
+            )}
+          </div>
         </div>
 
         <div className="bg-card rounded-xl border border-border p-6">
-          <h3 className="text-sm font-semibold text-foreground mb-4">Receivable vs Payable</h3>
-          {receivablePayableData.length > 0 ? (
-            <ResponsiveContainer width="100%" height={260}>
-              <PieChart>
-                <Pie
-                  data={receivablePayableData}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={50}
-                  outerRadius={80}
-                  paddingAngle={4}
-                  dataKey="value"
-                >
-                  {receivablePayableData.map((_, idx) => (
-                    <Cell key={idx} fill={CHART_COLORS[idx % CHART_COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip formatter={(value) => [`NPR ${value.toLocaleString()}`, 'Amount']} />
-              </PieChart>
-            </ResponsiveContainer>
-          ) : (
-            <div className="flex items-center justify-center h-[260px] text-muted-foreground text-sm">No receivable/payable data</div>
-          )}
-          <div className="grid grid-cols-2 gap-2 mt-4 text-xs text-muted-foreground">
-            {receivablePayableData.map((row) => (
-              <div key={row.name} className="rounded-lg bg-muted/40 p-2">
-                <p className="font-semibold text-foreground">{row.name}</p>
-                <p>NPR {row.value.toLocaleString()}</p>
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h3 className="text-sm font-semibold text-foreground">Ledger Summary</h3>
+              <p className="text-xs text-muted-foreground">Sales, purchases and expenses</p>
+            </div>
+            <BarChart3 className="w-5 h-5 text-emerald-600" />
+          </div>
+          <ResponsiveContainer width="100%" height={240}>
+            <BarChart data={ledgerChartData} margin={{ top: 10, right: 0, left: -10, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+              <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+              <YAxis tick={{ fontSize: 11 }} />
+              <Tooltip formatter={(value) => [`NPR ${value.toLocaleString()}`, 'Amount']} />
+              <Bar dataKey="value" radius={[6, 6, 0, 0]}>
+                {ledgerChartData.map(entry => (
+                  <Cell key={entry.name} fill={entry.name === 'Expenses' ? 'hsl(0, 84%, 60%)' : entry.name === 'Purchases' ? 'hsl(38, 92%, 50%)' : 'hsl(217, 71%, 53%)'} />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+          <div className="grid grid-cols-2 gap-3 mt-5 text-xs text-muted-foreground">
+            <div className="rounded-2xl bg-muted/40 p-3">
+              <p className="uppercase tracking-[0.2em]">Sales Count</p>
+              <p className="mt-2 text-sm font-semibold text-foreground">{stats.salesCount}</p>
+            </div>
+            <div className="rounded-2xl bg-muted/40 p-3">
+              <p className="uppercase tracking-[0.2em]">Purchase Count</p>
+              <p className="mt-2 text-sm font-semibold text-foreground">{stats.purchaseCount}</p>
+            </div>
+            <div className="rounded-2xl bg-muted/40 p-3">
+              <p className="uppercase tracking-[0.2em]">Expense Count</p>
+              <p className="mt-2 text-sm font-semibold text-foreground">{stats.expenseCount}</p>
+            </div>
+            <div className="rounded-2xl bg-muted/40 p-3">
+              <p className="uppercase tracking-[0.2em]">Payable / Receivable</p>
+              <p className="mt-2 text-sm font-semibold text-foreground">NPR {stats.totalReceivable.toLocaleString()} / NPR {stats.totalPayable.toLocaleString()}</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-card rounded-xl border border-border p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h3 className="text-sm font-semibold text-foreground">Quotation Reports</h3>
+              <p className="text-xs text-muted-foreground">Count and value by category</p>
+            </div>
+            <ClipboardList className="w-5 h-5 text-sky-600" />
+          </div>
+          <div className="space-y-3">
+            {quotationCategories.map(category => (
+              <div key={category.name} className="rounded-2xl bg-muted/40 p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-sm font-medium text-foreground">{category.name}</p>
+                  <p className="text-xs text-muted-foreground">{category.count}</p>
+                </div>
+                <p className="mt-2 text-sm font-semibold text-foreground">NPR {category.totalValue.toLocaleString()}</p>
               </div>
             ))}
           </div>
         </div>
-
-        <div className="bg-card rounded-xl border border-border p-6">
-          <h3 className="text-sm font-semibold text-foreground mb-4">Workflow & Cheque Reminders</h3>
-          <div className="space-y-4">
-            <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-[0.2em] mb-2">Workflow reminders</p>
-              {workflowReminders.length > 0 ? (
-                <div className="space-y-2">
-                  {workflowReminders.slice(0, 5).map((task, idx) => (
-                    <div key={`${task.id}-${idx}`} className="rounded-2xl bg-slate-50 p-3 text-sm">
-                      <div className="flex items-center justify-between gap-2">
-                        <p className="font-medium truncate">{task.title || 'Untitled task'}</p>
-                        <span className="text-[11px] text-muted-foreground">{task.due_date}</span>
-                      </div>
-                      <p className="text-xs text-muted-foreground truncate">{task.assigned_name || task.assigned_to || 'Unassigned'}</p>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-xs text-muted-foreground">No workflow reminders for the next 7 days.</p>
-              )}
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-[0.2em] mb-2">Cheque due alerts</p>
-              {chequeDuePayable.length + chequeDueReceivable.length > 0 ? (
-                <div className="space-y-2">
-                  {chequeDuePayable.slice(0, 2).map(txn => (
-                    <div key={`payable-${txn.id}`} className="rounded-2xl bg-red-50 p-3 text-sm">
-                      <p className="font-medium">Payable: {txn.party_name || txn.description}</p>
-                      <p className="text-xs text-muted-foreground">Due {txn.cheque_date} · NPR {txn.amount?.toLocaleString()}</p>
-                    </div>
-                  ))}
-                  {chequeDueReceivable.slice(0, 2).map(txn => (
-                    <div key={`receivable-${txn.id}`} className="rounded-2xl bg-emerald-50 p-3 text-sm">
-                      <p className="font-medium">Receivable: {txn.party_name || txn.description}</p>
-                      <p className="text-xs text-muted-foreground">Due {txn.cheque_date} · NPR {txn.amount?.toLocaleString()}</p>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-xs text-muted-foreground">No cheque reminders pending.</p>
-              )}
-            </div>
-          </div>
-        </div>
       </div>
 
-      {/* Inventory Summary Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Top 10 Selling Items */}
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
         <div className="bg-card rounded-xl border border-border p-6">
-          <h3 className="text-sm font-semibold text-foreground mb-1">Top 10 Highest Selling Items</h3>
-          <p className="text-xs text-muted-foreground mb-4">By sales value</p>
-          {topSellingItems.length > 0 ? (
-            <div className="space-y-2">
-              {topSellingItems.map((item, idx) => (
-                <div key={item.name} className="flex items-center gap-3">
-                  <span className="text-xs font-bold text-muted-foreground w-5">{idx + 1}</span>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-medium truncate">{item.name}</p>
-                    <p className="text-xs text-muted-foreground">{item.qty} units sold</p>
-                  </div>
-                  <span className="text-xs font-mono font-semibold text-primary">NPR {item.value.toLocaleString()}</span>
-                </div>
-              ))}
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h3 className="text-sm font-semibold text-foreground">Inventory Overview</h3>
+              <p className="text-xs text-muted-foreground">Stock status, top sellers and movement</p>
             </div>
-          ) : (
-            <div className="flex items-center justify-center h-32 text-muted-foreground text-sm">No sales data yet</div>
-          )}
-        </div>
-
-        {/* Inventory Value & Aging */}
-        <div className="space-y-4">
-          <div className="bg-card rounded-xl border border-border p-6">
-            <h3 className="text-sm font-semibold text-foreground mb-3">Inventory Value Summary</h3>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="bg-primary/5 rounded-lg p-4">
-                <p className="text-xs text-muted-foreground mb-1">Total Sold (by value)</p>
-                <p className="text-lg font-bold text-primary">NPR {inventorySoldValue.toLocaleString()}</p>
-              </div>
-              <div className="bg-success/5 rounded-lg p-4">
-                <p className="text-xs text-muted-foreground mb-1">In Hand (by value)</p>
-                <p className="text-lg font-bold text-success">NPR {inventoryInHandValue.toLocaleString()}</p>
-              </div>
+            <Package className="w-5 h-5 text-cyan-600" />
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="rounded-2xl bg-muted/40 p-4">
+              <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">Total Items</p>
+              <p className="mt-2 text-xl font-semibold text-foreground">{stats.totalInventory}</p>
+            </div>
+            <div className="rounded-2xl bg-muted/40 p-4">
+              <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">Low Stock</p>
+              <p className="mt-2 text-xl font-semibold text-foreground">{stats.lowStock}</p>
+            </div>
+            <div className="rounded-2xl bg-muted/40 p-4">
+              <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">Out of Stock</p>
+              <p className="mt-2 text-xl font-semibold text-foreground">{stats.outOfStock}</p>
             </div>
           </div>
-
-          <div className="bg-card rounded-xl border border-border p-6">
-            <div className="flex items-center gap-2 mb-3">
-              <AlertTriangle className="w-4 h-4 text-warning" />
-              <h3 className="text-sm font-semibold text-foreground">Aging Inventory</h3>
-              {agingItems.length > 0 && (
-                <span className="ml-auto text-xs bg-warning/10 text-warning font-semibold px-2 py-0.5 rounded-full">{agingItems.length} items</span>
-              )}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-5">
+            <div className="rounded-2xl bg-muted/40 p-4">
+              <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">Stock Value by Selling Price</p>
+              <p className="mt-2 text-lg font-semibold text-foreground">NPR {inventoryInHandValue.toLocaleString()}</p>
             </div>
-            {agingItems.length > 0 ? (
-              <div className="space-y-2 max-h-40 overflow-y-auto">
-                {agingItems.map(item => {
-                  const days = Math.floor((new Date() - new Date(item.date_of_purchase)) / (1000 * 60 * 60 * 24));
-                  return (
-                    <div key={item.id} className="flex items-center justify-between">
-                      <p className="text-xs font-medium truncate flex-1">{item.description}</p>
-                      <span className="text-xs text-warning font-semibold ml-2">{days}d old</span>
+            <div className="rounded-2xl bg-muted/40 p-4">
+              <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">Value Sold This Fiscal Year</p>
+              <p className="mt-2 text-lg font-semibold text-foreground">NPR {inventorySoldValue.toLocaleString()}</p>
+            </div>
+          </div>
+          <div className="mt-6">
+            <h4 className="text-sm font-semibold text-foreground mb-3">Top 10 Highest Selling Items</h4>
+            {topSellingItems.length > 0 ? (
+              <div className="space-y-3">
+                {topSellingItems.map(item => (
+                  <div key={item.name} className="flex items-center justify-between gap-3 rounded-2xl bg-muted/40 p-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium truncate">{item.name}</p>
+                      <p className="text-xs text-muted-foreground">{item.qty} units</p>
                     </div>
-                  );
-                })}
+                    <p className="text-sm font-semibold text-foreground">NPR {item.value.toLocaleString()}</p>
+                  </div>
+                ))}
               </div>
             ) : (
-              <p className="text-xs text-muted-foreground">No aging inventory alerts</p>
+              <p className="text-sm text-muted-foreground">No sales item data available.</p>
+            )}
+          </div>
+          <div className="mt-6">
+            <h4 className="text-sm font-semibold text-foreground mb-3">Stock Purchased vs Sold</h4>
+            {inventoryMovementData.length > 0 ? (
+              <ResponsiveContainer width="100%" height={240}>
+                <BarChart data={inventoryMovementData} margin={{ top: 10, right: 0, left: -10, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                  <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                  <YAxis tick={{ fontSize: 11 }} />
+                  <Tooltip formatter={(value) => [value.toLocaleString(), 'Units']} />
+                  <Bar dataKey="purchased" name="Purchased" fill="hsl(160, 60%, 45%)" radius={[6, 6, 0, 0]} />
+                  <Bar dataKey="sold" name="Sold" fill="hsl(217, 71%, 53%)" radius={[6, 6, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex items-center justify-center h-[260px] text-muted-foreground text-sm">No stock movement data available.</div>
             )}
           </div>
         </div>
+
+        <div className="bg-card rounded-xl border border-border p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h3 className="text-sm font-semibold text-foreground">Task Reports & Reminder</h3>
+              <p className="text-xs text-muted-foreground">Status counts and pending assignments</p>
+            </div>
+            <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
+            <div className="rounded-2xl bg-muted/40 p-4">
+              <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">Completed</p>
+              <p className="mt-2 text-2xl font-semibold text-foreground">{taskLists.completedCount}</p>
+            </div>
+            <div className="rounded-2xl bg-muted/40 p-4">
+              <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">In Progress</p>
+              <p className="mt-2 text-2xl font-semibold text-foreground">{taskLists.inProgress.length}</p>
+            </div>
+            <div className="rounded-2xl bg-muted/40 p-4">
+              <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">Incomplete</p>
+              <p className="mt-2 text-2xl font-semibold text-foreground">{taskLists.incomplete.length}</p>
+            </div>
+          </div>
+          <div className="mt-6 grid grid-cols-1 gap-4">
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <h4 className="text-sm font-semibold text-foreground">In Progress</h4>
+                <span className="text-xs text-muted-foreground">{taskLists.inProgress.length} tasks</span>
+              </div>
+              {taskLists.inProgress.length > 0 ? (
+                <div className="space-y-3">
+                  {taskLists.inProgress.map(task => (
+                    <div key={task.id} className="rounded-2xl bg-muted/40 p-4">
+                      <p className="text-sm font-medium text-foreground truncate">{task.title || 'Untitled task'}</p>
+                      <p className="text-xs text-muted-foreground mt-1">Assigned to: {task.assigned_name || task.assigned_to || 'Unassigned'}</p>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">No in-progress tasks.</p>
+              )}
+            </div>
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <h4 className="text-sm font-semibold text-foreground">Incomplete</h4>
+                <span className="text-xs text-muted-foreground">{taskLists.incomplete.length} tasks</span>
+              </div>
+              {taskLists.incomplete.length > 0 ? (
+                <div className="space-y-3">
+                  {taskLists.incomplete.map(task => (
+                    <div key={task.id} className="rounded-2xl bg-muted/40 p-4">
+                      <p className="text-sm font-medium text-foreground truncate">{task.title || 'Untitled task'}</p>
+                      <p className="text-xs text-muted-foreground mt-1">Assigned to: {task.assigned_name || task.assigned_to || 'Unassigned'}</p>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">No incomplete tasks.</p>
+              )}
+            </div>
+          </div>
+        </div>
       </div>
 
-      {/* Charts and Activity Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Low Stock Items */}
-        <div className="bg-card rounded-xl border border-border p-6">
-          <h3 className="text-sm font-semibold text-foreground mb-4">Inventory Status</h3>
-          {inventoryItems.length > 0 ? (
-            <ResponsiveContainer width="100%" height={220}>
-              <BarChart data={inventoryItems.slice(0, 5).map(i => ({
-                name: i.description?.substring(0, 15) || 'Item',
-                qty: i.quantity || 0,
-                threshold: i.low_stock_threshold || 5
-              }))}>
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-                <YAxis tick={{ fontSize: 11 }} />
-                <Tooltip />
-                <Bar dataKey="qty" fill="hsl(217, 71%, 53%)" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="threshold" fill="hsl(0, 84%, 60%)" radius={[4, 4, 0, 0]} opacity={0.4} />
-              </BarChart>
-            </ResponsiveContainer>
-          ) : (
-            <div className="flex items-center justify-center h-[220px] text-muted-foreground text-sm">
-              No inventory data yet
-            </div>
-          )}
+      <div className="bg-card rounded-xl border border-border p-6">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h3 className="text-sm font-semibold text-foreground">Transactions</h3>
+            <p className="text-xs text-muted-foreground">Cash inflow/outflow and cheque reminders</p>
+          </div>
+          <ArrowLeftRight className="w-5 h-5 text-slate-600" />
         </div>
-
-        {/* Quotation Status */}
-        <div className="bg-card rounded-xl border border-border p-6">
-          <h3 className="text-sm font-semibold text-foreground mb-4">Quotation Status</h3>
-          {quotationStats.length > 0 ? (
-            <ResponsiveContainer width="100%" height={220}>
-              <PieChart>
-                <Pie
-                  data={quotationStats}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={50}
-                  outerRadius={80}
-                  paddingAngle={4}
-                  dataKey="value"
-                >
-                  {quotationStats.map((_, idx) => (
-                    <Cell key={idx} fill={CHART_COLORS[idx % CHART_COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip />
-              </PieChart>
-            </ResponsiveContainer>
-          ) : (
-            <div className="flex items-center justify-center h-[220px] text-muted-foreground text-sm">
-              No quotations yet
-            </div>
-          )}
-          {quotationStats.length > 0 && (
-            <div className="flex flex-wrap gap-2 mt-2">
-              {quotationStats.map((q, idx) => (
-                <div key={q.name} className="flex items-center gap-1.5 text-xs">
-                  <div className="w-2 h-2 rounded-full" style={{ background: CHART_COLORS[idx % CHART_COLORS.length] }} />
-                  <span className="text-muted-foreground">{q.name}: {q.value}</span>
-                </div>
-              ))}
-            </div>
-          )}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="rounded-2xl bg-muted/40 p-4">
+            <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">Cash Inflow</p>
+            <p className="mt-2 text-2xl font-semibold text-foreground">NPR {cashFlow.inflow.toLocaleString()}</p>
+          </div>
+          <div className="rounded-2xl bg-muted/40 p-4">
+            <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">Cash Outflow</p>
+            <p className="mt-2 text-2xl font-semibold text-foreground">NPR {cashFlow.outflow.toLocaleString()}</p>
+          </div>
         </div>
-
-        {/* Recent Activity */}
-        <RecentActivity activities={recentActivities} />
+        <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div className="rounded-2xl bg-muted/40 p-4">
+            <div className="flex items-center justify-between mb-3">
+              <h4 className="text-sm font-semibold text-foreground">Payable Cheque Reminders</h4>
+              <span className="text-xs text-muted-foreground">{chequePayableDue.length}</span>
+            </div>
+            {chequePayableDue.length > 0 ? (
+              <div className="space-y-3">
+                {chequePayableDue.map(txn => (
+                  <div key={txn.id} className="rounded-2xl bg-white p-3 border border-border">
+                    <p className="text-sm font-medium text-foreground truncate">{txn.cheque_name || txn.party_name || txn.description || 'Cheque payable'}</p>
+                    <p className="text-xs text-muted-foreground mt-1">Issued by: {txn.issued_by || txn.from || txn.party_name || 'Unknown'}</p>
+                    <p className="text-xs text-muted-foreground mt-1">Issued date: {txn.issued_date || txn.date_ad || txn.created_date || 'Unknown'}</p>
+                    <p className="text-xs text-muted-foreground mt-1">Cheque date: {txn.cheque_date || 'Unknown'}</p>
+                    <p className="text-xs text-muted-foreground mt-1">Amount: NPR {(txn.amount || 0).toLocaleString()}</p>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">No payable cheque reminders.</p>
+            )}
+          </div>
+          <div className="rounded-2xl bg-muted/40 p-4">
+            <div className="flex items-center justify-between mb-3">
+              <h4 className="text-sm font-semibold text-foreground">Receivable Cheque Reminders</h4>
+              <span className="text-xs text-muted-foreground">{chequeReceivableDue.length}</span>
+            </div>
+            {chequeReceivableDue.length > 0 ? (
+              <div className="space-y-3">
+                {chequeReceivableDue.map(txn => (
+                  <div key={txn.id} className="rounded-2xl bg-white p-3 border border-border">
+                    <p className="text-sm font-medium text-foreground truncate">{txn.cheque_name || txn.party_name || txn.description || 'Cheque receivable'}</p>
+                    <p className="text-xs text-muted-foreground mt-1">Issued by: {txn.issued_by || txn.from || txn.party_name || 'Unknown'}</p>
+                    <p className="text-xs text-muted-foreground mt-1">Issued date: {txn.issued_date || txn.date_ad || txn.created_date || 'Unknown'}</p>
+                    <p className="text-xs text-muted-foreground mt-1">Cheque date: {txn.cheque_date || 'Unknown'}</p>
+                    <p className="text-xs text-muted-foreground mt-1">Amount: NPR {(txn.amount || 0).toLocaleString()}</p>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">No receivable cheque reminders.</p>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );

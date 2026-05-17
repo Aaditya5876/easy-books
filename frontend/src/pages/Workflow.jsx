@@ -14,6 +14,7 @@ import { CheckCircle, Clock, AlertCircle } from 'lucide-react';
 export default function Workflow() {
   const companyId = getActiveCompanyId();
   const [tasks, setTasks] = useState([]);
+  const [selectedCategory, setSelectedCategory] = useState(null);
   const [loading, setLoading] = useState(true);
   const [showNew, setShowNew] = useState(false);
   const [selectedTask, setSelectedTask] = useState(null);
@@ -95,6 +96,23 @@ export default function Workflow() {
     return order.indexOf(a.status) - order.indexOf(b.status);
   });
 
+  const WORKFLOW_CATEGORIES = [
+    { value: 'job_card', label: 'Job Cards' },
+    { value: 'order_slip', label: 'Order Slips' },
+    { value: 'general_assessments', label: 'General Assessments' },
+  ];
+
+  const filteredTasks = tasks.filter(t => {
+    if (selectedCategory && t.workflow_type !== selectedCategory) return false;
+    return true;
+  });
+
+  const sortedFilteredTasks = [...filteredTasks].sort((a, b) => {
+    if (a.status === b.status) return new Date(a.due_date || '').getTime() - new Date(b.due_date || '').getTime();
+    const order = ['pending', 'in_progress', 'completed', 'cancelled'];
+    return order.indexOf(a.status) - order.indexOf(b.status);
+  });
+
   return (
     <div className="space-y-6 animate-fade-in">
       <PageHeader title="Workflow" subtitle="Job cards, order slips and task board" onAdd={() => setShowNew(true)} addLabel="New Task" />
@@ -113,15 +131,28 @@ export default function Workflow() {
           <p className="mt-2 text-3xl font-bold text-slate-900">{new Set(tasks.map(t => t.assigned_name || t.assigned_to).filter(Boolean)).size}</p>
         </div>
       </div>
-
+      
+      <div className="grid grid-cols-3 gap-3 mt-4">
+        {WORKFLOW_CATEGORIES.map(c => (
+          <button
+            key={c.value}
+            type="button"
+            onClick={() => setSelectedCategory(prev => prev === c.value ? null : c.value)}
+            className={`text-left rounded-xl border p-3 ${selectedCategory === c.value ? 'bg-primary text-white border-primary' : 'bg-card'}`}
+          >
+            <p className="text-xl font-bold">{tasks.filter(t => t.workflow_type === c.value).length}</p>
+            <p className="text-[10px] mt-0.5">{c.label}</p>
+          </button>
+        ))}
+      </div>
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        {sortedTasks.length === 0 && (
+        {sortedFilteredTasks.length === 0 && (
           <div className="col-span-full rounded-3xl border border-dashed border-slate-300 bg-white/80 p-12 text-center text-slate-500">
             No workflow tasks found. Create a new task to display it here.
           </div>
         )}
 
-        {sortedTasks.map(task => {
+        {sortedFilteredTasks.map(task => {
           const Icon = statusIcons[task.status] || Clock;
           return (
             <button
