@@ -147,6 +147,7 @@ async function seedTeaHouse() {
     { name: 'Sita Gurung', designation: 'Cashier', department: 'Finance', phone: '9802220002', salary: 14000, join_date: '2024-03-01', companyId: teaId },
     { name: 'Bikash Shrestha', designation: 'Tea Maker', department: 'Operations', phone: '9802220003', salary: 13000, join_date: '2024-06-01', companyId: teaId },
     { name: 'Maya Lama', designation: 'Cleaner', department: 'Operations', phone: '9802220004', salary: 11000, join_date: '2024-08-01', companyId: teaId },
+    { name: 'Deepak Rai', designation: 'Waiter', department: 'Operations', phone: '9802220005', salary: 12000, join_date: '2024-09-01', companyId: teaId },
   ];
   for (const e of teaEmployees) await run(`Employee: ${e.name}`, () => post('/api/v1/employees', e));
 
@@ -253,6 +254,8 @@ async function seedPharmacy() {
     { name: 'Priya Maharjan', designation: 'Senior Pharmacist', department: 'Operations', phone: '9833330001', salary: 35000, join_date: '2023-05-01', companyId: pharmId },
     { name: 'Anil Thapa', designation: 'Sales Staff', department: 'Sales', phone: '9833330002', salary: 16000, join_date: '2024-01-15', companyId: pharmId },
     { name: 'Kamala Devi', designation: 'Accountant', department: 'Finance', phone: '9833330003', salary: 22000, join_date: '2023-08-01', companyId: pharmId },
+    { name: 'Suresh Basnet', designation: 'Pharmacist Assistant', department: 'Operations', phone: '9833330004', salary: 18000, join_date: '2024-02-01', companyId: pharmId },
+    { name: 'Nirmala Shrestha', designation: 'Billing Staff', department: 'Finance', phone: '9833330005', salary: 15000, join_date: '2024-04-01', companyId: pharmId },
   ];
   for (const e of pharmEmployees) await run(`Employee: ${e.name}`, () => post('/api/v1/employees', e));
 
@@ -319,7 +322,7 @@ async function verify() {
     { label: 'Tea House — Purchases',    path: `/api/v1/purchases?companyId=${teaId}`,     expected: 6 },
     { label: 'Tea House — Sales',        path: `/api/v1/sales?companyId=${teaId}`,         expected: 8 },
     { label: 'Tea House — Transactions', path: `/api/v1/transactions?companyId=${teaId}`,  expected: 10 },
-    { label: 'Tea House — Employees',    path: `/api/v1/employees?companyId=${teaId}`,     expected: 4 },
+    { label: 'Tea House — Employees',    path: `/api/v1/employees?companyId=${teaId}`,     expected: 5 },
     { label: 'Tea House — Quotations',   path: `/api/v1/quotations?companyId=${teaId}`,    expected: 3 },
     { label: 'Tea House — Tasks',        path: `/api/v1/tasks?companyId=${teaId}`,         expected: 4 },
     { label: 'Tea House — Banks',        path: `/api/v1/bank-accounts?companyId=${teaId}`, expected: 1 },
@@ -329,7 +332,7 @@ async function verify() {
     { label: 'Pharmacy — Purchases',     path: `/api/v1/purchases?companyId=${pharmId}`,   expected: 5 },
     { label: 'Pharmacy — Sales',         path: `/api/v1/sales?companyId=${pharmId}`,       expected: 6 },
     { label: 'Pharmacy — Transactions',  path: `/api/v1/transactions?companyId=${pharmId}`,expected: 8 },
-    { label: 'Pharmacy — Employees',     path: `/api/v1/employees?companyId=${pharmId}`,   expected: 3 },
+    { label: 'Pharmacy — Employees',     path: `/api/v1/employees?companyId=${pharmId}`,   expected: 5 },
     { label: 'Pharmacy — Quotations',    path: `/api/v1/quotations?companyId=${pharmId}`,  expected: 2 },
     { label: 'Pharmacy — Tasks',         path: `/api/v1/tasks?companyId=${pharmId}`,       expected: 3 },
     { label: 'Pharmacy — Banks',         path: `/api/v1/bank-accounts?companyId=${pharmId}`,expected: 1 },
