@@ -14,6 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { FileText, RefreshCw, Download, Calculator, Save, CalendarDays, Banknote } from 'lucide-react';
+import { useRole } from "@/lib/useRole";
 import { motion } from 'framer-motion';
 import { jsPDF } from 'jspdf';
 
@@ -38,6 +39,7 @@ function calcLateMinutes(checkIn, expectedIn = '09:00') {
 }
 
 export default function Payroll() {
+  const { canEdit, canProcessPayroll } = useRole();
   const companyId = getActiveCompanyId();
   const [payrolls, setPayrolls] = useState([]);
   const [employees, setEmployees] = useState([]);
@@ -236,7 +238,9 @@ export default function Payroll() {
     )},
     { key: 'actions', label: 'Actions', render: r => (
       <div className="flex gap-2">
-        <Button size="sm" variant="outline" onClick={e => { e.stopPropagation(); setShowDetail(r); setDetailBonus(r.bonus || 0); setDetailOtherDed(r.other_deductions || 0); }}>Details</Button>
+        {canEdit && (
+          <Button size="sm" variant="outline" onClick={e => { e.stopPropagation(); setShowDetail(r); setDetailBonus(r.bonus || 0); setDetailOtherDed(r.other_deductions || 0); }}>Details</Button>
+        )}
         <Button size="sm" variant="outline" onClick={e => { e.stopPropagation(); exportPDF(r); }}>
           <Download className="w-3 h-3 mr-1" /> PDF
         </Button>
@@ -259,10 +263,12 @@ export default function Payroll() {
           <Button variant="outline" onClick={() => { setShowGratuity(true); setGratuityResult(null); setGratuityEmpId(''); }} className="gap-2">
             <Calculator className="w-4 h-4" /> Gratuity
           </Button>
-          <Button onClick={generatePayroll} disabled={generating} className="gap-2">
-            <RefreshCw className={`w-4 h-4 ${generating ? 'animate-spin' : ''}`} />
-            {generating ? 'Generating...' : 'Generate Payroll'}
-          </Button>
+          {canProcessPayroll && (
+            <Button onClick={generatePayroll} disabled={generating} className="gap-2">
+              <RefreshCw className={`w-4 h-4 ${generating ? 'animate-spin' : ''}`} />
+              {generating ? 'Generating...' : 'Generate Payroll'}
+            </Button>
+          )}
         </div>
       </PageHeader>
 
@@ -271,12 +277,12 @@ export default function Payroll() {
           icon={FileText}
           title={`No payroll for ${selectedMonth}`}
           description='Click "Generate Payroll" to calculate salaries for this month.'
-          action={
+          action={canProcessPayroll ? (
             <Button onClick={generatePayroll} disabled={generating} className="gap-2">
               <RefreshCw className={`w-4 h-4 ${generating ? 'animate-spin' : ''}`} />
               {generating ? 'Generating...' : 'Generate Payroll'}
             </Button>
-          }
+          ) : null}
         />
       )}
 

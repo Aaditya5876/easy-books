@@ -20,6 +20,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue
 } from "@/components/ui/select";
 import { Plus, Trash2, ArrowRight, ClipboardList } from 'lucide-react';
+import { useRole } from "@/lib/useRole";
 
 const UNITS = ['Piece', 'Set', 'Liter', 'ml', 'Kg', 'gm', 'NOS'];
 const STATUSES = ['pending', 'sent', 'accepted', 'rejected', 'expired'];
@@ -41,6 +42,7 @@ const EMPTY_FORM = {
 };
 
 export default function Quotations() {
+  const { canEdit } = useRole();
   const companyId = getActiveCompanyId();
   const [quotations, setQuotations] = useState([]);
   const [clients, setClients] = useState([]);
@@ -308,7 +310,7 @@ export default function Quotations() {
       ),
     },
     {
-      key: 'actions', label: '', render: (row) => (row.status !== 'accepted' && row.status !== 'rejected') && (
+      key: 'actions', label: '', render: (row) => canEdit && (row.status !== 'accepted' && row.status !== 'rejected') && (
         <Button
           size="sm"
           variant="outline"
@@ -568,7 +570,7 @@ export default function Quotations() {
           columns={columns}
           data={filtered}
           emptyMessage="No quotations match your filters."
-          onRowClick={openEdit}
+          onRowClick={canEdit ? openEdit : undefined}
         />
       )}
 

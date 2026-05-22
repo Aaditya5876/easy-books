@@ -17,6 +17,7 @@ import {
   UserCircle, User, Phone, Mail, MapPin, Hash,
   Building2, Award, Calendar, Briefcase, FileText,
 } from 'lucide-react';
+import { useRole } from "@/lib/useRole";
 
 const statusColors = {
   active: 'bg-green-100 text-green-700',
@@ -223,6 +224,7 @@ function EmployeeFormBody({ data, onChange }) {
 
 export default function Employees() {
   const companyId = getActiveCompanyId();
+  const { canEdit } = useRole();
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -311,7 +313,7 @@ export default function Employees() {
           columns={columns}
           data={filtered}
           emptyMessage="No employees match your search."
-          onRowClick={(row) => setEditEmployee({ ...row })}
+          onRowClick={canEdit ? (row) => setEditEmployee({ ...row }) : undefined}
         />
       )}
 
@@ -352,7 +354,7 @@ export default function Employees() {
           )}
           <DialogFooter className="mt-4">
             <Button variant="outline" onClick={() => setEditEmployee(null)}>Cancel</Button>
-            <Button onClick={updateEmployee} disabled={!editEmployee?.name}>Save Changes</Button>
+            {canEdit && <Button onClick={updateEmployee} disabled={!editEmployee?.name}>Save Changes</Button>}
           </DialogFooter>
         </DialogContent>
       </Dialog>

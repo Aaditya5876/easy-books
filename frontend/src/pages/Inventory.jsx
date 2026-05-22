@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import PageLoader from '../components/PageLoader';
 import EmptyState from '../components/EmptyState';
+import { useRole } from "@/lib/useRole";
 
 const UNITS = ['Piece', 'Set', 'Liter', 'ml', 'Kg', 'gm', 'NOS'];
 
@@ -69,6 +70,7 @@ const EMPTY_FORM = {
 };
 
 export default function Inventory() {
+  const { canEdit, canDelete } = useRole();
   const companyId = getActiveCompanyId();
   const [items, setItems] = useState([]);
   const [company, setCompany] = useState(null);
@@ -305,18 +307,24 @@ export default function Inventory() {
         onAdd={() => { setShowExtraFields(false); setShowAdd(true); }}
         addLabel="Add Stock"
       >
-        <Button onClick={handleAdjustClick} variant="outline" className="gap-2" disabled={!selectedItem}>
-          <ArrowUpDown className="w-4 h-4" />Adjust Stock
-        </Button>
+        {canEdit && (
+          <Button onClick={handleAdjustClick} variant="outline" className="gap-2" disabled={!selectedItem}>
+            <ArrowUpDown className="w-4 h-4" />Adjust Stock
+          </Button>
+        )}
         <Button onClick={handleViewLog} variant="ghost" className="gap-2" disabled={!selectedItem}>
           <History className="w-4 h-4" />Log
         </Button>
-        <Button onClick={handleUpdateClick} variant="outline" className="gap-2">
-          <Tag className="w-4 h-4" />Update
-        </Button>
-        <Button onClick={handleDeleteClick} variant="destructive" className="gap-2" disabled={!selectedItem}>
-          <Trash2 className="w-4 h-4" />Delete
-        </Button>
+        {canEdit && (
+          <Button onClick={handleUpdateClick} variant="outline" className="gap-2">
+            <Tag className="w-4 h-4" />Update
+          </Button>
+        )}
+        {canDelete && (
+          <Button onClick={handleDeleteClick} variant="destructive" className="gap-2" disabled={!selectedItem}>
+            <Trash2 className="w-4 h-4" />Delete
+          </Button>
+        )}
       </PageHeader>
 
       {lowStockCount > 0 && (

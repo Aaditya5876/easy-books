@@ -3,18 +3,18 @@ import { Link, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, BookOpen, ArrowLeftRight, Users, UserCheck,
   Package, ShoppingCart, Receipt, FileText, MessageSquare,
-  FileSpreadsheet, UserCircle, CalendarCheck, Banknote,
+  FileSpreadsheet, CalendarCheck, Banknote,
   ChevronLeft, ChevronRight, Building2, ChevronDown, ClipboardList, BarChart2,
-  Kanban
+  Kanban, UserCircle, Settings, Shield
 } from 'lucide-react';
 import { cn } from "@/lib/utils";
+import { useRole } from "@/lib/useRole";
 
 const navSections = [
   {
     label: 'Main',
     labelColor: 'text-sidebar-muted',
     activeClass: 'bg-sidebar-primary text-sidebar-primary-foreground shadow-sm',
-    activeIconClass: 'text-white',
     items: [
       { icon: LayoutDashboard, label: 'Dashboard', path: '/' },
       { icon: BarChart2, label: 'Reports', path: '/reports' },
@@ -24,7 +24,6 @@ const navSections = [
     label: 'Accounts',
     labelColor: 'text-blue-400',
     activeClass: 'bg-blue-600 text-white shadow-sm shadow-blue-900/30',
-    activeIconClass: 'text-white',
     items: [
       { icon: BookOpen, label: 'Ledger', path: '/ledger' },
       { icon: ArrowLeftRight, label: 'Transactions', path: '/transactions' },
@@ -34,7 +33,6 @@ const navSections = [
     label: 'Business',
     labelColor: 'text-emerald-400',
     activeClass: 'bg-emerald-600 text-white shadow-sm shadow-emerald-900/30',
-    activeIconClass: 'text-white',
     items: [
       { icon: Users, label: 'Vendors', path: '/vendors' },
       { icon: UserCheck, label: 'Clients', path: '/clients' },
@@ -48,7 +46,6 @@ const navSections = [
     label: 'Workflow',
     labelColor: 'text-amber-400',
     activeClass: 'bg-amber-600 text-white shadow-sm shadow-amber-900/30',
-    activeIconClass: 'text-white',
     items: [
       { icon: Kanban, label: 'Workflow', path: '/workflow' },
     ]
@@ -57,19 +54,41 @@ const navSections = [
     label: 'Records',
     labelColor: 'text-violet-400',
     activeClass: 'bg-violet-600 text-white shadow-sm shadow-violet-900/30',
-    activeIconClass: 'text-white',
     items: [
       { icon: FileText, label: 'Memo', path: '/memo' },
       { icon: MessageSquare, label: 'Communication', path: '/communication' },
       { icon: FileSpreadsheet, label: 'Templates', path: '/templates' },
     ]
   },
+  {
+    label: 'HR',
+    labelColor: 'text-sky-400',
+    activeClass: 'bg-sky-600 text-white shadow-sm shadow-sky-900/30',
+    // visible to ACCOUNTANT + ADMIN
+    minRole: 'accountant',
+    items: [
+      { icon: UserCircle, label: 'Employees', path: '/employees' },
+      { icon: CalendarCheck, label: 'Attendance', path: '/attendance' },
+      { icon: Banknote, label: 'Payroll', path: '/payroll' },
+    ]
+  },
+  {
+    label: 'Admin',
+    labelColor: 'text-rose-400',
+    activeClass: 'bg-rose-600 text-white shadow-sm shadow-rose-900/30',
+    // visible to ADMIN only
+    minRole: 'admin',
+    items: [
+      { icon: Settings, label: 'Settings', path: '/settings' },
+    ]
+  },
 ];
 
 export default function SidebarNav({ collapsed, onToggle }) {
   const location = useLocation();
+  const { isAdmin, canViewPayroll } = useRole();
   const [expandedSections, setExpandedSections] = useState(
-    navSections.map((_, i) => true)
+    navSections.map(() => true)
   );
 
   const toggleSection = (index) => {
@@ -79,6 +98,13 @@ export default function SidebarNav({ collapsed, onToggle }) {
       return next;
     });
   };
+
+  // Filter sections based on role
+  const visibleSections = navSections.filter(section => {
+    if (section.minRole === 'admin') return isAdmin;
+    if (section.minRole === 'accountant') return canViewPayroll; // canViewPayroll = ACCOUNTANT + ADMIN
+    return true;
+  });
 
   return (
     <aside className={cn(
@@ -100,7 +126,7 @@ export default function SidebarNav({ collapsed, onToggle }) {
 
       {/* Navigation */}
       <nav className="flex-1 overflow-y-auto py-3 px-2 space-y-1">
-        {navSections.map((section, sIdx) => (
+        {visibleSections.map((section, sIdx) => (
           <div key={section.label} className="mb-1">
             {!collapsed && (
               <button
@@ -110,7 +136,10 @@ export default function SidebarNav({ collapsed, onToggle }) {
                   section.labelColor
                 )}
               >
-                {section.label}
+                <span className="flex items-center gap-1.5">
+                  {section.minRole === 'admin' && <Shield className="w-2.5 h-2.5" />}
+                  {section.label}
+                </span>
                 <ChevronDown className={cn(
                   "w-3 h-3 transition-transform",
                   !expandedSections[sIdx] && "-rotate-90"

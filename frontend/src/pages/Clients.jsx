@@ -21,6 +21,7 @@ import EmptyState from '../components/EmptyState';
 import {
   UserCheck, Building2, Phone, Mail, MapPin, Hash, Wallet, CreditCard, FileText, Truck, User
 } from 'lucide-react';
+import { useRole } from "@/lib/useRole";
 
 const CRM_STATUSES = ['lead', 'prospect', 'active', 'inactive'];
 const PAYMENT_TERMS = ['Immediate', 'NET-15', 'NET-30', 'NET-45', 'NET-60'];
@@ -28,6 +29,7 @@ const EMPTY_FORM = { name: '', contact_person: '', phone: '', email: '', address
 
 export default function Clients() {
   const companyId = getActiveCompanyId();
+  const { canEdit } = useRole();
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -120,7 +122,7 @@ export default function Clients() {
       {clients.length === 0 ? (
         <EmptyState icon={UserCheck} title="No clients yet" description="Add your first client to start managing your sales relationships." action={<Button onClick={() => setShowAdd(true)}>Add Client</Button>} />
       ) : (
-        <DataTable columns={columns} data={filtered} emptyMessage="No clients match your search." onRowClick={(row) => setEditClient({ ...row })} />
+        <DataTable columns={columns} data={filtered} emptyMessage="No clients match your search." onRowClick={canEdit ? (row) => setEditClient({ ...row }) : undefined} />
       )}
 
       {/* Add Dialog */}
@@ -398,7 +400,7 @@ export default function Clients() {
 
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditClient(null)}>Cancel</Button>
-            <Button onClick={updateClient} disabled={!editClient?.name}>Save Changes</Button>
+            {canEdit && <Button onClick={updateClient} disabled={!editClient?.name}>Save Changes</Button>}
           </DialogFooter>
         </DialogContent>
       </Dialog>

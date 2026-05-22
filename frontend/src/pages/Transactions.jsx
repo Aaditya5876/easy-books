@@ -20,6 +20,7 @@ import {
   Eye, EyeOff, ExternalLink, FileText, User, Calendar, Hash,
   Landmark, Globe, Lock, ArrowLeftRight,
 } from 'lucide-react';
+import { useRole } from "@/lib/useRole";
 import { motion } from 'framer-motion';
 import PageLoader from '../components/PageLoader';
 import EmptyState from '../components/EmptyState';
@@ -41,6 +42,7 @@ const PAY_METHODS = [
 ];
 
 export default function Transactions() {
+  const { canDelete } = useRole();
   const companyId = getActiveCompanyId();
   const [transactions, setTransactions] = useState([]);
   const [bankAccounts, setBankAccounts] = useState([]);
@@ -244,10 +246,12 @@ export default function Transactions() {
                   <Building2 className="w-3.5 h-3.5" />
                   <span>{acct.bank_name}</span>
                   <span className="text-xs opacity-60">···{acct.account_number?.slice(-4)}</span>
-                  <button
-                    onClick={e => { e.stopPropagation(); deleteBankAccount(acct.id); }}
-                    className="ml-1 opacity-0 group-hover:opacity-60 hover:!opacity-100 transition-opacity"
-                  ><X className="w-3 h-3" /></button>
+                  {canDelete && (
+                    <button
+                      onClick={e => { e.stopPropagation(); deleteBankAccount(acct.id); }}
+                      className="ml-1 opacity-0 group-hover:opacity-60 hover:!opacity-100 transition-opacity"
+                    ><X className="w-3 h-3" /></button>
+                  )}
                 </div>
               ))}
               <button

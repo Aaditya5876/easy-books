@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { api } from '@/api/adapter';
 import { usersApi, companyApi } from '@/api';
 import { useAuth } from '@/lib/AuthContext';
+import { useRole } from "@/lib/useRole";
 import { getActiveCompanyId, setActiveCompanyId } from '@/lib/companyContext';
 import PageHeader from '../components/shared/PageHeader';
 import { Button } from "@/components/ui/button";
@@ -39,6 +40,7 @@ const BUSINESS_TYPE_LABELS = Object.fromEntries(BUSINESS_TYPES.map(b => [b.value
 
 export default function Settings() {
   const { user } = useAuth();
+  const { canEdit, canDelete, canManageUsers } = useRole();
   const isAdmin = user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN';
   const activeCompanyId = getActiveCompanyId();
 
@@ -251,13 +253,17 @@ export default function Settings() {
                   </div>
                 </div>
                 <div className="flex gap-2">
-                  <Button size="sm" variant="outline" onClick={() => setEditingCompany({ ...c })}>Edit</Button>
+                  {canEdit && (
+                    <Button size="sm" variant="outline" onClick={() => setEditingCompany({ ...c })}>Edit</Button>
+                  )}
                   {c.id !== activeCompanyId && (
                     <Button size="sm" variant="outline" onClick={() => { setActiveCompanyId(c.id); window.location.href = '/'; }}>Set Active</Button>
                   )}
-                  <Button size="icon" variant="ghost" onClick={() => deleteCompany(c.id)}>
-                    <Trash2 className="w-4 h-4 text-destructive" />
-                  </Button>
+                  {canDelete && (
+                    <Button size="icon" variant="ghost" onClick={() => deleteCompany(c.id)}>
+                      <Trash2 className="w-4 h-4 text-destructive" />
+                    </Button>
+                  )}
                 </div>
               </div>
             ))}
@@ -278,9 +284,11 @@ export default function Settings() {
             <>
               <div className="flex items-center justify-between">
                 <p className="text-sm text-muted-foreground">{users.length} member{users.length !== 1 ? 's' : ''} in this company</p>
-                <Button onClick={() => setShowInvite(true)}>
-                  <UserPlus className="w-4 h-4 mr-1" />Invite User
-                </Button>
+                {canManageUsers && (
+                  <Button onClick={() => setShowInvite(true)}>
+                    <UserPlus className="w-4 h-4 mr-1" />Invite User
+                  </Button>
+                )}
               </div>
 
               {usersLoading ? (

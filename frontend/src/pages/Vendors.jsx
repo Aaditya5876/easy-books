@@ -20,12 +20,14 @@ import EmptyState from '../components/EmptyState';
 import {
   Users, Building2, Phone, Mail, MapPin, Hash, Wallet, CreditCard, FileText, Truck, User
 } from 'lucide-react';
+import { useRole } from "@/lib/useRole";
 
 const PAYMENT_TERMS = ['Immediate', 'NET-15', 'NET-30', 'NET-45', 'NET-60'];
 const EMPTY_FORM = { name: '', contact_person: '', phone: '', email: '', address: '', pan_vat: '', opening_balance: '', credit_limit: '', payment_terms: 'Immediate', notes: '' };
 
 export default function Vendors() {
   const companyId = getActiveCompanyId();
+  const { canEdit } = useRole();
   const [vendors, setVendors] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -97,7 +99,7 @@ export default function Vendors() {
       {vendors.length === 0 ? (
         <EmptyState icon={Users} title="No vendors yet" description="Add your first vendor to start tracking purchases." action={<Button onClick={() => setShowAdd(true)}>Add Vendor</Button>} />
       ) : (
-        <DataTable columns={columns} data={filtered} emptyMessage="No vendors match your search." onRowClick={(row) => setEditVendor({ ...row })} />
+        <DataTable columns={columns} data={filtered} emptyMessage="No vendors match your search." onRowClick={canEdit ? (row) => setEditVendor({ ...row }) : undefined} />
       )}
 
       {/* Add Dialog */}
@@ -347,7 +349,7 @@ export default function Vendors() {
 
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditVendor(null)}>Cancel</Button>
-            <Button onClick={updateVendor} disabled={!editVendor?.name}>Save Changes</Button>
+            {canEdit && <Button onClick={updateVendor} disabled={!editVendor?.name}>Save Changes</Button>}
           </DialogFooter>
         </DialogContent>
       </Dialog>

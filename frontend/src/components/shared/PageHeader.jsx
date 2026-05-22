@@ -1,8 +1,18 @@
 import { Button } from "@/components/ui/button";
-import { Plus, Search, Trash2, Tag } from 'lucide-react';
+import { Plus, Search, Trash2, Tag, Lock } from 'lucide-react';
 import { Input } from "@/components/ui/input";
+import { useRole } from "@/lib/useRole";
 
-export default function PageHeader({ title, subtitle, onAdd, addLabel, onDelete, deleteLabel, onUpdatePrice, updatePriceLabel, searchValue, onSearchChange, children }) {
+export default function PageHeader({
+  title, subtitle,
+  onAdd, addLabel,
+  onDelete, deleteLabel,
+  onUpdatePrice, updatePriceLabel,
+  searchValue, onSearchChange,
+  children,
+}) {
+  const { canCreate, canDelete, canEdit } = useRole();
+
   return (
     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
       <div>
@@ -22,23 +32,30 @@ export default function PageHeader({ title, subtitle, onAdd, addLabel, onDelete,
           </div>
         )}
         {children}
-        {onAdd && (
+        {onAdd && canCreate && (
           <Button onClick={onAdd} className="gap-2">
             <Plus className="w-4 h-4" />
             {addLabel || 'Add New'}
           </Button>
         )}
-        {onUpdatePrice && (
+        {onUpdatePrice && canEdit && (
           <Button onClick={onUpdatePrice} variant="outline" className="gap-2">
             <Tag className="w-4 h-4" />
             {updatePriceLabel || 'Update Price'}
           </Button>
         )}
-        {onDelete && (
+        {onDelete && canDelete && (
           <Button onClick={onDelete} variant="destructive" className="gap-2">
             <Trash2 className="w-4 h-4" />
             {deleteLabel || 'Delete'}
           </Button>
+        )}
+        {/* Show a read-only badge for STAFF so they know their access level */}
+        {!canCreate && onAdd && (
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground bg-muted px-3 py-1.5 rounded-lg border">
+            <Lock className="w-3 h-3" />
+            View only
+          </div>
         )}
       </div>
     </div>
