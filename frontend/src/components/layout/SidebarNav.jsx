@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { cn } from "@/lib/utils";
 import { useRole } from "@/lib/useRole";
+import { usePreferences, isColorDark } from '@/lib/PreferencesContext';
 
 const navSections = [
   {
@@ -87,9 +88,13 @@ const navSections = [
 export default function SidebarNav({ collapsed, onToggle }) {
   const location = useLocation();
   const { isAdmin, canViewPayroll } = useRole();
+  const { prefs } = usePreferences();
   const [expandedSections, setExpandedSections] = useState(
     navSections.map(() => true)
   );
+
+  const hasBgColor = !!prefs.sidebarColor;
+  const bgIsDark = hasBgColor ? isColorDark(prefs.sidebarColor) : true;
 
   const toggleSection = (index) => {
     setExpandedSections(prev => {
@@ -107,19 +112,35 @@ export default function SidebarNav({ collapsed, onToggle }) {
   });
 
   return (
-    <aside className={cn(
-      "fixed left-0 top-0 h-screen bg-sidebar text-sidebar-foreground z-40 flex flex-col transition-all duration-300",
-      collapsed ? "w-[68px]" : "w-[240px]"
-    )}>
+    <aside
+      className={cn(
+        "fixed left-0 top-0 h-screen bg-sidebar text-sidebar-foreground z-40 flex flex-col transition-all duration-300",
+        collapsed ? "w-[68px]" : "w-[240px]"
+      )}
+      style={hasBgColor ? { backgroundColor: prefs.sidebarColor } : undefined}
+    >
       {/* Logo */}
-      <div className="flex items-center gap-3 px-4 h-16 border-b border-sidebar-border shrink-0">
-        <div className="w-8 h-8 rounded-lg bg-sidebar-primary flex items-center justify-center shrink-0">
-          <Building2 className="w-4 h-4 text-sidebar-primary-foreground" />
-        </div>
+      <div className={cn(
+        "flex items-center gap-3 px-4 h-16 border-b shrink-0",
+        hasBgColor ? "border-white/10" : "border-sidebar-border"
+      )}>
+        {prefs.companyLogoUrl ? (
+          <img src={prefs.companyLogoUrl} alt="Company" className="w-8 h-8 rounded-lg object-cover shrink-0 ring-1 ring-white/20" />
+        ) : (
+          <div className="w-8 h-8 rounded-lg bg-sidebar-primary flex items-center justify-center shrink-0">
+            <Building2 className="w-4 h-4 text-sidebar-primary-foreground" />
+          </div>
+        )}
         {!collapsed && (
           <div className="animate-fade-in">
-            <h1 className="text-sm font-bold tracking-tight text-sidebar-foreground">EasyBooks</h1>
-            <p className="text-[10px] text-sidebar-muted leading-none">ERP · CRM · HRM</p>
+            <h1 className={cn(
+              "text-sm font-bold tracking-tight",
+              hasBgColor ? (bgIsDark ? "text-white" : "text-gray-900") : "text-sidebar-foreground"
+            )}>EasyBooks</h1>
+            <p className={cn(
+              "text-[10px] leading-none",
+              hasBgColor ? (bgIsDark ? "text-white/50" : "text-gray-600") : "text-sidebar-muted"
+            )}>ERP · CRM · HRM</p>
           </div>
         )}
       </div>
@@ -181,8 +202,24 @@ export default function SidebarNav({ collapsed, onToggle }) {
         ))}
       </nav>
 
+      {/* GeoInfosys badge */}
+      {prefs.companyLogoUrl && !collapsed && (
+        <div className={cn(
+          "shrink-0 px-4 pb-1.5 text-center border-b",
+          hasBgColor ? "border-white/10" : "border-sidebar-border"
+        )}>
+          <p className={cn(
+            "text-[10px]",
+            hasBgColor ? (bgIsDark ? "text-white/30" : "text-gray-400") : "text-sidebar-muted/50"
+          )}>Powered by GeoInfosys</p>
+        </div>
+      )}
+
       {/* Collapse toggle */}
-      <div className="shrink-0 p-2 border-t border-sidebar-border">
+      <div className={cn(
+        "shrink-0 p-2 border-t",
+        hasBgColor ? "border-white/10" : "border-sidebar-border"
+      )}>
         <button
           onClick={onToggle}
           className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sidebar-muted hover:bg-sidebar-accent hover:text-sidebar-foreground transition-colors"

@@ -1,9 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { api } from '@/api/adapter';
 import { usersApi, companyApi } from '@/api';
 import { useAuth } from '@/lib/AuthContext';
 import { useRole } from "@/lib/useRole";
+import { usePreferences } from '@/lib/PreferencesContext';
 import { getActiveCompanyId, setActiveCompanyId } from '@/lib/companyContext';
 import PageHeader from '../components/shared/PageHeader';
 import { Button } from "@/components/ui/button";
@@ -16,8 +17,17 @@ import {
 } from "@/components/ui/dialog";
 import {
   Building2, Plus, Trash2, Save, ImagePlus, X, UserPlus, Copy, Check, Shield,
-  Phone, Mail, MapPin, Hash, User
+  Phone, Mail, MapPin, Hash, User, Palette, Type, Bell, RotateCcw, Upload
 } from 'lucide-react';
+
+const SIDEBAR_PALETTE = ['#1e293b', '#1e3a5f', '#14532d', '#4c1d95', '#881337', '#7c2d12'];
+const TOPBAR_PALETTE = ['#ffffff', '#f8fafc', '#eff6ff', '#f0fdf4', '#0f172a', '#1d4ed8'];
+const FONT_SIZES = [
+  { key: 'small',  label: 'Small',   px: '12px' },
+  { key: 'medium', label: 'Medium',  px: '14px' },
+  { key: 'large',  label: 'Large',   px: '16px' },
+  { key: 'xl',     label: 'XL',      px: '18px' },
+];
 
 const ROLE_COLORS = {
   ADMIN: 'bg-red-100 text-red-700',
@@ -41,8 +51,10 @@ const BUSINESS_TYPE_LABELS = Object.fromEntries(BUSINESS_TYPES.map(b => [b.value
 export default function Settings() {
   const { user } = useAuth();
   const { canEdit, canDelete, canManageUsers } = useRole();
+  const { prefs, updatePref, resetPrefs } = usePreferences();
   const isAdmin = user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN';
   const activeCompanyId = getActiveCompanyId();
+  const logoInputRef = useRef(null);
 
   // ── Companies ─────────────────────────────────────────────────────────────
   const [companies, setCompanies] = useState([]);
@@ -66,8 +78,8 @@ export default function Settings() {
   const [copied, setCopied] = useState(false);
   const [roleChanging, setRoleChanging] = useState(null);
 
-  // ── Preferences ───────────────────────────────────────────────────────────
-  const [prefs, setPrefs] = useState({
+  // ── Company Prefs (server-side) ───────────────────────────────────────────
+  const [companyPrefs, setCompanyPrefs] = useState({
     abbreviation: '', workingDaysPerMonth: 26,
   });
   const [prefsSaving, setPrefsSaving] = useState(false);
@@ -83,7 +95,7 @@ export default function Settings() {
     ]);
     setCompanies(list);
     const active = list.find(c => c.id === activeCompanyId);
-    setPrefs({
+    setCompanyPrefs({
       abbreviation: active?.abbreviation || '',
       workingDaysPerMonth: payrollRes?.data?.workingDaysPerMonth ?? 26,
     });
@@ -187,9 +199,9 @@ export default function Settings() {
     setPrefsSaving(true);
     try {
       await Promise.all([
-        companyApi.update(activeCompanyId, { abbreviation: prefs.abbreviation || undefined }),
+        companyApi.update(activeCompanyId, { abbreviation: companyPrefs.abbreviation || undefined }),
         companyApi.upsertPayrollSettings(activeCompanyId, {
-          workingDaysPerMonth: Number(prefs.workingDaysPerMonth),
+          workingDaysPerMonth: Number(companyPrefs.workingDaysPerMonth),
         }),
       ]);
       setPrefsSaved(true);
@@ -199,6 +211,14 @@ export default function Settings() {
     } finally {
       setPrefsSaving(false);
     }
+  }
+
+  function handleUiLogoUpload(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => updatePref('companyLogoUrl', ev.target.result);
+    reader.readAsDataURL(file);
   }
 
   if (loading) return (
@@ -211,7 +231,7 @@ export default function Settings() {
     <div className="space-y-6 animate-fade-in">
       <PageHeader title="Settings" subtitle="Manage companies, users and preferences" />
 
-      <Tabs defaultValue="companies">
+      <Tabs defaultValue="preferences">
         <TabsList>
           <TabsTrigger value="companies">Companies</TabsTrigger>
           <TabsTrigger value="users" onClick={loadUsers}>Users</TabsTrigger>
@@ -340,21 +360,23 @@ export default function Settings() {
         </TabsContent>
 
         {/* ── Preferences Tab ───────────────────────────────────────────── */}
-        <TabsContent value="preferences" className="mt-4">
+        <TabsContent value="preferences" className="mt-4 space-y-5">
+
+          {/* Company Settings */}
           <div className="bg-card rounded-xl border p-6 space-y-5 max-w-lg">
-            <h3 className="font-semibold">Company Preferences</h3>
+            <h3 className="font-semibold">Company Settings</h3>
 
             <div className="space-y-1.5">
               <Label>Invoice Prefix / Abbreviation</Label>
-              <Input placeholder="e.g. INV, ABC, XYZ" value={prefs.abbreviation}
-                onChange={e => setPrefs({ ...prefs, abbreviation: e.target.value.toUpperCase().slice(0, 6) })} />
+              <Input placeholder="e.g. INV, ABC, XYZ" value={companyPrefs.abbreviation}
+                onChange={e => setCompanyPrefs({ ...companyPrefs, abbreviation: e.target.value.toUpperCase().slice(0, 6) })} />
               <p className="text-xs text-muted-foreground">Used in invoice numbers: ABC/2081-82/0001</p>
             </div>
 
             <div className="space-y-1.5">
               <Label>Working Days per Month</Label>
-              <SmartNumberInput min={20} max={31} value={prefs.workingDaysPerMonth}
-                onChange={e => setPrefs({ ...prefs, workingDaysPerMonth: parseInt(e.target.value) || 26 })} />
+              <SmartNumberInput min={20} max={31} value={companyPrefs.workingDaysPerMonth}
+                onChange={e => setCompanyPrefs({ ...companyPrefs, workingDaysPerMonth: parseInt(e.target.value) || 26 })} />
               <p className="text-xs text-muted-foreground">Used for absent-day salary deduction (default: 26)</p>
             </div>
 
@@ -380,6 +402,202 @@ export default function Settings() {
               {prefsSaved ? <><Check className="w-4 h-4 mr-1" />Saved!</> : prefsSaving ? 'Saving…' : <><Save className="w-4 h-4 mr-1" />Save Preferences</>}
             </Button>
             {!isAdmin && <p className="text-xs text-muted-foreground text-center">Only Admins can change preferences.</p>}
+          </div>
+
+          {/* Appearance */}
+          <div className="bg-card rounded-xl border p-6 space-y-6 max-w-lg">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Palette className="w-4 h-4 text-primary" />
+                <h3 className="font-semibold">Appearance</h3>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={resetPrefs}
+                className="text-muted-foreground gap-1.5"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />Reset to Defaults
+              </Button>
+            </div>
+
+            {/* Company Logo */}
+            <div className="space-y-2">
+              <Label className="flex items-center gap-1.5"><Upload className="w-3.5 h-3.5" />Sidebar Logo</Label>
+              <p className="text-xs text-muted-foreground">Replaces the Building icon in the sidebar top-left. Shows "Powered by GeoInfosys" badge below.</p>
+              <div className="flex items-center gap-3">
+                {prefs.companyLogoUrl ? (
+                  <div className="relative">
+                    <img src={prefs.companyLogoUrl} alt="Sidebar logo" className="w-14 h-14 rounded-xl object-cover border shadow-sm" />
+                    <button
+                      type="button"
+                      onClick={() => updatePref('companyLogoUrl', '')}
+                      className="absolute -top-2 -right-2 bg-destructive text-destructive-foreground rounded-full w-5 h-5 flex items-center justify-center shadow hover:scale-110 transition-transform"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                ) : (
+                  <label className="flex flex-col items-center justify-center w-14 h-14 border-2 border-dashed border-muted-foreground/25 rounded-xl cursor-pointer hover:border-primary/50 hover:bg-primary/5 transition-colors">
+                    <ImagePlus className="w-4 h-4 text-muted-foreground mb-0.5" />
+                    <span className="text-[10px] text-muted-foreground">Upload</span>
+                    <input ref={logoInputRef} type="file" accept="image/*" className="hidden" onChange={handleUiLogoUpload} />
+                  </label>
+                )}
+                {!prefs.companyLogoUrl && (
+                  <p className="text-xs text-muted-foreground">PNG, JPG, SVG up to 2 MB</p>
+                )}
+              </div>
+            </div>
+
+            {/* Sidebar Color */}
+            <div className="space-y-2">
+              <Label>Sidebar Background Color</Label>
+              <div className="flex items-center gap-2 flex-wrap">
+                {SIDEBAR_PALETTE.map(c => (
+                  <button
+                    key={c}
+                    type="button"
+                    onClick={() => updatePref('sidebarColor', c)}
+                    title={c}
+                    className="w-7 h-7 rounded-lg border-2 transition-all hover:scale-110"
+                    style={{
+                      backgroundColor: c,
+                      borderColor: prefs.sidebarColor === c ? 'hsl(var(--primary))' : 'transparent',
+                      outline: prefs.sidebarColor === c ? '2px solid hsl(var(--primary))' : 'none',
+                      outlineOffset: '2px',
+                    }}
+                  />
+                ))}
+                <label
+                  className="w-7 h-7 rounded-lg border-2 border-dashed border-muted-foreground/40 flex items-center justify-center cursor-pointer hover:border-primary/60 transition-colors overflow-hidden"
+                  title="Custom color"
+                  style={prefs.sidebarColor && !SIDEBAR_PALETTE.includes(prefs.sidebarColor) ? { backgroundColor: prefs.sidebarColor } : {}}
+                >
+                  <Palette className="w-3.5 h-3.5 text-muted-foreground" />
+                  <input
+                    type="color"
+                    className="sr-only"
+                    value={prefs.sidebarColor || '#1e293b'}
+                    onChange={e => updatePref('sidebarColor', e.target.value)}
+                  />
+                </label>
+                {prefs.sidebarColor && (
+                  <button
+                    type="button"
+                    onClick={() => updatePref('sidebarColor', '')}
+                    className="text-xs text-muted-foreground hover:text-foreground underline"
+                  >
+                    Reset
+                  </button>
+                )}
+              </div>
+              {prefs.sidebarColor && (
+                <p className="text-xs text-muted-foreground">Current: {prefs.sidebarColor}</p>
+              )}
+            </div>
+
+            {/* Topbar Color */}
+            <div className="space-y-2">
+              <Label>Topbar Background Color</Label>
+              <div className="flex items-center gap-2 flex-wrap">
+                {TOPBAR_PALETTE.map(c => (
+                  <button
+                    key={c}
+                    type="button"
+                    onClick={() => updatePref('topbarColor', c)}
+                    title={c}
+                    className="w-7 h-7 rounded-lg border-2 transition-all hover:scale-110"
+                    style={{
+                      backgroundColor: c,
+                      borderColor: prefs.topbarColor === c ? 'hsl(var(--primary))' : '#e2e8f0',
+                      outline: prefs.topbarColor === c ? '2px solid hsl(var(--primary))' : 'none',
+                      outlineOffset: '2px',
+                    }}
+                  />
+                ))}
+                <label
+                  className="w-7 h-7 rounded-lg border-2 border-dashed border-muted-foreground/40 flex items-center justify-center cursor-pointer hover:border-primary/60 transition-colors overflow-hidden"
+                  title="Custom color"
+                  style={prefs.topbarColor && !TOPBAR_PALETTE.includes(prefs.topbarColor) ? { backgroundColor: prefs.topbarColor } : {}}
+                >
+                  <Palette className="w-3.5 h-3.5 text-muted-foreground" />
+                  <input
+                    type="color"
+                    className="sr-only"
+                    value={prefs.topbarColor || '#ffffff'}
+                    onChange={e => updatePref('topbarColor', e.target.value)}
+                  />
+                </label>
+                {prefs.topbarColor && (
+                  <button
+                    type="button"
+                    onClick={() => updatePref('topbarColor', '')}
+                    className="text-xs text-muted-foreground hover:text-foreground underline"
+                  >
+                    Reset
+                  </button>
+                )}
+              </div>
+              {prefs.topbarColor && (
+                <p className="text-xs text-muted-foreground">Current: {prefs.topbarColor}</p>
+              )}
+            </div>
+
+            {/* Font Size */}
+            <div className="space-y-2">
+              <Label className="flex items-center gap-1.5"><Type className="w-3.5 h-3.5" />Font Size</Label>
+              <div className="flex gap-2">
+                {FONT_SIZES.map(f => (
+                  <button
+                    key={f.key}
+                    type="button"
+                    onClick={() => updatePref('fontSize', f.key)}
+                    className={`flex-1 flex flex-col items-center py-2.5 px-2 rounded-lg border-2 transition-all ${
+                      prefs.fontSize === f.key
+                        ? 'border-primary bg-primary/5'
+                        : 'border-border hover:border-primary/40'
+                    }`}
+                  >
+                    <span className="font-semibold" style={{ fontSize: f.px }}>A</span>
+                    <span className="text-[10px] text-muted-foreground mt-0.5">{f.label}</span>
+                    <span className="text-[9px] text-muted-foreground/60">{f.px}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Notifications */}
+            <div className="space-y-2">
+              <Label className="flex items-center gap-1.5"><Bell className="w-3.5 h-3.5" />Notification Preferences</Label>
+              <div className="space-y-2">
+                {[
+                  { key: 'transactions', label: 'Transaction Alerts', desc: 'Low stock, stale cheques, expiring bank guarantees' },
+                  { key: 'reminders',    label: 'Reminders',          desc: 'Payroll due, attendance missing, task deadlines' },
+                  { key: 'system',       label: 'System Notices',     desc: 'Updates, maintenance, role changes' },
+                ].map(n => (
+                  <div key={n.key} className="flex items-start justify-between gap-4 py-2 border-b border-border/50 last:border-0">
+                    <div>
+                      <p className="text-sm font-medium">{n.label}</p>
+                      <p className="text-xs text-muted-foreground">{n.desc}</p>
+                    </div>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={prefs.notifications[n.key]}
+                      onClick={() => updatePref('notifications', { [n.key]: !prefs.notifications[n.key] })}
+                      className={`relative shrink-0 w-10 h-5 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 ${
+                        prefs.notifications[n.key] ? 'bg-primary' : 'bg-muted'
+                      }`}
+                    >
+                      <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-transform ${
+                        prefs.notifications[n.key] ? 'translate-x-5' : 'translate-x-0'
+                      }`} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         </TabsContent>
       </Tabs>

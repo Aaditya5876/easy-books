@@ -9,6 +9,7 @@ import {
   UsersRound, Banknote, Sun, Moon, X, Package, Users, UserCheck,
   AlertTriangle, FileText, ArrowLeftRight,
 } from 'lucide-react';
+import { usePreferences } from '@/lib/PreferencesContext';
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
@@ -21,6 +22,7 @@ import { getTodayBS } from '@/lib/nepaliDate';
 export default function TopBar({ onMobileMenuToggle, onToolOpen }) {
   const navigate = useNavigate();
   const { resolvedTheme, setTheme } = useTheme();
+  const { prefs } = usePreferences();
   const [user, setUser] = useState(null);
   const [companies, setCompanies] = useState([]);
   const [activeCompany, setActiveCompany] = useState(null);
@@ -115,7 +117,10 @@ export default function TopBar({ onMobileMenuToggle, onToolOpen }) {
   const todayBS = getTodayBS();
 
   return (
-    <header className="h-16 backdrop-blur-xl bg-card/80 border-b border-border/60 flex items-center justify-between px-4 lg:px-6 shrink-0 sticky top-0 z-30">
+    <header
+      className="h-16 backdrop-blur-xl bg-card/80 border-b border-border/60 flex items-center justify-between px-4 lg:px-6 shrink-0 sticky top-0 z-30"
+      style={prefs.topbarColor ? { backgroundColor: prefs.topbarColor } : undefined}
+    >
       {/* Left side */}
       <div className="flex items-center gap-3">
         <button
@@ -205,6 +210,17 @@ export default function TopBar({ onMobileMenuToggle, onToolOpen }) {
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
+
+        {/* Settings shortcut */}
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => navigate('/settings')}
+          className="text-muted-foreground hover:text-foreground"
+          title="Settings"
+        >
+          <Settings className="w-4 h-4" />
+        </Button>
 
         {/* ── Inline Search ── */}
         {searchOpen ? (

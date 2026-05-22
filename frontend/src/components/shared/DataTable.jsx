@@ -4,7 +4,7 @@ import {
 } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 
-export default function DataTable({ columns, data, onRowClick, emptyMessage = "No data yet", filterRow, selectedId }) {
+export default function DataTable({ columns, data, onRowClick, onRowDoubleClick, onRowContextMenu, emptyMessage = "No data yet", filterRow, selectedId }) {
   const [internalSelectedId, setInternalSelectedId] = useState(null);
   const [colWidths, setColWidths] = useState({});
   const resizingRef = useRef(null);
@@ -85,10 +85,12 @@ export default function DataTable({ columns, data, onRowClick, emptyMessage = "N
           </TableHeader>
           <TableBody>
             {data.map((row, idx) => (
-              <TableRow 
+              <TableRow
                 key={row.id || idx}
                 onClick={() => { setInternalSelectedId(row.id || idx); onRowClick?.(row); }}
-                className={cn(onRowClick && "cursor-pointer", (row.id || idx) === activeId ? "bg-primary/10 border-l-2 border-primary hover:bg-primary/10" : "")}
+                onDoubleClick={() => onRowDoubleClick?.(row)}
+                onContextMenu={(e) => { if (onRowContextMenu) { e.preventDefault(); onRowContextMenu(row, e); } }}
+                className={cn((onRowClick || onRowDoubleClick) && "cursor-pointer", (row.id || idx) === activeId ? "bg-primary/10 border-l-2 border-primary hover:bg-primary/10" : "")}
               >
                 {columns.map(col => (
                   <TableCell key={col.key} className={cn("text-sm", col.cellClassName)}>

@@ -5,6 +5,7 @@ import { ThemeProvider } from 'next-themes'
 import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
 import PageNotFound from './lib/PageNotFound';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
+import { PreferencesProvider } from '@/lib/PreferencesContext';
 import UserNotRegisteredError from '@/components/UserNotRegisteredError';
 import Login from './pages/Login';
 import Layout from './components/Layout';
@@ -80,6 +81,7 @@ const AuthenticatedApp = () => {
 function App() {
   return (
     <ThemeProvider attribute="class" defaultTheme="light" disableTransitionOnChange>
+      <PreferencesProvider>
       <AuthProvider>
         <QueryClientProvider client={queryClientInstance}>
           <Router>
@@ -91,6 +93,7 @@ function App() {
           <Toaster />
         </QueryClientProvider>
       </AuthProvider>
+      </PreferencesProvider>
     </ThemeProvider>
   );
 }

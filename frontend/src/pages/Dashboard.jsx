@@ -1,749 +1,732 @@
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
 import { api } from '@/api/adapter';
 import {
-  purchaseApi, salesApi, transactionApi, bankAccountApi,
-  taskApi, dashboardApi,
+  salesApi, purchaseApi, transactionApi, taskApi,
+  inventoryApi, quotationApi, ledgerApi, bankAccountApi,
 } from '@/api';
 import { getActiveCompanyId } from '@/lib/companyContext';
 import {
-  Building2, Users, ArrowDownLeft, ArrowUpRight, ArrowRight,
-  TrendingUp, TrendingDown, ChevronDown, ChevronUp, Clock,
-  AlertCircle, CalendarCheck2, BarChart2,
+  TrendingUp, TrendingDown, ShoppingCart, Wallet, Building2,
+  Package, AlertTriangle, CheckCircle2, Clock, XCircle,
+  ChevronDown, ChevronUp, BarChart2, ClipboardList,
+  Activity, FileText, CreditCard, AlertCircle,
 } from 'lucide-react';
-import StatCard from '../components/dashboard/StatCard';
-import { Skeleton } from '@/components/ui/skeleton';
+import PageLoader from '../components/PageLoader';
 import { Button } from '@/components/ui/button';
 import {
-  ComposedChart, BarChart, Bar, LineChart, Line, PieChart, Pie, Cell,
+  BarChart, Bar, AreaChart, Area,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from 'recharts';
 
-// Chart color palette
-const COLORS = {
-  emerald: '#10b981',
-  red: '#ef4444',
-  blue: '#3b82f6',
-  orange: '#f97316',
-  purple: '#8b5cf6',
-  yellow: '#eab308',
-};
-
-const PIE_COLORS = [
-  COLORS.emerald, COLORS.blue, COLORS.orange, COLORS.purple,
-  COLORS.yellow, '#ec4899', '#06b6d4', '#84cc16',
-];
+// ── Helpers ────────────────────────────────────────────────────────────────────
+function unwrapArr(res) {
+  if (Array.isArray(res)) return res;
+  if (Array.isArray(res?.data)) return res.data;
+  if (Array.isArray(res?.data?.data)) return res.data.data;
+  return [];
+}
 
 function fmt(n) {
   return Number(n || 0).toLocaleString();
 }
 
-function priorityColor(priority) {
-  if (!priority) return 'bg-gray-100 text-gray-600';
-  switch (priority.toLowerCase()) {
-    case 'high':   return 'bg-red-100 text-red-700';
-    case 'medium': return 'bg-amber-100 text-amber-700';
-    case 'low':    return 'bg-green-100 text-green-700';
-    default:       return 'bg-gray-100 text-gray-600';
-  }
+function fmtNPR(n) {
+  return `NPR ${fmt(n)}`;
 }
 
-// ─── Section wrapper ──────────────────────────────────────────────────────────
-function CollapsibleSection({ title, icon: Icon, iconClass = '', open, onToggle, headerRight, children }) {
+// Nepali fiscal year: Shrawan 1 (≈ July 16) to Ashad End (≈ July 15)
+function getFiscalYearRange() {
+  const now = new Date();
+  const yr = now.getFullYear();
+  const m = now.getMonth(); // 0-indexed
+  // If month is July(6) and day >= 16 onwards, or Aug-Dec, Jan-Jun: fiscal year starts current yr
+  let fyStart, fyEnd;
+  if (m > 6 || (m === 6 && now.getDate() >= 16)) {
+    fyStart = new Date(yr, 6, 16);
+    fyEnd   = new Date(yr + 1, 6, 15);
+  } else {
+    fyStart = new Date(yr - 1, 6, 16);
+    fyEnd   = new Date(yr, 6, 15);
+  }
+  return { fyStart, fyEnd };
+}
+
+function inFiscalYear(dateStr) {
+  if (!dateStr) return false;
+  const { fyStart, fyEnd } = getFiscalYearRange();
+  const d = new Date(dateStr);
+  return d >= fyStart && d <= fyEnd;
+}
+
+// ── Collapsible Section ────────────────────────────────────────────────────────
+function Section({ title, icon: Icon, iconClass = 'text-primary', open, onToggle, children }) {
   return (
-    <div className="bg-card border border-border rounded-xl p-4 shadow-sm">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className={`font-semibold text-sm flex items-center gap-2 ${iconClass}`}>
+    <div className="bg-card border border-border rounded-xl shadow-sm overflow-hidden">
+      <button
+        onClick={onToggle}
+        className="w-full flex items-center justify-between px-5 py-4 hover:bg-muted/30 transition-colors"
+      >
+        <span className={`flex items-center gap-2 font-semibold text-sm ${iconClass}`}>
           {Icon && <Icon className="w-4 h-4" />}
           {title}
-        </h3>
-        <div className="flex items-center gap-2">
-          {headerRight}
-          <Button variant="ghost" size="sm" onClick={onToggle} className="h-7 w-7 p-0">
-            {open ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-          </Button>
-        </div>
-      </div>
-      {open && children}
+        </span>
+        {open ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
+      </button>
+      {open && <div className="px-5 pb-5">{children}</div>}
     </div>
   );
 }
 
-// ─── Donut pie chart ──────────────────────────────────────────────────────────
-function DonutChart({ data, title }) {
-  if (!data || data.length === 0) {
-    return (
-      <div className="flex flex-col h-[220px]">
-        <p className="text-xs font-medium text-muted-foreground mb-2">{title}</p>
-        <div className="flex items-center justify-center flex-1 text-xs text-muted-foreground">No data</div>
-      </div>
-    );
-  }
+// ── Stat chip ─────────────────────────────────────────────────────────────────
+function StatChip({ label, value, colorClass }) {
   return (
-    <div className="flex flex-col h-[220px]">
-      <p className="text-xs font-medium text-muted-foreground mb-1">{title}</p>
-      <ResponsiveContainer width="100%" height="100%">
-        <PieChart>
-          <Pie
-            data={data}
-            dataKey="value"
-            nameKey="name"
-            innerRadius={55}
-            outerRadius={80}
-            paddingAngle={2}
-          >
-            {data.map((_, i) => (
-              <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
-            ))}
-          </Pie>
-          <Tooltip formatter={(v) => `NPR ${fmt(v)}`} />
-          <Legend iconSize={8} wrapperStyle={{ fontSize: 10 }} />
-        </PieChart>
-      </ResponsiveContainer>
+    <div className={`rounded-lg border px-4 py-3 text-center ${colorClass}`}>
+      <p className="text-2xl font-bold">{value}</p>
+      <p className="text-[11px] font-medium mt-0.5 opacity-80">{label}</p>
     </div>
   );
 }
 
-// ─── Main component ───────────────────────────────────────────────────────────
+// ── Main Component ─────────────────────────────────────────────────────────────
 export default function Dashboard() {
-  const [loading, setLoading] = useState(true);
-
-  // KPI state
-  const [bankBalance, setBankBalance] = useState(0);
-  const [totalReceivable, setTotalReceivable] = useState(0);
-  const [totalPayable, setTotalPayable] = useState(0);
-  const [thisMonthIncome, setThisMonthIncome] = useState(0);
-  const [thisMonthExpense, setThisMonthExpense] = useState(0);
-
-  // Lists
-  const [receivablesList, setReceivablesList] = useState([]);
-  const [payablesList, setPayablesList] = useState([]);
-
-  // Backend summaries
-  const [alertsSummary, setAlertsSummary] = useState(null);
-  const [hrSummary, setHrSummary] = useState(null);
-  const [salesTrend, setSalesTrend] = useState([]);
-
-  // Chart data derived from transactions
-  const [incomeByCategory, setIncomeByCategory] = useState([]);
-  const [expenseByCategory, setExpenseByCategory] = useState([]);
-  const [monthlyTxCount, setMonthlyTxCount] = useState([]);
-  const [salesPurchaseTrend, setSalesPurchaseTrend] = useState([]);
-
-  // Collapsible state
-  const [analyticsOpen, setAnalyticsOpen] = useState(true);
-  const [hrOpen, setHrOpen] = useState(true);
-  const [deskOpen, setDeskOpen] = useState(true);
-
   const companyId = getActiveCompanyId();
 
+  const [loading, setLoading]           = useState(true);
+  const [sales, setSales]               = useState([]);
+  const [purchases, setPurchases]       = useState([]);
+  const [transactions, setTransactions] = useState([]);
+  const [tasks, setTasks]               = useState([]);
+  const [inventory, setInventory]       = useState([]);
+  const [quotations, setQuotations]     = useState([]);
+  const [ledgerAccts, setLedgerAccts]   = useState([]);
+  const [banks, setBanks]               = useState([]);
+
+  // Section open/close
+  const [finOpen, setFinOpen]   = useState(true);
+  const [opsOpen, setOpsOpen]   = useState(true);
+  const [actOpen, setActOpen]   = useState(true);
+
+  // Cheque tab
+  const [chequeTab, setChequeTab] = useState('receivable');
+
   useEffect(() => {
-    if (companyId) loadDashboardData();
-    else setLoading(false);
+    if (!companyId) { setLoading(false); return; }
+
+    Promise.all([
+      salesApi.list().catch(() => ({ data: [] })),
+      purchaseApi.list().catch(() => ({ data: [] })),
+      transactionApi.list().catch(() => ({ data: [] })),
+      taskApi.list().catch(() => ({ data: [] })),
+      inventoryApi.list().catch(() => ({ data: [] })),
+      quotationApi.list().catch(() => ({ data: [] })),
+      ledgerApi.accounts.list().catch(() => ({ data: [] })),
+      bankAccountApi.list().catch(() => ({ data: [] })),
+    ]).then(([s, p, t, tk, inv, q, la, b]) => {
+      setSales(unwrapArr(s));
+      setPurchases(unwrapArr(p));
+      setTransactions(unwrapArr(t));
+      setTasks(unwrapArr(tk));
+      setInventory(unwrapArr(inv));
+      setQuotations(unwrapArr(q));
+      setLedgerAccts(unwrapArr(la));
+      setBanks(unwrapArr(b));
+      setLoading(false);
+    }).catch(() => setLoading(false));
   }, [companyId]);
 
-  async function loadDashboardData() {
-    setLoading(true);
-    try {
-      const [
-        purchasesRes, salesRes, transactionsRes, banksRes,
-        trendRes, alertsRes, hrRes,
-      ] = await Promise.all([
-        purchaseApi.list().catch(() => ({ data: [] })),
-        salesApi.list().catch(() => ({ data: [] })),
-        transactionApi.list().catch(() => ({ data: [] })),
-        bankAccountApi.list().catch(() => ({ data: [] })),
-        dashboardApi.salesTrend(companyId).catch(() => ({ data: [] })),
-        dashboardApi.alerts(companyId).catch(() => ({ data: null })),
-        dashboardApi.hrSummary(companyId).catch(() => ({ data: null })),
-      ]);
+  if (!companyId) return <NoCompanyState />;
+  if (loading)    return <PageLoader />;
 
-      // Unwrap axios responses (NestJS returns { data: [...] } wrapped in axios { data })
-      const unwrap = (res) => {
-        const d = res?.data;
-        if (Array.isArray(d)) return d;
-        if (Array.isArray(d?.data)) return d.data;
-        return [];
-      };
-      const unwrapObj = (res) => {
-        const d = res?.data;
-        if (d && typeof d === 'object' && !Array.isArray(d)) {
-          if (d.data && typeof d.data === 'object' && !Array.isArray(d.data)) return d.data;
-          return d;
-        }
-        return null;
-      };
+  // ── Widget 1: KPI (fiscal year) ────────────────────────────────────────────
+  const fyFilter = (arr, dateField = 'date') =>
+    arr.filter(r => inFiscalYear(r[dateField] || r.date_ad || r.created_at));
 
-      const purchases     = unwrap(purchasesRes);
-      const sales         = unwrap(salesRes);
-      const transactions  = unwrap(transactionsRes);
-      const banks         = unwrap(banksRes);
+  const fySales     = fyFilter(sales).reduce((s, r) => s + (r.total_amount || 0), 0);
+  const fyPurchases = fyFilter(purchases).reduce((s, r) => s + (r.total_amount || 0), 0);
+  const fyExpenses  = fyFilter(transactions)
+    .filter(t => t.type === 'expense')
+    .reduce((s, t) => s + (t.amount || 0), 0);
 
-      // Bank balance
-      const calcBankBalance = banks.reduce((s, b) => s + (b.current_balance || 0), 0);
-      setBankBalance(calcBankBalance);
+  // ── Widget 2: Cash In Hand ─────────────────────────────────────────────────
+  const cashIn  = transactions.filter(t => t.payment_method === 'cash' && t.type === 'income')
+                              .reduce((s, t) => s + (t.amount || 0), 0);
+  const cashOut = transactions.filter(t => t.payment_method === 'cash' && t.type === 'expense')
+                              .reduce((s, t) => s + (t.amount || 0), 0);
+  const cashInHand = cashIn - cashOut;
 
-      // Backend summaries
-      const trend = (() => {
-        const d = trendRes?.data;
-        if (Array.isArray(d)) return d;
-        if (Array.isArray(d?.data)) return d.data;
-        return [];
-      })();
-      setSalesTrend(trend);
+  // ── Widget 3: Bank Balance ────────────────────────────────────────────────
+  const totalBank = banks.reduce((s, b) => s + (b.current_balance || 0), 0);
 
-      const alerts = unwrapObj(alertsRes);
-      setAlertsSummary(alerts);
+  // ── Widget 4: Ledger Summary ──────────────────────────────────────────────
+  const salesAccts    = ledgerAccts.filter(a => (a.account_type || a.accountType || '').toLowerCase().includes('sales') || (a.account_type || a.accountType || '').toLowerCase().includes('receivable'));
+  const purchaseAccts = ledgerAccts.filter(a => (a.account_type || a.accountType || '').toLowerCase().includes('purchase') || (a.account_type || a.accountType || '').toLowerCase().includes('payable'));
+  const expenseAccts  = ledgerAccts.filter(a => (a.account_type || a.accountType || '').toLowerCase().includes('expense'));
 
-      const hr = unwrapObj(hrRes);
-      setHrSummary(hr);
+  const totalReceivable = salesAccts.reduce((s, a) => s + (a.balance || a.current_balance || 0), 0);
+  const totalPayable    = purchaseAccts.reduce((s, a) => s + (a.balance || a.current_balance || 0), 0);
 
-      // ── This month income/expense ──────────────────────────────────────────
-      const thisMonth = new Date().toISOString().slice(0, 7);
-      const thisMonthTx = transactions.filter(t => (t.date_ad || t.date || '').startsWith(thisMonth));
-      const calcIncome  = thisMonthTx.filter(t => t.type === 'income' || t.category === 'income')
-                                     .reduce((s, t) => s + (t.amount || 0), 0);
-      const calcExpense = thisMonthTx.filter(t => t.type === 'expense' || t.category === 'expense')
-                                     .reduce((s, t) => s + (t.amount || 0), 0);
-      setThisMonthIncome(calcIncome);
-      setThisMonthExpense(calcExpense);
+  const ledgerChartData = [
+    { name: 'Sales/Receivable', amount: totalReceivable },
+    { name: 'Purchase/Payable', amount: totalPayable },
+    { name: 'Expenses',         amount: expenseAccts.reduce((s, a) => s + (a.balance || a.current_balance || 0), 0) },
+  ];
 
-      // ── Receivables per client (preserve existing logic exactly) ──────────
-      const salesByClient = {};
-      sales.forEach(s => {
-        const key = s.client_name || 'Unknown';
-        if (!salesByClient[key]) salesByClient[key] = { name: key, total: 0, paid: 0 };
-        salesByClient[key].total += (s.total_amount || 0);
-      });
-      transactions.filter(t => (t.category === 'income' || t.type === 'income') && t.party_name).forEach(t => {
-        const key = t.party_name;
-        if (salesByClient[key]) salesByClient[key].paid += (t.amount || 0);
-      });
-      const calcReceivablesList = Object.values(salesByClient)
-        .map(c => ({ name: c.name, amount: Math.max(0, c.total - c.paid) }))
-        .filter(c => c.amount > 0)
-        .sort((a, b) => b.amount - a.amount)
-        .slice(0, 8);
-      const calcTotalReceivable = calcReceivablesList.reduce((s, c) => s + c.amount, 0);
-      setReceivablesList(calcReceivablesList);
-      setTotalReceivable(calcTotalReceivable);
+  // ── Widget 5: Inventory ────────────────────────────────────────────────────
+  const lowStock  = inventory.filter(i => i.quantity > 0 && i.quantity <= (i.reorder_level || i.reorderLevel || 5));
+  const outOfStock = inventory.filter(i => (i.quantity || 0) === 0);
+  const stockValue = inventory.reduce((s, i) => s + ((i.quantity || 0) * (i.selling_price || i.sellingPrice || 0)), 0);
 
-      // ── Payables per vendor (preserve existing logic exactly) ─────────────
-      const purchasesByVendor = {};
-      purchases.forEach(p => {
-        const key = p.vendor_name || 'Unknown';
-        if (!purchasesByVendor[key]) purchasesByVendor[key] = { name: key, total: 0, paid: 0 };
-        purchasesByVendor[key].total += (p.total_amount || 0);
-      });
-      transactions.filter(t => (t.category === 'expense' || t.type === 'expense') && t.party_name).forEach(t => {
-        const key = t.party_name;
-        if (purchasesByVendor[key]) purchasesByVendor[key].paid += (t.amount || 0);
-      });
-      const calcPayablesList = Object.values(purchasesByVendor)
-        .map(v => ({ name: v.name, amount: Math.max(0, v.total - v.paid) }))
-        .filter(v => v.amount > 0)
-        .sort((a, b) => b.amount - a.amount)
-        .slice(0, 8);
-      const calcTotalPayable = calcPayablesList.reduce((s, v) => s + v.amount, 0);
-      setPayablesList(calcPayablesList);
-      setTotalPayable(calcTotalPayable);
+  // Top selling items from sales items
+  const itemSales = {};
+  sales.forEach(sale => {
+    const items = sale.items || sale.sales_items || [];
+    items.forEach(item => {
+      const key = item.item_name || item.description || item.name || 'Unknown';
+      if (!itemSales[key]) itemSales[key] = { name: key, qty: 0, revenue: 0 };
+      itemSales[key].qty     += (item.quantity || 0);
+      itemSales[key].revenue += (item.total || item.amount || 0);
+    });
+  });
+  const topItems = Object.values(itemSales).sort((a, b) => b.qty - a.qty).slice(0, 10);
+  const top5     = topItems.slice(0, 5);
 
-      // ── Income by category (donut) ─────────────────────────────────────────
-      const incCat = {};
-      transactions.filter(t => t.type === 'income' || t.category === 'income').forEach(t => {
-        const cat = t.sub_category || t.category || 'Other';
-        incCat[cat] = (incCat[cat] || 0) + (t.amount || 0);
-      });
-      setIncomeByCategory(Object.entries(incCat).map(([name, value]) => ({ name, value })));
+  // ── Widget 6: Quotations ───────────────────────────────────────────────────
+  const quotStats = {
+    pending:   quotations.filter(q => (q.status || '').toLowerCase() === 'pending'),
+    accepted:  quotations.filter(q => (q.status || '').toLowerCase() === 'accepted'),
+    cancelled: quotations.filter(q => (q.status || '').toLowerCase() === 'cancelled'),
+    revised:   quotations.filter(q => (q.status || '').toLowerCase() === 'revised'),
+    billed:    quotations.filter(q => ['billed', 'converted', 'invoiced'].includes((q.status || '').toLowerCase())),
+  };
+  const qTotal = (arr) => arr.reduce((s, q) => s + (q.total_amount || q.totalAmount || 0), 0);
 
-      // ── Expense by category (donut) ────────────────────────────────────────
-      const expCat = {};
-      transactions.filter(t => t.type === 'expense' || t.category === 'expense').forEach(t => {
-        const cat = t.sub_category || t.category || 'Other';
-        expCat[cat] = (expCat[cat] || 0) + (t.amount || 0);
-      });
-      setExpenseByCategory(Object.entries(expCat).map(([name, value]) => ({ name, value })));
+  // ── Widget 7: Tasks ────────────────────────────────────────────────────────
+  const taskCompleted  = tasks.filter(t => (t.status || '').toLowerCase() === 'completed');
+  const taskInProgress = tasks.filter(t => (t.status || '').toLowerCase().includes('progress'));
+  const taskPending    = tasks.filter(t => (t.status || '').toLowerCase() === 'pending' || (t.status || '').toLowerCase() === 'todo');
+  const activeTasks    = [...taskInProgress, ...taskPending];
+  const todayDate      = new Date();
+  todayDate.setHours(0, 0, 0, 0);
 
-      // ── Monthly transaction count (bar) ────────────────────────────────────
-      const txByMonth = {};
-      transactions.forEach(t => {
-        const m = (t.date_ad || t.date || '').slice(0, 7);
-        if (!m) return;
-        if (!txByMonth[m]) txByMonth[m] = { month: m, count: 0 };
-        txByMonth[m].count += 1;
-      });
-      setMonthlyTxCount(
-        Object.values(txByMonth).sort((a, b) => a.month.localeCompare(b.month)).slice(-6)
-      );
-
-      // ── Sales vs Purchase trend (bar) ──────────────────────────────────────
-      const spMap = {};
-      sales.forEach(s => {
-        const m = (s.date_ad || s.date || '').slice(0, 7);
-        if (!m) return;
-        if (!spMap[m]) spMap[m] = { month: m, sales: 0, purchase: 0 };
-        spMap[m].sales += (s.total_amount || 0);
-      });
-      purchases.forEach(p => {
-        const m = (p.date_ad || p.date || '').slice(0, 7);
-        if (!m) return;
-        if (!spMap[m]) spMap[m] = { month: m, sales: 0, purchase: 0 };
-        spMap[m].purchase += (p.total_amount || 0);
-      });
-      setSalesPurchaseTrend(
-        Object.values(spMap).sort((a, b) => a.month.localeCompare(b.month)).slice(-6)
-      );
-    } finally {
-      setLoading(false);
-    }
+  function isOverdue(task) {
+    const d = task.due_date || task.dueDate;
+    if (!d) return false;
+    return new Date(d) < todayDate && (task.status || '').toLowerCase() !== 'completed';
   }
 
-  if (!companyId) return <NoCompanyState />;
+  // ── Widget 8: Transactions / Cheque Reminders ─────────────────────────────
+  const fyTxns = fyFilter(transactions);
+  const fyInflow  = fyTxns.filter(t => t.type === 'income').reduce((s, t) => s + (t.amount || 0), 0);
+  const fyOutflow = fyTxns.filter(t => t.type === 'expense').reduce((s, t) => s + (t.amount || 0), 0);
 
-  if (loading) return <LoadingSkeleton />;
+  // Monthly cash flow chart (last 6 months)
+  const monthlyFlow = {};
+  transactions.forEach(t => {
+    const m = (t.date || t.date_ad || '').slice(0, 7);
+    if (!m) return;
+    if (!monthlyFlow[m]) monthlyFlow[m] = { month: m, inflow: 0, outflow: 0 };
+    if (t.type === 'income')  monthlyFlow[m].inflow  += (t.amount || 0);
+    if (t.type === 'expense') monthlyFlow[m].outflow += (t.amount || 0);
+  });
+  const flowChart = Object.values(monthlyFlow).sort((a, b) => a.month.localeCompare(b.month)).slice(-6);
 
-  // ── Derive Today's Desk data ───────────────────────────────────────────────
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  const cheques           = transactions.filter(t => t.payment_method === 'cheque');
+  const chequesReceivable = cheques.filter(t => t.type === 'income');
+  const chequesPayable    = cheques.filter(t => t.type === 'expense');
 
-  const overdueTasks = (alertsSummary?.overdueTasks || []).slice(0, 5);
-  const chequesThisWeek = (alertsSummary?.chequesThisWeek || []).slice(0, 5);
-
-  // ── P&L trend for ComposedChart ────────────────────────────────────────────
-  const plTrend = salesTrend.map(row => ({
-    month: row.month,
-    income: row.income ?? row.revenue ?? 0,
-    expense: row.expense ?? row.expenses ?? 0,
-    profit: (row.income ?? row.revenue ?? 0) - (row.expense ?? row.expenses ?? 0),
-  }));
+  // ── Widget 10: Financial Health ────────────────────────────────────────────
+  const netPnL       = fySales - fyPurchases - fyExpenses;
+  const grossMargin  = fySales > 0 ? ((fySales - fyPurchases) / fySales) * 100 : 0;
+  const pnlPositive  = netPnL >= 0;
 
   return (
-    <div className="space-y-6 animate-fade-in">
-      {/* Header */}
+    <div className="space-y-5">
+      {/* Page Header */}
       <div>
         <h1 className="text-2xl font-bold text-foreground tracking-tight">Dashboard</h1>
-        <p className="text-sm text-muted-foreground mt-1">Business overview at a glance</p>
+        <p className="text-sm text-muted-foreground mt-1">Business overview · Your Company</p>
       </div>
 
-      {/* ── Today's Desk ─────────────────────────────────────────────────── */}
-      <CollapsibleSection
-        title="Today's Desk"
-        icon={Clock}
-        iconClass="text-amber-600"
-        open={deskOpen}
-        onToggle={() => setDeskOpen(p => !p)}
+      {/* ══════════════════════════════════════════════════════════════════════ */}
+      {/* SECTION 1 — Financial Overview                                        */}
+      {/* ══════════════════════════════════════════════════════════════════════ */}
+      <Section
+        title="Financial Overview"
+        icon={BarChart2}
+        iconClass="text-blue-600"
+        open={finOpen}
+        onToggle={() => setFinOpen(p => !p)}
       >
-        <div className="grid grid-cols-2 gap-4">
-          {/* Overdue / Urgent Tasks */}
-          <div>
-            <div className="flex items-center gap-1.5 mb-3">
-              <AlertCircle className="w-3.5 h-3.5 text-red-500" />
-              <p className="text-xs font-semibold text-foreground">Overdue / Urgent Tasks</p>
+        {/* Widget 1 — KPI Bar */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-5">
+          <div className="bg-green-50 border border-green-200 rounded-xl p-5 flex items-center gap-4">
+            <div className="w-11 h-11 rounded-lg bg-green-500/15 flex items-center justify-center shrink-0">
+              <TrendingUp className="w-5 h-5 text-green-600" />
             </div>
-            {overdueTasks.length > 0 ? (
-              <div className="space-y-2">
-                {overdueTasks.map((task, i) => (
-                  <div
-                    key={task.id || i}
-                    className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 flex items-start gap-2"
-                  >
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-medium text-foreground truncate">{task.title || task.name || 'Unnamed task'}</p>
-                      {(task.due_date || task.dueDate) && (
-                        <p className="text-[10px] text-amber-600 mt-0.5">
-                          Due: {new Date(task.due_date || task.dueDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                        </p>
-                      )}
-                    </div>
-                    {task.priority && (
-                      <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full shrink-0 ${priorityColor(task.priority)}`}>
-                        {task.priority}
-                      </span>
-                    )}
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="bg-green-50 border border-green-200 rounded-lg px-3 py-4 text-center">
-                <p className="text-xs text-green-700 font-medium">All clear — no overdue tasks</p>
-              </div>
-            )}
-          </div>
-
-          {/* Cheques Due This Week */}
-          <div>
-            <div className="flex items-center gap-1.5 mb-3">
-              <CalendarCheck2 className="w-3.5 h-3.5 text-amber-500" />
-              <p className="text-xs font-semibold text-foreground">Cheques Due This Week</p>
-            </div>
-            {chequesThisWeek.length > 0 ? (
-              <div className="space-y-2">
-                {chequesThisWeek.map((cheque, i) => (
-                  <div
-                    key={cheque.id || i}
-                    className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2"
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="text-xs font-medium text-foreground truncate">
-                        {cheque.party_name || cheque.partyName || cheque.name || 'Unknown'}
-                      </p>
-                      {(cheque.amount) && (
-                        <span className="text-xs font-mono font-semibold text-amber-700 shrink-0">
-                          NPR {fmt(cheque.amount)}
-                        </span>
-                      )}
-                    </div>
-                    {(cheque.due_date || cheque.dueDate) && (
-                      <p className="text-[10px] text-muted-foreground mt-0.5">
-                        {new Date(cheque.due_date || cheque.dueDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                      </p>
-                    )}
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="bg-green-50 border border-green-200 rounded-lg px-3 py-4 text-center">
-                <p className="text-xs text-green-700 font-medium">No cheques due this week</p>
-              </div>
-            )}
-          </div>
-        </div>
-      </CollapsibleSection>
-
-      {/* ── KPI Cards (5) ────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-        {/* Total Receivable */}
-        <div className="glass-card rounded-xl p-5 hover:shadow-md transition-all">
-          <div className="flex items-start justify-between mb-3">
-            <div className="w-10 h-10 rounded-lg bg-green-500/10 flex items-center justify-center">
-              <ArrowDownLeft className="w-5 h-5 text-green-600" />
+            <div>
+              <p className="text-2xl font-bold text-green-700">{fmtNPR(fySales)}</p>
+              <p className="text-xs text-green-600 mt-0.5">Total Sales (FY)</p>
             </div>
           </div>
-          <p className="text-2xl font-bold text-foreground tracking-tight">NPR {fmt(totalReceivable)}</p>
-          <p className="text-xs text-muted-foreground mt-1">Total Receivable</p>
-        </div>
 
-        {/* Total Payable */}
-        <div className="glass-card rounded-xl p-5 hover:shadow-md transition-all">
-          <div className="flex items-start justify-between mb-3">
-            <div className="w-10 h-10 rounded-lg bg-red-500/10 flex items-center justify-center">
-              <ArrowUpRight className="w-5 h-5 text-red-600" />
+          <div className="bg-blue-50 border border-blue-200 rounded-xl p-5 flex items-center gap-4">
+            <div className="w-11 h-11 rounded-lg bg-blue-500/15 flex items-center justify-center shrink-0">
+              <ShoppingCart className="w-5 h-5 text-blue-600" />
+            </div>
+            <div>
+              <p className="text-2xl font-bold text-blue-700">{fmtNPR(fyPurchases)}</p>
+              <p className="text-xs text-blue-600 mt-0.5">Total Purchase (FY)</p>
             </div>
           </div>
-          <p className="text-2xl font-bold text-foreground tracking-tight">NPR {fmt(totalPayable)}</p>
-          <p className="text-xs text-muted-foreground mt-1">Total Payable</p>
-        </div>
 
-        {/* Bank Balance */}
-        <StatCard
-          icon={Building2}
-          label="Bank Balance"
-          value={`NPR ${fmt(bankBalance)}`}
-        />
-
-        {/* This Month Income */}
-        <div className="glass-card rounded-xl p-5 hover:shadow-md transition-all">
-          <div className="flex items-start justify-between mb-3">
-            <div className="w-10 h-10 rounded-lg bg-emerald-500/10 flex items-center justify-center">
-              <TrendingUp className="w-5 h-5 text-emerald-600" />
-            </div>
-          </div>
-          <p className="text-2xl font-bold text-foreground tracking-tight">NPR {fmt(thisMonthIncome)}</p>
-          <p className="text-xs text-muted-foreground mt-1">This Month Income</p>
-        </div>
-
-        {/* This Month Expense */}
-        <div className="glass-card rounded-xl p-5 hover:shadow-md transition-all">
-          <div className="flex items-start justify-between mb-3">
-            <div className="w-10 h-10 rounded-lg bg-red-500/10 flex items-center justify-center">
+          <div className="bg-red-50 border border-red-200 rounded-xl p-5 flex items-center gap-4">
+            <div className="w-11 h-11 rounded-lg bg-red-500/15 flex items-center justify-center shrink-0">
               <TrendingDown className="w-5 h-5 text-red-600" />
             </div>
-          </div>
-          <p className="text-2xl font-bold text-foreground tracking-tight">NPR {fmt(thisMonthExpense)}</p>
-          <p className="text-xs text-muted-foreground mt-1">This Month Expense</p>
-        </div>
-      </div>
-
-      {/* ── Receivables & Payables panels ────────────────────────────────── */}
-      <div className="grid grid-cols-2 gap-6">
-        {/* Paisa Linu Parne — Receivables */}
-        <div className="glass-card rounded-xl p-6">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <ArrowDownLeft className="w-4 h-4 text-green-600" />
-              <h3 className="text-sm font-semibold text-foreground">Paisa Linu Parne</h3>
+            <div>
+              <p className="text-2xl font-bold text-red-700">{fmtNPR(fyExpenses)}</p>
+              <p className="text-xs text-red-600 mt-0.5">Total Expenses (FY)</p>
             </div>
-            {totalReceivable > 0 && (
-              <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-green-500/10 text-green-700">
-                NPR {fmt(totalReceivable)}
-              </span>
-            )}
           </div>
-          {receivablesList.length > 0 ? (
-            <div className="space-y-2">
-              {receivablesList.map((client, idx) => (
-                <div key={client.name} className="flex items-center gap-3">
-                  <span className="text-xs font-bold text-muted-foreground w-5 shrink-0">{idx + 1}</span>
-                  <p className="text-xs font-medium truncate flex-1">{client.name}</p>
-                  <span className="text-xs font-mono font-semibold text-green-600 shrink-0">
-                    NPR {fmt(client.amount)}
-                  </span>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-xs text-muted-foreground py-6 text-center">No outstanding receivables</p>
-          )}
         </div>
 
-        {/* Paisa Dinu Parne — Payables */}
-        <div className="glass-card rounded-xl p-6">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <ArrowUpRight className="w-4 h-4 text-red-600" />
-              <h3 className="text-sm font-semibold text-foreground">Paisa Dinu Parne</h3>
+        {/* Widget 2 + Widget 3 side by side */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-5">
+          {/* Widget 2 — Cash In Hand */}
+          <div className="bg-card border border-border rounded-xl p-5">
+            <div className="flex items-center gap-2 mb-3">
+              <Wallet className="w-4 h-4 text-amber-500" />
+              <h3 className="text-sm font-semibold text-foreground">Cash In Hand</h3>
             </div>
-            {totalPayable > 0 && (
-              <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-red-500/10 text-red-700">
-                NPR {fmt(totalPayable)}
-              </span>
-            )}
+            <p className={`text-3xl font-bold ${cashInHand >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+              {fmtNPR(Math.abs(cashInHand))}
+              {cashInHand < 0 && <span className="text-base ml-1">(negative)</span>}
+            </p>
+            <p className="text-xs text-muted-foreground mt-2">Excludes bank balance</p>
+            <div className="flex gap-4 mt-3 text-xs">
+              <span className="text-green-600">Cash in: {fmtNPR(cashIn)}</span>
+              <span className="text-red-500">Cash out: {fmtNPR(cashOut)}</span>
+            </div>
           </div>
-          {payablesList.length > 0 ? (
-            <div className="space-y-2">
-              {payablesList.map((vendor, idx) => (
-                <div key={vendor.name} className="flex items-center gap-3">
-                  <span className="text-xs font-bold text-muted-foreground w-5 shrink-0">{idx + 1}</span>
-                  <p className="text-xs font-medium truncate flex-1">{vendor.name}</p>
-                  <span className="text-xs font-mono font-semibold text-red-600 shrink-0">
-                    NPR {fmt(vendor.amount)}
-                  </span>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-xs text-muted-foreground py-6 text-center">No outstanding payables</p>
-          )}
-        </div>
-      </div>
 
-      {/* ── Financial Analytics (collapsible) ────────────────────────────── */}
-      <CollapsibleSection
-        title="Financial Analytics"
-        icon={BarChart2}
-        open={analyticsOpen}
-        onToggle={() => setAnalyticsOpen(p => !p)}
-        headerRight={
-          <Link to="/reports">
-            <Button variant="outline" size="sm" className="gap-1 h-7 text-xs">
-              View Full Analysis <ArrowRight className="w-3 h-3" />
-            </Button>
-          </Link>
-        }
-      >
-        {/* Row 1: P&L Trend + Sales vs Purchase */}
-        <div className="grid grid-cols-2 gap-4 mb-4">
-          {/* P&L Trend */}
-          <div>
-            <p className="text-xs font-medium text-muted-foreground mb-2">P&L Trend (Monthly)</p>
-            {plTrend.length > 0 ? (
-              <ResponsiveContainer width="100%" height={200}>
-                <ComposedChart data={plTrend}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                  <XAxis dataKey="month" tick={{ fontSize: 10 }} />
-                  <YAxis tick={{ fontSize: 10 }} tickFormatter={v => `${(v / 1000).toFixed(0)}k`} />
-                  <Tooltip formatter={v => `NPR ${fmt(v)}`} />
-                  <Legend iconSize={8} wrapperStyle={{ fontSize: 10 }} />
-                  <Bar dataKey="income" name="Income" fill={COLORS.emerald} radius={[3, 3, 0, 0]} />
-                  <Bar dataKey="expense" name="Expense" fill={COLORS.red} radius={[3, 3, 0, 0]} opacity={0.8} />
-                  <Line
-                    type="monotone"
-                    dataKey="profit"
-                    name="Profit"
-                    stroke={COLORS.blue}
-                    strokeWidth={2}
-                    dot={{ r: 3 }}
-                  />
-                </ComposedChart>
-              </ResponsiveContainer>
+          {/* Widget 3 — Bank Balance */}
+          <div className="bg-card border border-border rounded-xl p-5">
+            <div className="flex items-center gap-2 mb-3">
+              <Building2 className="w-4 h-4 text-blue-500" />
+              <h3 className="text-sm font-semibold text-foreground">Bank Balance</h3>
+            </div>
+            <p className="text-3xl font-bold text-blue-700">{fmtNPR(totalBank)}</p>
+            <p className="text-xs text-muted-foreground mt-2 mb-3">Combined across all accounts</p>
+            {banks.length === 0 ? (
+              <p className="text-xs text-muted-foreground italic">No data yet</p>
             ) : (
-              <div className="flex items-center justify-center h-[200px] text-xs text-muted-foreground">No trend data yet</div>
-            )}
-          </div>
-
-          {/* Sales vs Purchase */}
-          <div>
-            <p className="text-xs font-medium text-muted-foreground mb-2">Sales vs Purchase (Monthly)</p>
-            {salesPurchaseTrend.length > 0 ? (
-              <ResponsiveContainer width="100%" height={200}>
-                <BarChart data={salesPurchaseTrend}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                  <XAxis dataKey="month" tick={{ fontSize: 10 }} />
-                  <YAxis tick={{ fontSize: 10 }} tickFormatter={v => `${(v / 1000).toFixed(0)}k`} />
-                  <Tooltip formatter={v => `NPR ${fmt(v)}`} />
-                  <Legend iconSize={8} wrapperStyle={{ fontSize: 10 }} />
-                  <Bar dataKey="sales" name="Sales" fill={COLORS.blue} radius={[3, 3, 0, 0]} />
-                  <Bar dataKey="purchase" name="Purchase" fill={COLORS.orange} radius={[3, 3, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="flex items-center justify-center h-[200px] text-xs text-muted-foreground">No data yet</div>
-            )}
-          </div>
-        </div>
-
-        {/* Row 2: Income by Category + Expense by Category */}
-        <div className="grid grid-cols-2 gap-4 mb-4">
-          <DonutChart data={incomeByCategory} title="Income by Category" />
-          <DonutChart data={expenseByCategory} title="Expense by Category" />
-        </div>
-
-        {/* Row 3: Payable vs Receivable Trend + Monthly Transaction Count */}
-        <div className="grid grid-cols-2 gap-4">
-          {/* Payable vs Receivable Trend — use salesTrend if available, else empty */}
-          <div>
-            <p className="text-xs font-medium text-muted-foreground mb-2">Payable vs Receivable (Monthly)</p>
-            {plTrend.length > 0 ? (
-              <ResponsiveContainer width="100%" height={200}>
-                <LineChart data={plTrend}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                  <XAxis dataKey="month" tick={{ fontSize: 10 }} />
-                  <YAxis tick={{ fontSize: 10 }} tickFormatter={v => `${(v / 1000).toFixed(0)}k`} />
-                  <Tooltip formatter={v => `NPR ${fmt(v)}`} />
-                  <Legend iconSize={8} wrapperStyle={{ fontSize: 10 }} />
-                  <Line type="monotone" dataKey="income" name="Receivable" stroke={COLORS.emerald} strokeWidth={2} dot={{ r: 3 }} />
-                  <Line type="monotone" dataKey="expense" name="Payable" stroke={COLORS.red} strokeWidth={2} dot={{ r: 3 }} />
-                </LineChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="flex items-center justify-center h-[200px] text-xs text-muted-foreground">No data yet</div>
-            )}
-          </div>
-
-          {/* Monthly Transaction Count */}
-          <div>
-            <p className="text-xs font-medium text-muted-foreground mb-2">Monthly Transaction Count</p>
-            {monthlyTxCount.length > 0 ? (
-              <ResponsiveContainer width="100%" height={200}>
-                <BarChart data={monthlyTxCount}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                  <XAxis dataKey="month" tick={{ fontSize: 10 }} />
-                  <YAxis tick={{ fontSize: 10 }} allowDecimals={false} />
-                  <Tooltip />
-                  <Bar dataKey="count" name="Transactions" fill={COLORS.purple} radius={[3, 3, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="flex items-center justify-center h-[200px] text-xs text-muted-foreground">No transactions yet</div>
-            )}
-          </div>
-        </div>
-      </CollapsibleSection>
-
-      {/* ── HR & Operations (collapsible) ────────────────────────────────── */}
-      <CollapsibleSection
-        title="HR & Operations"
-        icon={Users}
-        open={hrOpen}
-        onToggle={() => setHrOpen(p => !p)}
-      >
-        <div className="grid grid-cols-4 gap-3 mb-4">
-          {[
-            { label: 'Total Employees', value: hrSummary?.totalEmployees ?? '—', color: 'bg-blue-50 text-blue-700 border-blue-200' },
-            { label: 'Present Today',   value: hrSummary?.presentToday   ?? '—', color: 'bg-green-50 text-green-700 border-green-200' },
-            { label: 'On Leave',        value: hrSummary?.onLeave        ?? '—', color: 'bg-amber-50 text-amber-700 border-amber-200' },
-            { label: 'Absent Today',    value: hrSummary?.absentToday    ?? '—', color: 'bg-red-50 text-red-700 border-red-200' },
-          ].map(({ label, value, color }) => (
-            <div key={label} className={`rounded-lg border px-4 py-3 text-center ${color}`}>
-              <p className="text-2xl font-bold">{value}</p>
-              <p className="text-[11px] font-medium mt-0.5 opacity-80">{label}</p>
-            </div>
-          ))}
-        </div>
-        <div className="flex justify-end">
-          <Link to="/reports">
-            <Button variant="outline" size="sm" className="gap-1.5 text-xs">
-              Full HR Analysis <ArrowRight className="w-3 h-3" />
-            </Button>
-          </Link>
-        </div>
-      </CollapsibleSection>
-    </div>
-  );
-}
-
-// ── Skeleton loading state ─────────────────────────────────────────────────────
-function LoadingSkeleton() {
-  return (
-    <div className="space-y-6">
-      <div>
-        <Skeleton className="h-7 w-36 mb-2" />
-        <Skeleton className="h-4 w-52" />
-      </div>
-      {/* Today's Desk skeleton */}
-      <div className="bg-card border border-border rounded-xl p-4">
-        <Skeleton className="h-5 w-32 mb-4" />
-        <div className="grid grid-cols-2 gap-4">
-          {[0, 1].map(i => (
-            <div key={i} className="space-y-2">
-              {[...Array(3)].map((_, j) => <Skeleton key={j} className="h-12 w-full rounded-lg" />)}
-            </div>
-          ))}
-        </div>
-      </div>
-      {/* KPI cards skeleton */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-        {[...Array(5)].map((_, i) => (
-          <div key={i} className="glass-card rounded-xl p-5 space-y-3">
-            <Skeleton className="h-10 w-10 rounded-lg" />
-            <Skeleton className="h-7 w-32" />
-            <Skeleton className="h-3 w-24" />
-          </div>
-        ))}
-      </div>
-      {/* Panels skeleton */}
-      <div className="grid grid-cols-2 gap-6">
-        {[0, 1].map(i => (
-          <div key={i} className="glass-card rounded-xl p-4 space-y-3">
-            <Skeleton className="h-5 w-40" />
-            {[...Array(5)].map((_, j) => (
-              <div key={j} className="flex items-center gap-3">
-                <Skeleton className="h-4 w-4" />
-                <Skeleton className="h-4 flex-1" />
-                <Skeleton className="h-4 w-24" />
+              <div className="space-y-1.5 max-h-32 overflow-y-auto">
+                {banks.map((bank, i) => {
+                  const acct = bank.account_number || bank.accountNumber || '';
+                  return (
+                    <div key={bank.id || i} className="flex items-center justify-between text-xs">
+                      <span className="text-foreground font-medium truncate max-w-[140px]">
+                        {bank.bank_name || bank.bankName || bank.name || 'Account'}
+                        {acct && <span className="text-muted-foreground ml-1">···{acct.slice(-4)}</span>}
+                      </span>
+                      <span className="font-mono text-blue-600 shrink-0">{fmtNPR(bank.current_balance || 0)}</span>
+                    </div>
+                  );
+                })}
               </div>
-            ))}
+            )}
           </div>
-        ))}
-      </div>
-      {/* Analytics skeleton */}
-      <div className="bg-card border border-border rounded-xl p-4">
-        <Skeleton className="h-5 w-40 mb-4" />
-        <div className="grid grid-cols-2 gap-4">
-          <Skeleton className="h-48 w-full rounded-lg" />
-          <Skeleton className="h-48 w-full rounded-lg" />
         </div>
-      </div>
+
+        {/* Widget 10 — Financial Health (P&L) */}
+        <div className="bg-card border border-border rounded-xl p-5">
+          <div className="flex items-center gap-2 mb-4">
+            <Activity className="w-4 h-4 text-purple-500" />
+            <h3 className="text-sm font-semibold text-foreground">Financial Health</h3>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="text-center">
+              <p className="text-xs text-muted-foreground mb-1">Net P&amp;L (FY)</p>
+              <p className={`text-2xl font-bold ${pnlPositive ? 'text-green-600' : 'text-red-600'}`}>
+                {fmtNPR(Math.abs(netPnL))}
+              </p>
+              <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${pnlPositive ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                {pnlPositive ? 'Profit' : 'Loss'}
+              </span>
+            </div>
+            <div className="text-center">
+              <p className="text-xs text-muted-foreground mb-1">Gross Margin</p>
+              <p className={`text-2xl font-bold ${grossMargin >= 0 ? 'text-blue-600' : 'text-red-600'}`}>
+                {grossMargin.toFixed(1)}%
+              </p>
+              <p className="text-xs text-muted-foreground">(Sales − Purchase) / Sales</p>
+            </div>
+            <div className="text-center">
+              <p className="text-xs text-muted-foreground mb-1">Expense Ratio</p>
+              <p className="text-2xl font-bold text-orange-600">
+                {fySales > 0 ? ((fyExpenses / fySales) * 100).toFixed(1) : '0.0'}%
+              </p>
+              <p className="text-xs text-muted-foreground">Expenses / Sales</p>
+            </div>
+          </div>
+        </div>
+      </Section>
+
+      {/* ══════════════════════════════════════════════════════════════════════ */}
+      {/* SECTION 2 — Operations                                                */}
+      {/* ══════════════════════════════════════════════════════════════════════ */}
+      <Section
+        title="Operations"
+        icon={ClipboardList}
+        iconClass="text-emerald-600"
+        open={opsOpen}
+        onToggle={() => setOpsOpen(p => !p)}
+      >
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+
+          {/* Widget 5 — Inventory Overview */}
+          <div className="bg-card border border-border rounded-xl p-5 xl:col-span-2">
+            <div className="flex items-center gap-2 mb-4">
+              <Package className="w-4 h-4 text-emerald-500" />
+              <h3 className="text-sm font-semibold text-foreground">Inventory Overview</h3>
+            </div>
+
+            {/* Stats row */}
+            <div className="grid grid-cols-3 gap-3 mb-4">
+              <StatChip label="Total Items"   value={inventory.length}  colorClass="bg-blue-50 border-blue-200 text-blue-700" />
+              <StatChip label="Low Stock"     value={lowStock.length}   colorClass="bg-amber-50 border-amber-200 text-amber-700" />
+              <StatChip label="Out of Stock"  value={outOfStock.length} colorClass="bg-red-50 border-red-200 text-red-700" />
+            </div>
+
+            {/* Stock value */}
+            <p className="text-xs text-muted-foreground mb-3">
+              Total Stock Value: <span className="font-semibold text-foreground">{fmtNPR(stockValue)}</span>
+            </p>
+
+            {/* Top 5 selling items chart */}
+            {top5.length > 0 ? (
+              <>
+                <p className="text-xs font-medium text-muted-foreground mb-2">Top 5 Items by Qty Sold</p>
+                <ResponsiveContainer width="100%" height={200}>
+                  <BarChart data={top5} margin={{ top: 0, right: 0, left: -10, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                    <XAxis dataKey="name" tick={{ fontSize: 9 }} interval={0} angle={-20} textAnchor="end" height={40} />
+                    <YAxis tick={{ fontSize: 10 }} allowDecimals={false} />
+                    <Tooltip formatter={(v) => [`${v} units`, 'Qty Sold']} />
+                    <Bar dataKey="qty" name="Qty Sold" fill="#10b981" radius={[3, 3, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </>
+            ) : (
+              <div className="flex items-center justify-center h-[200px] text-xs text-muted-foreground">No data yet</div>
+            )}
+
+            {/* Top 10 list */}
+            {topItems.length > 0 && (
+              <div className="mt-4">
+                <p className="text-xs font-medium text-muted-foreground mb-2">Top 10 Selling Items</p>
+                <div className="space-y-1">
+                  {topItems.map((item, i) => (
+                    <div key={item.name} className="flex items-center gap-2 text-xs">
+                      <span className="text-muted-foreground w-4 text-right">{i + 1}.</span>
+                      <span className="flex-1 truncate text-foreground">{item.name}</span>
+                      <span className="font-mono text-emerald-600 shrink-0">{item.qty} units</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Widget 6 — Quotation Reports */}
+          <div className="bg-card border border-border rounded-xl p-5">
+            <div className="flex items-center gap-2 mb-4">
+              <FileText className="w-4 h-4 text-violet-500" />
+              <h3 className="text-sm font-semibold text-foreground">Quotation Reports</h3>
+            </div>
+            <p className="text-xs text-muted-foreground mb-3">
+              Total: <span className="font-semibold text-foreground">{quotations.length}</span> quotations
+            </p>
+
+            {quotations.length === 0 ? (
+              <p className="text-xs text-muted-foreground italic">No data yet</p>
+            ) : (
+              <div className="space-y-2">
+                {[
+                  { key: 'pending',   label: 'Pending',   color: 'bg-amber-50 border-amber-200 text-amber-700' },
+                  { key: 'accepted',  label: 'Accepted',  color: 'bg-green-50 border-green-200 text-green-700' },
+                  { key: 'cancelled', label: 'Cancelled', color: 'bg-red-50 border-red-200 text-red-700' },
+                  { key: 'revised',   label: 'Revised',   color: 'bg-purple-50 border-purple-200 text-purple-700' },
+                  { key: 'billed',    label: 'Billed',    color: 'bg-blue-50 border-blue-200 text-blue-700' },
+                ].map(({ key, label, color }) => {
+                  const arr = quotStats[key];
+                  return (
+                    <div key={key} className={`rounded-lg border px-3 py-2 flex items-center justify-between ${color}`}>
+                      <div>
+                        <span className="text-xs font-semibold">{label}</span>
+                        <span className="text-xs ml-2 opacity-70">({arr.length})</span>
+                      </div>
+                      <span className="text-xs font-mono font-semibold">{fmtNPR(qTotal(arr))}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+        </div>
+
+        {/* Widget 4 — Ledger Summary (full width row) */}
+        <div className="bg-card border border-border rounded-xl p-5 mt-5">
+          <div className="flex items-center gap-2 mb-4">
+            <BarChart2 className="w-4 h-4 text-blue-500" />
+            <h3 className="text-sm font-semibold text-foreground">Ledger Summary</h3>
+          </div>
+
+          {ledgerAccts.length === 0 ? (
+            <p className="text-xs text-muted-foreground italic">No data yet</p>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <ResponsiveContainer width="100%" height={200}>
+                <BarChart data={ledgerChartData} margin={{ top: 0, right: 10, left: -10, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                  <XAxis dataKey="name" tick={{ fontSize: 9 }} />
+                  <YAxis tick={{ fontSize: 10 }} tickFormatter={v => `${(v / 1000).toFixed(0)}k`} />
+                  <Tooltip formatter={v => fmtNPR(v)} />
+                  <Bar dataKey="amount" name="Balance" fill="#3b82f6" radius={[3, 3, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+
+              <div className="space-y-3">
+                <div className="rounded-lg bg-green-50 border border-green-200 px-4 py-3">
+                  <p className="text-xs text-green-600 font-medium">Total Receivable</p>
+                  <p className="text-xl font-bold text-green-700 mt-1">{fmtNPR(totalReceivable)}</p>
+                  <p className="text-[10px] text-green-500 mt-0.5">Sum of sales/receivable account balances</p>
+                </div>
+                <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-3">
+                  <p className="text-xs text-red-600 font-medium">Total Payable</p>
+                  <p className="text-xl font-bold text-red-700 mt-1">{fmtNPR(totalPayable)}</p>
+                  <p className="text-[10px] text-red-400 mt-0.5">Sum of purchase/payable account balances</p>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </Section>
+
+      {/* ══════════════════════════════════════════════════════════════════════ */}
+      {/* SECTION 3 — Activity                                                  */}
+      {/* ══════════════════════════════════════════════════════════════════════ */}
+      <Section
+        title="Activity"
+        icon={Activity}
+        iconClass="text-orange-600"
+        open={actOpen}
+        onToggle={() => setActOpen(p => !p)}
+      >
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+
+          {/* Widget 7 — Task Reports */}
+          <div className="bg-card border border-border rounded-xl p-5 xl:col-span-1">
+            <div className="flex items-center gap-2 mb-4">
+              <CheckCircle2 className="w-4 h-4 text-teal-500" />
+              <h3 className="text-sm font-semibold text-foreground">Task Reports</h3>
+            </div>
+
+            {/* Task counts */}
+            <div className="grid grid-cols-2 gap-2 mb-4">
+              <StatChip label="Completed"   value={taskCompleted.length}  colorClass="bg-green-50 border-green-200 text-green-700" />
+              <StatChip label="In Progress" value={taskInProgress.length} colorClass="bg-blue-50 border-blue-200 text-blue-700" />
+              <StatChip label="Pending"     value={taskPending.length}    colorClass="bg-amber-50 border-amber-200 text-amber-700" />
+              <StatChip label="Total"       value={tasks.length}          colorClass="bg-gray-50 border-gray-200 text-gray-700" />
+            </div>
+
+            {/* Active tasks list */}
+            <p className="text-xs font-medium text-muted-foreground mb-2">Active Tasks</p>
+            {activeTasks.length === 0 ? (
+              <p className="text-xs text-muted-foreground italic">No active tasks</p>
+            ) : (
+              <div className="space-y-1.5 max-h-64 overflow-y-auto">
+                {activeTasks.map((task, i) => {
+                  const overdue  = isOverdue(task);
+                  const dueDate  = task.due_date || task.dueDate;
+                  const assignee = task.assignee || task.assigned_to || task.assignedTo || '';
+                  return (
+                    <div
+                      key={task.id || i}
+                      className={`rounded-lg border px-3 py-2 ${overdue ? 'bg-red-50 border-red-200' : 'bg-muted/30 border-border'}`}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <p className={`text-xs font-medium truncate flex-1 ${overdue ? 'text-red-700' : 'text-foreground'}`}>
+                          {task.title || task.name || 'Untitled'}
+                        </p>
+                        {overdue && (
+                          <span className="text-[10px] font-semibold bg-red-100 text-red-600 px-1.5 py-0.5 rounded-full shrink-0">
+                            Overdue
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2 mt-1">
+                        {assignee && <span className="text-[10px] text-muted-foreground truncate">{assignee}</span>}
+                        {dueDate && (
+                          <span className={`text-[10px] shrink-0 ml-auto ${overdue ? 'text-red-500' : 'text-muted-foreground'}`}>
+                            Due: {new Date(dueDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Widget 8 — Transactions & Cheque Reminders */}
+          <div className="bg-card border border-border rounded-xl p-5 xl:col-span-2">
+            <div className="flex items-center gap-2 mb-4">
+              <CreditCard className="w-4 h-4 text-indigo-500" />
+              <h3 className="text-sm font-semibold text-foreground">Transactions &amp; Cheque Reminders</h3>
+            </div>
+
+            {/* Cash flow KPIs */}
+            <div className="grid grid-cols-2 gap-3 mb-4">
+              <div className="bg-green-50 border border-green-200 rounded-lg px-4 py-3">
+                <p className="text-xs text-green-600 font-medium">Total Inflow (FY)</p>
+                <p className="text-xl font-bold text-green-700 mt-0.5">{fmtNPR(fyInflow)}</p>
+              </div>
+              <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3">
+                <p className="text-xs text-red-500 font-medium">Total Outflow (FY)</p>
+                <p className="text-xl font-bold text-red-600 mt-0.5">{fmtNPR(fyOutflow)}</p>
+              </div>
+            </div>
+
+            {/* Area chart */}
+            {flowChart.length > 0 ? (
+              <>
+                <p className="text-xs font-medium text-muted-foreground mb-2">Monthly Cash Flow</p>
+                <ResponsiveContainer width="100%" height={200}>
+                  <AreaChart data={flowChart} margin={{ top: 0, right: 0, left: -10, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="inflowGrad" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%"  stopColor="#10b981" stopOpacity={0.25} />
+                        <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                      </linearGradient>
+                      <linearGradient id="outflowGrad" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%"  stopColor="#ef4444" stopOpacity={0.25} />
+                        <stop offset="95%" stopColor="#ef4444" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                    <XAxis dataKey="month" tick={{ fontSize: 10 }} />
+                    <YAxis tick={{ fontSize: 10 }} tickFormatter={v => `${(v / 1000).toFixed(0)}k`} />
+                    <Tooltip formatter={v => fmtNPR(v)} />
+                    <Legend iconSize={8} wrapperStyle={{ fontSize: 10 }} />
+                    <Area type="monotone" dataKey="inflow"  name="Inflow"  stroke="#10b981" fill="url(#inflowGrad)"  strokeWidth={2} />
+                    <Area type="monotone" dataKey="outflow" name="Outflow" stroke="#ef4444" fill="url(#outflowGrad)" strokeWidth={2} />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </>
+            ) : (
+              <div className="flex items-center justify-center h-[200px] text-xs text-muted-foreground">No data yet</div>
+            )}
+
+            {/* Cheque Reminders */}
+            <div className="mt-5">
+              <div className="flex items-center gap-2 mb-3">
+                <AlertCircle className="w-3.5 h-3.5 text-amber-500" />
+                <p className="text-xs font-semibold text-foreground">Cheque Reminders</p>
+              </div>
+
+              {/* Tabs */}
+              <div className="flex gap-1 mb-3 bg-muted/30 rounded-lg p-1 w-fit">
+                {[
+                  { key: 'receivable', label: `Receivable (${chequesReceivable.length})` },
+                  { key: 'payable',    label: `Payable (${chequesPayable.length})` },
+                ].map(tab => (
+                  <button
+                    key={tab.key}
+                    onClick={() => setChequeTab(tab.key)}
+                    className={`text-xs px-3 py-1.5 rounded-md font-medium transition-colors ${
+                      chequeTab === tab.key
+                        ? 'bg-card text-foreground shadow-sm'
+                        : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Cheque list */}
+              {(() => {
+                const list = chequeTab === 'receivable' ? chequesReceivable : chequesPayable;
+                if (list.length === 0) {
+                  return <p className="text-xs text-muted-foreground italic">No {chequeTab} cheques</p>;
+                }
+                return (
+                  <div className="space-y-1.5 max-h-48 overflow-y-auto">
+                    {list.map((ch, i) => {
+                      const dueDate  = ch.due_date || ch.dueDate || ch.date;
+                      const pastDue  = dueDate && new Date(dueDate) < todayDate;
+                      return (
+                        <div
+                          key={ch.id || i}
+                          className={`rounded-lg border px-3 py-2 flex items-center gap-3 ${pastDue ? 'bg-red-50 border-red-200' : 'bg-muted/20 border-border'}`}
+                        >
+                          <div className="flex-1 min-w-0">
+                            <p className={`text-xs font-medium truncate ${pastDue ? 'text-red-700' : 'text-foreground'}`}>
+                              {ch.party_name || ch.partyName || ch.name || 'Unknown'}
+                            </p>
+                            {ch.description && (
+                              <p className="text-[10px] text-muted-foreground truncate">{ch.description}</p>
+                            )}
+                          </div>
+                          <div className="text-right shrink-0">
+                            <p className={`text-xs font-mono font-semibold ${pastDue ? 'text-red-600' : 'text-foreground'}`}>
+                              {fmtNPR(ch.amount)}
+                            </p>
+                            {dueDate && (
+                              <p className={`text-[10px] ${pastDue ? 'text-red-500' : 'text-muted-foreground'}`}>
+                                {pastDue && 'Overdue · '}
+                                {new Date(dueDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' })}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
+            </div>
+          </div>
+
+        </div>
+      </Section>
     </div>
   );
 }
 
-// ── No-company onboarding state ────────────────────────────────────────────────
+// ── No Company State ───────────────────────────────────────────────────────────
 function NoCompanyState() {
+  const [name, setName]       = useState('');
   const [creating, setCreating] = useState(false);
-  const [name, setName] = useState('');
 
   async function handleCreate() {
     if (!name.trim()) return;
     setCreating(true);
-    const company = await api.Company.create({ name: name.trim(), is_active: true });
-    const { setActiveCompanyId } = await import('@/lib/companyContext');
-    setActiveCompanyId(company.id);
-    window.location.reload();
+    try {
+      const company = await api.Company.create({ name: name.trim(), is_active: true });
+      const { setActiveCompanyId } = await import('@/lib/companyContext');
+      setActiveCompanyId(company.id);
+      window.location.reload();
+    } finally {
+      setCreating(false);
+    }
   }
 
   return (
-    <div className="flex flex-col items-center justify-center py-20 animate-fade-in">
+    <div className="flex flex-col items-center justify-center py-20">
       <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mb-6">
         <Building2 className="w-8 h-8 text-primary" />
       </div>

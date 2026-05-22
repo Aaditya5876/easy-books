@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { api } from '@/api/adapter';
+import { ledgerApi } from '@/api';
 import { getActiveCompanyId } from '@/lib/companyContext';
 import { adToBs } from '@/lib/nepaliDate';
 import PageHeader from '../components/shared/PageHeader';
@@ -14,13 +15,17 @@ import { Badge } from "@/components/ui/badge";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter
 } from "@/components/ui/dialog";
-import { BookOpen, Plus, Printer, Share2, Save, Eye, User, Phone, Hash, MapPin, FileText, Wallet } from 'lucide-react';
+import { BookOpen, Plus, User, Phone, Hash, MapPin, FileText, Wallet, EyeOff, Eye, Lock, Trash2 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import FloatingAccountDetail from '../components/ledger/FloatingAccountDetail';
 import EmptyState from '../components/EmptyState';
+import { useRole } from '@/lib/useRole';
+import { useToast } from '@/components/ui/use-toast';
 
 export default function Ledger() {
   const companyId = getActiveCompanyId();
+  const { isAdmin } = useRole();
+  const { toast } = useToast();
   const [accounts, setAccounts] = useState([]);
   const [entries, setEntries] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -29,8 +34,54 @@ export default function Ledger() {
   const [colFilters, setColFilters] = useState({ account_name: '', contact_name: '', status: '' });
   const setCol = (key, val) => setColFilters(f => ({ ...f, [key]: val }));
   const [showNewAccount, setShowNewAccount] = useState(false);
-  const [showAccountDetail, setShowAccountDetail] = useState(null);
+  const [selectedAccount, setSelectedAccount] = useState(null); // single click — selection only
+  const [showAccountDetail, setShowAccountDetail] = useState(null); // double click — opens detail
   const [showNewEntry, setShowNewEntry] = useState(false);
+
+  // Context menu (right-click)
+  const [contextMenu, setContextMenu] = useState(null); // { x, y, account }
+
+  // Password dialog (hide/unhide + hidden search + hidden delete)
+  const [pwDialog, setPwDialog] = useState(null); // { mode: 'hide'|'search', account? }
+  const [pwInput, setPwInput] = useState('');
+  const [pwLoading, setPwLoading] = useState(false);
+
+  // Hidden account search
+  const [hiddenSearchName, setHiddenSearchName] = useState('');
+
+  // Space+Alt+Delete to delete hidden account (when detail is open)
+  const keysHeld = useRef(new Set());
+  const handleKeyDown = useCallback((e) => {
+    keysHeld.current.add(e.code);
+    if (
+      keysHeld.current.has('Space') &&
+      keysHeld.current.has('AltLeft') &&
+      keysHeld.current.has('Delete') &&
+      showAccountDetail?.isHidden
+    ) {
+      e.preventDefault();
+      setPwDialog({ mode: 'deleteHidden', account: showAccountDetail });
+      setPwInput('');
+    }
+  }, [showAccountDetail]);
+  const handleKeyUp = useCallback((e) => { keysHeld.current.delete(e.code); }, []);
+
+  useEffect(() => {
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+    };
+  }, [handleKeyDown, handleKeyUp]);
+
+  // Close context menu on click outside
+  useEffect(() => {
+    if (!contextMenu) return;
+    const close = () => setContextMenu(null);
+    window.addEventListener('click', close);
+    return () => window.removeEventListener('click', close);
+  }, [contextMenu]);
   const [newAccount, setNewAccount] = useState({
     account_name: '', contact_name: '', contact_phone: '',
     address: '', pan_vat: '', opening_balance: '', notes: '', ob_type: 'debit',
@@ -50,6 +101,33 @@ export default function Ledger() {
     setAccounts(accs);
     setEntries(ents);
     setLoading(false);
+  }
+
+  async function handlePasswordSubmit() {
+    if (!pwInput.trim() || !pwDialog) return;
+    setPwLoading(true);
+    try {
+      if (pwDialog.mode === 'hide') {
+        await ledgerApi.accounts.toggleHidden(pwDialog.account.id, pwInput);
+        toast({ title: pwDialog.account.isHidden ? 'Account unhidden' : 'Account hidden', description: pwDialog.account.account_name });
+        setShowAccountDetail(null);
+        loadData();
+      } else if (pwDialog.mode === 'search') {
+        const res = await ledgerApi.accounts.searchHidden(hiddenSearchName, pwInput);
+        setShowAccountDetail(res.data);
+      } else if (pwDialog.mode === 'deleteHidden') {
+        await ledgerApi.accounts.removeHidden(pwDialog.account.id, pwInput);
+        toast({ title: 'Hidden account deleted', description: pwDialog.account.account_name });
+        setShowAccountDetail(null);
+        loadData();
+      }
+      setPwDialog(null);
+      setPwInput('');
+    } catch (err) {
+      toast({ title: 'Error', description: err?.response?.data?.message || 'Incorrect password or account not found.', variant: 'destructive' });
+    } finally {
+      setPwLoading(false);
+    }
   }
 
   async function createAccount() {
@@ -110,6 +188,9 @@ export default function Ledger() {
     (!colFilters.contact_name || a.contact_name?.toLowerCase().includes(colFilters.contact_name.toLowerCase())) &&
     (!colFilters.status || (colFilters.status === 'active' ? a.is_active : !a.is_active))
   );
+
+  // When ADMIN searches and gets no results, offer hidden account lookup
+  const searchIsEmpty = search.trim().length > 0 && filteredAccounts.length === 0;
 
   const accountEntries = showAccountDetail
     ? [...entries.filter(e => e.account_id === showAccountDetail.id)].reverse()
@@ -172,7 +253,7 @@ export default function Ledger() {
         </TabsList>
 
         <TabsContent value={activeTab} className="mt-4">
-          {filteredAccounts.length === 0 ? (
+          {filteredAccounts.length === 0 && !searchIsEmpty ? (
             <EmptyState
               icon={BookOpen}
               title="No accounts yet"
@@ -183,11 +264,27 @@ export default function Ledger() {
                 </Button>
               }
             />
+          ) : searchIsEmpty && isAdmin ? (
+            <div className="bg-card rounded-xl border border-border p-10 text-center space-y-3">
+              <EyeOff className="w-8 h-8 mx-auto text-muted-foreground" />
+              <p className="text-sm font-medium">No visible accounts match "{search}"</p>
+              <p className="text-xs text-muted-foreground">This account may be hidden. Enter the exact name to search hidden accounts.</p>
+              <Button variant="outline" size="sm" className="gap-2" onClick={() => {
+                setHiddenSearchName(search);
+                setPwDialog({ mode: 'search' });
+                setPwInput('');
+              }}>
+                <Lock className="w-3.5 h-3.5" /> Search Hidden Accounts
+              </Button>
+            </div>
           ) : (
             <DataTable
               columns={accountColumns}
               data={filteredAccounts}
-              onRowClick={(row) => setShowAccountDetail(row)}
+              selectedId={selectedAccount?.id}
+              onRowClick={(row) => setSelectedAccount(row)}
+              onRowDoubleClick={(row) => setShowAccountDetail(row)}
+              onRowContextMenu={isAdmin ? (row, e) => setContextMenu({ x: e.clientX, y: e.clientY, account: row }) : undefined}
               emptyMessage={`No ${activeTab} accounts yet. Click "New Account" to create one.`}
             />
           )}
@@ -374,6 +471,90 @@ export default function Ledger() {
           createEntry={createEntry}
         />
       )}
+
+      {/* Right-click context menu */}
+      {contextMenu && (
+        <div
+          className="fixed z-[9999] bg-popover border border-border rounded-lg shadow-xl py-1 min-w-[180px] text-sm"
+          style={{ top: contextMenu.y, left: contextMenu.x }}
+          onClick={e => e.stopPropagation()}
+        >
+          <button
+            className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-muted transition-colors text-left"
+            onClick={() => {
+              setShowAccountDetail(contextMenu.account);
+              setContextMenu(null);
+            }}
+          >
+            <Eye className="w-3.5 h-3.5 text-muted-foreground" /> Open Account
+          </button>
+          <div className="border-t border-border my-1" />
+          <button
+            className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-muted transition-colors text-left text-amber-600"
+            onClick={() => {
+              setPwDialog({ mode: 'hide', account: contextMenu.account });
+              setPwInput('');
+              setContextMenu(null);
+            }}
+          >
+            <EyeOff className="w-3.5 h-3.5" />
+            {contextMenu.account?.isHidden ? 'Unhide Account' : 'Hide Account'}
+          </button>
+        </div>
+      )}
+
+      {/* Password dialog — hide/search/delete hidden */}
+      <Dialog open={!!pwDialog} onOpenChange={open => { if (!open) { setPwDialog(null); setPwInput(''); } }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Lock className="w-4 h-4 text-amber-500" />
+              {pwDialog?.mode === 'hide' && (pwDialog?.account?.isHidden ? 'Unhide Account' : 'Hide Account')}
+              {pwDialog?.mode === 'search' && 'Access Hidden Account'}
+              {pwDialog?.mode === 'deleteHidden' && 'Delete Hidden Account'}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            {pwDialog?.mode === 'search' && (
+              <div className="space-y-1.5">
+                <Label className="text-xs">Account Name</Label>
+                <Input
+                  value={hiddenSearchName}
+                  onChange={e => setHiddenSearchName(e.target.value)}
+                  placeholder="Exact account name..."
+                  className="h-9 text-sm"
+                />
+              </div>
+            )}
+            {pwDialog?.mode === 'deleteHidden' && (
+              <p className="text-sm text-destructive font-medium">
+                This will permanently delete "{pwDialog?.account?.account_name}". This cannot be undone.
+              </p>
+            )}
+            <div className="space-y-1.5">
+              <Label className="text-xs">Admin Password</Label>
+              <Input
+                type="password"
+                value={pwInput}
+                onChange={e => setPwInput(e.target.value)}
+                placeholder="Enter your password..."
+                className="h-9 text-sm"
+                onKeyDown={e => e.key === 'Enter' && handlePasswordSubmit()}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setPwDialog(null); setPwInput(''); }}>Cancel</Button>
+            <Button
+              onClick={handlePasswordSubmit}
+              disabled={!pwInput.trim() || pwLoading}
+              variant={pwDialog?.mode === 'deleteHidden' ? 'destructive' : 'default'}
+            >
+              {pwLoading ? 'Verifying…' : 'Confirm'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

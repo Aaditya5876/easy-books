@@ -96,6 +96,12 @@ export const ledgerApi = {
     create: (data: object) => apiClient.post('/api/v1/ledger/accounts', data),
     update: (id: string, data: object) => apiClient.put(`/api/v1/ledger/accounts/${id}`, data, { params: { companyId: companyId() } }),
     remove: (id: string) => apiClient.delete(`/api/v1/ledger/accounts/${id}`, { params: { companyId: companyId() } }),
+    toggleHidden: (id: string, password: string) =>
+      apiClient.post(`/api/v1/ledger/accounts/${id}/toggle-hidden`, { password }, { params: { companyId: companyId() } }),
+    searchHidden: (accountName: string, password: string) =>
+      apiClient.post('/api/v1/ledger/accounts/hidden/search', { accountName, password }, { params: { companyId: companyId() } }),
+    removeHidden: (id: string, password: string) =>
+      apiClient.delete(`/api/v1/ledger/accounts/${id}/hidden`, { data: { password }, params: { companyId: companyId() } }),
   },
   entries: {
     list: (accountId?: string) => apiClient.get('/api/v1/ledger/entries', { params: { companyId: companyId(), accountId } }),

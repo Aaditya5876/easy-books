@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { taskApi } from '@/api';
+import { taskApi, salesApi, purchaseApi, clientApi, vendorApi } from '@/api';
 import { getActiveCompanyId } from '@/lib/companyContext';
 import PageHeader from '../components/shared/PageHeader';
 import { Button } from "@/components/ui/button";
@@ -10,7 +10,9 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import { Plus, X, ExternalLink, Calendar, User, Tag, AlertCircle, CheckCircle2, Clock, Pencil, FileText } from 'lucide-react';
+import { Plus, X, Calendar, User, Tag, AlertCircle, CheckCircle2, Clock, Pencil, FileText, Paperclip } from 'lucide-react';
+import { FileAttachmentZone } from '@/components/ui/file-attachment-zone';
+import { memoApi } from '@/api';
 import { useToast } from "@/components/ui/use-toast";
 import EmptyState from '../components/EmptyState';
 import PageLoader from '../components/PageLoader';
@@ -51,6 +53,7 @@ const EMPTY_FORM = {
   status: 'Pending',
   due_date: '',
   assigned_to: '',
+  attachments: [],
 };
 
 const COLUMNS = [
@@ -164,14 +167,56 @@ function KanbanColumn({ title, dotColor, tasks, onCardClick, onAddNew }) {
 
 // ─── SlideOutPanel ────────────────────────────────────────────────────────────
 
+const EMPTY_SALES = { client_name: '', invoice_number: '', date: '', amount: '', notes: '' };
+const EMPTY_PURCHASE = { vendor_name: '', order_number: '', date: '', amount: '', notes: '' };
+const EMPTY_CLIENT = { name: '', phone: '', email: '', address: '' };
+const EMPTY_VENDOR = { name: '', phone: '', email: '', address: '' };
+
 function SlideOutPanel({ task, onClose, onSave }) {
   const [editing, setEditing] = useState(null);
   const [saving, setSaving] = useState(false);
+  const { toast } = useToast();
+
+  // Quick-action dialog state
+  const [salesDialog, setSalesDialog] = useState(false);
+  const [purchaseDialog, setPurchaseDialog] = useState(false);
+  const [clientDialog, setClientDialog] = useState(false);
+  const [vendorDialog, setVendorDialog] = useState(false);
+
+  const [salesForm, setSalesForm] = useState(EMPTY_SALES);
+  const [purchaseForm, setPurchaseForm] = useState(EMPTY_PURCHASE);
+  const [clientForm, setClientForm] = useState(EMPTY_CLIENT);
+  const [vendorForm, setVendorForm] = useState(EMPTY_VENDOR);
+
+  const [qaSubmitting, setQaSubmitting] = useState(false);
 
   useEffect(() => {
-    if (task) setEditing({ ...task });
-    else setEditing(null);
+    if (task) {
+      setEditing({ ...task });
+      setSalesForm(f => ({ ...EMPTY_SALES, notes: task.title || '', ...f, notes: task.title || '' }));
+      setPurchaseForm(f => ({ ...EMPTY_PURCHASE, notes: task.title || '', ...f, notes: task.title || '' }));
+    } else {
+      setEditing(null);
+    }
   }, [task]);
+
+  // Reset forms when dialogs open so pre-fill is fresh
+  function openSalesDialog() {
+    setSalesForm({ ...EMPTY_SALES, notes: task?.title || '' });
+    setSalesDialog(true);
+  }
+  function openPurchaseDialog() {
+    setPurchaseForm({ ...EMPTY_PURCHASE, notes: task?.title || '' });
+    setPurchaseDialog(true);
+  }
+  function openClientDialog() {
+    setClientForm({ ...EMPTY_CLIENT });
+    setClientDialog(true);
+  }
+  function openVendorDialog() {
+    setVendorForm({ ...EMPTY_VENDOR });
+    setVendorDialog(true);
+  }
 
   if (!editing) return null;
 
@@ -181,154 +226,503 @@ function SlideOutPanel({ task, onClose, onSave }) {
     setSaving(false);
   }
 
-  const QUICK_ACTIONS = [
-    { label: 'Create Sales Bill', href: '/sales' },
-    { label: 'Create Purchase', href: '/purchase' },
-    { label: 'Add Client', href: '/clients' },
-    { label: 'Add Vendor', href: '/vendors' },
-  ];
+  async function handleCreateSales() {
+    setQaSubmitting(true);
+    try {
+      const companyId = getActiveCompanyId();
+      const amount = parseFloat(salesForm.amount) || 0;
+      await salesApi.create({
+        client_name: salesForm.client_name,
+        invoice_number: salesForm.invoice_number,
+        date_ad: salesForm.date,
+        items: [{ description: editing.title, quantity: 1, unit: 'pcs', unit_price: amount, total: amount }],
+        companyId,
+        payment_type: 'cash',
+        is_vat: false,
+        notes: salesForm.notes,
+        labor_items: [],
+      });
+      setSalesDialog(false);
+      toast({ title: 'Sales bill created', description: `Bill for "${salesForm.client_name}" created.` });
+    } catch {
+      toast({ title: 'Error', description: 'Could not create sales bill.', variant: 'destructive' });
+    } finally {
+      setQaSubmitting(false);
+    }
+  }
+
+  async function handleCreatePurchase() {
+    setQaSubmitting(true);
+    try {
+      const companyId = getActiveCompanyId();
+      const amount = parseFloat(purchaseForm.amount) || 0;
+      await purchaseApi.create({
+        vendor_name: purchaseForm.vendor_name,
+        order_number: purchaseForm.order_number,
+        date_ad: purchaseForm.date,
+        items: [{ description: editing.title, quantity: 1, unit: 'pcs', unit_price: amount, total: amount }],
+        companyId,
+        payment_type: 'cash',
+        is_vat: false,
+        notes: purchaseForm.notes,
+        labor_items: [],
+      });
+      setPurchaseDialog(false);
+      toast({ title: 'Purchase created', description: `Purchase from "${purchaseForm.vendor_name}" created.` });
+    } catch {
+      toast({ title: 'Error', description: 'Could not create purchase.', variant: 'destructive' });
+    } finally {
+      setQaSubmitting(false);
+    }
+  }
+
+  async function handleCreateClient() {
+    setQaSubmitting(true);
+    try {
+      const companyId = getActiveCompanyId();
+      await clientApi.create({ ...clientForm, companyId });
+      setClientDialog(false);
+      toast({ title: 'Client added', description: `"${clientForm.name}" added as a client.` });
+    } catch {
+      toast({ title: 'Error', description: 'Could not add client.', variant: 'destructive' });
+    } finally {
+      setQaSubmitting(false);
+    }
+  }
+
+  async function handleCreateVendor() {
+    setQaSubmitting(true);
+    try {
+      const companyId = getActiveCompanyId();
+      await vendorApi.create({ ...vendorForm, companyId });
+      setVendorDialog(false);
+      toast({ title: 'Vendor added', description: `"${vendorForm.name}" added as a vendor.` });
+    } catch {
+      toast({ title: 'Error', description: 'Could not add vendor.', variant: 'destructive' });
+    } finally {
+      setQaSubmitting(false);
+    }
+  }
 
   return (
-    <div
-      className={cn(
-        'fixed right-0 top-0 h-screen w-[420px] bg-background border-l border-border shadow-2xl z-50 transition-transform duration-300 flex flex-col',
-        task ? 'translate-x-0' : 'translate-x-full'
-      )}
-    >
-      {/* Header */}
-      <div className="flex items-start justify-between p-5 border-b border-border shrink-0">
-        <div className="flex-1 pr-4">
-          <p className="text-xs font-medium text-muted-foreground mb-1 uppercase tracking-wide">Task Detail</p>
-          <h2 className="font-bold text-base leading-snug">{editing.title}</h2>
-        </div>
-        <Button variant="ghost" size="icon" className="w-8 h-8 shrink-0" onClick={onClose}>
-          <X className="w-4 h-4" />
-        </Button>
-      </div>
-
-      {/* Scrollable body */}
-      <div className="flex-1 overflow-y-auto p-5 space-y-5">
-
-        {/* Status + Priority row */}
-        <div className="grid grid-cols-2 gap-3">
-          <div className="space-y-1.5">
-            <Label className="text-xs font-medium flex items-center gap-1.5">
-              <Clock className="w-3 h-3" /> Status
-            </Label>
-            <Select
-              value={editing.status}
-              onValueChange={v => setEditing(e => ({ ...e, status: v }))}
-            >
-              <SelectTrigger className="h-9 text-sm">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="Pending">Pending</SelectItem>
-                <SelectItem value="In Progress">In Progress</SelectItem>
-                <SelectItem value="Done">Done</SelectItem>
-              </SelectContent>
-            </Select>
+    <>
+      <div
+        className={cn(
+          'fixed right-0 top-0 h-screen w-[420px] bg-background border-l border-border shadow-2xl z-50 transition-transform duration-300 flex flex-col',
+          task ? 'translate-x-0' : 'translate-x-full'
+        )}
+      >
+        {/* Header */}
+        <div className="flex items-start justify-between p-5 border-b border-border shrink-0">
+          <div className="flex-1 pr-4">
+            <p className="text-xs font-medium text-muted-foreground mb-1 uppercase tracking-wide">Task Detail</p>
+            <h2 className="font-bold text-base leading-snug">{editing.title}</h2>
           </div>
-
-          <div className="space-y-1.5">
-            <Label className="text-xs font-medium flex items-center gap-1.5">
-              <AlertCircle className="w-3 h-3" /> Priority
-            </Label>
-            <Select
-              value={editing.priority}
-              onValueChange={v => setEditing(e => ({ ...e, priority: v }))}
-            >
-              <SelectTrigger className="h-9 text-sm">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="High">High</SelectItem>
-                <SelectItem value="Medium">Medium</SelectItem>
-                <SelectItem value="Low">Low</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+          <Button variant="ghost" size="icon" className="w-8 h-8 shrink-0" onClick={onClose}>
+            <X className="w-4 h-4" />
+          </Button>
         </div>
 
-        {/* Category */}
-        <div className="space-y-1.5">
-          <Label className="text-xs font-medium flex items-center gap-1.5">
-            <Tag className="w-3 h-3" /> Category
-          </Label>
-          <span className={cn('inline-block text-xs px-2.5 py-1 rounded-md font-medium', CATEGORY_COLORS[editing.category] || CATEGORY_COLORS.General)}>
-            {editing.category || 'General'}
-          </span>
-        </div>
+        {/* Scrollable body */}
+        <div className="flex-1 overflow-y-auto p-5 space-y-5">
 
-        {/* Due date */}
-        <div className="space-y-1.5">
-          <Label className="text-xs font-medium flex items-center gap-1.5">
-            <Calendar className="w-3 h-3" /> Due Date
-          </Label>
-          <Input
-            type="date"
-            className="h-9 text-sm"
-            value={editing.due_date || ''}
-            onChange={e => setEditing(ed => ({ ...ed, due_date: e.target.value }))}
-          />
-          {editing.due_date && isOverdue(editing.due_date) && (
-            <p className="text-xs text-red-500 font-medium">This task is overdue.</p>
-          )}
-        </div>
-
-        {/* Assigned to */}
-        <div className="space-y-1.5">
-          <Label className="text-xs font-medium flex items-center gap-1.5">
-            <User className="w-3 h-3" /> Assigned To
-          </Label>
-          <Input
-            className="h-9 text-sm"
-            placeholder="Name or email..."
-            value={editing.assigned_to || ''}
-            onChange={e => setEditing(ed => ({ ...ed, assigned_to: e.target.value }))}
-          />
-        </div>
-
-        {/* Description */}
-        <div className="space-y-1.5">
-          <Label className="text-xs font-medium">Description</Label>
-          <Textarea
-            className="text-sm resize-none"
-            rows={4}
-            placeholder="Add details about this task..."
-            value={editing.description || ''}
-            onChange={e => setEditing(ed => ({ ...ed, description: e.target.value }))}
-          />
-        </div>
-
-        {/* Quick Actions */}
-        <div className="space-y-2">
-          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Quick Actions</p>
-          <div className="grid grid-cols-2 gap-2">
-            {QUICK_ACTIONS.map(action => (
-              <a
-                key={action.href}
-                href={action.href}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-border text-xs font-medium hover:bg-muted transition-colors text-foreground"
+          {/* Status + Priority row */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium flex items-center gap-1.5">
+                <Clock className="w-3 h-3" /> Status
+              </Label>
+              <Select
+                value={editing.status}
+                onValueChange={v => setEditing(e => ({ ...e, status: v }))}
               >
-                <ExternalLink className="w-3 h-3 shrink-0 text-muted-foreground" />
-                {action.label}
-              </a>
-            ))}
+                <SelectTrigger className="h-9 text-sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Pending">Pending</SelectItem>
+                  <SelectItem value="In Progress">In Progress</SelectItem>
+                  <SelectItem value="Done">Done</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium flex items-center gap-1.5">
+                <AlertCircle className="w-3 h-3" /> Priority
+              </Label>
+              <Select
+                value={editing.priority}
+                onValueChange={v => setEditing(e => ({ ...e, priority: v }))}
+              >
+                <SelectTrigger className="h-9 text-sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="High">High</SelectItem>
+                  <SelectItem value="Medium">Medium</SelectItem>
+                  <SelectItem value="Low">Low</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
+
+          {/* Category */}
+          <div className="space-y-1.5">
+            <Label className="text-xs font-medium flex items-center gap-1.5">
+              <Tag className="w-3 h-3" /> Category
+            </Label>
+            <span className={cn('inline-block text-xs px-2.5 py-1 rounded-md font-medium', CATEGORY_COLORS[editing.category] || CATEGORY_COLORS.General)}>
+              {editing.category || 'General'}
+            </span>
+          </div>
+
+          {/* Due date */}
+          <div className="space-y-1.5">
+            <Label className="text-xs font-medium flex items-center gap-1.5">
+              <Calendar className="w-3 h-3" /> Due Date
+            </Label>
+            <Input
+              type="date"
+              className="h-9 text-sm"
+              value={editing.due_date || ''}
+              onChange={e => setEditing(ed => ({ ...ed, due_date: e.target.value }))}
+            />
+            {editing.due_date && isOverdue(editing.due_date) && (
+              <p className="text-xs text-red-500 font-medium">This task is overdue.</p>
+            )}
+          </div>
+
+          {/* Assigned to */}
+          <div className="space-y-1.5">
+            <Label className="text-xs font-medium flex items-center gap-1.5">
+              <User className="w-3 h-3" /> Assigned To
+            </Label>
+            <Input
+              className="h-9 text-sm"
+              placeholder="Name or email..."
+              value={editing.assigned_to || ''}
+              onChange={e => setEditing(ed => ({ ...ed, assigned_to: e.target.value }))}
+            />
+          </div>
+
+          {/* Description */}
+          <div className="space-y-1.5">
+            <Label className="text-xs font-medium">Description</Label>
+            <Textarea
+              className="text-sm resize-none"
+              rows={4}
+              placeholder="Add details about this task..."
+              value={editing.description || ''}
+              onChange={e => setEditing(ed => ({ ...ed, description: e.target.value }))}
+            />
+          </div>
+
+          {/* Quick Actions */}
+          <div className="space-y-2">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Quick Actions</p>
+            <div className="grid grid-cols-2 gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="justify-start gap-1.5 text-xs font-medium h-9"
+                onClick={openSalesDialog}
+              >
+                <Plus className="w-3 h-3 shrink-0 text-muted-foreground" />
+                Create Sales Bill
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="justify-start gap-1.5 text-xs font-medium h-9"
+                onClick={openPurchaseDialog}
+              >
+                <Plus className="w-3 h-3 shrink-0 text-muted-foreground" />
+                Create Purchase
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="justify-start gap-1.5 text-xs font-medium h-9"
+                onClick={openClientDialog}
+              >
+                <Plus className="w-3 h-3 shrink-0 text-muted-foreground" />
+                Add Client
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="justify-start gap-1.5 text-xs font-medium h-9"
+                onClick={openVendorDialog}
+              >
+                <Plus className="w-3 h-3 shrink-0 text-muted-foreground" />
+                Add Vendor
+              </Button>
+            </div>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="p-5 border-t border-border shrink-0">
+          <Button className="w-full gap-2" onClick={handleSave} disabled={saving}>
+            <CheckCircle2 className="w-4 h-4" />
+            {saving ? 'Saving…' : 'Save Changes'}
+          </Button>
         </div>
       </div>
 
-      {/* Footer */}
-      <div className="p-5 border-t border-border shrink-0">
-        <Button className="w-full gap-2" onClick={handleSave} disabled={saving}>
-          <CheckCircle2 className="w-4 h-4" />
-          {saving ? 'Saving…' : 'Save Changes'}
-        </Button>
-      </div>
-    </div>
+      {/* ── Create Sales Bill Dialog ── */}
+      <Dialog open={salesDialog} onOpenChange={setSalesDialog}>
+        <DialogContent className="glass-dialog max-w-md overflow-hidden">
+          <div className="h-1 bg-gradient-to-r from-amber-500 to-orange-500 -mx-6 -mt-6 mb-4 rounded-t-lg" />
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FileText className="w-5 h-5 text-amber-500" />
+              Create Sales Bill
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 mt-2">
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium">Client Name <span className="text-red-500">*</span></Label>
+              <Input
+                className="h-9 text-sm"
+                placeholder="Client name..."
+                value={salesForm.client_name}
+                onChange={e => setSalesForm(f => ({ ...f, client_name: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium">Invoice Number</Label>
+              <Input
+                className="h-9 text-sm"
+                placeholder="INV-001..."
+                value={salesForm.invoice_number}
+                onChange={e => setSalesForm(f => ({ ...f, invoice_number: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium">Date</Label>
+              <Input
+                type="date"
+                className="h-9 text-sm"
+                value={salesForm.date}
+                onChange={e => setSalesForm(f => ({ ...f, date: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium">Amount</Label>
+              <Input
+                type="number"
+                className="h-9 text-sm"
+                placeholder="0.00"
+                value={salesForm.amount}
+                onChange={e => setSalesForm(f => ({ ...f, amount: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium">Notes</Label>
+              <Textarea
+                className="text-sm resize-none"
+                rows={3}
+                placeholder="Notes..."
+                value={salesForm.notes}
+                onChange={e => setSalesForm(f => ({ ...f, notes: e.target.value }))}
+              />
+            </div>
+          </div>
+          <DialogFooter className="mt-4">
+            <Button variant="outline" onClick={() => setSalesDialog(false)}>Cancel</Button>
+            <Button onClick={handleCreateSales} disabled={!salesForm.client_name.trim() || qaSubmitting}>
+              {qaSubmitting ? 'Creating…' : 'Create Bill'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Create Purchase Dialog ── */}
+      <Dialog open={purchaseDialog} onOpenChange={setPurchaseDialog}>
+        <DialogContent className="glass-dialog max-w-md overflow-hidden">
+          <div className="h-1 bg-gradient-to-r from-amber-500 to-orange-500 -mx-6 -mt-6 mb-4 rounded-t-lg" />
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FileText className="w-5 h-5 text-amber-500" />
+              Create Purchase
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 mt-2">
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium">Vendor Name <span className="text-red-500">*</span></Label>
+              <Input
+                className="h-9 text-sm"
+                placeholder="Vendor name..."
+                value={purchaseForm.vendor_name}
+                onChange={e => setPurchaseForm(f => ({ ...f, vendor_name: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium">Order Number</Label>
+              <Input
+                className="h-9 text-sm"
+                placeholder="PO-001..."
+                value={purchaseForm.order_number}
+                onChange={e => setPurchaseForm(f => ({ ...f, order_number: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium">Date</Label>
+              <Input
+                type="date"
+                className="h-9 text-sm"
+                value={purchaseForm.date}
+                onChange={e => setPurchaseForm(f => ({ ...f, date: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium">Amount</Label>
+              <Input
+                type="number"
+                className="h-9 text-sm"
+                placeholder="0.00"
+                value={purchaseForm.amount}
+                onChange={e => setPurchaseForm(f => ({ ...f, amount: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium">Notes</Label>
+              <Textarea
+                className="text-sm resize-none"
+                rows={3}
+                placeholder="Notes..."
+                value={purchaseForm.notes}
+                onChange={e => setPurchaseForm(f => ({ ...f, notes: e.target.value }))}
+              />
+            </div>
+          </div>
+          <DialogFooter className="mt-4">
+            <Button variant="outline" onClick={() => setPurchaseDialog(false)}>Cancel</Button>
+            <Button onClick={handleCreatePurchase} disabled={!purchaseForm.vendor_name.trim() || qaSubmitting}>
+              {qaSubmitting ? 'Creating…' : 'Create Purchase'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Add Client Dialog ── */}
+      <Dialog open={clientDialog} onOpenChange={setClientDialog}>
+        <DialogContent className="glass-dialog max-w-md overflow-hidden">
+          <div className="h-1 bg-gradient-to-r from-amber-500 to-orange-500 -mx-6 -mt-6 mb-4 rounded-t-lg" />
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <User className="w-5 h-5 text-amber-500" />
+              Add Client
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 mt-2">
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium">Name <span className="text-red-500">*</span></Label>
+              <Input
+                className="h-9 text-sm"
+                placeholder="Client name..."
+                value={clientForm.name}
+                onChange={e => setClientForm(f => ({ ...f, name: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium">Phone</Label>
+              <Input
+                className="h-9 text-sm"
+                placeholder="+977..."
+                value={clientForm.phone}
+                onChange={e => setClientForm(f => ({ ...f, phone: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium">Email</Label>
+              <Input
+                type="email"
+                className="h-9 text-sm"
+                placeholder="client@example.com"
+                value={clientForm.email}
+                onChange={e => setClientForm(f => ({ ...f, email: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium">Address</Label>
+              <Input
+                className="h-9 text-sm"
+                placeholder="Address..."
+                value={clientForm.address}
+                onChange={e => setClientForm(f => ({ ...f, address: e.target.value }))}
+              />
+            </div>
+          </div>
+          <DialogFooter className="mt-4">
+            <Button variant="outline" onClick={() => setClientDialog(false)}>Cancel</Button>
+            <Button onClick={handleCreateClient} disabled={!clientForm.name.trim() || qaSubmitting}>
+              {qaSubmitting ? 'Adding…' : 'Add Client'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Add Vendor Dialog ── */}
+      <Dialog open={vendorDialog} onOpenChange={setVendorDialog}>
+        <DialogContent className="glass-dialog max-w-md overflow-hidden">
+          <div className="h-1 bg-gradient-to-r from-amber-500 to-orange-500 -mx-6 -mt-6 mb-4 rounded-t-lg" />
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <User className="w-5 h-5 text-amber-500" />
+              Add Vendor
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 mt-2">
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium">Name <span className="text-red-500">*</span></Label>
+              <Input
+                className="h-9 text-sm"
+                placeholder="Vendor name..."
+                value={vendorForm.name}
+                onChange={e => setVendorForm(f => ({ ...f, name: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium">Phone</Label>
+              <Input
+                className="h-9 text-sm"
+                placeholder="+977..."
+                value={vendorForm.phone}
+                onChange={e => setVendorForm(f => ({ ...f, phone: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium">Email</Label>
+              <Input
+                type="email"
+                className="h-9 text-sm"
+                placeholder="vendor@example.com"
+                value={vendorForm.email}
+                onChange={e => setVendorForm(f => ({ ...f, email: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium">Address</Label>
+              <Input
+                className="h-9 text-sm"
+                placeholder="Address..."
+                value={vendorForm.address}
+                onChange={e => setVendorForm(f => ({ ...f, address: e.target.value }))}
+              />
+            </div>
+          </div>
+          <DialogFooter className="mt-4">
+            <Button variant="outline" onClick={() => setVendorDialog(false)}>Cancel</Button>
+            <Button onClick={handleCreateVendor} disabled={!vendorForm.name.trim() || qaSubmitting}>
+              {qaSubmitting ? 'Adding…' : 'Add Vendor'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 
@@ -354,8 +748,19 @@ function NewTaskDialog({ open, onOpenChange, onCreated }) {
     setSaving(true);
     try {
       const companyId = getActiveCompanyId();
-      const res = await taskApi.create({ ...form, companyId });
-      onCreated(res.data);
+      const { attachments, ...taskData } = form;
+      const res = await taskApi.create({ ...taskData, companyId });
+      const created = res.data;
+      if (attachments.length > 0 && created?.id) {
+        await memoApi.create({
+          companyId,
+          title: `Task: ${form.title}`,
+          content: `Attachments for task #${created.id}`,
+          tags: ['task', 'attachment'],
+          attachments,
+        }).catch(() => null);
+      }
+      onCreated(created);
       setForm(EMPTY_FORM);
       onOpenChange(false);
       toast({ title: 'Task created', description: `"${form.title}" added to ${form.status}.` });
@@ -503,6 +908,17 @@ function NewTaskDialog({ open, onOpenChange, onCreated }) {
                   </SelectContent>
                 </Select>
               </div>
+            </div>
+
+            {/* Attachments */}
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium flex items-center gap-1.5">
+                <Paperclip className="w-3.5 h-3.5" /> Attachments
+              </Label>
+              <FileAttachmentZone
+                value={form.attachments}
+                onChange={files => setField('attachments', files)}
+              />
             </div>
           </motion.div>
         </div>
