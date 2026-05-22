@@ -1,9 +1,13 @@
 // EasyBooks Seed Script
-// Run: node seed.js
+// Run: node seed.js [admin_email] [admin_password]
+// Default credentials match SUPER_ADMIN in backend/.env
 // Make sure backend is running on http://localhost:3000
 
 const BASE = 'http://localhost:3000';
-let token = '';
+const ADMIN_EMAIL    = process.argv[2] || 'admin@easybooks.com';
+const ADMIN_PASSWORD = process.argv[3] || 'ChangeMe@123';
+
+let cookies = '';
 let teaId = '';
 let pharmId = '';
 
@@ -12,10 +16,19 @@ let failed = 0;
 
 // ─── HTTP helpers ─────────────────────────────────────────────────────────────
 
+function extractCookies(res) {
+  const raw = typeof res.headers.getSetCookie === 'function'
+    ? res.headers.getSetCookie()
+    : (res.headers.get('set-cookie') || '').split(/,(?=[^ ])/);
+  return raw.map(c => c.split(';')[0]).filter(Boolean).join('; ');
+}
+
 async function post(path, body, auth = true) {
   const headers = { 'Content-Type': 'application/json' };
-  if (auth) headers['Authorization'] = `Bearer ${token}`;
+  if (auth && cookies) headers['Cookie'] = cookies;
   const res = await fetch(`${BASE}${path}`, { method: 'POST', headers, body: JSON.stringify(body) });
+  const newCookies = extractCookies(res);
+  if (newCookies) cookies = newCookies;
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(`POST ${path} → ${res.status}: ${JSON.stringify(data)}`);
   return data;
@@ -23,7 +36,7 @@ async function post(path, body, auth = true) {
 
 async function get(path, auth = true) {
   const headers = {};
-  if (auth) headers['Authorization'] = `Bearer ${token}`;
+  if (auth && cookies) headers['Cookie'] = cookies;
   const res = await fetch(`${BASE}${path}`, { headers });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(`GET ${path} → ${res.status}: ${JSON.stringify(data)}`);
@@ -48,21 +61,9 @@ async function run(label, fn) {
 async function seedAuth() {
   console.log('\n🔐 Auth');
 
-  await run('Register user', async () => {
-    return post('/api/v1/auth/register', {
-      name: 'Aaditya Joshi',
-      email: 'demo@easybooks.com',
-      password: 'Demo@1234',
-    }, false).catch(() => null); // ignore if already exists
-  });
-
-  await run('Login', async () => {
-    const data = await post('/api/v1/auth/login', {
-      email: 'demo@easybooks.com',
-      password: 'Demo@1234',
-    }, false);
-    token = data.accessToken || data.access_token || data.token;
-    if (!token) throw new Error('No token in response: ' + JSON.stringify(data));
+  await run(`Login as ${ADMIN_EMAIL}`, async () => {
+    await post('/api/v1/auth/login', { email: ADMIN_EMAIL, password: ADMIN_PASSWORD }, false);
+    if (!cookies) throw new Error('No cookies set — login failed');
   });
 }
 
