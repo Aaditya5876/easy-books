@@ -7,11 +7,14 @@ export class MemoServiceImpl {
   constructor(private readonly prisma: PrismaService) {}
 
   async findAll(companyId: string) {
-    return this.prisma.memoDocument.findMany({ where: { companyId }, orderBy: { createdAt: 'desc' } });
+    return this.prisma.memoDocument.findMany({
+      where: { companyId, deletedAt: null },
+      orderBy: { createdAt: 'desc' },
+    });
   }
 
   async findOne(id: string, companyId: string) {
-    return this.prisma.memoDocument.findFirst({ where: { id, companyId } });
+    return this.prisma.memoDocument.findFirst({ where: { id, companyId, deletedAt: null } });
   }
 
   async create(dto: CreateMemoDocumentDTO) {
@@ -23,6 +26,6 @@ export class MemoServiceImpl {
   }
 
   async remove(id: string, companyId: string) {
-    return this.prisma.memoDocument.delete({ where: { id } });
+    return this.prisma.memoDocument.update({ where: { id }, data: { deletedAt: new Date() } });
   }
 }

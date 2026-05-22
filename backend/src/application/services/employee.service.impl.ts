@@ -7,11 +7,14 @@ export class EmployeeServiceImpl {
   constructor(private readonly prisma: PrismaService) {}
 
   async findAll(companyId: string) {
-    return this.prisma.employee.findMany({ where: { companyId }, orderBy: { createdAt: 'desc' } });
+    return this.prisma.employee.findMany({
+      where: { companyId, deletedAt: null },
+      orderBy: { createdAt: 'desc' },
+    });
   }
 
   async findOne(id: string, companyId: string) {
-    const emp = await this.prisma.employee.findFirst({ where: { id, companyId } });
+    const emp = await this.prisma.employee.findFirst({ where: { id, companyId, deletedAt: null } });
     if (!emp) throw new NotFoundException('Employee not found');
     return emp;
   }
@@ -25,8 +28,8 @@ export class EmployeeServiceImpl {
   }
 
   async remove(id: string, companyId: string) {
-    const emp = await this.prisma.employee.findFirst({ where: { id, companyId } });
+    const emp = await this.prisma.employee.findFirst({ where: { id, companyId, deletedAt: null } });
     if (!emp) throw new NotFoundException('Employee not found');
-    return this.prisma.employee.update({ where: { id }, data: { status: 'INACTIVE' } });
+    return this.prisma.employee.update({ where: { id }, data: { deletedAt: new Date() } });
   }
 }

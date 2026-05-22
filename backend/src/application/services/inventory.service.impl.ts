@@ -14,11 +14,14 @@ export class InventoryServiceImpl {
   constructor(private readonly prisma: PrismaService) {}
 
   async findAll(companyId: string) {
-    return this.prisma.inventoryItem.findMany({ where: { companyId }, orderBy: { createdAt: 'desc' } });
+    return this.prisma.inventoryItem.findMany({
+      where: { companyId, deletedAt: null },
+      orderBy: { createdAt: 'desc' },
+    });
   }
 
   async findOne(id: string, companyId: string) {
-    return this.prisma.inventoryItem.findFirst({ where: { id, companyId } });
+    return this.prisma.inventoryItem.findFirst({ where: { id, companyId, deletedAt: null } });
   }
 
   async create(dto: CreateInventoryItemDTO) {
@@ -30,18 +33,9 @@ export class InventoryServiceImpl {
   }
 
   async remove(id: string, companyId: string) {
-    const item = await this.prisma.inventoryItem.findFirst({ where: { id, companyId } });
+    const item = await this.prisma.inventoryItem.findFirst({ where: { id, companyId, deletedAt: null } });
     if (!item) throw new NotFoundException('Inventory item not found');
-
-    const [hasSales, hasPurchases] = await Promise.all([
-      this.prisma.salesOrderItem.findFirst({ where: { inventoryItemId: id } }),
-      this.prisma.purchaseOrderItem.findFirst({ where: { inventoryItemId: id } }),
-    ]);
-
-    if (hasSales) throw new ConflictException('Cannot delete inventory item with existing sales history');
-    if (hasPurchases) throw new ConflictException('Cannot delete inventory item with existing purchase history');
-
-    return this.prisma.inventoryItem.delete({ where: { id } });
+    return this.prisma.inventoryItem.update({ where: { id }, data: { deletedAt: new Date() } });
   }
 
   async adjust(id: string, companyId: string, dto: AdjustInventoryInput) {

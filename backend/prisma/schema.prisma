@@ -144,14 +144,18 @@ enum CreditNoteStatus {
 // ─── Models ──────────────────────────────────────────────────────────────────
 
 model User {
-  id           String   @id @default(uuid())
-  email        String   @unique
-  password     String
-  name         String
-  role         UserRole @default(STAFF)
-  refreshToken String?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id                 String    @id @default(uuid())
+  email              String    @unique
+  password           String
+  name               String
+  role               UserRole  @default(STAFF)
+  refreshToken       String?
+  emailVerified      Boolean   @default(false)
+  verificationOtp    String?
+  otpExpiresAt       DateTime?
+  mustChangePassword Boolean   @default(false)
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
 
   userCompanies UserCompany[]
 
@@ -264,6 +268,7 @@ model Employee {
   bankName       String?
   bankAccount    String?
   status         EmployeeStatus @default(ACTIVE)
+  deletedAt      DateTime?
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
 
@@ -551,6 +556,7 @@ model InventoryItem {
   agingDays             Int?
   vendorId              String?
   vendor                Vendor?  @relation(fields: [vendorId], references: [id])
+  deletedAt             DateTime?
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
 
@@ -574,6 +580,7 @@ model Client {
   panVat        String?
   crmStatus     ClientStatus @default(ACTIVE)
   notes         String?
+  deletedAt     DateTime?
   createdAt     DateTime     @default(now())
   updatedAt     DateTime     @updatedAt
 
@@ -597,6 +604,7 @@ model Vendor {
   panVat        String?
   bankDetails   String?
   notes         String?
+  deletedAt     DateTime?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
@@ -631,6 +639,7 @@ model SalesOrder {
   status        OrderStatus @default(PENDING)
   issuedBy      String?     // userId
   notes         String?
+  deletedAt     DateTime?
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
 
@@ -681,6 +690,7 @@ model PurchaseOrder {
   paymentMethod PaymentMethod @default(CASH)
   status        OrderStatus @default(PENDING)
   notes         String?
+  deletedAt     DateTime?
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
 
@@ -807,6 +817,7 @@ model MemoDocument {
   dateBs       String?
   documentType String?
   attachments  Json?
+  deletedAt    DateTime?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -824,6 +835,7 @@ model Task {
   priority    TaskPriority @default(MEDIUM)
   status      TaskStatus   @default(PENDING)
   notes       String?
+  deletedAt   DateTime?
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
 

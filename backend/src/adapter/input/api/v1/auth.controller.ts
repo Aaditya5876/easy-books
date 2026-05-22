@@ -1,4 +1,15 @@
-import { Controller, Post, Get, Body, Req, Res, Inject, HttpCode, HttpStatus, UnauthorizedException } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Get,
+  Body,
+  Req,
+  Res,
+  Inject,
+  HttpCode,
+  HttpStatus,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiBody } from '@nestjs/swagger';
 import { Throttle, SkipThrottle } from '@nestjs/throttler';
 import { Request, Response } from 'express';
@@ -15,15 +26,35 @@ export class AuthController {
 
   @Public()
   @Post('register')
-  @ApiOperation({ summary: 'Register new user and company' })
-  @ApiBody({ schema: { type: 'object', required: ['email', 'password', 'name', 'companyName'], properties: { email: { type: 'string', example: 'user@example.com' }, password: { type: 'string', example: 'password123' }, name: { type: 'string', example: 'John Doe' }, companyName: { type: 'string', example: 'My Company' } } } })
-  async register(
-    @Body(new ZodValidationPipe(RegisterSchema)) dto: RegisterDTO,
+  @ApiOperation({ summary: 'Register new user and company — sends OTP for email verification' })
+  async register(@Body(new ZodValidationPipe(RegisterSchema)) dto: RegisterDTO) {
+    return this.authService.register(dto);
+  }
+
+  @Public()
+  @Post('verify-otp')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Verify OTP and complete registration — issues auth tokens' })
+  @ApiBody({ schema: { type: 'object', required: ['email', 'otp'], properties: { email: { type: 'string' }, otp: { type: 'string' } } } })
+  async verifyOtp(
+    @Body('email') email: string,
+    @Body('otp') otp: string,
     @Res({ passthrough: true }) res: Response,
   ) {
-    const tokens = await this.authService.register(dto);
+    const tokens = await this.authService.verifyOtp(email, otp);
     this.setTokenCookies(res, tokens);
-    return { success: true, message: 'Registered successfully' };
+    return { success: true, message: 'Email verified successfully' };
+  }
+
+  @Public()
+  @Post('resend-otp')
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 3, ttl: 60000 } })
+  @ApiOperation({ summary: 'Resend OTP verification email (rate-limited: 3 per minute)' })
+  @ApiBody({ schema: { type: 'object', required: ['email'], properties: { email: { type: 'string' } } } })
+  async resendOtp(@Body('email') email: string) {
+    await this.authService.resendOtp(email);
+    return { success: true, message: 'Verification code resent' };
   }
 
   @Public()
@@ -31,14 +62,28 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @Throttle({ default: { limit: 5, ttl: 60000 } })
   @ApiOperation({ summary: 'Login with email and password (rate-limited: 5 per minute)' })
-  @ApiBody({ schema: { type: 'object', required: ['email', 'password'], properties: { email: { type: 'string', example: 'user@example.com' }, password: { type: 'string', example: 'password123' } } } })
+  @ApiBody({ schema: { type: 'object', required: ['email', 'password'], properties: { email: { type: 'string' }, password: { type: 'string' } } } })
   async login(
     @Body(new ZodValidationPipe(LoginSchema)) dto: LoginDTO,
     @Res({ passthrough: true }) res: Response,
   ) {
-    const tokens = await this.authService.login(dto);
-    this.setTokenCookies(res, tokens);
-    return { success: true, message: 'Login successful' };
+    const result = await this.authService.login(dto);
+    this.setTokenCookies(res, result);
+    return { success: true, message: 'Login successful', mustChangePassword: result.mustChangePassword };
+  }
+
+  @Post('change-password')
+  @HttpCode(HttpStatus.OK)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Change password (required on first login for invited users)' })
+  @ApiBody({ schema: { type: 'object', required: ['currentPassword', 'newPassword'], properties: { currentPassword: { type: 'string' }, newPassword: { type: 'string' } } } })
+  async changePassword(
+    @Req() req: any,
+    @Body('currentPassword') currentPassword: string,
+    @Body('newPassword') newPassword: string,
+  ) {
+    await this.authService.changePassword(req.user.sub, currentPassword, newPassword);
+    return { success: true, message: 'Password changed successfully' };
   }
 
   @Public()
@@ -48,9 +93,7 @@ export class AuthController {
   async refresh(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
     const userId = req.cookies?.userId;
     const refreshToken = req.cookies?.refreshToken;
-    if (!userId || !refreshToken) {
-      throw new UnauthorizedException('No refresh token');
-    }
+    if (!userId || !refreshToken) throw new UnauthorizedException('No refresh token');
     const tokens = await this.authService.refresh(userId, refreshToken);
     this.setTokenCookies(res, tokens);
     return { success: true, message: 'Token refreshed' };

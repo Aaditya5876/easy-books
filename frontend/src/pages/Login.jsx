@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Eye, EyeOff, Mail, Lock, User, Building2, Hash } from 'lucide-react';
+import { useState, useRef, useEffect } from 'react';
+import { Eye, EyeOff, Mail, Lock, User, Building2, Hash, ShieldCheck, KeyRound } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { authApi } from '@/api';
 import { setActiveCompanyId } from '@/lib/companyContext';
@@ -28,11 +28,15 @@ function passwordStrength(pw) {
   return { label: 'Strong', color: 'bg-green-500' };
 }
 
-function StepDots({ step }) {
+function StepDots({ step, total = 2 }) {
   return (
     <div className="flex items-center justify-center gap-2 mb-4">
-      <div className={`h-2 rounded-full transition-all duration-300 ${step >= 1 ? 'bg-primary w-4' : 'bg-muted w-2'}`} />
-      <div className={`h-2 rounded-full transition-all duration-300 ${step >= 2 ? 'bg-primary w-4' : 'bg-muted w-2'}`} />
+      {Array.from({ length: total }, (_, i) => (
+        <div
+          key={i}
+          className={`h-2 rounded-full transition-all duration-300 ${step >= i + 1 ? 'bg-primary w-4' : 'bg-muted w-2'}`}
+        />
+      ))}
     </div>
   );
 }
@@ -43,8 +47,57 @@ const slideVariants = {
   exit: (dir) => ({ x: dir > 0 ? -60 : 60, opacity: 0 }),
 };
 
+// OTP Input — 6 individual boxes
+function OtpInput({ value, onChange }) {
+  const inputs = useRef([]);
+
+  function handleChange(i, e) {
+    const v = e.target.value.replace(/\D/g, '').slice(-1);
+    const arr = value.split('');
+    arr[i] = v;
+    const next = arr.join('');
+    onChange(next);
+    if (v && i < 5) inputs.current[i + 1]?.focus();
+  }
+
+  function handleKeyDown(i, e) {
+    if (e.key === 'Backspace' && !value[i] && i > 0) {
+      inputs.current[i - 1]?.focus();
+    }
+  }
+
+  function handlePaste(e) {
+    const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
+    if (pasted) {
+      onChange(pasted.padEnd(6, '').slice(0, 6));
+      inputs.current[Math.min(pasted.length, 5)]?.focus();
+    }
+    e.preventDefault();
+  }
+
+  return (
+    <div className="flex gap-2 justify-center">
+      {Array.from({ length: 6 }, (_, i) => (
+        <input
+          key={i}
+          ref={el => (inputs.current[i] = el)}
+          type="text"
+          inputMode="numeric"
+          maxLength={1}
+          value={value[i] || ''}
+          onChange={e => handleChange(i, e)}
+          onKeyDown={e => handleKeyDown(i, e)}
+          onPaste={handlePaste}
+          className="w-10 h-12 text-center text-lg font-mono font-semibold border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary transition-all"
+          autoFocus={i === 0}
+        />
+      ))}
+    </div>
+  );
+}
+
 export default function Login() {
-  const [mode, setMode] = useState('login');
+  const [mode, setMode] = useState('login'); // 'login' | 'register' | 'otp' | 'change-password'
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -68,12 +121,43 @@ export default function Login() {
   const [showRegPw, setShowRegPw] = useState(false);
   const [showConfirmPw, setShowConfirmPw] = useState(false);
 
+  // OTP
+  const [otpEmail, setOtpEmail] = useState('');
+  const [otpValue, setOtpValue] = useState('');
+  const [resendCooldown, setResendCooldown] = useState(0);
+  const cooldownRef = useRef(null);
+
+  // Force-change-password
+  const [cpForm, setCpForm] = useState({ current: '', next: '', confirm: '' });
+  const [showCpCurrent, setShowCpCurrent] = useState(false);
+  const [showCpNext, setShowCpNext] = useState(false);
+
+  useEffect(() => {
+    return () => clearInterval(cooldownRef.current);
+  }, []);
+
+  function startCooldown() {
+    setResendCooldown(60);
+    cooldownRef.current = setInterval(() => {
+      setResendCooldown(v => {
+        if (v <= 1) { clearInterval(cooldownRef.current); return 0; }
+        return v - 1;
+      });
+    }, 1000);
+  }
+
   async function handleLogin(e) {
     e.preventDefault();
     setError('');
     setLoading(true);
     try {
-      await authApi.login({ email: loginForm.email, password: loginForm.password });
+      const res = await authApi.login({ email: loginForm.email, password: loginForm.password });
+      if (res.data?.mustChangePassword) {
+        setMode('change-password');
+        return;
+      }
+      const meRes = await authApi.me();
+      if (meRes.data?.defaultCompanyId) setActiveCompanyId(meRes.data.defaultCompanyId);
       window.location.href = '/';
     } catch (err) {
       setError(err?.response?.data?.message || 'Invalid email or password');
@@ -85,26 +169,21 @@ export default function Login() {
   async function handleRegister(e) {
     e.preventDefault();
     setError('');
-    if (regForm.password !== regForm.confirmPassword) {
-      setError('Passwords do not match');
-      return;
-    }
-    if (regForm.password.length < 8) {
-      setError('Password must be at least 8 characters');
-      return;
-    }
+    if (regForm.password !== regForm.confirmPassword) { setError('Passwords do not match'); return; }
+    if (regForm.password.length < 8) { setError('Password must be at least 8 characters'); return; }
     setLoading(true);
     try {
       const { confirmPassword, otherBusinessDesc, ...payload } = regForm;
       if (payload.businessType === 'OTHER' && otherBusinessDesc.trim()) {
         payload.businessType = otherBusinessDesc.trim();
       }
-      await authApi.register(payload);
-      const meRes = await authApi.me();
-      if (meRes.data?.defaultCompanyId) {
-        setActiveCompanyId(meRes.data.defaultCompanyId);
+      const res = await authApi.register(payload);
+      if (res.data?.requiresVerification) {
+        setOtpEmail(res.data.email);
+        setOtpValue('');
+        setMode('otp');
+        startCooldown();
       }
-      window.location.href = '/';
     } catch (err) {
       setError(err?.response?.data?.message || 'Registration failed');
     } finally {
@@ -112,28 +191,64 @@ export default function Login() {
     }
   }
 
+  async function handleVerifyOtp(e) {
+    e.preventDefault();
+    if (otpValue.length !== 6) { setError('Please enter the 6-digit code'); return; }
+    setError('');
+    setLoading(true);
+    try {
+      await authApi.verifyOtp(otpEmail, otpValue);
+      const meRes = await authApi.me();
+      if (meRes.data?.defaultCompanyId) setActiveCompanyId(meRes.data.defaultCompanyId);
+      window.location.href = '/';
+    } catch (err) {
+      setError(err?.response?.data?.message || 'Invalid or expired verification code');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleResendOtp() {
+    if (resendCooldown > 0) return;
+    setError('');
+    try {
+      await authApi.resendOtp(otpEmail);
+      startCooldown();
+    } catch (err) {
+      setError(err?.response?.data?.message || 'Failed to resend code');
+    }
+  }
+
+  async function handleChangePassword(e) {
+    e.preventDefault();
+    setError('');
+    if (cpForm.next !== cpForm.confirm) { setError('Passwords do not match'); return; }
+    if (cpForm.next.length < 8) { setError('Password must be at least 8 characters'); return; }
+    if (cpForm.next === cpForm.current) { setError('New password must be different from current password'); return; }
+    setLoading(true);
+    try {
+      await authApi.changePassword(cpForm.current, cpForm.next);
+      const meRes = await authApi.me();
+      if (meRes.data?.defaultCompanyId) setActiveCompanyId(meRes.data.defaultCompanyId);
+      window.location.href = '/';
+    } catch (err) {
+      setError(err?.response?.data?.message || 'Failed to change password');
+    } finally {
+      setLoading(false);
+    }
+  }
+
   function goNext() {
     setError('');
-    if (!regForm.name.trim()) {
-      setError('Full name is required');
-      return;
-    }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(regForm.email)) {
-      setError('Please enter a valid email address');
-      return;
-    }
-    if (regForm.password.length < 8) {
-      setError('Password must be at least 8 characters');
-      return;
-    }
-    if (regForm.password !== regForm.confirmPassword) {
-      setError('Passwords do not match');
-      return;
-    }
+    if (!regForm.name.trim()) { setError('Full name is required'); return; }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(regForm.email)) { setError('Please enter a valid email address'); return; }
+    if (regForm.password.length < 8) { setError('Password must be at least 8 characters'); return; }
+    if (regForm.password !== regForm.confirmPassword) { setError('Passwords do not match'); return; }
     setRegStep(2);
   }
 
   const strength = passwordStrength(regForm.password);
+  const cpStrength = passwordStrength(cpForm.next);
 
   return (
     <div
@@ -148,7 +263,6 @@ export default function Login() {
       <div className="login-orb login-orb-3" />
 
       <Card className="w-full max-w-md shadow-2xl glass-dialog border-border/40 relative z-10 overflow-hidden">
-        {/* Gradient stripe */}
         <div className="h-1 bg-gradient-to-r from-primary via-blue-500 to-indigo-400" />
 
         <CardHeader className="text-center pb-2">
@@ -163,286 +277,435 @@ export default function Login() {
         </CardHeader>
 
         <CardContent className="pt-4">
-          {/* Tab switcher */}
-          <div className="flex rounded-lg bg-secondary p-1 mb-6">
-            <button
-              className={`flex-1 text-sm py-1.5 rounded-md transition-colors ${mode === 'login' ? 'bg-background shadow-sm font-medium' : 'text-muted-foreground'}`}
-              onClick={() => { setMode('login'); setError(''); setRegStep(1); }}
+          {/* ── OTP SCREEN ── */}
+          {mode === 'otp' && (
+            <motion.div
+              key="otp"
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.2 }}
+              className="space-y-5"
             >
-              Login
-            </button>
-            <button
-              className={`flex-1 text-sm py-1.5 rounded-md transition-colors ${mode === 'register' ? 'bg-background shadow-sm font-medium' : 'text-muted-foreground'}`}
-              onClick={() => { setMode('register'); setError(''); }}
-            >
-              Register
-            </button>
-          </div>
-
-          {/* ── LOGIN FORM ── */}
-          {mode === 'login' && (
-            <form onSubmit={handleLogin} className="space-y-4">
-              <div className="space-y-1.5">
-                <Label>Email</Label>
-                <div className="relative">
-                  <Mail className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
-                  <Input
-                    type="email"
-                    placeholder="you@company.com"
-                    className="pl-8 h-9"
-                    value={loginForm.email}
-                    onChange={e => setLoginForm({ ...loginForm, email: e.target.value })}
-                    required
-                  />
+              <div className="text-center">
+                <div className="w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-3">
+                  <ShieldCheck className="w-7 h-7 text-primary" />
                 </div>
+                <h3 className="font-semibold text-base">Verify your email</h3>
+                <p className="text-sm text-muted-foreground mt-1">
+                  We sent a 6-digit code to<br />
+                  <span className="font-medium text-foreground">{otpEmail}</span>
+                </p>
               </div>
 
-              <div className="space-y-1.5">
-                <Label>Password</Label>
-                <div className="relative">
-                  <Lock className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
-                  <Input
-                    type={showLoginPw ? 'text' : 'password'}
-                    placeholder="••••••••"
-                    className="pl-8 pr-10 h-9"
-                    value={loginForm.password}
-                    onChange={e => setLoginForm({ ...loginForm, password: e.target.value })}
-                    required
-                  />
+              <form onSubmit={handleVerifyOtp} className="space-y-4">
+                <OtpInput value={otpValue} onChange={setOtpValue} />
+
+                {error && <p className="text-sm text-destructive text-center">{error}</p>}
+
+                <Button type="submit" className="w-full" disabled={loading || otpValue.length !== 6}>
+                  {loading ? 'Verifying...' : 'Verify Email'}
+                </Button>
+              </form>
+
+              <div className="text-center space-y-2">
+                <p className="text-xs text-muted-foreground">Didn't receive the code?</p>
+                <button
+                  type="button"
+                  disabled={resendCooldown > 0}
+                  onClick={handleResendOtp}
+                  className="text-xs text-primary hover:underline disabled:opacity-50 disabled:no-underline disabled:cursor-not-allowed"
+                >
+                  {resendCooldown > 0 ? `Resend in ${resendCooldown}s` : 'Resend code'}
+                </button>
+                <div>
                   <button
                     type="button"
-                    tabIndex={-1}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                    onClick={() => setShowLoginPw(v => !v)}
+                    className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                    onClick={() => { setMode('register'); setRegStep(2); setError(''); }}
                   >
-                    {showLoginPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    ← Back to registration
                   </button>
                 </div>
               </div>
-
-              {error && <p className="text-sm text-destructive">{error}</p>}
-
-              <Button type="submit" className="w-full" disabled={loading}>
-                {loading ? 'Signing in...' : 'Sign In'}
-              </Button>
-            </form>
+            </motion.div>
           )}
 
-          {/* ── REGISTER FORM ── */}
-          {mode === 'register' && (
-            <div className="overflow-hidden">
-              <StepDots step={regStep} />
+          {/* ── FORCE CHANGE PASSWORD SCREEN ── */}
+          {mode === 'change-password' && (
+            <motion.div
+              key="change-password"
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.2 }}
+              className="space-y-5"
+            >
+              <div className="text-center">
+                <div className="w-14 h-14 rounded-full bg-amber-100 flex items-center justify-center mx-auto mb-3">
+                  <KeyRound className="w-7 h-7 text-amber-600" />
+                </div>
+                <h3 className="font-semibold text-base">Set your password</h3>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Your account requires a password change before you can continue.
+                </p>
+              </div>
 
-              <AnimatePresence mode="wait" custom={regStep}>
-                {/* STEP 1 — Personal */}
-                {regStep === 1 && (
-                  <motion.div
-                    key="s1"
-                    custom={1}
-                    variants={slideVariants}
-                    initial="enter"
-                    animate="center"
-                    exit="exit"
-                    transition={{ duration: 0.2, ease: 'easeInOut' }}
-                    className="space-y-3"
-                  >
-                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">
-                      Personal Details
-                    </p>
+              <form onSubmit={handleChangePassword} className="space-y-3">
+                <div className="space-y-1.5">
+                  <Label>Temporary Password</Label>
+                  <div className="relative">
+                    <Lock className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                    <Input
+                      type={showCpCurrent ? 'text' : 'password'}
+                      placeholder="Enter the password from your invite email"
+                      className="pl-8 pr-10 h-9"
+                      value={cpForm.current}
+                      onChange={e => setCpForm({ ...cpForm, current: e.target.value })}
+                      required
+                    />
+                    <button
+                      type="button"
+                      tabIndex={-1}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                      onClick={() => setShowCpCurrent(v => !v)}
+                    >
+                      {showCpCurrent ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
 
-                    <div className="space-y-1.5">
-                      <Label>Full Name *</Label>
-                      <div className="relative">
-                        <User className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
-                        <Input
-                          placeholder="Ram Sharma"
-                          className="pl-8 h-9"
-                          value={regForm.name}
-                          onChange={e => setRegForm({ ...regForm, name: e.target.value })}
+                <div className="space-y-1.5">
+                  <Label>New Password</Label>
+                  <div className="relative">
+                    <Lock className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                    <Input
+                      type={showCpNext ? 'text' : 'password'}
+                      placeholder="Min. 8 characters"
+                      className="pl-8 pr-10 h-9"
+                      value={cpForm.next}
+                      onChange={e => setCpForm({ ...cpForm, next: e.target.value })}
+                      required
+                    />
+                    <button
+                      type="button"
+                      tabIndex={-1}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                      onClick={() => setShowCpNext(v => !v)}
+                    >
+                      {showCpNext ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                  {cpStrength && (
+                    <div className="flex items-center gap-2 mt-1">
+                      <div className="flex-1 h-1 bg-secondary rounded-full overflow-hidden">
+                        <div
+                          className={`h-full rounded-full transition-all ${cpStrength.color}`}
+                          style={{ width: cpStrength.label === 'Weak' ? '25%' : cpStrength.label === 'Fair' ? '50%' : cpStrength.label === 'Good' ? '75%' : '100%' }}
                         />
                       </div>
+                      <span className="text-xs text-muted-foreground">{cpStrength.label}</span>
                     </div>
+                  )}
+                </div>
 
-                    <div className="space-y-1.5">
-                      <Label>Email *</Label>
-                      <div className="relative">
-                        <Mail className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
-                        <Input
-                          type="email"
-                          placeholder="you@company.com"
-                          className="pl-8 h-9"
-                          value={regForm.email}
-                          onChange={e => setRegForm({ ...regForm, email: e.target.value })}
-                        />
-                      </div>
+                <div className="space-y-1.5">
+                  <Label>Confirm New Password</Label>
+                  <div className="relative">
+                    <Lock className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                    <Input
+                      type="password"
+                      placeholder="Re-enter new password"
+                      className="pl-8 h-9"
+                      value={cpForm.confirm}
+                      onChange={e => setCpForm({ ...cpForm, confirm: e.target.value })}
+                      required
+                    />
+                  </div>
+                  {cpForm.confirm && cpForm.next !== cpForm.confirm && (
+                    <p className="text-xs text-destructive">Passwords do not match</p>
+                  )}
+                </div>
+
+                {error && <p className="text-sm text-destructive">{error}</p>}
+
+                <Button type="submit" className="w-full" disabled={loading}>
+                  {loading ? 'Saving...' : 'Set Password & Continue'}
+                </Button>
+              </form>
+            </motion.div>
+          )}
+
+          {/* ── LOGIN / REGISTER ── */}
+          {(mode === 'login' || mode === 'register') && (
+            <>
+              {/* Tab switcher */}
+              <div className="flex rounded-lg bg-secondary p-1 mb-6">
+                <button
+                  className={`flex-1 text-sm py-1.5 rounded-md transition-colors ${mode === 'login' ? 'bg-background shadow-sm font-medium' : 'text-muted-foreground'}`}
+                  onClick={() => { setMode('login'); setError(''); setRegStep(1); }}
+                >
+                  Login
+                </button>
+                <button
+                  className={`flex-1 text-sm py-1.5 rounded-md transition-colors ${mode === 'register' ? 'bg-background shadow-sm font-medium' : 'text-muted-foreground'}`}
+                  onClick={() => { setMode('register'); setError(''); }}
+                >
+                  Register
+                </button>
+              </div>
+
+              {/* ── LOGIN FORM ── */}
+              {mode === 'login' && (
+                <form onSubmit={handleLogin} className="space-y-4">
+                  <div className="space-y-1.5">
+                    <Label>Email</Label>
+                    <div className="relative">
+                      <Mail className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                      <Input
+                        type="email"
+                        placeholder="you@company.com"
+                        className="pl-8 h-9"
+                        value={loginForm.email}
+                        onChange={e => setLoginForm({ ...loginForm, email: e.target.value })}
+                        required
+                      />
                     </div>
+                  </div>
 
-                    <div className="space-y-1.5">
-                      <Label>Password *</Label>
-                      <div className="relative">
-                        <Lock className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
-                        <Input
-                          type={showRegPw ? 'text' : 'password'}
-                          placeholder="Min. 8 characters"
-                          className="pl-8 pr-10 h-9"
-                          value={regForm.password}
-                          onChange={e => setRegForm({ ...regForm, password: e.target.value })}
-                        />
-                        <button
-                          type="button"
-                          tabIndex={-1}
-                          className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                          onClick={() => setShowRegPw(v => !v)}
-                        >
-                          {showRegPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                        </button>
-                      </div>
-                      {strength && (
-                        <div className="flex items-center gap-2 mt-1">
-                          <div className="flex-1 h-1 bg-secondary rounded-full overflow-hidden">
-                            <div
-                              className={`h-full rounded-full transition-all ${strength.color}`}
-                              style={{
-                                width:
-                                  strength.label === 'Weak'
-                                    ? '25%'
-                                    : strength.label === 'Fair'
-                                    ? '50%'
-                                    : strength.label === 'Good'
-                                    ? '75%'
-                                    : '100%',
-                              }}
-                            />
-                          </div>
-                          <span className="text-xs text-muted-foreground">{strength.label}</span>
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <Label>Confirm Password *</Label>
-                      <div className="relative">
-                        <Lock className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
-                        <Input
-                          type={showConfirmPw ? 'text' : 'password'}
-                          placeholder="Re-enter password"
-                          className="pl-8 pr-10 h-9"
-                          value={regForm.confirmPassword}
-                          onChange={e => setRegForm({ ...regForm, confirmPassword: e.target.value })}
-                        />
-                        <button
-                          type="button"
-                          tabIndex={-1}
-                          className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                          onClick={() => setShowConfirmPw(v => !v)}
-                        >
-                          {showConfirmPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                        </button>
-                      </div>
-                      {regForm.confirmPassword && regForm.password !== regForm.confirmPassword && (
-                        <p className="text-xs text-destructive">Passwords do not match</p>
-                      )}
-                    </div>
-
-                    {error && <p className="text-sm text-destructive">{error}</p>}
-
-                    <Button className="w-full" onClick={goNext}>
-                      Continue →
-                    </Button>
-                  </motion.div>
-                )}
-
-                {/* STEP 2 — Company */}
-                {regStep === 2 && (
-                  <motion.div
-                    key="s2"
-                    custom={2}
-                    variants={slideVariants}
-                    initial="enter"
-                    animate="center"
-                    exit="exit"
-                    transition={{ duration: 0.2, ease: 'easeInOut' }}
-                    className="space-y-3"
-                  >
-                    <div className="flex items-center gap-2 mb-1">
+                  <div className="space-y-1.5">
+                    <Label>Password</Label>
+                    <div className="relative">
+                      <Lock className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                      <Input
+                        type={showLoginPw ? 'text' : 'password'}
+                        placeholder="••••••••"
+                        className="pl-8 pr-10 h-9"
+                        value={loginForm.password}
+                        onChange={e => setLoginForm({ ...loginForm, password: e.target.value })}
+                        required
+                      />
                       <button
                         type="button"
-                        className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-                        onClick={() => { setError(''); setRegStep(1); }}
+                        tabIndex={-1}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                        onClick={() => setShowLoginPw(v => !v)}
                       >
-                        ← Back
+                        {showLoginPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                       </button>
-                      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                        Company Details
-                      </p>
                     </div>
+                  </div>
 
-                    <div className="space-y-1.5">
-                      <Label>Company Name *</Label>
-                      <div className="relative">
-                        <Building2 className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
-                        <Input
-                          placeholder="My Company Pvt. Ltd."
-                          className="pl-8 h-9"
-                          value={regForm.companyName}
-                          onChange={e => setRegForm({ ...regForm, companyName: e.target.value })}
-                          required
-                        />
-                      </div>
-                    </div>
+                  {error && <p className="text-sm text-destructive">{error}</p>}
 
-                    <div className="space-y-1.5">
-                      <Label>Business Type *</Label>
-                      <select
-                        className="w-full border rounded-md px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring"
-                        value={regForm.businessType}
-                        onChange={e =>
-                          setRegForm({ ...regForm, businessType: e.target.value, otherBusinessDesc: '' })
-                        }
-                        required
+                  <Button type="submit" className="w-full" disabled={loading}>
+                    {loading ? 'Signing in...' : 'Sign In'}
+                  </Button>
+                </form>
+              )}
+
+              {/* ── REGISTER FORM ── */}
+              {mode === 'register' && (
+                <div className="overflow-hidden">
+                  <StepDots step={regStep} total={2} />
+
+                  <AnimatePresence mode="wait" custom={regStep}>
+                    {/* STEP 1 — Personal */}
+                    {regStep === 1 && (
+                      <motion.div
+                        key="s1"
+                        custom={1}
+                        variants={slideVariants}
+                        initial="enter"
+                        animate="center"
+                        exit="exit"
+                        transition={{ duration: 0.2, ease: 'easeInOut' }}
+                        className="space-y-3"
                       >
-                        <option value="">Select business type…</option>
-                        {BUSINESS_TYPES.map(bt => (
-                          <option key={bt.value} value={bt.value}>
-                            {bt.label}
-                          </option>
-                        ))}
-                      </select>
-                      {regForm.businessType === 'OTHER' && (
-                        <Input
-                          placeholder="Describe your business (e.g. Tailoring Shop, Laundry)"
-                          value={regForm.otherBusinessDesc}
-                          onChange={e => setRegForm({ ...regForm, otherBusinessDesc: e.target.value })}
-                          autoFocus
-                        />
-                      )}
-                    </div>
+                        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">
+                          Personal Details
+                        </p>
 
-                    <div className="space-y-1.5">
-                      <Label>
-                        PAN / Registration Number{' '}
-                        <span className="text-muted-foreground">(Optional)</span>
-                      </Label>
-                      <div className="relative">
-                        <Hash className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
-                        <Input
-                          placeholder="e.g. 123456789 or Company Reg No."
-                          className="pl-8 h-9"
-                          value={regForm.registrationNumber}
-                          onChange={e => setRegForm({ ...regForm, registrationNumber: e.target.value })}
-                        />
-                      </div>
-                    </div>
+                        <div className="space-y-1.5">
+                          <Label>Full Name *</Label>
+                          <div className="relative">
+                            <User className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                            <Input
+                              placeholder="Ram Sharma"
+                              className="pl-8 h-9"
+                              value={regForm.name}
+                              onChange={e => setRegForm({ ...regForm, name: e.target.value })}
+                            />
+                          </div>
+                        </div>
 
-                    {error && <p className="text-sm text-destructive">{error}</p>}
+                        <div className="space-y-1.5">
+                          <Label>Email *</Label>
+                          <div className="relative">
+                            <Mail className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                            <Input
+                              type="email"
+                              placeholder="you@company.com"
+                              className="pl-8 h-9"
+                              value={regForm.email}
+                              onChange={e => setRegForm({ ...regForm, email: e.target.value })}
+                            />
+                          </div>
+                        </div>
 
-                    <Button type="submit" className="w-full" onClick={handleRegister} disabled={loading}>
-                      {loading ? 'Creating account...' : 'Create Account'}
-                    </Button>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
+                        <div className="space-y-1.5">
+                          <Label>Password *</Label>
+                          <div className="relative">
+                            <Lock className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                            <Input
+                              type={showRegPw ? 'text' : 'password'}
+                              placeholder="Min. 8 characters"
+                              className="pl-8 pr-10 h-9"
+                              value={regForm.password}
+                              onChange={e => setRegForm({ ...regForm, password: e.target.value })}
+                            />
+                            <button
+                              type="button"
+                              tabIndex={-1}
+                              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                              onClick={() => setShowRegPw(v => !v)}
+                            >
+                              {showRegPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                            </button>
+                          </div>
+                          {strength && (
+                            <div className="flex items-center gap-2 mt-1">
+                              <div className="flex-1 h-1 bg-secondary rounded-full overflow-hidden">
+                                <div
+                                  className={`h-full rounded-full transition-all ${strength.color}`}
+                                  style={{ width: strength.label === 'Weak' ? '25%' : strength.label === 'Fair' ? '50%' : strength.label === 'Good' ? '75%' : '100%' }}
+                                />
+                              </div>
+                              <span className="text-xs text-muted-foreground">{strength.label}</span>
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <Label>Confirm Password *</Label>
+                          <div className="relative">
+                            <Lock className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                            <Input
+                              type={showConfirmPw ? 'text' : 'password'}
+                              placeholder="Re-enter password"
+                              className="pl-8 pr-10 h-9"
+                              value={regForm.confirmPassword}
+                              onChange={e => setRegForm({ ...regForm, confirmPassword: e.target.value })}
+                            />
+                            <button
+                              type="button"
+                              tabIndex={-1}
+                              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                              onClick={() => setShowConfirmPw(v => !v)}
+                            >
+                              {showConfirmPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                            </button>
+                          </div>
+                          {regForm.confirmPassword && regForm.password !== regForm.confirmPassword && (
+                            <p className="text-xs text-destructive">Passwords do not match</p>
+                          )}
+                        </div>
+
+                        {error && <p className="text-sm text-destructive">{error}</p>}
+
+                        <Button className="w-full" onClick={goNext}>
+                          Continue →
+                        </Button>
+                      </motion.div>
+                    )}
+
+                    {/* STEP 2 — Company */}
+                    {regStep === 2 && (
+                      <motion.div
+                        key="s2"
+                        custom={2}
+                        variants={slideVariants}
+                        initial="enter"
+                        animate="center"
+                        exit="exit"
+                        transition={{ duration: 0.2, ease: 'easeInOut' }}
+                        className="space-y-3"
+                      >
+                        <div className="flex items-center gap-2 mb-1">
+                          <button
+                            type="button"
+                            className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                            onClick={() => { setError(''); setRegStep(1); }}
+                          >
+                            ← Back
+                          </button>
+                          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                            Company Details
+                          </p>
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <Label>Company Name *</Label>
+                          <div className="relative">
+                            <Building2 className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                            <Input
+                              placeholder="My Company Pvt. Ltd."
+                              className="pl-8 h-9"
+                              value={regForm.companyName}
+                              onChange={e => setRegForm({ ...regForm, companyName: e.target.value })}
+                              required
+                            />
+                          </div>
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <Label>Business Type *</Label>
+                          <select
+                            className="w-full border rounded-md px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring"
+                            value={regForm.businessType}
+                            onChange={e => setRegForm({ ...regForm, businessType: e.target.value, otherBusinessDesc: '' })}
+                            required
+                          >
+                            <option value="">Select business type…</option>
+                            {BUSINESS_TYPES.map(bt => (
+                              <option key={bt.value} value={bt.value}>{bt.label}</option>
+                            ))}
+                          </select>
+                          {regForm.businessType === 'OTHER' && (
+                            <Input
+                              placeholder="Describe your business (e.g. Tailoring Shop, Laundry)"
+                              value={regForm.otherBusinessDesc}
+                              onChange={e => setRegForm({ ...regForm, otherBusinessDesc: e.target.value })}
+                              autoFocus
+                            />
+                          )}
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <Label>
+                            PAN / Registration Number{' '}
+                            <span className="text-muted-foreground">(Optional)</span>
+                          </Label>
+                          <div className="relative">
+                            <Hash className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                            <Input
+                              placeholder="e.g. 123456789 or Company Reg No."
+                              className="pl-8 h-9"
+                              value={regForm.registrationNumber}
+                              onChange={e => setRegForm({ ...regForm, registrationNumber: e.target.value })}
+                            />
+                          </div>
+                        </div>
+
+                        {error && <p className="text-sm text-destructive">{error}</p>}
+
+                        <Button type="submit" className="w-full" onClick={handleRegister} disabled={loading}>
+                          {loading ? 'Creating account...' : 'Create Account'}
+                        </Button>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              )}
+            </>
           )}
         </CardContent>
       </Card>

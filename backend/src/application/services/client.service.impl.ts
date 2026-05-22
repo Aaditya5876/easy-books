@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../../core/db/psql/prisma.client';
 import { CreateClientDTO, UpdateClientDTO } from '@easy-books/shared';
 
@@ -7,11 +7,14 @@ export class ClientServiceImpl {
   constructor(private readonly prisma: PrismaService) {}
 
   async findAll(companyId: string) {
-    return this.prisma.client.findMany({ where: { companyId }, orderBy: { createdAt: 'desc' } });
+    return this.prisma.client.findMany({
+      where: { companyId, deletedAt: null },
+      orderBy: { createdAt: 'desc' },
+    });
   }
 
   async findOne(id: string, companyId: string) {
-    const client = await this.prisma.client.findFirst({ where: { id, companyId } });
+    const client = await this.prisma.client.findFirst({ where: { id, companyId, deletedAt: null } });
     if (!client) throw new NotFoundException('Client not found');
     return client;
   }
@@ -25,19 +28,8 @@ export class ClientServiceImpl {
   }
 
   async remove(id: string, companyId: string) {
-    const client = await this.prisma.client.findFirst({ where: { id, companyId } });
+    const client = await this.prisma.client.findFirst({ where: { id, companyId, deletedAt: null } });
     if (!client) throw new NotFoundException('Client not found');
-
-    const hasOrders = await this.prisma.salesOrder.findFirst({ where: { clientId: id } });
-    if (hasOrders) {
-      throw new BadRequestException('Cannot delete client with existing sales orders');
-    }
-
-    const hasQuotations = await this.prisma.quotation.findFirst({ where: { clientId: id } });
-    if (hasQuotations) {
-      throw new BadRequestException('Cannot delete client with existing quotations');
-    }
-
-    return this.prisma.client.delete({ where: { id } });
+    return this.prisma.client.update({ where: { id }, data: { deletedAt: new Date() } });
   }
 }

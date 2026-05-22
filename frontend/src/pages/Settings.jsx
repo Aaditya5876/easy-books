@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { api } from '@/api/adapter';
-import { usersApi, companyApi } from '@/api';
+import { usersApi, companyApi, recycleBinApi } from '@/api';
 import { useAuth } from '@/lib/AuthContext';
 import { useRole } from "@/lib/useRole";
 import { usePreferences } from '@/lib/PreferencesContext';
@@ -17,7 +17,8 @@ import {
 } from "@/components/ui/dialog";
 import {
   Building2, Plus, Trash2, Save, ImagePlus, X, UserPlus, Copy, Check, Shield,
-  Phone, Mail, MapPin, Hash, User, Palette, Type, Bell, RotateCcw, Upload
+  Phone, Mail, MapPin, Hash, User, Palette, Type, Bell, RotateCcw, Upload,
+  Recycle, RotateCw, Lock, AlertTriangle, Clock
 } from 'lucide-react';
 
 const SIDEBAR_PALETTE = ['#1e293b', '#1e3a5f', '#14532d', '#4c1d95', '#881337', '#7c2d12'];
@@ -77,6 +78,16 @@ export default function Settings() {
   const [tempPassword, setTempPassword] = useState(null);
   const [copied, setCopied] = useState(false);
   const [roleChanging, setRoleChanging] = useState(null);
+
+  // ── Recycle Bin ───────────────────────────────────────────────────────────
+  const [binAccessGranted, setBinAccessGranted] = useState(false);
+  const [binPassword, setBinPassword] = useState('');
+  const [binPasswordError, setBinPasswordError] = useState('');
+  const [binVerifying, setBinVerifying] = useState(false);
+  const [binItems, setBinItems] = useState(null);
+  const [binLoading, setBinLoading] = useState(false);
+  const [binAutoDelete, setBinAutoDelete] = useState(() => parseInt(localStorage.getItem('easybooks_bin_auto_delete') || '0'));
+  const [binConfirmEmpty, setBinConfirmEmpty] = useState(false);
 
   // ── Company Prefs (server-side) ───────────────────────────────────────────
   const [companyPrefs, setCompanyPrefs] = useState({
@@ -213,6 +224,65 @@ export default function Settings() {
     }
   }
 
+  async function verifyBinPassword() {
+    if (!binPassword) return;
+    setBinVerifying(true);
+    setBinPasswordError('');
+    try {
+      const res = await recycleBinApi.verify(binPassword);
+      if (res.data?.valid) {
+        setBinAccessGranted(true);
+        setBinPassword('');
+        loadBinItems();
+      } else {
+        setBinPasswordError('Incorrect password.');
+      }
+    } catch {
+      setBinPasswordError('Incorrect password.');
+    } finally {
+      setBinVerifying(false);
+    }
+  }
+
+  async function loadBinItems() {
+    if (!activeCompanyId) return;
+    setBinLoading(true);
+    try {
+      // Auto-cleanup old items if auto-delete is set
+      if (binAutoDelete > 0) {
+        await recycleBinApi.cleanup(activeCompanyId, binAutoDelete).catch(() => {});
+      }
+      const res = await recycleBinApi.list(activeCompanyId);
+      setBinItems(res.data);
+    } catch {
+      setBinItems(null);
+    } finally {
+      setBinLoading(false);
+    }
+  }
+
+  async function restoreItem(id, type) {
+    await recycleBinApi.restore(id, type, activeCompanyId);
+    loadBinItems();
+  }
+
+  async function permanentDeleteItem(id, type) {
+    if (!confirm('Permanently delete this item? This cannot be undone.')) return;
+    await recycleBinApi.permanentDelete(id, type, activeCompanyId);
+    loadBinItems();
+  }
+
+  async function emptyBin() {
+    await recycleBinApi.emptyBin(activeCompanyId);
+    setBinConfirmEmpty(false);
+    loadBinItems();
+  }
+
+  function setBinAutoDeletePref(days) {
+    setBinAutoDelete(days);
+    localStorage.setItem('easybooks_bin_auto_delete', String(days));
+  }
+
   function handleUiLogoUpload(e) {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -236,6 +306,11 @@ export default function Settings() {
           <TabsTrigger value="companies">Companies</TabsTrigger>
           <TabsTrigger value="users" onClick={loadUsers}>Users</TabsTrigger>
           <TabsTrigger value="preferences">Preferences</TabsTrigger>
+          {isAdmin && (
+            <TabsTrigger value="recycle-bin" className="gap-1.5">
+              <Recycle className="w-3.5 h-3.5" />Recycle Bin
+            </TabsTrigger>
+          )}
         </TabsList>
 
         {/* ── Companies Tab ─────────────────────────────────────────────── */}
@@ -599,6 +674,155 @@ export default function Settings() {
               </div>
             </div>
           </div>
+        </TabsContent>
+
+        {/* ── Recycle Bin Tab ────────────────────────────────────────────── */}
+        <TabsContent value="recycle-bin" className="mt-4 space-y-4">
+          {!binAccessGranted ? (
+            /* Password Gate */
+            <div className="max-w-sm mx-auto mt-8">
+              <div className="bg-card rounded-xl border p-8 space-y-5 text-center">
+                <div className="w-14 h-14 rounded-full bg-amber-100 flex items-center justify-center mx-auto">
+                  <Lock className="w-6 h-6 text-amber-600" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-lg">Admin Access Required</h3>
+                  <p className="text-sm text-muted-foreground mt-1">Enter your admin password to access the Recycle Bin.</p>
+                </div>
+                <div className="space-y-2 text-left">
+                  <input
+                    type="password"
+                    placeholder="Admin password"
+                    value={binPassword}
+                    onChange={e => { setBinPassword(e.target.value); setBinPasswordError(''); }}
+                    onKeyDown={e => e.key === 'Enter' && verifyBinPassword()}
+                    className="w-full border rounded-lg px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring"
+                  />
+                  {binPasswordError && <p className="text-xs text-destructive">{binPasswordError}</p>}
+                </div>
+                <Button onClick={verifyBinPassword} disabled={binVerifying || !binPassword} className="w-full">
+                  {binVerifying ? 'Verifying…' : 'Unlock Recycle Bin'}
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <>
+              {/* Header bar */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2">
+                    <Clock className="w-4 h-4 text-muted-foreground" />
+                    <span className="text-sm text-muted-foreground">Auto-delete after:</span>
+                  </div>
+                  <div className="flex gap-1">
+                    {[{ v: 0, l: 'Never' }, { v: 7, l: '7 days' }, { v: 30, l: '30 days' }, { v: 90, l: '90 days' }].map(opt => (
+                      <button
+                        key={opt.v}
+                        onClick={() => setBinAutoDeletePref(opt.v)}
+                        className={`text-xs px-2.5 py-1 rounded-md border transition-colors ${
+                          binAutoDelete === opt.v ? 'bg-primary text-primary-foreground border-primary' : 'border-border hover:bg-secondary'
+                        }`}
+                      >
+                        {opt.l}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" onClick={loadBinItems}>
+                    <RotateCw className="w-3.5 h-3.5 mr-1" />Refresh
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={() => setBinConfirmEmpty(true)}
+                    disabled={!binItems || Object.values(binItems).every(arr => arr.length === 0)}
+                  >
+                    <Trash2 className="w-3.5 h-3.5 mr-1" />Empty Bin
+                  </Button>
+                </div>
+              </div>
+
+              {/* Confirm empty dialog */}
+              {binConfirmEmpty && (
+                <div className="bg-destructive/10 border border-destructive/30 rounded-xl p-4 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <AlertTriangle className="w-4 h-4 text-destructive" />
+                    <span className="text-sm font-medium">Permanently delete ALL items in the bin?</span>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="sm" onClick={() => setBinConfirmEmpty(false)}>Cancel</Button>
+                    <Button variant="destructive" size="sm" onClick={emptyBin}>Yes, empty bin</Button>
+                  </div>
+                </div>
+              )}
+
+              {binLoading ? (
+                <div className="flex justify-center py-16">
+                  <div className="w-8 h-8 border-4 border-primary/20 border-t-primary rounded-full animate-spin" />
+                </div>
+              ) : !binItems || Object.values(binItems).every(arr => arr.length === 0) ? (
+                <div className="flex flex-col items-center justify-center py-20 gap-3 text-muted-foreground">
+                  <Recycle className="w-12 h-12 opacity-20" />
+                  <p className="text-sm font-medium">Recycle bin is empty</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {[
+                    { key: 'clients',   label: 'Clients',         icon: '👤', type: 'client',   nameKey: 'name',         subKey: 'email' },
+                    { key: 'vendors',   label: 'Vendors',         icon: '🏢', type: 'vendor',   nameKey: 'name',         subKey: 'phone' },
+                    { key: 'employees', label: 'Employees',       icon: '👷', type: 'employee', nameKey: 'name',         subKey: 'designation' },
+                    { key: 'inventory', label: 'Inventory Items', icon: '📦', type: 'inventory',nameKey: 'itemName',     subKey: 'brand' },
+                    { key: 'sales',     label: 'Sales Orders',    icon: '🧾', type: 'sales',    nameKey: 'invoiceNumber',subKey: 'clientName' },
+                    { key: 'purchases', label: 'Purchase Orders', icon: '🛒', type: 'purchase', nameKey: 'orderNumber',  subKey: 'vendorName' },
+                    { key: 'tasks',     label: 'Tasks',           icon: '✅', type: 'task',     nameKey: 'title',        subKey: 'assignedTo' },
+                    { key: 'memos',     label: 'Memos',           icon: '📝', type: 'memo',     nameKey: 'title',        subKey: 'documentType' },
+                  ].filter(s => binItems[s.key]?.length > 0).map(section => (
+                    <div key={section.key} className="bg-card rounded-xl border overflow-hidden">
+                      <div className="px-4 py-3 bg-secondary/50 border-b flex items-center gap-2">
+                        <span>{section.icon}</span>
+                        <span className="font-medium text-sm">{section.label}</span>
+                        <span className="ml-auto text-xs bg-secondary text-muted-foreground px-2 py-0.5 rounded-full">
+                          {binItems[section.key].length}
+                        </span>
+                      </div>
+                      <div className="divide-y divide-border">
+                        {binItems[section.key].map(item => (
+                          <div key={item.id} className="flex items-center justify-between px-4 py-3 hover:bg-secondary/30 transition-colors">
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium truncate">{item[section.nameKey] || '—'}</p>
+                              <p className="text-xs text-muted-foreground truncate">
+                                {item[section.subKey] && `${item[section.subKey]} · `}
+                                Deleted {new Date(item.deletedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                              </p>
+                            </div>
+                            <div className="flex gap-2 ml-3 shrink-0">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => restoreItem(item.id, section.type)}
+                                className="h-7 text-xs gap-1"
+                              >
+                                <RotateCcw className="w-3 h-3" />Restore
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => permanentDeleteItem(item.id, section.type)}
+                                className="h-7 text-xs text-destructive hover:text-destructive"
+                              >
+                                <Trash2 className="w-3 h-3" />
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
         </TabsContent>
       </Tabs>
 

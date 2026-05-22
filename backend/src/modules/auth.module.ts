@@ -4,6 +4,7 @@ import { PassportModule } from '@nestjs/passport';
 import { PrismaService } from '../../core/db/psql/prisma.client';
 import { AuthController } from '../adapter/input/api/v1/auth.controller';
 import { AuthServiceImpl } from '../application/services/auth.service.impl';
+import { MailService } from '../application/services/mail.service';
 import { UserPsqlRepository } from '../adapter/output/persistence/psql/user.psql.repository';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { AUTH_SERVICE } from '../domain/services/auth.service';
@@ -14,6 +15,7 @@ import { USER_REPOSITORY } from '../domain/repositories';
   controllers: [AuthController],
   providers: [
     PrismaService,
+    MailService,
     JwtStrategy,
     { provide: AUTH_SERVICE, useClass: AuthServiceImpl },
     { provide: USER_REPOSITORY, useClass: UserPsqlRepository },

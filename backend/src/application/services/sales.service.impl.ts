@@ -50,6 +50,7 @@ export class SalesServiceImpl {
     return this.prisma.salesOrder.findMany({
       where: {
         companyId,
+        deletedAt: null,
         ...(filters?.status ? { status: filters.status as any } : {}),
         ...(filters?.clientId ? { clientId: filters.clientId } : {}),
       },
@@ -186,13 +187,13 @@ export class SalesServiceImpl {
 
   async remove(id: string, companyId: string) {
     const order = await this.prisma.salesOrder.findFirst({
-      where: { id, companyId },
+      where: { id, companyId, deletedAt: null },
       include: { items: true },
     });
     if (!order) throw new NotFoundException('Sales order not found');
     if (order.status === 'COMPLETED') throw new BadRequestException('Cannot delete a completed order');
 
-    // Restore stock
+    // Restore stock and soft-delete
     await this.prisma.$transaction(async (tx) => {
       for (const item of order.items) {
         if (item.inventoryItemId) {
@@ -202,7 +203,7 @@ export class SalesServiceImpl {
           });
         }
       }
-      await tx.salesOrder.delete({ where: { id } });
+      await tx.salesOrder.update({ where: { id }, data: { deletedAt: new Date() } });
     });
   }
 

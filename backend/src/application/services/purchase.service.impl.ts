@@ -49,6 +49,7 @@ export class PurchaseServiceImpl {
     return this.prisma.purchaseOrder.findMany({
       where: {
         companyId,
+        deletedAt: null,
         ...(filters?.status ? { status: filters.status as any } : {}),
         ...(filters?.vendorId ? { vendorId: filters.vendorId } : {}),
       },
@@ -178,12 +179,13 @@ export class PurchaseServiceImpl {
 
   async remove(id: string, companyId: string) {
     const order = await this.prisma.purchaseOrder.findFirst({
-      where: { id, companyId },
+      where: { id, companyId, deletedAt: null },
       include: { items: true },
     });
     if (!order) throw new NotFoundException('Purchase order not found');
     if (order.status === 'COMPLETED') throw new BadRequestException('Cannot delete a completed order');
 
+    // Reverse stock and soft-delete
     await this.prisma.$transaction(async (tx) => {
       for (const item of order.items) {
         if (item.inventoryItemId) {
@@ -193,7 +195,7 @@ export class PurchaseServiceImpl {
           });
         }
       }
-      await tx.purchaseOrder.delete({ where: { id } });
+      await tx.purchaseOrder.update({ where: { id }, data: { deletedAt: new Date() } });
     });
   }
 

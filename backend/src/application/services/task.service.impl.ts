@@ -7,11 +7,14 @@ export class TaskServiceImpl {
   constructor(private readonly prisma: PrismaService) {}
 
   async findAll(companyId: string) {
-    return this.prisma.task.findMany({ where: { companyId }, orderBy: { createdAt: 'desc' } });
+    return this.prisma.task.findMany({
+      where: { companyId, deletedAt: null },
+      orderBy: { createdAt: 'desc' },
+    });
   }
 
   async findOne(id: string, companyId: string) {
-    return this.prisma.task.findFirst({ where: { id, companyId } });
+    return this.prisma.task.findFirst({ where: { id, companyId, deletedAt: null } });
   }
 
   async create(dto: CreateTaskDTO) {
@@ -23,6 +26,6 @@ export class TaskServiceImpl {
   }
 
   async remove(id: string, companyId: string) {
-    return this.prisma.task.delete({ where: { id } });
+    return this.prisma.task.update({ where: { id }, data: { deletedAt: new Date() } });
   }
 }

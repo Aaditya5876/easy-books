@@ -5,6 +5,10 @@ export class UserEntity {
   name: string;
   role: string;
   refreshToken: string | null;
+  emailVerified: boolean;
+  verificationOtp: string | null;
+  otpExpiresAt: Date | null;
+  mustChangePassword: boolean;
   createdAt: Date;
   updatedAt: Date;
 }

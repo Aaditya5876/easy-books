@@ -27,6 +27,7 @@ async function main() {
       password: hashed,
       name,
       role: 'SUPER_ADMIN',
+      emailVerified: true,
     },
   });
 

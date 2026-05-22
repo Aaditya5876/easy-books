@@ -1,19 +1,22 @@
 import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../../../core/db/psql/prisma.client';
+import { MailService } from './mail.service';
 import * as bcrypt from 'bcrypt';
 
 const ROLE_HIERARCHY = ['STAFF', 'ACCOUNTANT', 'ADMIN', 'SUPER_ADMIN'];
 
 @Injectable()
 export class UserServiceImpl {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly mailService: MailService,
+  ) {}
 
   async inviteUser(companyId: string, data: { email: string; name: string; role: string }, invitedByRole: string) {
     if (!ROLE_HIERARCHY.includes(data.role)) {
       throw new BadRequestException(`Invalid role: ${data.role}`);
     }
 
-    // ADMIN can only invite STAFF or ACCOUNTANT
     if (invitedByRole === 'ADMIN' && !['STAFF', 'ACCOUNTANT'].includes(data.role)) {
       throw new ForbiddenException('ADMIN can only invite STAFF or ACCOUNTANT');
     }
@@ -24,7 +27,6 @@ export class UserServiceImpl {
     const existing = await this.prisma.user.findUnique({ where: { email: data.email } });
 
     if (existing) {
-      // User exists — just link to company if not already
       const link = await this.prisma.userCompany.findUnique({
         where: { userId_companyId: { userId: existing.id, companyId } },
       });
@@ -34,13 +36,11 @@ export class UserServiceImpl {
         data: { userId: existing.id, companyId, isDefault: false },
       });
 
-      // Update role if the new role is more restrictive or was explicitly requested
       await this.prisma.user.update({ where: { id: existing.id }, data: { role: data.role as any } });
 
       return { message: 'Existing user linked to company', userId: existing.id };
     }
 
-    // Create new user with temporary password — they should reset on first login
     const tempPassword = Math.random().toString(36).slice(-10);
     const hashed = await bcrypt.hash(tempPassword, 10);
 
@@ -50,6 +50,8 @@ export class UserServiceImpl {
         name: data.name,
         password: hashed,
         role: data.role as any,
+        emailVerified: true,
+        mustChangePassword: true,
         userCompanies: {
           create: { companyId, isDefault: true },
         },
@@ -57,7 +59,9 @@ export class UserServiceImpl {
       select: { id: true, email: true, name: true, role: true },
     });
 
-    return { message: 'User invited', userId: user.id, tempPassword, user };
+    await this.mailService.sendInvitation(data.email, data.name, company.name, tempPassword);
+
+    return { message: 'User invited', userId: user.id, user };
   }
 
   async changeRole(targetUserId: string, companyId: string, newRole: string, changedByRole: string) {

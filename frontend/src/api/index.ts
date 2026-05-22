@@ -6,6 +6,10 @@ const companyId = () => localStorage.getItem('easybooks_active_company') || '';
 export const authApi = {
   login: (data: { email: string; password: string }) => apiClient.post('/api/v1/auth/login', data),
   register: (data: object) => apiClient.post('/api/v1/auth/register', data),
+  verifyOtp: (email: string, otp: string) => apiClient.post('/api/v1/auth/verify-otp', { email, otp }),
+  resendOtp: (email: string) => apiClient.post('/api/v1/auth/resend-otp', { email }),
+  changePassword: (currentPassword: string, newPassword: string) =>
+    apiClient.post('/api/v1/auth/change-password', { currentPassword, newPassword }),
   logout: () => apiClient.post('/api/v1/auth/logout'),
   me: () => apiClient.get('/api/v1/auth/me'),
   refresh: () => apiClient.post('/api/v1/auth/refresh'),
@@ -186,6 +190,19 @@ export const uploadApi = {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
   },
+};
+
+// Recycle Bin (ADMIN only)
+export const recycleBinApi = {
+  verify: (password: string) => apiClient.post('/api/v1/recycle-bin/verify', { password }),
+  list: (cid: string) => apiClient.get('/api/v1/recycle-bin', { params: { companyId: cid } }),
+  restore: (id: string, type: string, cid: string) =>
+    apiClient.post('/api/v1/recycle-bin/restore', { id, type, companyId: cid }),
+  permanentDelete: (id: string, type: string, cid: string) =>
+    apiClient.delete(`/api/v1/recycle-bin/${id}`, { params: { type, companyId: cid } }),
+  emptyBin: (cid: string) => apiClient.delete('/api/v1/recycle-bin/empty', { params: { companyId: cid } }),
+  cleanup: (cid: string, days: number) =>
+    apiClient.post('/api/v1/recycle-bin/cleanup', { companyId: cid, days }),
 };
 
 // Users (ADMIN only)
