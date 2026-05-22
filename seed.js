@@ -60,7 +60,6 @@ async function run(label, fn) {
 
 async function seedAuth() {
   console.log('\n🔐 Auth');
-
   await run(`Login as ${ADMIN_EMAIL}`, async () => {
     await post('/api/v1/auth/login', { email: ADMIN_EMAIL, password: ADMIN_PASSWORD }, false);
     if (!cookies) throw new Error('No cookies set — login failed');
@@ -78,8 +77,7 @@ async function seedCompanies() {
       address: 'Thamel, Kathmandu',
       phone: '9841000001',
       email: 'teahouse@himalayan.com',
-      pan: '123456789',
-      type: 'Restaurant',
+      panVat: '123456789',
     });
     teaId = data.id;
     if (!teaId) throw new Error('No ID returned');
@@ -91,221 +89,224 @@ async function seedCompanies() {
       address: 'Baneshwor, Kathmandu',
       phone: '9841000002',
       email: 'info@nepalpharmacy.com',
-      pan: '987654321',
-      type: 'Pharmacy',
+      panVat: '987654321',
     });
     pharmId = data.id;
     if (!pharmId) throw new Error('No ID returned');
   });
 }
 
-// ─── 3. Tea House Data ────────────────────────────────────────────────────────
+// ─── 3. Tea House ─────────────────────────────────────────────────────────────
 
 async function seedTeaHouse() {
   console.log('\n🍵 Tea House — Vendors');
   const teaVendors = [
-    { name: 'Ilam Tea Suppliers', phone: '9800001111', email: 'ilam@tea.com', address: 'Ilam, Province 1', pan_vat: '111222333', companyId: teaId },
-    { name: 'Dairy Fresh Pvt Ltd', phone: '9800002222', email: 'dairy@fresh.com', address: 'Bhaktapur', companyId: teaId },
-    { name: 'Himalayan Sugar Mills', phone: '9800003333', address: 'Birgunj', companyId: teaId },
-    { name: 'Everest Snacks Co', phone: '9800004444', address: 'Patan', companyId: teaId },
-    { name: 'Kathmandu Paper Cups', phone: '9800005555', address: 'Koteshwor', companyId: teaId },
+    { companyId: teaId, name: 'Ilam Tea Suppliers',    phone: '9800001111', email: 'ilam@tea.com',    address: 'Ilam, Province 1', panVat: '111222333' },
+    { companyId: teaId, name: 'Dairy Fresh Pvt Ltd',   phone: '9800002222', email: 'dairy@fresh.com', address: 'Bhaktapur' },
+    { companyId: teaId, name: 'Himalayan Sugar Mills', phone: '9800003333', address: 'Birgunj' },
+    { companyId: teaId, name: 'Everest Snacks Co',     phone: '9800004444', address: 'Patan' },
+    { companyId: teaId, name: 'Kathmandu Paper Cups',  phone: '9800005555', address: 'Koteshwor' },
   ];
   for (const v of teaVendors) await run(`Vendor: ${v.name}`, () => post('/api/v1/vendors', v));
 
   console.log('\n🍵 Tea House — Clients');
   const teaClients = [
-    { name: 'Sunrise Hotel', phone: '9801111001', email: 'sunrise@hotel.com', address: 'Thamel', companyId: teaId },
-    { name: 'TU Students Canteen', phone: '9801111002', address: 'Kirtipur', companyId: teaId },
-    { name: 'Mount View Resort', phone: '9801111003', email: 'mountview@resort.com', address: 'Nagarkot', companyId: teaId },
-    { name: 'Pokhara Tea Garden', phone: '9801111004', address: 'Pokhara', companyId: teaId },
-    { name: 'Boudha Coffee & Tea', phone: '9801111005', address: 'Boudha', companyId: teaId },
+    { companyId: teaId, name: 'Sunrise Hotel',      phone: '9801111001', email: 'sunrise@hotel.com',   address: 'Thamel' },
+    { companyId: teaId, name: 'TU Students Canteen',phone: '9801111002', address: 'Kirtipur' },
+    { companyId: teaId, name: 'Mount View Resort',  phone: '9801111003', email: 'mountview@resort.com', address: 'Nagarkot' },
+    { companyId: teaId, name: 'Pokhara Tea Garden', phone: '9801111004', address: 'Pokhara' },
+    { companyId: teaId, name: 'Boudha Coffee & Tea',phone: '9801111005', address: 'Boudha' },
   ];
   for (const c of teaClients) await run(`Client: ${c.name}`, () => post('/api/v1/clients', c));
 
   console.log('\n🍵 Tea House — Bank Account');
   await run('Bank: Nepal Bank Ltd', () => post('/api/v1/bank-accounts', {
-    bank_name: 'Nepal Bank Ltd', account_number: '0011020304050',
-    account_holder: 'Himalayan Tea House', branch: 'Thamel',
-    current_balance: 250000, companyId: teaId,
+    companyId: teaId,
+    bankName: 'Nepal Bank Ltd',
+    accountNumber: '0011020304050',
+    branch: 'Thamel',
+    currentBalance: 250000,
   }));
 
   console.log('\n🍵 Tea House — Inventory');
   const teaInventory = [
-    { name: 'Ilam Premium Tea', unit: 'Kg', quantity: 50, reorder_level: 10, cost_price: 800, selling_price: 1200, category: 'Tea', companyId: teaId },
-    { name: 'Milk (Full Cream)', unit: 'Liter', quantity: 30, reorder_level: 10, cost_price: 90, selling_price: 100, category: 'Dairy', companyId: teaId },
-    { name: 'Sugar', unit: 'Kg', quantity: 40, reorder_level: 5, cost_price: 75, selling_price: 80, category: 'Ingredient', companyId: teaId },
-    { name: 'Masala Chai Mix', unit: 'Kg', quantity: 20, reorder_level: 5, cost_price: 600, selling_price: 900, category: 'Tea', companyId: teaId },
-    { name: 'Paper Cups (100pcs)', unit: 'Set', quantity: 100, reorder_level: 20, cost_price: 120, selling_price: 150, category: 'Packaging', companyId: teaId },
-    { name: 'Green Tea Bags', unit: 'Set', quantity: 60, reorder_level: 15, cost_price: 250, selling_price: 400, category: 'Tea', companyId: teaId },
-    { name: 'Sel Roti Mix', unit: 'Kg', quantity: 25, reorder_level: 5, cost_price: 150, selling_price: 200, category: 'Snacks', companyId: teaId },
-    { name: 'Honey (Local)', unit: 'Liter', quantity: 15, reorder_level: 3, cost_price: 700, selling_price: 1000, category: 'Ingredient', companyId: teaId },
+    { companyId: teaId, itemName: 'Ilam Premium Tea',    unit: 'Kg',    quantity: 50, lowStockThreshold: 10, unitPurchasePrice: 800,  unitSellingPrice: 1200 },
+    { companyId: teaId, itemName: 'Milk (Full Cream)',    unit: 'Liter', quantity: 30, lowStockThreshold: 10, unitPurchasePrice: 90,   unitSellingPrice: 100 },
+    { companyId: teaId, itemName: 'Sugar',                unit: 'Kg',    quantity: 40, lowStockThreshold: 5,  unitPurchasePrice: 75,   unitSellingPrice: 80 },
+    { companyId: teaId, itemName: 'Masala Chai Mix',      unit: 'Kg',    quantity: 20, lowStockThreshold: 5,  unitPurchasePrice: 600,  unitSellingPrice: 900 },
+    { companyId: teaId, itemName: 'Paper Cups (100pcs)',  unit: 'Set',   quantity: 100,lowStockThreshold: 20, unitPurchasePrice: 120,  unitSellingPrice: 150 },
+    { companyId: teaId, itemName: 'Green Tea Bags',       unit: 'Set',   quantity: 60, lowStockThreshold: 15, unitPurchasePrice: 250,  unitSellingPrice: 400 },
+    { companyId: teaId, itemName: 'Sel Roti Mix',         unit: 'Kg',    quantity: 25, lowStockThreshold: 5,  unitPurchasePrice: 150,  unitSellingPrice: 200 },
+    { companyId: teaId, itemName: 'Honey (Local)',        unit: 'Liter', quantity: 15, lowStockThreshold: 3,  unitPurchasePrice: 700,  unitSellingPrice: 1000 },
   ];
-  for (const i of teaInventory) await run(`Inventory: ${i.name}`, () => post('/api/v1/inventory', i));
+  for (const i of teaInventory) await run(`Inventory: ${i.itemName}`, () => post('/api/v1/inventory', i));
 
   console.log('\n🍵 Tea House — Employees');
   const teaEmployees = [
-    { name: 'Ram Prasad Tamang', designation: 'Head Barista', department: 'Operations', phone: '9802220001', email: 'ram@himalayan.com', salary: 18000, join_date: '2024-01-15', companyId: teaId },
-    { name: 'Sita Gurung', designation: 'Cashier', department: 'Finance', phone: '9802220002', salary: 14000, join_date: '2024-03-01', companyId: teaId },
-    { name: 'Bikash Shrestha', designation: 'Tea Maker', department: 'Operations', phone: '9802220003', salary: 13000, join_date: '2024-06-01', companyId: teaId },
-    { name: 'Maya Lama', designation: 'Cleaner', department: 'Operations', phone: '9802220004', salary: 11000, join_date: '2024-08-01', companyId: teaId },
-    { name: 'Deepak Rai', designation: 'Waiter', department: 'Operations', phone: '9802220005', salary: 12000, join_date: '2024-09-01', companyId: teaId },
+    { companyId: teaId, employeeId: 'TEA-001', name: 'Ram Prasad Tamang', designation: 'Head Barista',  department: 'Operations', phone: '9802220001', email: 'ram@himalayan.com', basicSalary: 18000, dateOfJoining: '2024-01-15' },
+    { companyId: teaId, employeeId: 'TEA-002', name: 'Sita Gurung',       designation: 'Cashier',       department: 'Finance',    phone: '9802220002', basicSalary: 14000, dateOfJoining: '2024-03-01' },
+    { companyId: teaId, employeeId: 'TEA-003', name: 'Bikash Shrestha',   designation: 'Tea Maker',     department: 'Operations', phone: '9802220003', basicSalary: 13000, dateOfJoining: '2024-06-01' },
+    { companyId: teaId, employeeId: 'TEA-004', name: 'Maya Lama',         designation: 'Cleaner',       department: 'Operations', phone: '9802220004', basicSalary: 11000, dateOfJoining: '2024-08-01' },
+    { companyId: teaId, employeeId: 'TEA-005', name: 'Deepak Rai',        designation: 'Waiter',        department: 'Operations', phone: '9802220005', basicSalary: 12000, dateOfJoining: '2024-09-01' },
   ];
   for (const e of teaEmployees) await run(`Employee: ${e.name}`, () => post('/api/v1/employees', e));
 
   console.log('\n🍵 Tea House — Purchases');
   const teaPurchases = [
-    { vendor_name: 'Ilam Tea Suppliers', order_number: 'PO-001', date_ad: '2025-01-10', payment_type: 'cash', is_vat: false, notes: '', items: [{ description: 'Ilam Premium Tea', quantity: 20, unit: 'Kg', unit_price: 800, total: 16000 }], labor_items: [], companyId: teaId },
-    { vendor_name: 'Dairy Fresh Pvt Ltd', order_number: 'PO-002', date_ad: '2025-01-15', payment_type: 'cash', is_vat: false, notes: '', items: [{ description: 'Full Cream Milk', quantity: 50, unit: 'Liter', unit_price: 90, total: 4500 }], labor_items: [], companyId: teaId },
-    { vendor_name: 'Himalayan Sugar Mills', order_number: 'PO-003', date_ad: '2025-02-01', payment_type: 'cheque', is_vat: false, notes: '', items: [{ description: 'Sugar', quantity: 30, unit: 'Kg', unit_price: 75, total: 2250 }], labor_items: [], companyId: teaId },
-    { vendor_name: 'Everest Snacks Co', order_number: 'PO-004', date_ad: '2025-02-10', payment_type: 'cash', is_vat: true, notes: '', items: [{ description: 'Sel Roti Mix', quantity: 15, unit: 'Kg', unit_price: 150, total: 2250 }], labor_items: [], companyId: teaId },
-    { vendor_name: 'Ilam Tea Suppliers', order_number: 'PO-005', date_ad: '2025-03-01', payment_type: 'cash', is_vat: false, notes: '', items: [{ description: 'Masala Chai Mix', quantity: 10, unit: 'Kg', unit_price: 600, total: 6000 }, { description: 'Green Tea Bags', quantity: 20, unit: 'Set', unit_price: 250, total: 5000 }], labor_items: [], companyId: teaId },
-    { vendor_name: 'Kathmandu Paper Cups', order_number: 'PO-006', date_ad: '2025-03-15', payment_type: 'cash', is_vat: false, notes: '', items: [{ description: 'Paper Cups 100pcs', quantity: 50, unit: 'Set', unit_price: 120, total: 6000 }], labor_items: [], companyId: teaId },
+    { companyId: teaId, vendorName: 'Ilam Tea Suppliers',    dateAd: '2025-01-10', paymentMethod: 'CASH',   isVat: false, items: [{ description: 'Ilam Premium Tea',  quantity: 20, unit: 'Kg',    unitPrice: 800 }] },
+    { companyId: teaId, vendorName: 'Dairy Fresh Pvt Ltd',   dateAd: '2025-01-15', paymentMethod: 'CASH',   isVat: false, items: [{ description: 'Full Cream Milk',    quantity: 50, unit: 'Liter', unitPrice: 90 }] },
+    { companyId: teaId, vendorName: 'Himalayan Sugar Mills', dateAd: '2025-02-01', paymentMethod: 'CHEQUE', isVat: false, items: [{ description: 'Sugar',              quantity: 30, unit: 'Kg',    unitPrice: 75 }] },
+    { companyId: teaId, vendorName: 'Everest Snacks Co',     dateAd: '2025-02-10', paymentMethod: 'CASH',   isVat: true,  items: [{ description: 'Sel Roti Mix',       quantity: 15, unit: 'Kg',    unitPrice: 150 }] },
+    { companyId: teaId, vendorName: 'Ilam Tea Suppliers',    dateAd: '2025-03-01', paymentMethod: 'CASH',   isVat: false, items: [{ description: 'Masala Chai Mix',    quantity: 10, unit: 'Kg',    unitPrice: 600 }, { description: 'Green Tea Bags', quantity: 20, unit: 'Set', unitPrice: 250 }] },
+    { companyId: teaId, vendorName: 'Kathmandu Paper Cups',  dateAd: '2025-03-15', paymentMethod: 'CASH',   isVat: false, items: [{ description: 'Paper Cups 100pcs', quantity: 50, unit: 'Set',   unitPrice: 120 }] },
   ];
-  for (const p of teaPurchases) await run(`Purchase: ${p.order_number}`, () => post('/api/v1/purchases', p));
+  for (const p of teaPurchases) await run(`Purchase: ${p.vendorName} (${p.dateAd})`, () => post('/api/v1/purchases', p));
 
   console.log('\n🍵 Tea House — Sales');
   const teaSales = [
-    { client_name: 'Sunrise Hotel', invoice_number: 'INV-001', date_ad: '2025-01-20', payment_type: 'credit', is_vat: true, notes: '', items: [{ description: 'Ilam Premium Tea', quantity: 5, unit: 'Kg', unit_price: 1200, total: 6000 }], labor_items: [], companyId: teaId },
-    { client_name: 'TU Students Canteen', invoice_number: 'INV-002', date_ad: '2025-02-05', payment_type: 'cash', is_vat: false, notes: '', items: [{ description: 'Masala Chai Mix', quantity: 3, unit: 'Kg', unit_price: 900, total: 2700 }], labor_items: [], companyId: teaId },
-    { client_name: 'Mount View Resort', invoice_number: 'INV-003', date_ad: '2025-02-15', payment_type: 'cheque', is_vat: true, notes: '', items: [{ description: 'Ilam Premium Tea', quantity: 8, unit: 'Kg', unit_price: 1200, total: 9600 }, { description: 'Honey (Local)', quantity: 3, unit: 'Liter', unit_price: 1000, total: 3000 }], labor_items: [], companyId: teaId },
-    { client_name: 'Pokhara Tea Garden', invoice_number: 'INV-004', date_ad: '2025-02-28', payment_type: 'cash', is_vat: false, notes: '', items: [{ description: 'Green Tea Bags', quantity: 10, unit: 'Set', unit_price: 400, total: 4000 }], labor_items: [], companyId: teaId },
-    { client_name: 'Boudha Coffee & Tea', invoice_number: 'INV-005', date_ad: '2025-03-10', payment_type: 'credit', is_vat: true, notes: '', items: [{ description: 'Masala Chai Mix', quantity: 5, unit: 'Kg', unit_price: 900, total: 4500 }, { description: 'Ilam Premium Tea', quantity: 3, unit: 'Kg', unit_price: 1200, total: 3600 }], labor_items: [], companyId: teaId },
-    { client_name: 'Sunrise Hotel', invoice_number: 'INV-006', date_ad: '2025-03-20', payment_type: 'credit', is_vat: true, notes: '', items: [{ description: 'Green Tea Bags', quantity: 15, unit: 'Set', unit_price: 400, total: 6000 }], labor_items: [], companyId: teaId },
-    { client_name: 'TU Students Canteen', invoice_number: 'INV-007', date_ad: '2025-04-01', payment_type: 'cash', is_vat: false, notes: '', items: [{ description: 'Sel Roti Mix', quantity: 5, unit: 'Kg', unit_price: 200, total: 1000 }], labor_items: [], companyId: teaId },
-    { client_name: 'Mount View Resort', invoice_number: 'INV-008', date_ad: '2025-04-15', payment_type: 'cheque', is_vat: true, notes: '', items: [{ description: 'Honey (Local)', quantity: 5, unit: 'Liter', unit_price: 1000, total: 5000 }], labor_items: [], companyId: teaId },
+    { companyId: teaId, clientName: 'Sunrise Hotel',       dateAd: '2025-01-20', paymentMethod: 'CREDIT', isVat: true,  items: [{ description: 'Ilam Premium Tea',  quantity: 5,  unit: 'Kg',    unitPrice: 1200 }] },
+    { companyId: teaId, clientName: 'TU Students Canteen', dateAd: '2025-02-05', paymentMethod: 'CASH',   isVat: false, items: [{ description: 'Masala Chai Mix',    quantity: 3,  unit: 'Kg',    unitPrice: 900 }] },
+    { companyId: teaId, clientName: 'Mount View Resort',   dateAd: '2025-02-15', paymentMethod: 'CHEQUE', isVat: true,  items: [{ description: 'Ilam Premium Tea',  quantity: 8,  unit: 'Kg',    unitPrice: 1200 }, { description: 'Honey (Local)', quantity: 3, unit: 'Liter', unitPrice: 1000 }] },
+    { companyId: teaId, clientName: 'Pokhara Tea Garden',  dateAd: '2025-02-28', paymentMethod: 'CASH',   isVat: false, items: [{ description: 'Green Tea Bags',     quantity: 10, unit: 'Set',   unitPrice: 400 }] },
+    { companyId: teaId, clientName: 'Boudha Coffee & Tea', dateAd: '2025-03-10', paymentMethod: 'CREDIT', isVat: true,  items: [{ description: 'Masala Chai Mix',    quantity: 5,  unit: 'Kg',    unitPrice: 900 }, { description: 'Ilam Premium Tea', quantity: 3, unit: 'Kg', unitPrice: 1200 }] },
+    { companyId: teaId, clientName: 'Sunrise Hotel',       dateAd: '2025-03-20', paymentMethod: 'CREDIT', isVat: true,  items: [{ description: 'Green Tea Bags',     quantity: 15, unit: 'Set',   unitPrice: 400 }] },
+    { companyId: teaId, clientName: 'TU Students Canteen', dateAd: '2025-04-01', paymentMethod: 'CASH',   isVat: false, items: [{ description: 'Sel Roti Mix',       quantity: 5,  unit: 'Kg',    unitPrice: 200 }] },
+    { companyId: teaId, clientName: 'Mount View Resort',   dateAd: '2025-04-15', paymentMethod: 'CHEQUE', isVat: true,  items: [{ description: 'Honey (Local)',      quantity: 5,  unit: 'Liter', unitPrice: 1000 }] },
   ];
-  for (const s of teaSales) await run(`Sale: ${s.invoice_number}`, () => post('/api/v1/sales', s));
+  for (const s of teaSales) await run(`Sale: ${s.clientName} (${s.dateAd})`, () => post('/api/v1/sales', s));
 
   console.log('\n🍵 Tea House — Transactions');
   const teaTx = [
-    { type: 'income', amount: 6780, date: '2025-01-20', description: 'Payment from Sunrise Hotel INV-001', party_name: 'Sunrise Hotel', category: 'Sales', payment_method: 'bank_transfer', companyId: teaId },
-    { type: 'income', amount: 2700, date: '2025-02-05', description: 'TU Canteen cash payment INV-002', party_name: 'TU Students Canteen', category: 'Sales', payment_method: 'cash', companyId: teaId },
-    { type: 'expense', amount: 16000, date: '2025-01-10', description: 'Ilam Tea purchase PO-001', party_name: 'Ilam Tea Suppliers', category: 'Purchases', payment_method: 'cash', companyId: teaId },
-    { type: 'expense', amount: 4500, date: '2025-01-15', description: 'Milk purchase PO-002', party_name: 'Dairy Fresh Pvt Ltd', category: 'Purchases', payment_method: 'cash', companyId: teaId },
-    { type: 'expense', amount: 56000, date: '2025-01-31', description: 'January staff salaries', party_name: 'Staff Payroll', category: 'Salaries', payment_method: 'bank_transfer', companyId: teaId },
-    { type: 'expense', amount: 15000, date: '2025-02-01', description: 'Thamel shop rent - February', party_name: 'Landlord', category: 'Rent', payment_method: 'cash', companyId: teaId },
-    { type: 'income', amount: 14600, date: '2025-02-15', description: 'Mount View Resort payment INV-003', party_name: 'Mount View Resort', category: 'Sales', payment_method: 'cheque', companyId: teaId },
-    { type: 'expense', amount: 5000, date: '2025-03-01', description: 'Electricity bill March', party_name: 'NEA', category: 'Utilities', payment_method: 'cash', companyId: teaId },
-    { type: 'income', amount: 4000, date: '2025-03-10', description: 'Pokhara Tea Garden INV-004', party_name: 'Pokhara Tea Garden', category: 'Sales', payment_method: 'cash', companyId: teaId },
-    { type: 'expense', amount: 2250, date: '2025-02-01', description: 'Sugar purchase PO-003', party_name: 'Himalayan Sugar Mills', category: 'Purchases', payment_method: 'cheque', companyId: teaId },
+    { companyId: teaId, type: 'BANK',  category: 'INCOME',   dateAd: '2025-01-20', amount: 6780,  description: 'Payment from Sunrise Hotel INV-001' },
+    { companyId: teaId, type: 'CASH',  category: 'INCOME',   dateAd: '2025-02-05', amount: 2700,  description: 'TU Canteen cash payment INV-002' },
+    { companyId: teaId, type: 'CASH',  category: 'EXPENSE',  dateAd: '2025-01-10', amount: 16000, description: 'Ilam Tea purchase PO-001' },
+    { companyId: teaId, type: 'CASH',  category: 'EXPENSE',  dateAd: '2025-01-15', amount: 4500,  description: 'Milk purchase PO-002' },
+    { companyId: teaId, type: 'BANK',  category: 'EXPENSE',  dateAd: '2025-01-31', amount: 56000, description: 'January staff salaries' },
+    { companyId: teaId, type: 'CASH',  category: 'EXPENSE',  dateAd: '2025-02-01', amount: 15000, description: 'Thamel shop rent - February' },
+    { companyId: teaId, type: 'CHEQUE',category: 'INCOME',   dateAd: '2025-02-15', amount: 14600, description: 'Mount View Resort payment INV-003' },
+    { companyId: teaId, type: 'CASH',  category: 'EXPENSE',  dateAd: '2025-03-01', amount: 5000,  description: 'Electricity bill March' },
+    { companyId: teaId, type: 'CASH',  category: 'INCOME',   dateAd: '2025-03-10', amount: 4000,  description: 'Pokhara Tea Garden INV-004' },
+    { companyId: teaId, type: 'CHEQUE',category: 'EXPENSE',  dateAd: '2025-02-01', amount: 2250,  description: 'Sugar purchase PO-003' },
   ];
-  for (const t of teaTx) await run(`Transaction: ${t.description.substring(0, 35)}`, () => post('/api/v1/transactions', t));
+  for (const t of teaTx) await run(`Transaction: ${t.description.substring(0, 40)}`, () => post('/api/v1/transactions', t));
 
   console.log('\n🍵 Tea House — Quotations');
   const teaQuotations = [
-    { client_name: 'New Hotel Annapurna', quotation_number: 'QT-001', date_ad: '2025-03-01', valid_until: '2025-04-01', payment_type: 'credit', is_vat: true, status: 'pending', notes: 'Bulk tea supply contract', items: [{ description: 'Ilam Premium Tea', quantity: 20, unit: 'Kg', unit_price: 1200, total: 24000 }], labor_items: [], companyId: teaId },
-    { client_name: 'Yak & Yeti Hotel', quotation_number: 'QT-002', date_ad: '2025-03-10', valid_until: '2025-04-10', payment_type: 'cheque', is_vat: true, status: 'accepted', notes: '', items: [{ description: 'Masala Chai Mix', quantity: 10, unit: 'Kg', unit_price: 900, total: 9000 }, { description: 'Green Tea Bags', quantity: 20, unit: 'Set', unit_price: 400, total: 8000 }], labor_items: [], companyId: teaId },
-    { client_name: 'KU Cafeteria', quotation_number: 'QT-003', date_ad: '2025-04-01', valid_until: '2025-05-01', payment_type: 'cash', is_vat: false, status: 'pending', notes: '', items: [{ description: 'Sel Roti Mix', quantity: 25, unit: 'Kg', unit_price: 200, total: 5000 }], labor_items: [], companyId: teaId },
+    { companyId: teaId, clientName: 'New Hotel Annapurna', quotationNumber: 'QT-001', dateAd: '2025-03-01', totalAmount: 24000, items: [{ description: 'Ilam Premium Tea',  quantity: 20, unit: 'Kg', unitPrice: 1200 }] },
+    { companyId: teaId, clientName: 'Yak & Yeti Hotel',    quotationNumber: 'QT-002', dateAd: '2025-03-10', totalAmount: 17000, items: [{ description: 'Masala Chai Mix',    quantity: 10, unit: 'Kg', unitPrice: 900 }, { description: 'Green Tea Bags', quantity: 20, unit: 'Set', unitPrice: 400 }] },
+    { companyId: teaId, clientName: 'KU Cafeteria',        quotationNumber: 'QT-003', dateAd: '2025-04-01', totalAmount: 5000,  items: [{ description: 'Sel Roti Mix',       quantity: 25, unit: 'Kg', unitPrice: 200 }] },
   ];
-  for (const q of teaQuotations) await run(`Quotation: ${q.quotation_number}`, () => post('/api/v1/quotations', q));
+  for (const q of teaQuotations) await run(`Quotation: ${q.quotationNumber}`, () => post('/api/v1/quotations', q));
 
   console.log('\n🍵 Tea House — Tasks');
   const teaTasks = [
-    { title: 'Follow up with Sunrise Hotel for payment', description: 'INV-001 payment pending since Jan 20', priority: 'High', status: 'Pending', due_date: '2025-02-01', category: 'Finance', assigned_to: 'Sita Gurung', companyId: teaId },
-    { title: 'Reorder Ilam Tea stock', description: 'Stock below reorder level — contact Ilam Tea Suppliers', priority: 'Medium', status: 'In Progress', due_date: '2025-03-15', category: 'Operations', assigned_to: 'Ram Prasad Tamang', companyId: teaId },
-    { title: 'Renew Thamel shop lease', description: 'Lease expires June 2025', priority: 'High', status: 'Pending', due_date: '2025-05-01', category: 'Admin', assigned_to: 'Aaditya Joshi', companyId: teaId },
-    { title: 'Train new barista on masala recipe', description: 'Bikash needs training on new recipe', priority: 'Low', status: 'Done', due_date: '2025-02-28', category: 'HR', assigned_to: 'Ram Prasad Tamang', companyId: teaId },
+    { companyId: teaId, title: 'Follow up with Sunrise Hotel for payment',  description: 'INV-001 payment pending since Jan 20',         priority: 'HIGH',   status: 'PENDING',     dueDate: '2025-02-01', assignedTo: 'Sita Gurung' },
+    { companyId: teaId, title: 'Reorder Ilam Tea stock',                    description: 'Stock below reorder level',                     priority: 'MEDIUM', status: 'IN_PROGRESS', dueDate: '2025-03-15', assignedTo: 'Ram Prasad Tamang' },
+    { companyId: teaId, title: 'Renew Thamel shop lease',                   description: 'Lease expires June 2025',                       priority: 'HIGH',   status: 'PENDING',     dueDate: '2025-05-01', assignedTo: 'Admin' },
+    { companyId: teaId, title: 'Train new barista on masala recipe',        description: 'Bikash needs training on new recipe',           priority: 'LOW',    status: 'COMPLETED',   dueDate: '2025-02-28', assignedTo: 'Ram Prasad Tamang' },
   ];
   for (const t of teaTasks) await run(`Task: ${t.title.substring(0, 40)}`, () => post('/api/v1/tasks', t));
 }
 
-// ─── 4. Pharmacy Data ─────────────────────────────────────────────────────────
+// ─── 4. Pharmacy ──────────────────────────────────────────────────────────────
 
 async function seedPharmacy() {
   console.log('\n💊 Pharmacy — Vendors');
   const pharmVendors = [
-    { name: 'Shangrila Pharma Distributors', phone: '9811110001', email: 'shangrila@pharma.com', address: 'Kalimati, Kathmandu', pan_vat: '444555666', companyId: pharmId },
-    { name: 'Nepal Drug House', phone: '9811110002', address: 'New Road, Kathmandu', pan_vat: '777888999', companyId: pharmId },
-    { name: 'Himalayan Herbals Pvt Ltd', phone: '9811110003', address: 'Budhanilkantha', companyId: pharmId },
-    { name: 'MediCare Imports', phone: '9811110004', email: 'medicare@imports.com', address: 'Teku, Kathmandu', companyId: pharmId },
+    { companyId: pharmId, name: 'Shangrila Pharma Distributors', phone: '9811110001', email: 'shangrila@pharma.com', address: 'Kalimati, Kathmandu', panVat: '444555666' },
+    { companyId: pharmId, name: 'Nepal Drug House',              phone: '9811110002', address: 'New Road, Kathmandu', panVat: '777888999' },
+    { companyId: pharmId, name: 'Himalayan Herbals Pvt Ltd',     phone: '9811110003', address: 'Budhanilkantha' },
+    { companyId: pharmId, name: 'MediCare Imports',              phone: '9811110004', email: 'medicare@imports.com', address: 'Teku, Kathmandu' },
   ];
   for (const v of pharmVendors) await run(`Vendor: ${v.name}`, () => post('/api/v1/vendors', v));
 
   console.log('\n💊 Pharmacy — Clients');
   const pharmClients = [
-    { name: 'Dr. Suresh Clinic', phone: '9822220001', email: 'drsuresh@clinic.com', address: 'Baneshwor', companyId: pharmId },
-    { name: 'Patan Hospital Pharmacy', phone: '9822220002', address: 'Patan', companyId: pharmId },
-    { name: 'Gramin Swastha Kendra', phone: '9822220003', address: 'Bhaktapur', companyId: pharmId },
-    { name: 'Kathmandu Nursing Home', phone: '9822220004', email: 'knursinghome@gmail.com', address: 'Chabahil', companyId: pharmId },
+    { companyId: pharmId, name: 'Dr. Suresh Clinic',        phone: '9822220001', email: 'drsuresh@clinic.com',    address: 'Baneshwor' },
+    { companyId: pharmId, name: 'Patan Hospital Pharmacy',  phone: '9822220002', address: 'Patan' },
+    { companyId: pharmId, name: 'Gramin Swastha Kendra',    phone: '9822220003', address: 'Bhaktapur' },
+    { companyId: pharmId, name: 'Kathmandu Nursing Home',   phone: '9822220004', email: 'knursinghome@gmail.com', address: 'Chabahil' },
   ];
   for (const c of pharmClients) await run(`Client: ${c.name}`, () => post('/api/v1/clients', c));
 
   console.log('\n💊 Pharmacy — Bank Account');
   await run('Bank: Everest Bank Ltd', () => post('/api/v1/bank-accounts', {
-    bank_name: 'Everest Bank Ltd', account_number: '0022030405060',
-    account_holder: 'Nepal Pharmacy', branch: 'Baneshwor',
-    current_balance: 380000, companyId: pharmId,
+    companyId: pharmId,
+    bankName: 'Everest Bank Ltd',
+    accountNumber: '0022030405060',
+    branch: 'Baneshwor',
+    currentBalance: 380000,
   }));
 
   console.log('\n💊 Pharmacy — Inventory');
   const pharmInventory = [
-    { name: 'Paracetamol 500mg', unit: 'Piece', quantity: 500, reorder_level: 100, cost_price: 5, selling_price: 8, category: 'Medicine', companyId: pharmId },
-    { name: 'Amoxicillin 250mg', unit: 'Piece', quantity: 300, reorder_level: 50, cost_price: 12, selling_price: 18, category: 'Antibiotic', companyId: pharmId },
-    { name: 'ORS Packet', unit: 'Piece', quantity: 200, reorder_level: 50, cost_price: 15, selling_price: 25, category: 'Medicine', companyId: pharmId },
-    { name: 'Vitamin C 500mg', unit: 'Piece', quantity: 400, reorder_level: 80, cost_price: 8, selling_price: 15, category: 'Supplement', companyId: pharmId },
-    { name: 'Surgical Gloves (Box)', unit: 'Set', quantity: 50, reorder_level: 10, cost_price: 350, selling_price: 500, category: 'Equipment', companyId: pharmId },
-    { name: 'Ibuprofen 400mg', unit: 'Piece', quantity: 250, reorder_level: 60, cost_price: 7, selling_price: 12, category: 'Medicine', companyId: pharmId },
-    { name: 'Antiseptic Solution 100ml', unit: 'Piece', quantity: 80, reorder_level: 20, cost_price: 120, selling_price: 180, category: 'Medicine', companyId: pharmId },
-    { name: 'Diabetes Test Strips', unit: 'Set', quantity: 60, reorder_level: 15, cost_price: 800, selling_price: 1200, category: 'Equipment', companyId: pharmId },
+    { companyId: pharmId, itemName: 'Paracetamol 500mg',        unit: 'Piece', quantity: 500, lowStockThreshold: 100, unitPurchasePrice: 5,   unitSellingPrice: 8 },
+    { companyId: pharmId, itemName: 'Amoxicillin 250mg',        unit: 'Piece', quantity: 300, lowStockThreshold: 50,  unitPurchasePrice: 12,  unitSellingPrice: 18 },
+    { companyId: pharmId, itemName: 'ORS Packet',               unit: 'Piece', quantity: 200, lowStockThreshold: 50,  unitPurchasePrice: 15,  unitSellingPrice: 25 },
+    { companyId: pharmId, itemName: 'Vitamin C 500mg',          unit: 'Piece', quantity: 400, lowStockThreshold: 80,  unitPurchasePrice: 8,   unitSellingPrice: 15 },
+    { companyId: pharmId, itemName: 'Surgical Gloves (Box)',    unit: 'Set',   quantity: 50,  lowStockThreshold: 10,  unitPurchasePrice: 350, unitSellingPrice: 500 },
+    { companyId: pharmId, itemName: 'Ibuprofen 400mg',          unit: 'Piece', quantity: 250, lowStockThreshold: 60,  unitPurchasePrice: 7,   unitSellingPrice: 12 },
+    { companyId: pharmId, itemName: 'Antiseptic Solution 100ml',unit: 'Piece', quantity: 80,  lowStockThreshold: 20,  unitPurchasePrice: 120, unitSellingPrice: 180 },
+    { companyId: pharmId, itemName: 'Diabetes Test Strips',     unit: 'Set',   quantity: 60,  lowStockThreshold: 15,  unitPurchasePrice: 800, unitSellingPrice: 1200 },
   ];
-  for (const i of pharmInventory) await run(`Inventory: ${i.name}`, () => post('/api/v1/inventory', i));
+  for (const i of pharmInventory) await run(`Inventory: ${i.itemName}`, () => post('/api/v1/inventory', i));
 
   console.log('\n💊 Pharmacy — Employees');
   const pharmEmployees = [
-    { name: 'Priya Maharjan', designation: 'Senior Pharmacist', department: 'Operations', phone: '9833330001', salary: 35000, join_date: '2023-05-01', companyId: pharmId },
-    { name: 'Anil Thapa', designation: 'Sales Staff', department: 'Sales', phone: '9833330002', salary: 16000, join_date: '2024-01-15', companyId: pharmId },
-    { name: 'Kamala Devi', designation: 'Accountant', department: 'Finance', phone: '9833330003', salary: 22000, join_date: '2023-08-01', companyId: pharmId },
-    { name: 'Suresh Basnet', designation: 'Pharmacist Assistant', department: 'Operations', phone: '9833330004', salary: 18000, join_date: '2024-02-01', companyId: pharmId },
-    { name: 'Nirmala Shrestha', designation: 'Billing Staff', department: 'Finance', phone: '9833330005', salary: 15000, join_date: '2024-04-01', companyId: pharmId },
+    { companyId: pharmId, employeeId: 'PHA-001', name: 'Priya Maharjan', designation: 'Senior Pharmacist',    department: 'Operations', phone: '9833330001', basicSalary: 35000, dateOfJoining: '2023-05-01' },
+    { companyId: pharmId, employeeId: 'PHA-002', name: 'Anil Thapa',     designation: 'Sales Staff',          department: 'Sales',      phone: '9833330002', basicSalary: 16000, dateOfJoining: '2024-01-15' },
+    { companyId: pharmId, employeeId: 'PHA-003', name: 'Kamala Devi',    designation: 'Accountant',           department: 'Finance',    phone: '9833330003', basicSalary: 22000, dateOfJoining: '2023-08-01' },
+    { companyId: pharmId, employeeId: 'PHA-004', name: 'Suresh Basnet',  designation: 'Pharmacist Assistant', department: 'Operations', phone: '9833330004', basicSalary: 18000, dateOfJoining: '2024-02-01' },
+    { companyId: pharmId, employeeId: 'PHA-005', name: 'Nirmala Shrestha',designation: 'Billing Staff',       department: 'Finance',    phone: '9833330005', basicSalary: 15000, dateOfJoining: '2024-04-01' },
   ];
   for (const e of pharmEmployees) await run(`Employee: ${e.name}`, () => post('/api/v1/employees', e));
 
   console.log('\n💊 Pharmacy — Purchases');
   const pharmPurchases = [
-    { vendor_name: 'Shangrila Pharma Distributors', order_number: 'PPO-001', date_ad: '2025-01-05', payment_type: 'credit', is_vat: true, notes: '', items: [{ description: 'Paracetamol 500mg', quantity: 500, unit: 'Piece', unit_price: 5, total: 2500 }, { description: 'Amoxicillin 250mg', quantity: 200, unit: 'Piece', unit_price: 12, total: 2400 }], labor_items: [], companyId: pharmId },
-    { vendor_name: 'Nepal Drug House', order_number: 'PPO-002', date_ad: '2025-01-20', payment_type: 'cash', is_vat: true, notes: '', items: [{ description: 'ORS Packet', quantity: 100, unit: 'Piece', unit_price: 15, total: 1500 }, { description: 'Ibuprofen 400mg', quantity: 200, unit: 'Piece', unit_price: 7, total: 1400 }], labor_items: [], companyId: pharmId },
-    { vendor_name: 'Himalayan Herbals Pvt Ltd', order_number: 'PPO-003', date_ad: '2025-02-10', payment_type: 'cheque', is_vat: false, notes: '', items: [{ description: 'Vitamin C 500mg', quantity: 300, unit: 'Piece', unit_price: 8, total: 2400 }], labor_items: [], companyId: pharmId },
-    { vendor_name: 'MediCare Imports', order_number: 'PPO-004', date_ad: '2025-02-25', payment_type: 'credit', is_vat: true, notes: '', items: [{ description: 'Surgical Gloves (Box)', quantity: 30, unit: 'Set', unit_price: 350, total: 10500 }, { description: 'Diabetes Test Strips', quantity: 30, unit: 'Set', unit_price: 800, total: 24000 }], labor_items: [], companyId: pharmId },
-    { vendor_name: 'Shangrila Pharma Distributors', order_number: 'PPO-005', date_ad: '2025-03-10', payment_type: 'credit', is_vat: true, notes: '', items: [{ description: 'Antiseptic Solution 100ml', quantity: 50, unit: 'Piece', unit_price: 120, total: 6000 }], labor_items: [], companyId: pharmId },
+    { companyId: pharmId, vendorName: 'Shangrila Pharma Distributors', dateAd: '2025-01-05', paymentMethod: 'CREDIT', isVat: true,  items: [{ description: 'Paracetamol 500mg',  quantity: 500, unit: 'Piece', unitPrice: 5 }, { description: 'Amoxicillin 250mg', quantity: 200, unit: 'Piece', unitPrice: 12 }] },
+    { companyId: pharmId, vendorName: 'Nepal Drug House',              dateAd: '2025-01-20', paymentMethod: 'CASH',   isVat: true,  items: [{ description: 'ORS Packet',          quantity: 100, unit: 'Piece', unitPrice: 15 }, { description: 'Ibuprofen 400mg',   quantity: 200, unit: 'Piece', unitPrice: 7 }] },
+    { companyId: pharmId, vendorName: 'Himalayan Herbals Pvt Ltd',     dateAd: '2025-02-10', paymentMethod: 'CHEQUE', isVat: false, items: [{ description: 'Vitamin C 500mg',     quantity: 300, unit: 'Piece', unitPrice: 8 }] },
+    { companyId: pharmId, vendorName: 'MediCare Imports',              dateAd: '2025-02-25', paymentMethod: 'CREDIT', isVat: true,  items: [{ description: 'Surgical Gloves (Box)',quantity: 30, unit: 'Set',   unitPrice: 350 }, { description: 'Diabetes Test Strips', quantity: 30, unit: 'Set', unitPrice: 800 }] },
+    { companyId: pharmId, vendorName: 'Shangrila Pharma Distributors', dateAd: '2025-03-10', paymentMethod: 'CREDIT', isVat: true,  items: [{ description: 'Antiseptic Solution 100ml', quantity: 50, unit: 'Piece', unitPrice: 120 }] },
   ];
-  for (const p of pharmPurchases) await run(`Purchase: ${p.order_number}`, () => post('/api/v1/purchases', p));
+  for (const p of pharmPurchases) await run(`Purchase: ${p.vendorName.substring(0, 25)} (${p.dateAd})`, () => post('/api/v1/purchases', p));
 
   console.log('\n💊 Pharmacy — Sales');
   const pharmSales = [
-    { client_name: 'Dr. Suresh Clinic', invoice_number: 'PINV-001', date_ad: '2025-01-15', payment_type: 'credit', is_vat: true, notes: '', items: [{ description: 'Paracetamol 500mg', quantity: 100, unit: 'Piece', unit_price: 8, total: 800 }, { description: 'Amoxicillin 250mg', quantity: 50, unit: 'Piece', unit_price: 18, total: 900 }], labor_items: [], companyId: pharmId },
-    { client_name: 'Patan Hospital Pharmacy', invoice_number: 'PINV-002', date_ad: '2025-02-01', payment_type: 'cheque', is_vat: true, notes: '', items: [{ description: 'ORS Packet', quantity: 80, unit: 'Piece', unit_price: 25, total: 2000 }, { description: 'Surgical Gloves (Box)', quantity: 10, unit: 'Set', unit_price: 500, total: 5000 }], labor_items: [], companyId: pharmId },
-    { client_name: 'Gramin Swastha Kendra', invoice_number: 'PINV-003', date_ad: '2025-02-20', payment_type: 'cash', is_vat: false, notes: '', items: [{ description: 'Vitamin C 500mg', quantity: 150, unit: 'Piece', unit_price: 15, total: 2250 }, { description: 'Ibuprofen 400mg', quantity: 100, unit: 'Piece', unit_price: 12, total: 1200 }], labor_items: [], companyId: pharmId },
-    { client_name: 'Kathmandu Nursing Home', invoice_number: 'PINV-004', date_ad: '2025-03-05', payment_type: 'credit', is_vat: true, notes: '', items: [{ description: 'Diabetes Test Strips', quantity: 20, unit: 'Set', unit_price: 1200, total: 24000 }], labor_items: [], companyId: pharmId },
-    { client_name: 'Dr. Suresh Clinic', invoice_number: 'PINV-005', date_ad: '2025-03-15', payment_type: 'credit', is_vat: true, notes: '', items: [{ description: 'Antiseptic Solution 100ml', quantity: 20, unit: 'Piece', unit_price: 180, total: 3600 }], labor_items: [], companyId: pharmId },
-    { client_name: 'Patan Hospital Pharmacy', invoice_number: 'PINV-006', date_ad: '2025-04-01', payment_type: 'cheque', is_vat: true, notes: '', items: [{ description: 'Paracetamol 500mg', quantity: 200, unit: 'Piece', unit_price: 8, total: 1600 }, { description: 'Amoxicillin 250mg', quantity: 100, unit: 'Piece', unit_price: 18, total: 1800 }], labor_items: [], companyId: pharmId },
+    { companyId: pharmId, clientName: 'Dr. Suresh Clinic',       dateAd: '2025-01-15', paymentMethod: 'CREDIT', isVat: true,  items: [{ description: 'Paracetamol 500mg',      quantity: 100, unit: 'Piece', unitPrice: 8 }, { description: 'Amoxicillin 250mg', quantity: 50, unit: 'Piece', unitPrice: 18 }] },
+    { companyId: pharmId, clientName: 'Patan Hospital Pharmacy', dateAd: '2025-02-01', paymentMethod: 'CHEQUE', isVat: true,  items: [{ description: 'ORS Packet',              quantity: 80,  unit: 'Piece', unitPrice: 25 }, { description: 'Surgical Gloves (Box)', quantity: 10, unit: 'Set', unitPrice: 500 }] },
+    { companyId: pharmId, clientName: 'Gramin Swastha Kendra',   dateAd: '2025-02-20', paymentMethod: 'CASH',   isVat: false, items: [{ description: 'Vitamin C 500mg',         quantity: 150, unit: 'Piece', unitPrice: 15 }, { description: 'Ibuprofen 400mg', quantity: 100, unit: 'Piece', unitPrice: 12 }] },
+    { companyId: pharmId, clientName: 'Kathmandu Nursing Home',  dateAd: '2025-03-05', paymentMethod: 'CREDIT', isVat: true,  items: [{ description: 'Diabetes Test Strips',    quantity: 20,  unit: 'Set',   unitPrice: 1200 }] },
+    { companyId: pharmId, clientName: 'Dr. Suresh Clinic',       dateAd: '2025-03-15', paymentMethod: 'CREDIT', isVat: true,  items: [{ description: 'Antiseptic Solution 100ml',quantity: 20, unit: 'Piece', unitPrice: 180 }] },
+    { companyId: pharmId, clientName: 'Patan Hospital Pharmacy', dateAd: '2025-04-01', paymentMethod: 'CHEQUE', isVat: true,  items: [{ description: 'Paracetamol 500mg',      quantity: 200, unit: 'Piece', unitPrice: 8 }, { description: 'Amoxicillin 250mg', quantity: 100, unit: 'Piece', unitPrice: 18 }] },
   ];
-  for (const s of pharmSales) await run(`Sale: ${s.invoice_number}`, () => post('/api/v1/sales', s));
+  for (const s of pharmSales) await run(`Sale: ${s.clientName} (${s.dateAd})`, () => post('/api/v1/sales', s));
 
   console.log('\n💊 Pharmacy — Transactions');
   const pharmTx = [
-    { type: 'income', amount: 1921, date: '2025-01-15', description: 'Dr. Suresh Clinic PINV-001', party_name: 'Dr. Suresh Clinic', category: 'Sales', payment_method: 'bank_transfer', companyId: pharmId },
-    { type: 'expense', amount: 5537, date: '2025-01-05', description: 'Shangrila Pharma PPO-001', party_name: 'Shangrila Pharma Distributors', category: 'Purchases', payment_method: 'credit', companyId: pharmId },
-    { type: 'expense', amount: 73000, date: '2025-01-31', description: 'January staff salaries', party_name: 'Staff Payroll', category: 'Salaries', payment_method: 'bank_transfer', companyId: pharmId },
-    { type: 'expense', amount: 25000, date: '2025-02-01', description: 'Baneshwor shop rent', party_name: 'Landlord', category: 'Rent', payment_method: 'cash', companyId: pharmId },
-    { type: 'income', amount: 7910, date: '2025-02-01', description: 'Patan Hospital PINV-002', party_name: 'Patan Hospital Pharmacy', category: 'Sales', payment_method: 'cheque', companyId: pharmId },
-    { type: 'income', amount: 3450, date: '2025-02-20', description: 'Gramin Swastha PINV-003', party_name: 'Gramin Swastha Kendra', category: 'Sales', payment_method: 'cash', companyId: pharmId },
-    { type: 'expense', amount: 2900, date: '2025-02-10', description: 'Himalayan Herbals PPO-003', party_name: 'Himalayan Herbals Pvt Ltd', category: 'Purchases', payment_method: 'cheque', companyId: pharmId },
-    { type: 'expense', amount: 8000, date: '2025-03-01', description: 'Electricity + water bills', party_name: 'NEA / KUKL', category: 'Utilities', payment_method: 'cash', companyId: pharmId },
+    { companyId: pharmId, type: 'BANK',  category: 'INCOME',  dateAd: '2025-01-15', amount: 1921,  description: 'Dr. Suresh Clinic PINV-001' },
+    { companyId: pharmId, type: 'BANK',  category: 'EXPENSE', dateAd: '2025-01-05', amount: 5537,  description: 'Shangrila Pharma PPO-001' },
+    { companyId: pharmId, type: 'BANK',  category: 'EXPENSE', dateAd: '2025-01-31', amount: 73000, description: 'January staff salaries' },
+    { companyId: pharmId, type: 'CASH',  category: 'EXPENSE', dateAd: '2025-02-01', amount: 25000, description: 'Baneshwor shop rent' },
+    { companyId: pharmId, type: 'CHEQUE',category: 'INCOME',  dateAd: '2025-02-01', amount: 7910,  description: 'Patan Hospital PINV-002' },
+    { companyId: pharmId, type: 'CASH',  category: 'INCOME',  dateAd: '2025-02-20', amount: 3450,  description: 'Gramin Swastha PINV-003' },
+    { companyId: pharmId, type: 'CHEQUE',category: 'EXPENSE', dateAd: '2025-02-10', amount: 2900,  description: 'Himalayan Herbals PPO-003' },
+    { companyId: pharmId, type: 'CASH',  category: 'EXPENSE', dateAd: '2025-03-01', amount: 8000,  description: 'Electricity + water bills' },
   ];
-  for (const t of pharmTx) await run(`Transaction: ${t.description.substring(0, 35)}`, () => post('/api/v1/transactions', t));
+  for (const t of pharmTx) await run(`Transaction: ${t.description.substring(0, 40)}`, () => post('/api/v1/transactions', t));
 
   console.log('\n💊 Pharmacy — Quotations');
   const pharmQuotations = [
-    { client_name: 'Gramin Swastha Kendra', quotation_number: 'PQT-001', date_ad: '2025-03-01', valid_until: '2025-04-01', payment_type: 'credit', is_vat: false, status: 'pending', notes: 'Monthly medicine supply', items: [{ description: 'Paracetamol 500mg', quantity: 500, unit: 'Piece', unit_price: 8, total: 4000 }, { description: 'ORS Packet', quantity: 200, unit: 'Piece', unit_price: 25, total: 5000 }], labor_items: [], companyId: pharmId },
-    { client_name: 'Kathmandu Nursing Home', quotation_number: 'PQT-002', date_ad: '2025-03-20', valid_until: '2025-04-20', payment_type: 'cheque', is_vat: true, status: 'accepted', notes: '', items: [{ description: 'Diabetes Test Strips', quantity: 50, unit: 'Set', unit_price: 1200, total: 60000 }], labor_items: [], companyId: pharmId },
+    { companyId: pharmId, clientName: 'Gramin Swastha Kendra',  quotationNumber: 'PQT-001', dateAd: '2025-03-01', totalAmount: 9000,  items: [{ description: 'Paracetamol 500mg', quantity: 500, unit: 'Piece', unitPrice: 8 }, { description: 'ORS Packet', quantity: 200, unit: 'Piece', unitPrice: 25 }] },
+    { companyId: pharmId, clientName: 'Kathmandu Nursing Home', quotationNumber: 'PQT-002', dateAd: '2025-03-20', totalAmount: 60000, items: [{ description: 'Diabetes Test Strips', quantity: 50, unit: 'Set', unitPrice: 1200 }] },
   ];
-  for (const q of pharmQuotations) await run(`Quotation: ${q.quotation_number}`, () => post('/api/v1/quotations', q));
+  for (const q of pharmQuotations) await run(`Quotation: ${q.quotationNumber}`, () => post('/api/v1/quotations', q));
 
   console.log('\n💊 Pharmacy — Tasks');
   const pharmTasks = [
-    { title: 'Collect payment from Kathmandu Nursing Home', description: 'PINV-004 worth NPR 27,120 outstanding', priority: 'High', status: 'Pending', due_date: '2025-04-15', category: 'Finance', assigned_to: 'Kamala Devi', companyId: pharmId },
-    { title: 'Drug retail license renewal', description: 'Annual renewal due June 2025', priority: 'High', status: 'Pending', due_date: '2025-05-15', category: 'Legal', assigned_to: 'Priya Maharjan', companyId: pharmId },
-    { title: 'Monthly physical stock count', description: 'Verify all medicine quantities', priority: 'Medium', status: 'In Progress', due_date: '2025-04-30', category: 'Operations', assigned_to: 'Anil Thapa', companyId: pharmId },
+    { companyId: pharmId, title: 'Collect payment from Kathmandu Nursing Home', description: 'PINV-004 worth NPR 27,120 outstanding', priority: 'HIGH',   status: 'PENDING',     dueDate: '2025-04-15', assignedTo: 'Kamala Devi' },
+    { companyId: pharmId, title: 'Drug retail license renewal',                 description: 'Annual renewal due June 2025',          priority: 'HIGH',   status: 'PENDING',     dueDate: '2025-05-15', assignedTo: 'Priya Maharjan' },
+    { companyId: pharmId, title: 'Monthly physical stock count',                description: 'Verify all medicine quantities',        priority: 'MEDIUM', status: 'IN_PROGRESS', dueDate: '2025-04-30', assignedTo: 'Anil Thapa' },
   ];
   for (const t of pharmTasks) await run(`Task: ${t.title.substring(0, 40)}`, () => post('/api/v1/tasks', t));
 }
@@ -314,33 +315,29 @@ async function seedPharmacy() {
 
 async function verify() {
   console.log('\n📊 Verification');
-
   const checks = [
-    { label: 'Companies', path: '/api/v1/companies', expected: 2 },
-    { label: 'Tea House — Vendors',      path: `/api/v1/vendors?companyId=${teaId}`,       expected: 5 },
-    { label: 'Tea House — Clients',      path: `/api/v1/clients?companyId=${teaId}`,       expected: 5 },
-    { label: 'Tea House — Inventory',    path: `/api/v1/inventory?companyId=${teaId}`,     expected: 8 },
-    { label: 'Tea House — Purchases',    path: `/api/v1/purchases?companyId=${teaId}`,     expected: 6 },
-    { label: 'Tea House — Sales',        path: `/api/v1/sales?companyId=${teaId}`,         expected: 8 },
-    { label: 'Tea House — Transactions', path: `/api/v1/transactions?companyId=${teaId}`,  expected: 10 },
-    { label: 'Tea House — Employees',    path: `/api/v1/employees?companyId=${teaId}`,     expected: 5 },
-    { label: 'Tea House — Quotations',   path: `/api/v1/quotations?companyId=${teaId}`,    expected: 3 },
-    { label: 'Tea House — Tasks',        path: `/api/v1/tasks?companyId=${teaId}`,         expected: 4 },
-    { label: 'Tea House — Banks',        path: `/api/v1/bank-accounts?companyId=${teaId}`, expected: 1 },
-    { label: 'Pharmacy — Vendors',       path: `/api/v1/vendors?companyId=${pharmId}`,     expected: 4 },
-    { label: 'Pharmacy — Clients',       path: `/api/v1/clients?companyId=${pharmId}`,     expected: 4 },
-    { label: 'Pharmacy — Inventory',     path: `/api/v1/inventory?companyId=${pharmId}`,   expected: 8 },
-    { label: 'Pharmacy — Purchases',     path: `/api/v1/purchases?companyId=${pharmId}`,   expected: 5 },
-    { label: 'Pharmacy — Sales',         path: `/api/v1/sales?companyId=${pharmId}`,       expected: 6 },
-    { label: 'Pharmacy — Transactions',  path: `/api/v1/transactions?companyId=${pharmId}`,expected: 8 },
-    { label: 'Pharmacy — Employees',     path: `/api/v1/employees?companyId=${pharmId}`,   expected: 5 },
-    { label: 'Pharmacy — Quotations',    path: `/api/v1/quotations?companyId=${pharmId}`,  expected: 2 },
-    { label: 'Pharmacy — Tasks',         path: `/api/v1/tasks?companyId=${pharmId}`,       expected: 3 },
-    { label: 'Pharmacy — Banks',         path: `/api/v1/bank-accounts?companyId=${pharmId}`,expected: 1 },
+    { label: 'Tea House — Vendors',      path: `/api/v1/vendors?companyId=${teaId}`,        expected: 5 },
+    { label: 'Tea House — Clients',      path: `/api/v1/clients?companyId=${teaId}`,        expected: 5 },
+    { label: 'Tea House — Inventory',    path: `/api/v1/inventory?companyId=${teaId}`,      expected: 8 },
+    { label: 'Tea House — Employees',    path: `/api/v1/employees?companyId=${teaId}`,      expected: 5 },
+    { label: 'Tea House — Purchases',    path: `/api/v1/purchases?companyId=${teaId}`,      expected: 6 },
+    { label: 'Tea House — Sales',        path: `/api/v1/sales?companyId=${teaId}`,          expected: 8 },
+    { label: 'Tea House — Transactions', path: `/api/v1/transactions?companyId=${teaId}`,   expected: 10 },
+    { label: 'Tea House — Quotations',   path: `/api/v1/quotations?companyId=${teaId}`,     expected: 3 },
+    { label: 'Tea House — Tasks',        path: `/api/v1/tasks?companyId=${teaId}`,          expected: 4 },
+    { label: 'Pharmacy — Vendors',       path: `/api/v1/vendors?companyId=${pharmId}`,      expected: 4 },
+    { label: 'Pharmacy — Clients',       path: `/api/v1/clients?companyId=${pharmId}`,      expected: 4 },
+    { label: 'Pharmacy — Inventory',     path: `/api/v1/inventory?companyId=${pharmId}`,    expected: 8 },
+    { label: 'Pharmacy — Employees',     path: `/api/v1/employees?companyId=${pharmId}`,    expected: 5 },
+    { label: 'Pharmacy — Purchases',     path: `/api/v1/purchases?companyId=${pharmId}`,    expected: 5 },
+    { label: 'Pharmacy — Sales',         path: `/api/v1/sales?companyId=${pharmId}`,        expected: 6 },
+    { label: 'Pharmacy — Transactions',  path: `/api/v1/transactions?companyId=${pharmId}`, expected: 8 },
+    { label: 'Pharmacy — Quotations',    path: `/api/v1/quotations?companyId=${pharmId}`,   expected: 2 },
+    { label: 'Pharmacy — Tasks',         path: `/api/v1/tasks?companyId=${pharmId}`,        expected: 3 },
   ];
 
   for (const c of checks) {
-    await run(`${c.label} (expected ${c.expected})`, async () => {
+    await run(`${c.label} (≥${c.expected})`, async () => {
       const data = await get(c.path);
       const arr = Array.isArray(data) ? data : (data.data || data.items || []);
       if (arr.length < c.expected) throw new Error(`Got ${arr.length}, expected ${c.expected}`);
@@ -356,13 +353,13 @@ async function main() {
 
   try {
     await seedAuth();
-    if (!token) { console.log('\n❌ Cannot continue without auth token. Is the backend running?'); process.exit(1); }
+    if (!cookies) { console.log('\n❌ Cannot continue without auth. Is the backend running?'); process.exit(1); }
 
     await seedCompanies();
     if (!teaId || !pharmId) { console.log('\n❌ Cannot continue without company IDs.'); process.exit(1); }
 
-    console.log(`\n📌 Tea House ID:  ${teaId}`);
-    console.log(`📌 Pharmacy ID:   ${pharmId}`);
+    console.log(`\n📌 Tea House ID: ${teaId}`);
+    console.log(`📌 Pharmacy ID:  ${pharmId}`);
 
     await seedTeaHouse();
     await seedPharmacy();
