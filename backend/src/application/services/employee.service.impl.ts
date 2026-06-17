@@ -20,7 +20,8 @@ export class EmployeeServiceImpl {
   }
 
   async create(dto: CreateEmployeeDTO) {
-    return this.prisma.employee.create({ data: dto as any });
+    const dateOfJoining = dto.dateOfJoining ? new Date(dto.dateOfJoining) : undefined;
+    return this.prisma.employee.create({ data: { ...dto, dateOfJoining } as any });
   }
 
   async update(id: string, companyId: string, dto: UpdateEmployeeDTO) {

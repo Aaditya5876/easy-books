@@ -65,7 +65,7 @@ export class ChequeServiceImpl {
     const validTransitions: Record<string, string[]> = {
       ISSUED: ['DEPOSITED', 'CANCELLED'],
       DEPOSITED: ['CLEARED', 'BOUNCED'],
-      BOUNCED: ['CANCELLED'],
+      BOUNCED: ['DEPOSITED', 'CANCELLED'],
     };
 
     if (!validTransitions[cheque.status]?.includes(status)) {

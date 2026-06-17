@@ -17,8 +17,16 @@ export class VatService {
     return { subtotal: taxableAmount, vatAmount, totalAmount, vatRate: VAT_RATE };
   }
 
-  computeOrderTotals(items: Array<{ quantity: number; unitPrice: number }>, laborCharges = 0, isVat = false) {
-    const subtotal = items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0);
+  computeOrderTotals(
+    items: Array<{ quantity: number; unitPrice: number; discountPercent?: number }>,
+    laborCharges = 0,
+    isVat = false,
+  ) {
+    const subtotal = items.reduce((sum, item) => {
+      const gross = item.quantity * item.unitPrice;
+      const discount = (item.discountPercent ?? 0) / 100;
+      return sum + Number((gross * (1 - discount)).toFixed(2));
+    }, 0);
     if (!isVat) {
       return { subtotal, laborCharges, vatAmount: 0, totalAmount: subtotal + laborCharges };
     }

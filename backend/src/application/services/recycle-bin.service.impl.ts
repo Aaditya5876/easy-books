@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
-import * as bcrypt from 'bcryptjs';
+import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../../../core/db/psql/prisma.client';
 
 export type RecycleBinItemType =
@@ -34,6 +34,7 @@ export class RecycleBinServiceImpl {
   }
 
   async restore(id: string, type: RecycleBinItemType, companyId: string) {
+    await this.verifyDeletedOwnership(id, type, companyId);
     const data = { deletedAt: null };
     switch (type) {
       case 'client':    return this.prisma.client.update({ where: { id }, data });
@@ -49,6 +50,7 @@ export class RecycleBinServiceImpl {
   }
 
   async permanentDelete(id: string, type: RecycleBinItemType, companyId: string) {
+    await this.verifyDeletedOwnership(id, type, companyId);
     switch (type) {
       case 'client':    return this.prisma.client.delete({ where: { id } });
       case 'vendor':    return this.prisma.vendor.delete({ where: { id } });
@@ -70,6 +72,22 @@ export class RecycleBinServiceImpl {
       }
       default: throw new BadRequestException('Unknown item type');
     }
+  }
+
+  private async verifyDeletedOwnership(id: string, type: RecycleBinItemType, companyId: string) {
+    const where = { id, companyId, deletedAt: { not: null } } as any;
+    let found: any = null;
+    switch (type) {
+      case 'client':    found = await this.prisma.client.findFirst({ where }); break;
+      case 'vendor':    found = await this.prisma.vendor.findFirst({ where }); break;
+      case 'employee':  found = await this.prisma.employee.findFirst({ where }); break;
+      case 'inventory': found = await this.prisma.inventoryItem.findFirst({ where }); break;
+      case 'sales':     found = await this.prisma.salesOrder.findFirst({ where }); break;
+      case 'purchase':  found = await this.prisma.purchaseOrder.findFirst({ where }); break;
+      case 'task':      found = await this.prisma.task.findFirst({ where }); break;
+      case 'memo':      found = await this.prisma.memoDocument.findFirst({ where }); break;
+    }
+    if (!found) throw new NotFoundException('Item not found in recycle bin');
   }
 
   async emptyBin(companyId: string) {

@@ -36,7 +36,7 @@ import { RolesGuard } from './guards/roles.guard';
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true, validate: validateEnv }),
-    ThrottlerModule.forRoot([{ ttl: 60000, limit: 10 }]),
+    ThrottlerModule.forRoot([{ ttl: 60000, limit: 200 }]),
     PinoLoggerModule,
     BullRootModule,
     AuthModule,

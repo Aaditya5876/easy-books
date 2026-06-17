@@ -1,17 +1,17 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../core/db/psql/prisma.client';
-import { adToBs } from '@easy-books/shared';
+import { adToBs, bsToAd } from '@easy-books/shared';
 
 function getCurrentBsMonthRange(): { startAd: Date; endAd: Date; bsMonth: string } {
   const now = new Date();
   const bsStr = adToBs(now);
   const [bsYear, bsMonth] = bsStr.split('-').map(Number);
 
-  // Approximate: BS month ≈ AD month - 2.5 months offset
-  // For accurate BS→AD conversion of month start/end, use simple approximation
-  // Start: first day of current AD month, End: last day of current AD month
-  const startAd = new Date(now.getFullYear(), now.getMonth(), 1);
-  const endAd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+  const startAd = bsToAd(`${bsYear}-${String(bsMonth).padStart(2, '0')}-01`);
+  const nextBsYear = bsMonth === 12 ? bsYear + 1 : bsYear;
+  const nextBsMonth = bsMonth === 12 ? 1 : bsMonth + 1;
+  const nextMonthStart = bsToAd(`${nextBsYear}-${String(nextBsMonth).padStart(2, '0')}-01`);
+  const endAd = new Date(nextMonthStart.getTime() - 1);
 
   return { startAd, endAd, bsMonth: `${bsYear}-${String(bsMonth).padStart(2, '0')}` };
 }
@@ -24,11 +24,10 @@ function getCurrentFiscalYearRange(): { startAd: Date; endAd: Date; fiscalYear: 
   const fyStart = bsMonth >= 4 ? bsYear : bsYear - 1;
   const fiscalYear = `${fyStart}-${String(fyStart + 1).slice(-2)}`;
 
-  // Shrawan (BS month 4) starts ~mid-July AD
-  // Approximate: FY start = July 16 of fyStart-57 AD, FY end = July 15 of (fyStart-57+1) AD
-  const adStartYear = fyStart - 57;
-  const startAd = new Date(adStartYear, 6, 16); // July 16
-  const endAd = new Date(adStartYear + 1, 6, 15, 23, 59, 59, 999); // July 15 next year
+  // Shrawan 1 (BS month 4, day 1) is the fiscal year start
+  const startAd = bsToAd(`${fyStart}-04-01`);
+  const nextFyStart = bsToAd(`${fyStart + 1}-04-01`);
+  const endAd = new Date(nextFyStart.getTime() - 1);
 
   return { startAd, endAd, fiscalYear };
 }

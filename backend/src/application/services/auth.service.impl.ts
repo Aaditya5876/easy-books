@@ -9,6 +9,7 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
+import * as crypto from 'crypto';
 import { LoginDTO, RegisterDTO } from '@easy-books/shared';
 import { IAuthService, AuthTokens } from '../../domain/services/auth.service';
 import { IUserRepository, USER_REPOSITORY } from '../../domain/repositories';
@@ -80,9 +81,11 @@ export class AuthServiceImpl implements IAuthService {
     const user = await this.userRepo.findByEmail(email);
     if (!user) throw new NotFoundException('User not found');
     if (user.emailVerified) throw new BadRequestException('Email already verified');
-    if (!user.verificationOtp || user.verificationOtp !== otp) {
-      throw new UnauthorizedException('Invalid verification code');
-    }
+    if (!user.verificationOtp) throw new UnauthorizedException('Invalid verification code');
+    const otpMatch =
+      user.verificationOtp.length === otp.length &&
+      crypto.timingSafeEqual(Buffer.from(user.verificationOtp), Buffer.from(otp));
+    if (!otpMatch) throw new UnauthorizedException('Invalid verification code');
     if (!user.otpExpiresAt || new Date() > user.otpExpiresAt) {
       throw new UnauthorizedException('Verification code has expired');
     }

@@ -18,7 +18,8 @@ export class TaskServiceImpl {
   }
 
   async create(dto: CreateTaskDTO) {
-    return this.prisma.task.create({ data: dto as any });
+    const dueDate = dto.dueDate ? new Date(dto.dueDate) : undefined;
+    return this.prisma.task.create({ data: { ...dto, dueDate } as any });
   }
 
   async update(id: string, companyId: string, dto: UpdateTaskDTO) {

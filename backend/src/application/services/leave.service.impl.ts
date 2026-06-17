@@ -2,6 +2,20 @@ import { Injectable, NotFoundException, BadRequestException } from '@nestjs/comm
 import { PrismaService } from '../../../core/db/psql/prisma.client';
 import { adToBs } from '@easy-books/shared';
 
+// Count working days between two dates, skipping Saturdays (Nepal weekly holiday)
+function countWorkingDays(start: Date, end: Date): number {
+  let count = 0;
+  const current = new Date(start);
+  current.setHours(0, 0, 0, 0);
+  const endDay = new Date(end);
+  endDay.setHours(23, 59, 59, 999);
+  while (current <= endDay) {
+    if (current.getDay() !== 6) count++; // 6 = Saturday
+    current.setDate(current.getDate() + 1);
+  }
+  return count;
+}
+
 // Nepal fiscal year: Shrawan (month 4) to Ashadh (month 3 of next year)
 function getFiscalYear(adDate: Date): string {
   const bsDateStr = adToBs(adDate);
@@ -152,7 +166,8 @@ export class LeaveServiceImpl {
   }) {
     const start = new Date(data.startDate);
     const end = new Date(data.endDate);
-    const totalDays = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+    if (end < start) throw new BadRequestException('End date must be after start date');
+    const totalDays = countWorkingDays(start, end);
 
     if (totalDays <= 0) throw new BadRequestException('End date must be after start date');
 
@@ -198,11 +213,16 @@ export class LeaveServiceImpl {
       });
 
       if (balance) {
+        if (Number(balance.remainingDays) < Number(req.totalDays)) {
+          throw new BadRequestException(
+            `Insufficient leave balance. Available: ${balance.remainingDays} days, Requested: ${req.totalDays} days`,
+          );
+        }
         const newUsed = Number(balance.usedDays) + Number(req.totalDays);
         const newRemaining = Number(balance.totalDays) - newUsed;
         await tx.leaveBalance.update({
           where: { id: balance.id },
-          data: { usedDays: newUsed, remainingDays: Math.max(0, newRemaining) },
+          data: { usedDays: newUsed, remainingDays: newRemaining },
         });
       }
     });

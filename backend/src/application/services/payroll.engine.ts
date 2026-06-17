@@ -5,6 +5,7 @@ import { Queue } from 'bull';
 import { QUEUE_NAMES } from '../../../core/queue/bull.client';
 import { adToBs, bsToAd } from '@easy-books/shared';
 import { LedgerPostingService } from './ledger-posting.service';
+import { PIT_SLABS_MARRIED, PIT_SLABS_UNMARRIED } from '../../domain/vo';
 
 export interface PayrollResult {
   employeeId: string;
@@ -33,22 +34,13 @@ function calculateSSF(basicSalary: number, employeeRate: number, employerRate: n
 }
 
 // Annual PIT on annual gross — returns monthly portion
+// Uses IRD Nepal slabs from vo.ts (PIT_SLABS_MARRIED / PIT_SLABS_UNMARRIED)
 function calculateMonthlyPIT(monthlyGross: number, isMarried: boolean): number {
   const annual = monthlyGross * 12;
+  const slabs = isMarried ? PIT_SLABS_MARRIED : PIT_SLABS_UNMARRIED;
   let tax = 0;
-
-  // Married threshold is Rs 600,000 vs Rs 500,000 for single
-  const firstSlabLimit = isMarried ? 600000 : 500000;
-
-  const slabs = [
-    { upTo: firstSlabLimit, rate: 0.01 },
-    { upTo: 700000, rate: 0.10 },
-    { upTo: 1000000, rate: 0.20 },
-    { upTo: 2000000, rate: 0.30 },
-    { upTo: Infinity, rate: 0.36 },
-  ];
-
   let prev = 0;
+
   for (const slab of slabs) {
     if (annual <= prev) break;
     const taxable = Math.min(annual, slab.upTo) - prev;
@@ -129,7 +121,7 @@ export class PayrollEngineService {
     const allowances = Object.values(allowancesJson).reduce((sum, v) => sum + Number(v), 0);
     const grossSalary = basicSalary + allowances;
 
-    const perDaySalary = basicSalary / workingDaysPerMonth;
+    const perDaySalary = grossSalary / workingDaysPerMonth;
     const absentDeduction = Number(((absentDays + halfDays * 0.5) * perDaySalary).toFixed(2));
 
     const overtimeHoursTotal = attendance.reduce((sum, a) => sum + Number(a.overtimeHours ?? 0), 0);
@@ -269,8 +261,8 @@ export class PayrollEngineService {
     }
 
     const basicSalary = Number(employee.basicSalary);
-    // Monthly accrual = basic / 12; total = monthly × months worked
-    const monthlyAccrual = Number((basicSalary / 12).toFixed(2));
+    // Nepal Labour Act: half a month's salary per year of service = basicSalary × months / 24
+    const monthlyAccrual = Number((basicSalary / 24).toFixed(2));
     const gratuityAmount = Number((monthlyAccrual * monthsWorked).toFixed(2));
 
     return {

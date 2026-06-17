@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../../core/db/psql/prisma.client';
 import { CreateBankAccountDTO, UpdateBankAccountDTO } from '@easy-books/shared';
 
@@ -19,10 +19,14 @@ export class BankAccountServiceImpl {
   }
 
   async update(id: string, companyId: string, dto: UpdateBankAccountDTO) {
+    const record = await this.prisma.bankAccount.findFirst({ where: { id, companyId } });
+    if (!record) throw new NotFoundException('Bank account not found');
     return this.prisma.bankAccount.update({ where: { id }, data: dto as any });
   }
 
   async remove(id: string, companyId: string) {
+    const record = await this.prisma.bankAccount.findFirst({ where: { id, companyId } });
+    if (!record) throw new NotFoundException('Bank account not found');
     return this.prisma.bankAccount.delete({ where: { id } });
   }
 }

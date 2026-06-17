@@ -70,28 +70,28 @@ export class DebitNoteServiceImpl {
   }
 
   private async generateNumber(companyId: string): Promise<string> {
-    const company = await this.prisma.company.findUnique({
-      where: { id: companyId },
-      select: { abbreviation: true, debitNoteSequence: true, sequenceFiscalYear: true },
-    });
-    if (!company) throw new BadRequestException('Company not found');
-
     const todayBs = adToBs(new Date());
     const bsYear = parseInt(todayBs.split('-')[0]);
     const bsMonth = parseInt(todayBs.split('-')[1]);
     const fyStart = bsMonth >= 4 ? bsYear : bsYear - 1;
     const currentFiscalYear = `${fyStart}-${String(fyStart + 1).slice(-2)}`;
 
-    const needsReset = company.sequenceFiscalYear !== currentFiscalYear;
-
-    const updated = await this.prisma.company.update({
-      where: { id: companyId },
-      data: {
-        debitNoteSequence: needsReset ? 1 : { increment: 1 },
-        sequenceFiscalYear: currentFiscalYear,
-      },
-      select: { abbreviation: true, debitNoteSequence: true },
-    });
+    const updated = await (this.prisma.$transaction as any)(async (tx: any) => {
+      const company = await tx.company.findUnique({
+        where: { id: companyId },
+        select: { abbreviation: true, debitNoteSequence: true, sequenceFiscalYear: true },
+      });
+      if (!company) throw new BadRequestException('Company not found');
+      const needsReset = company.sequenceFiscalYear !== currentFiscalYear;
+      return tx.company.update({
+        where: { id: companyId },
+        data: {
+          debitNoteSequence: needsReset ? 1 : { increment: 1 },
+          sequenceFiscalYear: currentFiscalYear,
+        },
+        select: { abbreviation: true, debitNoteSequence: true },
+      });
+    }, { isolationLevel: 'Serializable' });
 
     const abbr = (updated.abbreviation ?? 'DN').toUpperCase();
     const seq = String(updated.debitNoteSequence).padStart(4, '0');

@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../../core/db/psql/prisma.client';
 import { CreateTransactionDTO, UpdateTransactionDTO } from '@easy-books/shared';
 
@@ -15,14 +15,19 @@ export class TransactionServiceImpl {
   }
 
   async create(dto: CreateTransactionDTO) {
-    return this.prisma.transaction.create({ data: dto as any });
+    const dateAd = new Date(dto.dateAd);
+    return this.prisma.transaction.create({ data: { ...dto, dateAd } as any });
   }
 
   async update(id: string, companyId: string, dto: UpdateTransactionDTO) {
+    const record = await this.prisma.transaction.findFirst({ where: { id, companyId } });
+    if (!record) throw new NotFoundException('Transaction not found');
     return this.prisma.transaction.update({ where: { id }, data: dto as any });
   }
 
   async remove(id: string, companyId: string) {
+    const record = await this.prisma.transaction.findFirst({ where: { id, companyId } });
+    if (!record) throw new NotFoundException('Transaction not found');
     return this.prisma.transaction.delete({ where: { id } });
   }
 }
