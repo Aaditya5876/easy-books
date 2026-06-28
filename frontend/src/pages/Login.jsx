@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 const BUSINESS_TYPES = [
+  { value: 'SCHOOL', label: 'School / Educational Institution' },
   { value: 'RETAIL', label: 'Retail / General Store' },
   { value: 'PHARMACY', label: 'Pharmacy / Medical' },
   { value: 'ELECTRONICS', label: 'Electronics / Hardware' },

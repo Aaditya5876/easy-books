@@ -30,9 +30,21 @@ import Payroll from './pages/Payroll';
 import Quotations from './pages/Quotations';
 import Reports from './pages/Reports';
 import Workflow from './pages/Workflow';
+import SchoolDashboard from './pages/school/SchoolDashboard';
+import Students from './pages/school/Students';
+import Classes from './pages/school/Classes';
+import Fees from './pages/school/Fees';
+import Exams from './pages/school/Exams';
+import Subjects from './pages/school/Subjects';
+import StudentAttendance from './pages/school/StudentAttendance';
+import AcademicYear from './pages/school/AcademicYear';
+import Timetable from './pages/school/Timetable';
+import Notices from './pages/school/Notices';
+import Events from './pages/school/Events';
 
 const AuthenticatedApp = () => {
-  const { isLoadingAuth, isAuthenticated, navigateToLogin } = useAuth();
+  const { isLoadingAuth, isAuthenticated, navigateToLogin, user } = useAuth();
+  const isSchool = user?.defaultCompany?.businessType === 'SCHOOL';
 
   if (isLoadingAuth) {
     return (
@@ -50,27 +62,53 @@ const AuthenticatedApp = () => {
   return (
     <Routes>
       <Route element={<Layout />}>
-        <Route path="/" element={<Dashboard />} />
-        <Route path="/ledger" element={<Ledger />} />
-        <Route path="/transactions" element={<Transactions />} />
-        <Route path="/vendors" element={<Vendors />} />
-        <Route path="/clients" element={<Clients />} />
-        <Route path="/inventory" element={<Inventory />} />
-        <Route path="/purchase" element={<Purchase />} />
-        <Route path="/sales" element={<Sales />} />
-        <Route path="/quotations" element={<Quotations />} />
-        <Route path="/memo" element={<Memo />} />
-        <Route path="/communication" element={<Communication />} />
-        <Route path="/templates" element={<Templates />} />
-        <Route path="/calculator" element={<Calculator />} />
-        <Route path="/calendar" element={<CalendarPage />} />
-        <Route path="/currency" element={<CurrencyConverter />} />
-        <Route path="/settings" element={<Settings />} />
-        <Route path="/employees" element={<Employees />} />
-        <Route path="/attendance" element={<Attendance />} />
-        <Route path="/payroll" element={<Payroll />} />
-        <Route path="/reports" element={<Reports />} />
-        <Route path="/workflow" element={<Workflow />} />
+        {isSchool ? (
+          <>
+            <Route path="/" element={<SchoolDashboard />} />
+            <Route path="/students" element={<Students />} />
+            <Route path="/classes" element={<Classes />} />
+            <Route path="/subjects" element={<Subjects />} />
+            <Route path="/fees" element={<Fees />} />
+            <Route path="/exams" element={<Exams />} />
+            <Route path="/student-attendance" element={<StudentAttendance />} />
+            <Route path="/academic-years" element={<AcademicYear />} />
+            <Route path="/timetable" element={<Timetable />} />
+            <Route path="/notices" element={<Notices />} />
+            <Route path="/events" element={<Events />} />
+            {/* Shared modules — reused as-is */}
+            <Route path="/employees" element={<Employees />} />
+            <Route path="/attendance" element={<Attendance />} />
+            <Route path="/payroll" element={<Payroll />} />
+            <Route path="/ledger" element={<Ledger />} />
+            <Route path="/transactions" element={<Transactions />} />
+            <Route path="/reports" element={<Reports />} />
+            <Route path="/settings" element={<Settings />} />
+          </>
+        ) : (
+          <>
+            <Route path="/" element={<Dashboard />} />
+            <Route path="/ledger" element={<Ledger />} />
+            <Route path="/transactions" element={<Transactions />} />
+            <Route path="/vendors" element={<Vendors />} />
+            <Route path="/clients" element={<Clients />} />
+            <Route path="/inventory" element={<Inventory />} />
+            <Route path="/purchase" element={<Purchase />} />
+            <Route path="/sales" element={<Sales />} />
+            <Route path="/quotations" element={<Quotations />} />
+            <Route path="/memo" element={<Memo />} />
+            <Route path="/communication" element={<Communication />} />
+            <Route path="/templates" element={<Templates />} />
+            <Route path="/calculator" element={<Calculator />} />
+            <Route path="/calendar" element={<CalendarPage />} />
+            <Route path="/currency" element={<CurrencyConverter />} />
+            <Route path="/settings" element={<Settings />} />
+            <Route path="/employees" element={<Employees />} />
+            <Route path="/attendance" element={<Attendance />} />
+            <Route path="/payroll" element={<Payroll />} />
+            <Route path="/reports" element={<Reports />} />
+            <Route path="/workflow" element={<Workflow />} />
+          </>
+        )}
         <Route path="*" element={<PageNotFound />} />
       </Route>
     </Routes>

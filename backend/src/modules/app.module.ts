@@ -30,6 +30,7 @@ import { UserModule } from './user.module';
 import { DashboardModule } from './dashboard.module';
 import { UploadModule } from './upload.module';
 import { RecycleBinModule } from './recycle-bin.module';
+import { SchoolModule } from './school.module';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { RolesGuard } from './guards/roles.guard';
 
@@ -64,6 +65,7 @@ import { RolesGuard } from './guards/roles.guard';
     DashboardModule,
     UploadModule,
     RecycleBinModule,
+    SchoolModule,
   ],
   providers: [
     // Global guards — run on every request in order: Throttler, JWT, then Roles

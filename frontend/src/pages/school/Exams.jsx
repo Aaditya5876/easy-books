@@ -1,0 +1,393 @@
+import { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Plus, Trophy, Pencil, Trash2, FileText } from 'lucide-react';
+import { examResultsApi, studentsApi, subjectsApi } from '@/api';
+import { getActiveCompanyId } from '@/lib/companyContext';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { toast } from 'sonner';
+import { format } from 'date-fns';
+
+const EMPTY_FORM = { studentId: '', subjectId: '', examName: '', marksObtained: '', totalMarks: '', grade: '', remarks: '', examDate: '' };
+
+function ExamDialog({ open, onClose, initial, students, subjects, companyId }) {
+  const qc = useQueryClient();
+  const isEdit = !!initial?.id;
+  const [form, setForm] = useState(initial ? { ...EMPTY_FORM, ...initial, marksObtained: String(initial.marksObtained), totalMarks: String(initial.totalMarks) } : EMPTY_FORM);
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  const save = useMutation({
+    mutationFn: (data) =>
+      isEdit ? examResultsApi.update(initial.id, data) : examResultsApi.create(data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['exam-results'] });
+      toast.success(isEdit ? 'Result updated' : 'Result added');
+      onClose();
+    },
+    onError: (err) => toast.error(err?.response?.data?.message || 'Failed to save result'),
+  });
+
+  function handleSubmit(e) {
+    e.preventDefault();
+    if (!form.studentId) { toast.error('Select a student'); return; }
+    if (!form.examName.trim()) { toast.error('Exam name is required'); return; }
+    if (!form.marksObtained || !form.totalMarks) { toast.error('Enter marks'); return; }
+    save.mutate({
+      ...form,
+      marksObtained: parseFloat(form.marksObtained),
+      totalMarks: parseFloat(form.totalMarks),
+      companyId,
+    });
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onClose}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader><DialogTitle>{isEdit ? 'Edit Result' : 'Add Exam Result'}</DialogTitle></DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-3 pt-2">
+          <div className="space-y-1.5">
+            <Label>Student *</Label>
+            <select className="w-full border rounded-md px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring" value={form.studentId} onChange={e => set('studentId', e.target.value)}>
+              <option value="">Select student…</option>
+              {students.map(s => <option key={s.id} value={s.id}>{s.name} {s.rollNumber ? `(${s.rollNumber})` : ''}</option>)}
+            </select>
+          </div>
+          <div className="space-y-1.5">
+            <Label>Subject</Label>
+            <select className="w-full border rounded-md px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring" value={form.subjectId} onChange={e => set('subjectId', e.target.value)}>
+              <option value="">Select subject…</option>
+              {subjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </select>
+          </div>
+          <div className="space-y-1.5">
+            <Label>Exam Name *</Label>
+            <Input placeholder="e.g. First Terminal 2081" value={form.examName} onChange={e => set('examName', e.target.value)} />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label>Marks Obtained *</Label>
+              <Input type="number" placeholder="75" value={form.marksObtained} onChange={e => set('marksObtained', e.target.value)} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Total Marks *</Label>
+              <Input type="number" placeholder="100" value={form.totalMarks} onChange={e => set('totalMarks', e.target.value)} />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label>Grade</Label>
+              <Input placeholder="A+, A, B…" value={form.grade} onChange={e => set('grade', e.target.value)} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Exam Date</Label>
+              <Input type="date" value={form.examDate} onChange={e => set('examDate', e.target.value)} />
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <Label>Remarks</Label>
+            <Input placeholder="Optional remarks" value={form.remarks} onChange={e => set('remarks', e.target.value)} />
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
+            <Button type="submit" disabled={save.isPending}>{save.isPending ? 'Saving…' : isEdit ? 'Save' : 'Add Result'}</Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function printReportCard(data) {
+  const { student, results, company, examName, totalObtained, totalMax, percentage } = data;
+  const className = student.class ? `${student.class.name}${student.class.section ? ` (${student.class.section})` : ''}` : '—';
+  const rows = results.map(r => `
+    <tr>
+      <td style="border:1px solid #ddd;padding:8px">${r.subject?.name || '—'}</td>
+      <td style="border:1px solid #ddd;padding:8px;text-align:center">${Number(r.totalMarks).toFixed(0)}</td>
+      <td style="border:1px solid #ddd;padding:8px;text-align:center">${Number(r.marksObtained).toFixed(0)}</td>
+      <td style="border:1px solid #ddd;padding:8px;text-align:center">${r.grade || '—'}</td>
+      <td style="border:1px solid #ddd;padding:8px;text-align:center">${((Number(r.marksObtained) / Number(r.totalMarks)) * 100).toFixed(1)}%</td>
+      <td style="border:1px solid #ddd;padding:8px">${r.remarks || ''}</td>
+    </tr>
+  `).join('');
+
+  const w = window.open('', '_blank');
+  w.document.write(`
+    <html><head><title>Report Card</title>
+    <style>
+      body{font-family:serif;max-width:720px;margin:30px auto;padding:0 20px}
+      h2{text-align:center;margin:0}
+      .school{text-align:center;margin-bottom:20px}
+      .info{display:flex;justify-content:space-between;margin:16px 0;font-size:13px}
+      table{width:100%;border-collapse:collapse;font-size:13px;margin-top:16px}
+      th{background:#f0f0f0;border:1px solid #ddd;padding:8px;text-align:left}
+      .total{font-weight:bold;background:#f8f8f8}
+      .footer{margin-top:50px;display:flex;justify-content:space-between;font-size:13px}
+      @media print{button{display:none}}
+    </style></head>
+    <body>
+    <div class="school">
+      <h2>${company?.name || 'School'}</h2>
+      ${company?.address ? `<p style="margin:4px 0;font-size:13px">${company.address}</p>` : ''}
+      <h3 style="margin-top:12px">Report Card — ${examName}</h3>
+    </div>
+    <div class="info">
+      <div><strong>Student:</strong> ${student.name}</div>
+      <div><strong>Roll No:</strong> ${student.rollNumber || '—'}</div>
+      <div><strong>Class:</strong> ${className}</div>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>Subject</th><th style="text-align:center">Full Marks</th><th style="text-align:center">Obtained</th><th style="text-align:center">Grade</th><th style="text-align:center">%</th><th>Remarks</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rows}
+        <tr class="total">
+          <td style="border:1px solid #ddd;padding:8px"><strong>Total</strong></td>
+          <td style="border:1px solid #ddd;padding:8px;text-align:center"><strong>${totalMax}</strong></td>
+          <td style="border:1px solid #ddd;padding:8px;text-align:center"><strong>${totalObtained}</strong></td>
+          <td style="border:1px solid #ddd;padding:8px;text-align:center">—</td>
+          <td style="border:1px solid #ddd;padding:8px;text-align:center"><strong>${percentage}%</strong></td>
+          <td style="border:1px solid #ddd;padding:8px"></td>
+        </tr>
+      </tbody>
+    </table>
+    <div class="footer">
+      <div>Class Teacher: _______________</div>
+      <div>Principal: _______________</div>
+    </div>
+    <br><button onclick="window.print()">Print Report Card</button>
+    </body></html>
+  `);
+  w.document.close();
+  setTimeout(() => w.print(), 300);
+}
+
+function ReportCardDialog({ open, onClose, students, examNames }) {
+  const companyId = getActiveCompanyId();
+  const [studentId, setStudentId] = useState('');
+  const [examName, setExamName] = useState('');
+  const [fetching, setFetching] = useState(false);
+
+  const { data: cardData, isLoading } = useQuery({
+    queryKey: ['report-card', studentId, examName],
+    queryFn: () => examResultsApi.reportCard(studentId, examName).then(r => r.data),
+    enabled: fetching && !!studentId && !!examName,
+  });
+
+  const handleGenerate = () => {
+    if (!studentId) { toast.error('Select a student'); return; }
+    if (!examName) { toast.error('Select an exam'); return; }
+    setFetching(true);
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onClose}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader><DialogTitle>Generate Report Card</DialogTitle></DialogHeader>
+        <div className="space-y-4 pt-2">
+          <div className="space-y-1">
+            <Label>Student *</Label>
+            <select
+              className="w-full border rounded-md px-3 py-2 text-sm bg-background"
+              value={studentId}
+              onChange={e => { setStudentId(e.target.value); setFetching(false); }}
+            >
+              <option value="">Select student…</option>
+              {students.map(s => <option key={s.id} value={s.id}>{s.name} {s.rollNumber ? `(${s.rollNumber})` : ''}</option>)}
+            </select>
+          </div>
+          <div className="space-y-1">
+            <Label>Exam *</Label>
+            <select
+              className="w-full border rounded-md px-3 py-2 text-sm bg-background"
+              value={examName}
+              onChange={e => { setExamName(e.target.value); setFetching(false); }}
+            >
+              <option value="">Select exam…</option>
+              {examNames.map(n => <option key={n} value={n}>{n}</option>)}
+            </select>
+          </div>
+          {isLoading && <div className="text-sm text-muted-foreground">Loading report card…</div>}
+          {cardData && !isLoading && (
+            <div className="text-sm bg-muted rounded-md p-3">
+              <div className="font-medium">{cardData.student?.name}</div>
+              <div className="text-muted-foreground">{cardData.results?.length} subjects · {cardData.percentage}% overall</div>
+            </div>
+          )}
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Close</Button>
+          <Button onClick={handleGenerate} disabled={isLoading}>
+            {isLoading ? 'Loading…' : 'Generate'}
+          </Button>
+          {cardData && (
+            <Button onClick={() => printReportCard(cardData)}>
+              Print
+            </Button>
+          )}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+export default function Exams() {
+  const companyId = getActiveCompanyId();
+  const qc = useQueryClient();
+  const [dialog, setDialog] = useState(null);
+  const [reportCardDialog, setReportCardDialog] = useState(false);
+  const [filterExam, setFilterExam] = useState('');
+
+  const { data: students = [] } = useQuery({
+    queryKey: ['students', companyId],
+    queryFn: () => studentsApi.list().then(r => r.data),
+    enabled: !!companyId,
+  });
+
+  const { data: subjects = [] } = useQuery({
+    queryKey: ['subjects', companyId],
+    queryFn: () => subjectsApi.list().then(r => r.data),
+    enabled: !!companyId,
+  });
+
+  const { data: results = [], isLoading } = useQuery({
+    queryKey: ['exam-results', companyId, filterExam],
+    queryFn: () => examResultsApi.list(filterExam ? { examName: filterExam } : {}).then(r => r.data),
+    enabled: !!companyId,
+  });
+
+  const remove = useMutation({
+    mutationFn: (id) => examResultsApi.remove(id),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['exam-results'] }); toast.success('Result deleted'); },
+    onError: () => toast.error('Failed to delete'),
+  });
+
+  const examNames = [...new Set(results.map(r => r.examName))];
+  const filtered = filterExam ? results.filter(r => r.examName === filterExam) : results;
+
+  return (
+    <div className="p-6 space-y-5 max-w-6xl">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold">Exams & Results</h1>
+          <p className="text-muted-foreground text-sm mt-1">{results.length} results recorded</p>
+        </div>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => setReportCardDialog(true)}>
+            <FileText className="w-4 h-4 mr-2" /> Report Card
+          </Button>
+          <Button onClick={() => setDialog({ mode: 'add' })}>
+            <Plus className="w-4 h-4 mr-2" /> Add Result
+          </Button>
+        </div>
+      </div>
+
+      {examNames.length > 0 && (
+        <div className="flex gap-2 flex-wrap">
+          <button
+            onClick={() => setFilterExam('')}
+            className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${!filterExam ? 'bg-primary text-primary-foreground border-primary' : 'border-border hover:bg-muted'}`}
+          >
+            All Exams
+          </button>
+          {examNames.map(name => (
+            <button
+              key={name}
+              onClick={() => setFilterExam(name)}
+              className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${filterExam === name ? 'bg-primary text-primary-foreground border-primary' : 'border-border hover:bg-muted'}`}
+            >
+              {name}
+            </button>
+          ))}
+        </div>
+      )}
+
+      <div className="bg-card rounded-xl border border-border overflow-hidden">
+        {isLoading ? (
+          <div className="p-12 text-center text-muted-foreground text-sm">Loading results…</div>
+        ) : filtered.length === 0 ? (
+          <div className="p-12 text-center">
+            <Trophy className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
+            <p className="text-muted-foreground text-sm">No exam results yet</p>
+            <Button className="mt-4" size="sm" onClick={() => setDialog({ mode: 'add' })}>Add First Result</Button>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-muted/40 border-b border-border">
+                <tr>
+                  <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">Student</th>
+                  <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">Class</th>
+                  <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">Exam</th>
+                  <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">Subject</th>
+                  <th className="text-right px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">Marks</th>
+                  <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">Grade</th>
+                  <th className="px-5 py-3" />
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {filtered.map(r => (
+                  <tr key={r.id} className="hover:bg-muted/20">
+                    <td className="px-5 py-3 font-medium">{r.student?.name || '—'}</td>
+                    <td className="px-5 py-3 text-muted-foreground text-xs">
+                      {r.student?.class ? `${r.student.class.name}${r.student.class.section ? ` (${r.student.class.section})` : ''}` : '—'}
+                    </td>
+                    <td className="px-5 py-3 text-muted-foreground">{r.examName}</td>
+                    <td className="px-5 py-3 text-muted-foreground">{r.subject?.name || '—'}</td>
+                    <td className="px-5 py-3 text-right tabular-nums">
+                      {Number(r.marksObtained).toFixed(0)} / {Number(r.totalMarks).toFixed(0)}
+                      <span className="text-muted-foreground ml-1 text-xs">
+                        ({((Number(r.marksObtained) / Number(r.totalMarks)) * 100).toFixed(1)}%)
+                      </span>
+                    </td>
+                    <td className="px-5 py-3">
+                      {r.grade ? (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold bg-blue-100 text-blue-700">{r.grade}</span>
+                      ) : '—'}
+                    </td>
+                    <td className="px-5 py-3">
+                      <div className="flex gap-2 justify-end">
+                        <button onClick={() => setDialog({ mode: 'edit', result: r })} className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors">
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
+                        <button onClick={() => { if (window.confirm('Delete this result?')) remove.mutate(r.id); }} className="p-1.5 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600 transition-colors">
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {dialog && (
+        <ExamDialog
+          open={!!dialog}
+          onClose={() => setDialog(null)}
+          initial={dialog.mode === 'edit' ? dialog.result : null}
+          students={students}
+          subjects={subjects}
+          companyId={companyId}
+        />
+      )}
+
+      {reportCardDialog && (
+        <ReportCardDialog
+          open={reportCardDialog}
+          onClose={() => setReportCardDialog(false)}
+          students={students}
+          examNames={examNames}
+        />
+      )}
+    </div>
+  );
+}

@@ -5,11 +5,14 @@ import {
   Package, ShoppingCart, Receipt, FileText, MessageSquare,
   FileSpreadsheet, CalendarCheck, Banknote,
   ChevronLeft, ChevronRight, Building2, ChevronDown, ClipboardList, BarChart2,
-  Kanban, UserCircle, Settings, Shield
+  Kanban, UserCircle, Settings, Shield,
+  GraduationCap, School, BookMarked, DollarSign, ClipboardCheck, Trophy,
+  Megaphone, CalendarDays, Clock, CalendarCheck2
 } from 'lucide-react';
 import { cn } from "@/lib/utils";
 import { useRole } from "@/lib/useRole";
 import { usePreferences, isColorDark } from '@/lib/PreferencesContext';
+import { useAuth } from '@/lib/AuthContext';
 
 const navSections = [
   {
@@ -77,9 +80,73 @@ const navSections = [
     label: 'Admin',
     labelColor: 'text-rose-400',
     activeClass: 'bg-rose-600 text-white shadow-sm shadow-rose-900/30',
-    // visible to ADMIN only
     minRole: 'admin',
     items: [
+      { icon: Settings, label: 'Settings', path: '/settings' },
+    ]
+  },
+];
+
+const schoolNavSections = [
+  {
+    label: 'Main',
+    labelColor: 'text-sidebar-muted',
+    activeClass: 'bg-sidebar-primary text-sidebar-primary-foreground shadow-sm',
+    items: [
+      { icon: LayoutDashboard, label: 'Dashboard', path: '/' },
+      { icon: BarChart2, label: 'Reports', path: '/reports' },
+    ]
+  },
+  {
+    label: 'Academic',
+    labelColor: 'text-emerald-400',
+    activeClass: 'bg-emerald-600 text-white shadow-sm shadow-emerald-900/30',
+    items: [
+      { icon: GraduationCap, label: 'Students', path: '/students' },
+      { icon: School, label: 'Classes', path: '/classes' },
+      { icon: BookMarked, label: 'Subjects', path: '/subjects' },
+      { icon: CalendarCheck2, label: 'Attendance', path: '/student-attendance' },
+      { icon: Clock, label: 'Timetable', path: '/timetable' },
+      { icon: Trophy, label: 'Exams', path: '/exams' },
+    ]
+  },
+  {
+    label: 'Finance',
+    labelColor: 'text-blue-400',
+    activeClass: 'bg-blue-600 text-white shadow-sm shadow-blue-900/30',
+    items: [
+      { icon: DollarSign, label: 'Fees', path: '/fees' },
+      { icon: BookOpen, label: 'Ledger', path: '/ledger' },
+      { icon: ArrowLeftRight, label: 'Transactions', path: '/transactions' },
+    ]
+  },
+  {
+    label: 'Communication',
+    labelColor: 'text-amber-400',
+    activeClass: 'bg-amber-600 text-white shadow-sm shadow-amber-900/30',
+    items: [
+      { icon: Megaphone, label: 'Notices', path: '/notices' },
+      { icon: CalendarDays, label: 'Events', path: '/events' },
+    ]
+  },
+  {
+    label: 'HR',
+    labelColor: 'text-sky-400',
+    activeClass: 'bg-sky-600 text-white shadow-sm shadow-sky-900/30',
+    minRole: 'accountant',
+    items: [
+      { icon: UserCircle, label: 'Teachers', path: '/employees' },
+      { icon: CalendarCheck, label: 'Staff Attendance', path: '/attendance' },
+      { icon: Banknote, label: 'Payroll', path: '/payroll' },
+    ]
+  },
+  {
+    label: 'Admin',
+    labelColor: 'text-rose-400',
+    activeClass: 'bg-rose-600 text-white shadow-sm shadow-rose-900/30',
+    minRole: 'admin',
+    items: [
+      { icon: CalendarDays, label: 'Academic Years', path: '/academic-years' },
       { icon: Settings, label: 'Settings', path: '/settings' },
     ]
   },
@@ -89,6 +156,8 @@ export default function SidebarNav({ collapsed, onToggle }) {
   const location = useLocation();
   const { isAdmin, canViewPayroll } = useRole();
   const { prefs } = usePreferences();
+  const { user } = useAuth();
+  const isSchool = user?.defaultCompany?.businessType === 'SCHOOL';
   const [expandedSections, setExpandedSections] = useState(
     navSections.map(() => true)
   );
@@ -104,10 +173,11 @@ export default function SidebarNav({ collapsed, onToggle }) {
     });
   };
 
-  // Filter sections based on role
-  const visibleSections = navSections.filter(section => {
+  const activeSections = isSchool ? schoolNavSections : navSections;
+
+  const visibleSections = activeSections.filter(section => {
     if (section.minRole === 'admin') return isAdmin;
-    if (section.minRole === 'accountant') return canViewPayroll; // canViewPayroll = ACCOUNTANT + ADMIN
+    if (section.minRole === 'accountant') return canViewPayroll;
     return true;
   });
 
@@ -140,7 +210,7 @@ export default function SidebarNav({ collapsed, onToggle }) {
             <p className={cn(
               "text-[10px] leading-none",
               hasBgColor ? (bgIsDark ? "text-white/50" : "text-gray-600") : "text-sidebar-muted"
-            )}>ERP · CRM · HRM</p>
+            )}>{isSchool ? 'School Management' : 'ERP · CRM · HRM'}</p>
           </div>
         )}
       </div>

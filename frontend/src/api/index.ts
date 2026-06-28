@@ -205,6 +205,111 @@ export const recycleBinApi = {
     apiClient.post('/api/v1/recycle-bin/cleanup', { companyId: cid, days }),
 };
 
+// ── School APIs ──────────────────────────────────────────────────────────────
+
+export const schoolDashboardApi = {
+  summary: () => apiClient.get('/api/v1/school/dashboard', { params: { companyId: companyId() } }),
+};
+
+export const academicYearsApi = {
+  list: () => apiClient.get('/api/v1/school/academic-years', { params: { companyId: companyId() } }),
+  create: (data: object) => apiClient.post('/api/v1/school/academic-years', data),
+  update: (id: string, data: object) =>
+    apiClient.put(`/api/v1/school/academic-years/${id}`, data, { params: { companyId: companyId() } }),
+  remove: (id: string) =>
+    apiClient.delete(`/api/v1/school/academic-years/${id}`, { params: { companyId: companyId() } }),
+};
+
+export const studentsApi = {
+  list: (classId?: string) => apiClient.get('/api/v1/school/students', { params: { companyId: companyId(), classId } }),
+  get: (id: string) => apiClient.get(`/api/v1/school/students/${id}`, { params: { companyId: companyId() } }),
+  create: (data: object) => apiClient.post('/api/v1/school/students', data),
+  update: (id: string, data: object) => apiClient.put(`/api/v1/school/students/${id}`, data),
+  remove: (id: string) => apiClient.delete(`/api/v1/school/students/${id}`, { params: { companyId: companyId() } }),
+  promote: (data: object) => apiClient.post('/api/v1/school/students/promote', data),
+};
+
+export const classesApi = {
+  list: () => apiClient.get('/api/v1/school/classes', { params: { companyId: companyId() } }),
+  create: (data: object) => apiClient.post('/api/v1/school/classes', data),
+  update: (id: string, data: object) => apiClient.put(`/api/v1/school/classes/${id}`, data),
+  remove: (id: string) => apiClient.delete(`/api/v1/school/classes/${id}`, { params: { companyId: companyId() } }),
+};
+
+export const subjectsApi = {
+  list: () => apiClient.get('/api/v1/school/subjects', { params: { companyId: companyId() } }),
+  create: (data: object) => apiClient.post('/api/v1/school/subjects', data),
+  update: (id: string, data: object) => apiClient.put(`/api/v1/school/subjects/${id}`, data),
+  remove: (id: string) => apiClient.delete(`/api/v1/school/subjects/${id}`, { params: { companyId: companyId() } }),
+};
+
+export const studentAttendanceApi = {
+  get: (classId: string, date: string) =>
+    apiClient.get('/api/v1/school/attendance', { params: { companyId: companyId(), classId, date } }),
+  save: (data: object) => apiClient.post('/api/v1/school/attendance', data),
+  report: (classId: string, startDate: string, endDate: string) =>
+    apiClient.get('/api/v1/school/attendance/report', { params: { companyId: companyId(), classId, startDate, endDate } }),
+  summary: (studentId: string, month?: string) =>
+    apiClient.get('/api/v1/school/attendance/summary', { params: { companyId: companyId(), studentId, month } }),
+};
+
+export const feesApi = {
+  listStructures: (classId?: string) =>
+    apiClient.get('/api/v1/school/fee-structures', { params: { companyId: companyId(), classId } }),
+  createStructure: (data: object) => apiClient.post('/api/v1/school/fee-structures', data),
+  updateStructure: (id: string, data: object) => apiClient.put(`/api/v1/school/fee-structures/${id}`, data),
+  removeStructure: (id: string) =>
+    apiClient.delete(`/api/v1/school/fee-structures/${id}`, { params: { companyId: companyId() } }),
+  listInvoices: (params?: object) =>
+    apiClient.get('/api/v1/school/fee-invoices', { params: { companyId: companyId(), ...params } }),
+  createInvoice: (data: object) => apiClient.post('/api/v1/school/fee-invoices', data),
+  recordPayment: (id: string, data: object) =>
+    apiClient.patch(`/api/v1/school/fee-invoices/${id}/payment`, data),
+  generateBulk: (data: object) => apiClient.post('/api/v1/school/fee-invoices/bulk', data),
+  receipt: (id: string) =>
+    apiClient.get(`/api/v1/school/fee-invoices/${id}/receipt`, { params: { companyId: companyId() } }),
+};
+
+export const examResultsApi = {
+  list: (params?: object) =>
+    apiClient.get('/api/v1/school/exam-results', { params: { companyId: companyId(), ...params } }),
+  reportCard: (studentId: string, examName: string) =>
+    apiClient.get('/api/v1/school/exam-results/report-card', {
+      params: { companyId: companyId(), studentId, examName },
+    }),
+  create: (data: object) => apiClient.post('/api/v1/school/exam-results', data),
+  update: (id: string, data: object) => apiClient.put(`/api/v1/school/exam-results/${id}`, data),
+  remove: (id: string) =>
+    apiClient.delete(`/api/v1/school/exam-results/${id}`, { params: { companyId: companyId() } }),
+};
+
+export const timetableApi = {
+  get: (classId: string) =>
+    apiClient.get('/api/v1/school/timetable', { params: { companyId: companyId(), classId } }),
+  upsert: (data: object) => apiClient.post('/api/v1/school/timetable', data),
+  remove: (id: string) =>
+    apiClient.delete(`/api/v1/school/timetable/${id}`, { params: { companyId: companyId() } }),
+};
+
+export const noticesApi = {
+  list: () => apiClient.get('/api/v1/school/notices', { params: { companyId: companyId() } }),
+  create: (data: object) => apiClient.post('/api/v1/school/notices', data),
+  update: (id: string, data: object) =>
+    apiClient.put(`/api/v1/school/notices/${id}`, data, { params: { companyId: companyId() } }),
+  remove: (id: string) =>
+    apiClient.delete(`/api/v1/school/notices/${id}`, { params: { companyId: companyId() } }),
+};
+
+export const schoolEventsApi = {
+  list: (month?: string) =>
+    apiClient.get('/api/v1/school/events', { params: { companyId: companyId(), month } }),
+  create: (data: object) => apiClient.post('/api/v1/school/events', data),
+  update: (id: string, data: object) =>
+    apiClient.put(`/api/v1/school/events/${id}`, data, { params: { companyId: companyId() } }),
+  remove: (id: string) =>
+    apiClient.delete(`/api/v1/school/events/${id}`, { params: { companyId: companyId() } }),
+};
+
 // Users (ADMIN only)
 export const usersApi = {
   list: (cid: string) => apiClient.get('/api/v1/users', { params: { companyId: cid } }),
