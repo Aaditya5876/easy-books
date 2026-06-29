@@ -310,6 +310,66 @@ export const schoolEventsApi = {
     apiClient.delete(`/api/v1/school/events/${id}`, { params: { companyId: companyId() } }),
 };
 
+export const studyMaterialsApi = {
+  list: (classId?: string, subjectId?: string) =>
+    apiClient.get('/api/v1/school/study-materials', { params: { companyId: companyId(), classId, subjectId } }),
+  create: (data: object) => apiClient.post('/api/v1/school/study-materials', data),
+  remove: (id: string) =>
+    apiClient.delete(`/api/v1/school/study-materials/${id}`, { params: { companyId: companyId() } }),
+};
+
+export const homeworkApi = {
+  list: (classId?: string, subjectId?: string) =>
+    apiClient.get('/api/v1/school/homework', { params: { companyId: companyId(), classId, subjectId } }),
+  create: (data: object) => apiClient.post('/api/v1/school/homework', data),
+  update: (id: string, data: object) =>
+    apiClient.put(`/api/v1/school/homework/${id}`, data, { params: { companyId: companyId() } }),
+  remove: (id: string) =>
+    apiClient.delete(`/api/v1/school/homework/${id}`, { params: { companyId: companyId() } }),
+};
+
+export const libraryApi = {
+  listBooks: () => apiClient.get('/api/v1/school/library/books', { params: { companyId: companyId() } }),
+  createBook: (data: object) => apiClient.post('/api/v1/school/library/books', data),
+  updateBook: (id: string, data: object) =>
+    apiClient.put(`/api/v1/school/library/books/${id}`, data, { params: { companyId: companyId() } }),
+  removeBook: (id: string) =>
+    apiClient.delete(`/api/v1/school/library/books/${id}`, { params: { companyId: companyId() } }),
+  listIssues: (status?: string) =>
+    apiClient.get('/api/v1/school/library/issues', { params: { companyId: companyId(), status } }),
+  issueBook: (data: object) => apiClient.post('/api/v1/school/library/issues', data),
+  returnBook: (id: string, fine?: number) =>
+    apiClient.patch(`/api/v1/school/library/issues/${id}/return`, { fine }, { params: { companyId: companyId() } }),
+};
+
+export const hostelApi = {
+  listRooms: () => apiClient.get('/api/v1/school/hostel/rooms', { params: { companyId: companyId() } }),
+  createRoom: (data: object) => apiClient.post('/api/v1/school/hostel/rooms', data),
+  updateRoom: (id: string, data: object) =>
+    apiClient.put(`/api/v1/school/hostel/rooms/${id}`, data, { params: { companyId: companyId() } }),
+  removeRoom: (id: string) =>
+    apiClient.delete(`/api/v1/school/hostel/rooms/${id}`, { params: { companyId: companyId() } }),
+  listAllocations: (roomId?: string) =>
+    apiClient.get('/api/v1/school/hostel/allocations', { params: { companyId: companyId(), roomId } }),
+  allocate: (data: object) => apiClient.post('/api/v1/school/hostel/allocations', data),
+  deallocate: (id: string) =>
+    apiClient.delete(`/api/v1/school/hostel/allocations/${id}`, { params: { companyId: companyId() } }),
+};
+
+export const transportApi = {
+  listRoutes: () => apiClient.get('/api/v1/school/transport/routes', { params: { companyId: companyId() } }),
+  createRoute: (data: object) => apiClient.post('/api/v1/school/transport/routes', data),
+  updateRoute: (id: string, data: object) =>
+    apiClient.put(`/api/v1/school/transport/routes/${id}`, data, { params: { companyId: companyId() } }),
+  removeRoute: (id: string) =>
+    apiClient.delete(`/api/v1/school/transport/routes/${id}`, { params: { companyId: companyId() } }),
+  listAssignments: (routeId?: string) =>
+    apiClient.get('/api/v1/school/transport/assignments', { params: { companyId: companyId(), routeId } }),
+  assign: (data: object) => apiClient.post('/api/v1/school/transport/assignments', data),
+  unassign: (id: string) =>
+    apiClient.delete(`/api/v1/school/transport/assignments/${id}`, { params: { companyId: companyId() } }),
+};
+
 // Users (ADMIN only)
 export const usersApi = {
   list: (cid: string) => apiClient.get('/api/v1/users', { params: { companyId: cid } }),

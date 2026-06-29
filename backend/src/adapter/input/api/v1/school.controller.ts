@@ -348,4 +348,189 @@ export class SchoolController {
   deleteEvent(@Param('id') id: string, @Query('companyId') companyId: string) {
     return this.service.deleteEvent(id, companyId);
   }
+
+  // ── Study Materials ───────────────────────────────────────────────────────────
+
+  @Get('study-materials')
+  @ApiQuery({ name: 'companyId', required: true })
+  @ApiQuery({ name: 'classId', required: false })
+  @ApiQuery({ name: 'subjectId', required: false })
+  listStudyMaterials(
+    @Query('companyId') companyId: string,
+    @Query('classId') classId?: string,
+    @Query('subjectId') subjectId?: string,
+  ) {
+    return this.service.listStudyMaterials(companyId, classId, subjectId);
+  }
+
+  @Post('study-materials')
+  createStudyMaterial(@Body() body: any) {
+    return this.service.createStudyMaterial(body);
+  }
+
+  @Delete('study-materials/:id')
+  @ApiQuery({ name: 'companyId', required: true })
+  deleteStudyMaterial(@Param('id') id: string, @Query('companyId') companyId: string) {
+    return this.service.deleteStudyMaterial(id, companyId);
+  }
+
+  // ── Homework ──────────────────────────────────────────────────────────────────
+
+  @Get('homework')
+  @ApiQuery({ name: 'companyId', required: true })
+  @ApiQuery({ name: 'classId', required: false })
+  @ApiQuery({ name: 'subjectId', required: false })
+  listHomework(
+    @Query('companyId') companyId: string,
+    @Query('classId') classId?: string,
+    @Query('subjectId') subjectId?: string,
+  ) {
+    return this.service.listHomework(companyId, classId, subjectId);
+  }
+
+  @Post('homework')
+  createHomework(@Body() body: any) {
+    return this.service.createHomework(body);
+  }
+
+  @Put('homework/:id')
+  @ApiQuery({ name: 'companyId', required: true })
+  updateHomework(@Param('id') id: string, @Query('companyId') companyId: string, @Body() body: any) {
+    return this.service.updateHomework(id, companyId, body);
+  }
+
+  @Delete('homework/:id')
+  @ApiQuery({ name: 'companyId', required: true })
+  deleteHomework(@Param('id') id: string, @Query('companyId') companyId: string) {
+    return this.service.deleteHomework(id, companyId);
+  }
+
+  // ── Library ───────────────────────────────────────────────────────────────────
+
+  @Get('library/books')
+  @ApiQuery({ name: 'companyId', required: true })
+  listBooks(@Query('companyId') companyId: string) {
+    return this.service.listBooks(companyId);
+  }
+
+  @Post('library/books')
+  createBook(@Body() body: any) {
+    return this.service.createBook(body);
+  }
+
+  @Put('library/books/:id')
+  @ApiQuery({ name: 'companyId', required: true })
+  updateBook(@Param('id') id: string, @Query('companyId') companyId: string, @Body() body: any) {
+    return this.service.updateBook(id, companyId, body);
+  }
+
+  @Delete('library/books/:id')
+  @ApiQuery({ name: 'companyId', required: true })
+  deleteBook(@Param('id') id: string, @Query('companyId') companyId: string) {
+    return this.service.deleteBook(id, companyId);
+  }
+
+  @Get('library/issues')
+  @ApiQuery({ name: 'companyId', required: true })
+  @ApiQuery({ name: 'status', required: false })
+  listIssues(@Query('companyId') companyId: string, @Query('status') status?: string) {
+    return this.service.listIssues(companyId, status);
+  }
+
+  @Post('library/issues')
+  issueBook(@Body() body: any) {
+    return this.service.issueBook(body);
+  }
+
+  @Patch('library/issues/:id/return')
+  @ApiQuery({ name: 'companyId', required: true })
+  returnBook(@Param('id') id: string, @Query('companyId') companyId: string, @Body() body: { fine?: number }) {
+    return this.service.returnBook(id, companyId, body.fine);
+  }
+
+  // ── Hostel ────────────────────────────────────────────────────────────────────
+
+  @Get('hostel/rooms')
+  @ApiQuery({ name: 'companyId', required: true })
+  listHostelRooms(@Query('companyId') companyId: string) {
+    return this.service.listHostelRooms(companyId);
+  }
+
+  @Post('hostel/rooms')
+  createHostelRoom(@Body() body: any) {
+    return this.service.createHostelRoom(body);
+  }
+
+  @Put('hostel/rooms/:id')
+  @ApiQuery({ name: 'companyId', required: true })
+  updateHostelRoom(@Param('id') id: string, @Query('companyId') companyId: string, @Body() body: any) {
+    return this.service.updateHostelRoom(id, companyId, body);
+  }
+
+  @Delete('hostel/rooms/:id')
+  @ApiQuery({ name: 'companyId', required: true })
+  deleteHostelRoom(@Param('id') id: string, @Query('companyId') companyId: string) {
+    return this.service.deleteHostelRoom(id, companyId);
+  }
+
+  @Get('hostel/allocations')
+  @ApiQuery({ name: 'companyId', required: true })
+  @ApiQuery({ name: 'roomId', required: false })
+  listHostelAllocations(@Query('companyId') companyId: string, @Query('roomId') roomId?: string) {
+    return this.service.listHostelAllocations(companyId, roomId);
+  }
+
+  @Post('hostel/allocations')
+  allocateStudent(@Body() body: any) {
+    return this.service.allocateStudent(body);
+  }
+
+  @Delete('hostel/allocations/:id')
+  @ApiQuery({ name: 'companyId', required: true })
+  deallocateStudent(@Param('id') id: string, @Query('companyId') companyId: string) {
+    return this.service.deallocateStudent(id, companyId);
+  }
+
+  // ── Transport ─────────────────────────────────────────────────────────────────
+
+  @Get('transport/routes')
+  @ApiQuery({ name: 'companyId', required: true })
+  listTransportRoutes(@Query('companyId') companyId: string) {
+    return this.service.listTransportRoutes(companyId);
+  }
+
+  @Post('transport/routes')
+  createTransportRoute(@Body() body: any) {
+    return this.service.createTransportRoute(body);
+  }
+
+  @Put('transport/routes/:id')
+  @ApiQuery({ name: 'companyId', required: true })
+  updateTransportRoute(@Param('id') id: string, @Query('companyId') companyId: string, @Body() body: any) {
+    return this.service.updateTransportRoute(id, companyId, body);
+  }
+
+  @Delete('transport/routes/:id')
+  @ApiQuery({ name: 'companyId', required: true })
+  deleteTransportRoute(@Param('id') id: string, @Query('companyId') companyId: string) {
+    return this.service.deleteTransportRoute(id, companyId);
+  }
+
+  @Get('transport/assignments')
+  @ApiQuery({ name: 'companyId', required: true })
+  @ApiQuery({ name: 'routeId', required: false })
+  listTransportAssignments(@Query('companyId') companyId: string, @Query('routeId') routeId?: string) {
+    return this.service.listTransportAssignments(companyId, routeId);
+  }
+
+  @Post('transport/assignments')
+  assignStudentTransport(@Body() body: any) {
+    return this.service.assignStudentTransport(body);
+  }
+
+  @Delete('transport/assignments/:id')
+  @ApiQuery({ name: 'companyId', required: true })
+  removeStudentTransport(@Param('id') id: string, @Query('companyId') companyId: string) {
+    return this.service.removeStudentTransport(id, companyId);
+  }
 }

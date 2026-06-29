@@ -513,4 +513,224 @@ export class SchoolService {
   async deleteEvent(id: string, companyId: string) {
     return this.prisma.schoolEvent.deleteMany({ where: { id, companyId } });
   }
+
+  // ── Study Materials ───────────────────────────────────────────────────────────
+
+  async listStudyMaterials(companyId: string, classId?: string, subjectId?: string) {
+    return this.prisma.studyMaterial.findMany({
+      where: { companyId, ...(classId ? { classId } : {}), ...(subjectId ? { subjectId } : {}) },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        class: { select: { name: true, section: true } },
+        subject: { select: { name: true } },
+      },
+    });
+  }
+
+  async createStudyMaterial(data: { companyId: string; title: string; fileUrl: string; fileType?: string; classId?: string; subjectId?: string; description?: string; uploadedBy?: string }) {
+    return this.prisma.studyMaterial.create({ data });
+  }
+
+  async deleteStudyMaterial(id: string, companyId: string) {
+    const mat = await this.prisma.studyMaterial.findFirst({ where: { id, companyId } });
+    if (!mat) throw new NotFoundException('Study material not found');
+    return this.prisma.studyMaterial.delete({ where: { id } });
+  }
+
+  // ── Homework ──────────────────────────────────────────────────────────────────
+
+  async listHomework(companyId: string, classId?: string, subjectId?: string) {
+    return this.prisma.homework.findMany({
+      where: { companyId, ...(classId ? { classId } : {}), ...(subjectId ? { subjectId } : {}) },
+      orderBy: { dueDate: 'asc' },
+      include: {
+        class: { select: { name: true, section: true } },
+        subject: { select: { name: true } },
+      },
+    });
+  }
+
+  async createHomework(data: { companyId: string; classId: string; title: string; dueDate: Date; subjectId?: string; description?: string; fileUrl?: string }) {
+    return this.prisma.homework.create({ data });
+  }
+
+  async updateHomework(id: string, companyId: string, data: any) {
+    const hw = await this.prisma.homework.findFirst({ where: { id, companyId } });
+    if (!hw) throw new NotFoundException('Homework not found');
+    return this.prisma.homework.update({ where: { id }, data });
+  }
+
+  async deleteHomework(id: string, companyId: string) {
+    const hw = await this.prisma.homework.findFirst({ where: { id, companyId } });
+    if (!hw) throw new NotFoundException('Homework not found');
+    return this.prisma.homework.delete({ where: { id } });
+  }
+
+  // ── Library ───────────────────────────────────────────────────────────────────
+
+  async listBooks(companyId: string) {
+    return this.prisma.book.findMany({
+      where: { companyId },
+      orderBy: { title: 'asc' },
+      include: { _count: { select: { bookIssues: true } } },
+    });
+  }
+
+  async createBook(data: { companyId: string; title: string; author?: string; isbn?: string; category?: string; totalCopies?: number; availableCopies?: number; shelfLocation?: string }) {
+    return this.prisma.book.create({ data });
+  }
+
+  async updateBook(id: string, companyId: string, data: any) {
+    const book = await this.prisma.book.findFirst({ where: { id, companyId } });
+    if (!book) throw new NotFoundException('Book not found');
+    return this.prisma.book.update({ where: { id }, data });
+  }
+
+  async deleteBook(id: string, companyId: string) {
+    const book = await this.prisma.book.findFirst({ where: { id, companyId } });
+    if (!book) throw new NotFoundException('Book not found');
+    const activeIssues = await this.prisma.bookIssue.count({ where: { bookId: id, status: 'ISSUED' } });
+    if (activeIssues > 0) throw new BadRequestException('Cannot delete — book has active issues');
+    return this.prisma.book.delete({ where: { id } });
+  }
+
+  async listIssues(companyId: string, status?: string) {
+    return this.prisma.bookIssue.findMany({
+      where: { companyId, ...(status ? { status } : {}) },
+      orderBy: { issueDate: 'desc' },
+      include: {
+        book: { select: { title: true, author: true } },
+        student: { select: { name: true, rollNumber: true } },
+      },
+    });
+  }
+
+  async issueBook(data: { companyId: string; bookId: string; studentId?: string; memberName?: string; dueDate: Date }) {
+    const book = await this.prisma.book.findFirst({ where: { id: data.bookId, companyId: data.companyId } });
+    if (!book) throw new NotFoundException('Book not found');
+    if (book.availableCopies < 1) throw new BadRequestException('No copies available');
+    const [issue] = await this.prisma.$transaction([
+      this.prisma.bookIssue.create({ data: { ...data, status: 'ISSUED', issueDate: new Date() } }),
+      this.prisma.book.update({ where: { id: data.bookId }, data: { availableCopies: { decrement: 1 } } }),
+    ]);
+    return issue;
+  }
+
+  async returnBook(id: string, companyId: string, fine?: number) {
+    const issue = await this.prisma.bookIssue.findFirst({ where: { id, companyId, status: 'ISSUED' } });
+    if (!issue) throw new NotFoundException('Issue record not found or already returned');
+    await this.prisma.$transaction([
+      this.prisma.bookIssue.update({ where: { id }, data: { status: 'RETURNED', returnDate: new Date(), fine: fine ?? 0 } }),
+      this.prisma.book.update({ where: { id: issue.bookId }, data: { availableCopies: { increment: 1 } } }),
+    ]);
+    return { returned: true };
+  }
+
+  // ── Hostel ────────────────────────────────────────────────────────────────────
+
+  async listHostelRooms(companyId: string) {
+    return this.prisma.hostelRoom.findMany({
+      where: { companyId },
+      orderBy: { roomNumber: 'asc' },
+      include: { _count: { select: { allocations: { where: { isActive: true } } } } },
+    });
+  }
+
+  async createHostelRoom(data: { companyId: string; roomNumber: string; floor?: string; capacity?: number; monthlyFee?: number; facilities?: string }) {
+    return this.prisma.hostelRoom.create({ data });
+  }
+
+  async updateHostelRoom(id: string, companyId: string, data: any) {
+    const room = await this.prisma.hostelRoom.findFirst({ where: { id, companyId } });
+    if (!room) throw new NotFoundException('Room not found');
+    return this.prisma.hostelRoom.update({ where: { id }, data });
+  }
+
+  async deleteHostelRoom(id: string, companyId: string) {
+    const room = await this.prisma.hostelRoom.findFirst({ where: { id, companyId } });
+    if (!room) throw new NotFoundException('Room not found');
+    const active = await this.prisma.hostelAllocation.count({ where: { roomId: id, isActive: true } });
+    if (active > 0) throw new BadRequestException('Cannot delete — room has active residents');
+    return this.prisma.hostelRoom.delete({ where: { id } });
+  }
+
+  async listHostelAllocations(companyId: string, roomId?: string) {
+    return this.prisma.hostelAllocation.findMany({
+      where: { companyId, isActive: true, ...(roomId ? { roomId } : {}) },
+      orderBy: { startDate: 'desc' },
+      include: {
+        room: { select: { roomNumber: true, floor: true } },
+        student: { select: { name: true, rollNumber: true, class: { select: { name: true, section: true } } } },
+      },
+    });
+  }
+
+  async allocateStudent(data: { companyId: string; roomId: string; studentId: string; startDate?: Date }) {
+    const room = await this.prisma.hostelRoom.findFirst({
+      where: { id: data.roomId, companyId: data.companyId },
+      include: { _count: { select: { allocations: { where: { isActive: true } } } } },
+    });
+    if (!room) throw new NotFoundException('Room not found');
+    if (room._count.allocations >= room.capacity) throw new BadRequestException('Room is at full capacity');
+    const existing = await this.prisma.hostelAllocation.findFirst({ where: { studentId: data.studentId, companyId: data.companyId, isActive: true } });
+    if (existing) throw new BadRequestException('Student already has an active hostel allocation');
+    return this.prisma.hostelAllocation.create({ data: { ...data, startDate: data.startDate ?? new Date() } });
+  }
+
+  async deallocateStudent(id: string, companyId: string) {
+    const alloc = await this.prisma.hostelAllocation.findFirst({ where: { id, companyId } });
+    if (!alloc) throw new NotFoundException('Allocation not found');
+    return this.prisma.hostelAllocation.update({ where: { id }, data: { isActive: false, endDate: new Date() } });
+  }
+
+  // ── Transport ─────────────────────────────────────────────────────────────────
+
+  async listTransportRoutes(companyId: string) {
+    return this.prisma.transportRoute.findMany({
+      where: { companyId },
+      orderBy: { routeName: 'asc' },
+      include: { _count: { select: { studentTransports: { where: { isActive: true } } } } },
+    });
+  }
+
+  async createTransportRoute(data: { companyId: string; routeName: string; description?: string; stops?: string; monthlyFee?: number; driverName?: string; vehicleNumber?: string }) {
+    return this.prisma.transportRoute.create({ data });
+  }
+
+  async updateTransportRoute(id: string, companyId: string, data: any) {
+    const route = await this.prisma.transportRoute.findFirst({ where: { id, companyId } });
+    if (!route) throw new NotFoundException('Route not found');
+    return this.prisma.transportRoute.update({ where: { id }, data });
+  }
+
+  async deleteTransportRoute(id: string, companyId: string) {
+    const route = await this.prisma.transportRoute.findFirst({ where: { id, companyId } });
+    if (!route) throw new NotFoundException('Route not found');
+    const active = await this.prisma.studentTransport.count({ where: { routeId: id, isActive: true } });
+    if (active > 0) throw new BadRequestException('Cannot delete — route has active student assignments');
+    return this.prisma.transportRoute.delete({ where: { id } });
+  }
+
+  async listTransportAssignments(companyId: string, routeId?: string) {
+    return this.prisma.studentTransport.findMany({
+      where: { companyId, isActive: true, ...(routeId ? { routeId } : {}) },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        route: { select: { routeName: true } },
+        student: { select: { name: true, rollNumber: true, class: { select: { name: true, section: true } } } },
+      },
+    });
+  }
+
+  async assignStudentTransport(data: { companyId: string; routeId: string; studentId: string; pickupStop?: string }) {
+    const existing = await this.prisma.studentTransport.findFirst({ where: { studentId: data.studentId, companyId: data.companyId, isActive: true } });
+    if (existing) throw new BadRequestException('Student is already assigned to a transport route');
+    return this.prisma.studentTransport.create({ data });
+  }
+
+  async removeStudentTransport(id: string, companyId: string) {
+    const assignment = await this.prisma.studentTransport.findFirst({ where: { id, companyId } });
+    if (!assignment) throw new NotFoundException('Assignment not found');
+    return this.prisma.studentTransport.update({ where: { id }, data: { isActive: false } });
+  }
 }

@@ -7,7 +7,8 @@ import {
   ChevronLeft, ChevronRight, Building2, ChevronDown, ClipboardList, BarChart2,
   Kanban, UserCircle, Settings, Shield,
   GraduationCap, School, BookMarked, DollarSign, ClipboardCheck, Trophy,
-  Megaphone, CalendarDays, Clock, CalendarCheck2
+  Megaphone, CalendarDays, Clock, CalendarCheck2,
+  FolderOpen, Library, Home, Bus
 } from 'lucide-react';
 import { cn } from "@/lib/utils";
 import { useRole } from "@/lib/useRole";
@@ -108,6 +109,8 @@ const schoolNavSections = [
       { icon: CalendarCheck2, label: 'Attendance', path: '/student-attendance' },
       { icon: Clock, label: 'Timetable', path: '/timetable' },
       { icon: Trophy, label: 'Exams', path: '/exams' },
+      { icon: FolderOpen, label: 'Study Materials', path: '/study-materials' },
+      { icon: ClipboardList, label: 'Homework', path: '/homework' },
     ]
   },
   {
@@ -127,6 +130,9 @@ const schoolNavSections = [
     items: [
       { icon: Megaphone, label: 'Notices', path: '/notices' },
       { icon: CalendarDays, label: 'Events', path: '/events' },
+      { icon: Library, label: 'Library', path: '/library' },
+      { icon: Home, label: 'Hostel', path: '/hostel' },
+      { icon: Bus, label: 'Transport', path: '/transport' },
     ]
   },
   {

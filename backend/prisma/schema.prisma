@@ -225,6 +225,14 @@ model Company {
   timetableEntries     TimetableEntry[]
   schoolNotices        SchoolNotice[]
   schoolEvents         SchoolEvent[]
+  studyMaterials       StudyMaterial[]
+  homeworks            Homework[]
+  books                Book[]
+  bookIssues           BookIssue[]
+  hostelRooms          HostelRoom[]
+  hostelAllocations    HostelAllocation[]
+  transportRoutes      TransportRoute[]
+  studentTransports    StudentTransport[]
 
   @@map("companies")
 }
@@ -904,6 +912,8 @@ model SchoolClass {
   feeStructures      FeeStructure[]
   studentAttendances StudentAttendance[]
   timetableEntries   TimetableEntry[]
+  studyMaterials     StudyMaterial[]
+  homeworks          Homework[]
 
   @@unique([companyId, name, section])
   @@map("school_classes")
@@ -931,6 +941,9 @@ model Student {
   feeInvoices        FeeInvoice[]
   examResults        ExamResult[]
   studentAttendances StudentAttendance[]
+  bookIssues         BookIssue[]
+  hostelAllocations  HostelAllocation[]
+  studentTransports  StudentTransport[]
 
   @@unique([companyId, rollNumber])
   @@map("students")
@@ -947,6 +960,8 @@ model Subject {
 
   examResults      ExamResult[]
   timetableEntries TimetableEntry[]
+  studyMaterials   StudyMaterial[]
+  homeworks        Homework[]
 
   @@unique([companyId, name])
   @@map("subjects")
@@ -1118,4 +1133,151 @@ model InventoryAdjustment {
   createdAt       DateTime      @default(now())
 
   @@map("inventory_adjustments")
+}
+
+// ─── School Extended: Study Materials, Homework, Library, Hostel, Transport ──
+
+model StudyMaterial {
+  id          String       @id @default(uuid())
+  companyId   String
+  company     Company      @relation(fields: [companyId], references: [id])
+  classId     String?
+  class       SchoolClass? @relation(fields: [classId], references: [id])
+  subjectId   String?
+  subject     Subject?     @relation(fields: [subjectId], references: [id])
+  title       String
+  description String?
+  fileUrl     String
+  fileType    String?
+  uploadedBy  String?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  @@map("study_materials")
+}
+
+model Homework {
+  id          String       @id @default(uuid())
+  companyId   String
+  company     Company      @relation(fields: [companyId], references: [id])
+  classId     String
+  class       SchoolClass  @relation(fields: [classId], references: [id])
+  subjectId   String?
+  subject     Subject?     @relation(fields: [subjectId], references: [id])
+  title       String
+  description String?      @db.Text
+  dueDate     DateTime
+  fileUrl     String?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  @@map("homeworks")
+}
+
+model Book {
+  id              String      @id @default(uuid())
+  companyId       String
+  company         Company     @relation(fields: [companyId], references: [id])
+  title           String
+  author          String?
+  isbn            String?
+  category        String?
+  totalCopies     Int         @default(1)
+  availableCopies Int         @default(1)
+  shelfLocation   String?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  bookIssues BookIssue[]
+
+  @@map("books")
+}
+
+model BookIssue {
+  id         String    @id @default(uuid())
+  companyId  String
+  company    Company   @relation(fields: [companyId], references: [id])
+  bookId     String
+  book       Book      @relation(fields: [bookId], references: [id])
+  studentId  String?
+  student    Student?  @relation(fields: [studentId], references: [id])
+  memberName String?
+  issueDate  DateTime  @default(now())
+  dueDate    DateTime
+  returnDate DateTime?
+  fine       Decimal   @default(0) @db.Decimal(8, 2)
+  status     String    @default("ISSUED")
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  @@map("book_issues")
+}
+
+model HostelRoom {
+  id          String   @id @default(uuid())
+  companyId   String
+  company     Company  @relation(fields: [companyId], references: [id])
+  roomNumber  String
+  floor       String?
+  capacity    Int      @default(4)
+  monthlyFee  Decimal  @default(0) @db.Decimal(10, 2)
+  facilities  String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  allocations HostelAllocation[]
+
+  @@unique([companyId, roomNumber])
+  @@map("hostel_rooms")
+}
+
+model HostelAllocation {
+  id        String     @id @default(uuid())
+  companyId String
+  company   Company    @relation(fields: [companyId], references: [id])
+  roomId    String
+  room      HostelRoom @relation(fields: [roomId], references: [id])
+  studentId String
+  student   Student    @relation(fields: [studentId], references: [id])
+  startDate DateTime   @default(now())
+  endDate   DateTime?
+  isActive  Boolean    @default(true)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  @@map("hostel_allocations")
+}
+
+model TransportRoute {
+  id            String   @id @default(uuid())
+  companyId     String
+  company       Company  @relation(fields: [companyId], references: [id])
+  routeName     String
+  description   String?
+  stops         String?
+  monthlyFee    Decimal  @default(0) @db.Decimal(10, 2)
+  driverName    String?
+  vehicleNumber String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  studentTransports StudentTransport[]
+
+  @@map("transport_routes")
+}
+
+model StudentTransport {
+  id         String         @id @default(uuid())
+  companyId  String
+  company    Company        @relation(fields: [companyId], references: [id])
+  routeId    String
+  route      TransportRoute @relation(fields: [routeId], references: [id])
+  studentId  String
+  student    Student        @relation(fields: [studentId], references: [id])
+  pickupStop String?
+  isActive   Boolean        @default(true)
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+
+  @@map("student_transports")
 }

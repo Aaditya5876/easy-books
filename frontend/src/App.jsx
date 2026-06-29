@@ -41,6 +41,11 @@ import AcademicYear from './pages/school/AcademicYear';
 import Timetable from './pages/school/Timetable';
 import Notices from './pages/school/Notices';
 import Events from './pages/school/Events';
+import StudyMaterials from './pages/school/StudyMaterials';
+import Homework from './pages/school/Homework';
+import Library from './pages/school/Library';
+import Hostel from './pages/school/Hostel';
+import Transport from './pages/school/Transport';
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isAuthenticated, navigateToLogin, user } = useAuth();
@@ -75,6 +80,11 @@ const AuthenticatedApp = () => {
             <Route path="/timetable" element={<Timetable />} />
             <Route path="/notices" element={<Notices />} />
             <Route path="/events" element={<Events />} />
+            <Route path="/study-materials" element={<StudyMaterials />} />
+            <Route path="/homework" element={<Homework />} />
+            <Route path="/library" element={<Library />} />
+            <Route path="/hostel" element={<Hostel />} />
+            <Route path="/transport" element={<Transport />} />
             {/* Shared modules — reused as-is */}
             <Route path="/employees" element={<Employees />} />
             <Route path="/attendance" element={<Attendance />} />
