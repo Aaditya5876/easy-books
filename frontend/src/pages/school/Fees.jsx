@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Pencil, Trash2, DollarSign, CheckCircle, Printer, Users } from 'lucide-react';
-import { feesApi, classesApi, studentsApi } from '@/api';
+import { Plus, Pencil, Trash2, DollarSign, CheckCircle, Printer, Users, Sparkles } from 'lucide-react';
+import { feesApi, classesApi, studentsApi, aiApi } from '@/api';
 import { getActiveCompanyId } from '@/lib/companyContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -508,10 +508,22 @@ export default function Fees() {
                             </span>
                           </td>
                           <td className="px-5 py-3">
-                            <div className="flex gap-1">
+                            <div className="flex gap-1 flex-wrap">
                               {inv.status !== 'PAID' && inv.status !== 'WAIVED' && (
                                 <Button size="sm" variant="outline" onClick={() => setPayDialog(inv)}>
                                   <CheckCircle className="w-3.5 h-3.5 mr-1" /> Pay
+                                </Button>
+                              )}
+                              {inv.status !== 'PAID' && inv.status !== 'WAIVED' && (
+                                <Button size="sm" variant="ghost" className="text-violet-600 hover:bg-violet-50" onClick={async () => {
+                                  try {
+                                    await feesApi.sendFeeReminderSms(inv.id);
+                                    toast.success('SMS reminder sent to guardian');
+                                  } catch (e) {
+                                    toast.error(e?.response?.data?.message || 'SMS failed — check SMS_API_KEY');
+                                  }
+                                }} title="Send SMS Reminder">
+                                  <Sparkles className="w-3.5 h-3.5" />
                                 </Button>
                               )}
                               <Button size="sm" variant="ghost" onClick={() => {

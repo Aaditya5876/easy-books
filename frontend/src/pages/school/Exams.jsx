@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Trophy, Pencil, Trash2, FileText } from 'lucide-react';
-import { examResultsApi, studentsApi, subjectsApi } from '@/api';
+import { Plus, Trophy, Pencil, Trash2, FileText, Sparkles } from 'lucide-react';
+import { examResultsApi, studentsApi, subjectsApi, aiApi } from '@/api';
 import { getActiveCompanyId } from '@/lib/companyContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -173,6 +173,8 @@ function ReportCardDialog({ open, onClose, students, examNames }) {
   const [studentId, setStudentId] = useState('');
   const [examName, setExamName] = useState('');
   const [fetching, setFetching] = useState(false);
+  const [aiComment, setAiComment] = useState('');
+  const [aiLoading, setAiLoading] = useState(false);
 
   const { data: cardData, isLoading } = useQuery({
     queryKey: ['report-card', studentId, examName],
@@ -185,6 +187,27 @@ function ReportCardDialog({ open, onClose, students, examNames }) {
     if (!examName) { toast.error('Select an exam'); return; }
     setFetching(true);
   };
+
+  async function generateComment() {
+    if (!cardData) { toast.error('Generate report card first'); return; }
+    setAiLoading(true);
+    try {
+      const res = await aiApi.reportCardComment({
+        studentName: cardData.student?.name,
+        examResults: cardData.results?.map(r => ({
+          subject: r.subject?.name || 'Subject',
+          marksObtained: r.marksObtained,
+          totalMarks: r.totalMarks,
+          grade: r.grade,
+        })) || [],
+      });
+      setAiComment(res.data.comment);
+    } catch (e) {
+      toast.error(e?.response?.data?.message || 'AI comment failed');
+    } finally {
+      setAiLoading(false);
+    }
+  }
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
@@ -215,9 +238,23 @@ function ReportCardDialog({ open, onClose, students, examNames }) {
           </div>
           {isLoading && <div className="text-sm text-muted-foreground">Loading report card…</div>}
           {cardData && !isLoading && (
-            <div className="text-sm bg-muted rounded-md p-3">
+            <div className="text-sm bg-muted rounded-md p-3 space-y-2">
               <div className="font-medium">{cardData.student?.name}</div>
               <div className="text-muted-foreground">{cardData.results?.length} subjects · {cardData.percentage}% overall</div>
+              <button
+                type="button"
+                onClick={generateComment}
+                disabled={aiLoading}
+                className="flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full bg-violet-100 text-violet-700 hover:bg-violet-200 transition-colors disabled:opacity-50 mt-1"
+              >
+                <Sparkles className="w-3 h-3" />
+                {aiLoading ? 'Writing…' : 'AI Remark'}
+              </button>
+              {aiComment && (
+                <div className="mt-2 p-2 bg-violet-50 rounded border border-violet-100 text-xs text-gray-700 italic">
+                  "{aiComment}"
+                </div>
+              )}
             </div>
           )}
         </div>

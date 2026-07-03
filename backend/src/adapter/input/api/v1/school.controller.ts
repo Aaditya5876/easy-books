@@ -323,6 +323,19 @@ export class SchoolController {
     return this.service.deleteNotice(id, companyId);
   }
 
+  @Post('notices/:id/broadcast-sms')
+  @Roles('ADMIN')
+  broadcastNoticeSms(@Param('id') id: string, @Query('companyId') companyId: string) {
+    return this.service.broadcastNoticeSms(id, companyId);
+  }
+
+  // ── SMS ───────────────────────────────────────────────────────────────────────
+
+  @Post('sms/fee-reminder/:invoiceId')
+  sendFeeReminderSms(@Param('invoiceId') invoiceId: string, @Query('companyId') companyId: string) {
+    return this.service.sendFeeReminderSms(invoiceId, companyId);
+  }
+
   // ── Events ────────────────────────────────────────────────────────────────────
 
   @Get('events')

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Pencil, Trash2, ClipboardList, AlertCircle } from 'lucide-react';
-import { homeworkApi, classesApi, subjectsApi } from '@/api';
+import { Plus, Pencil, Trash2, ClipboardList, AlertCircle, Sparkles } from 'lucide-react';
+import { homeworkApi, classesApi, subjectsApi, aiApi } from '@/api';
 import { getActiveCompanyId } from '@/lib/companyContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -23,6 +23,28 @@ function HomeworkDialog({ open, onClose, initial, classes, subjects, companyId }
     fileUrl: initial.fileUrl || '',
   } : EMPTY);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const [aiLoading, setAiLoading] = useState(false);
+
+  async function generateDescription() {
+    if (!form.title.trim()) { toast.error('Enter a title first'); return; }
+    const className = classes.find(c => c.id === form.classId)?.name || '';
+    const subjectName = subjects.find(s => s.id === form.subjectId)?.name || '';
+    setAiLoading(true);
+    try {
+      const res = await aiApi.homeworkDescription({
+        subject: subjectName || 'General',
+        topic: form.title,
+        className: className || 'students',
+        dueDate: form.dueDate || 'next class',
+      });
+      set('description', res.data.description);
+      toast.success('Description generated');
+    } catch (e) {
+      toast.error(e?.response?.data?.message || 'AI failed — check GEMINI_API_KEY');
+    } finally {
+      setAiLoading(false);
+    }
+  }
 
   const save = useMutation({
     mutationFn: (data) => isEdit ? homeworkApi.update(initial.id, data) : homeworkApi.create(data),
@@ -72,7 +94,18 @@ function HomeworkDialog({ open, onClose, initial, classes, subjects, companyId }
             <Input type="date" value={form.dueDate} onChange={e => set('dueDate', e.target.value)} />
           </div>
           <div className="space-y-1.5">
-            <Label>Description</Label>
+            <div className="flex items-center justify-between">
+              <Label>Description</Label>
+              <button
+                type="button"
+                onClick={generateDescription}
+                disabled={aiLoading}
+                className="flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full bg-violet-50 text-violet-700 hover:bg-violet-100 transition-colors disabled:opacity-50"
+              >
+                <Sparkles className="w-3 h-3" />
+                {aiLoading ? 'Writing…' : 'Write with AI'}
+              </button>
+            </div>
             <textarea
               className="w-full border rounded-md px-3 py-2 text-sm bg-background min-h-[80px] resize-none focus:outline-none focus:ring-2 focus:ring-ring"
               placeholder="Instructions or details for students…"

@@ -233,6 +233,7 @@ model Company {
   hostelAllocations    HostelAllocation[]
   transportRoutes      TransportRoute[]
   studentTransports    StudentTransport[]
+  portalUsers          PortalUser[]
 
   @@map("companies")
 }
@@ -944,6 +945,7 @@ model Student {
   bookIssues         BookIssue[]
   hostelAllocations  HostelAllocation[]
   studentTransports  StudentTransport[]
+  portalUsers        PortalUser[]
 
   @@unique([companyId, rollNumber])
   @@map("students")
@@ -1280,4 +1282,21 @@ model StudentTransport {
   updatedAt  DateTime       @updatedAt
 
   @@map("student_transports")
+}
+
+model PortalUser {
+  id           String   @id @default(uuid())
+  companyId    String
+  company      Company  @relation(fields: [companyId], references: [id])
+  studentId    String
+  student      Student  @relation(fields: [studentId], references: [id])
+  type         String   @default("PARENT")
+  phone        String
+  passwordHash String
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([studentId, type])
+  @@map("portal_users")
 }

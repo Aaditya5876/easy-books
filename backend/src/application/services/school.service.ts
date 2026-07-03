@@ -1,9 +1,13 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../../core/db/psql/prisma.client';
+import { SmsService } from './sms.service';
 
 @Injectable()
 export class SchoolService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly sms: SmsService,
+  ) {}
 
   // ── Dashboard ────────────────────────────────────────────────────────────────
 
@@ -228,7 +232,55 @@ export class SchoolService {
       }),
     );
     await this.prisma.$transaction(ops);
+
+    // Fire absent SMS alerts in the background (non-blocking)
+    const absentEntries = entries.filter(e => e.status === 'ABSENT');
+    if (absentEntries.length > 0) {
+      const company = await this.prisma.company.findUnique({ where: { id: companyId }, select: { name: true } });
+      const students = await this.prisma.student.findMany({
+        where: { id: { in: absentEntries.map(e => e.studentId) }, companyId },
+        select: { id: true, name: true, guardianPhone: true },
+      });
+      const dateStr = new Date(date).toLocaleDateString('en-NP', { day: 'numeric', month: 'short', year: 'numeric' });
+      for (const student of students) {
+        if (student.guardianPhone) {
+          this.sms.sendAbsentAlert(student.name, student.guardianPhone, dateStr, company?.name).catch(() => {});
+        }
+      }
+    }
+
     return { saved: entries.length };
+  }
+
+  async sendFeeReminderSms(invoiceId: string, companyId: string): Promise<{ sent: boolean }> {
+    const invoice = await this.prisma.feeInvoice.findFirst({
+      where: { id: invoiceId, companyId },
+      include: { student: { select: { name: true, guardianPhone: true } }, company: { select: { name: true } } },
+    });
+    if (!invoice) throw new NotFoundException('Invoice not found');
+    const phone = (invoice.student as any)?.guardianPhone;
+    if (!phone) throw new BadRequestException('No guardian phone on record');
+    const amount = Number(invoice.totalAmount) - Number(invoice.paidAmount);
+    const sent = await this.sms.sendFeeReminder(
+      (invoice.student as any)?.name,
+      phone,
+      amount,
+      invoice.month,
+      (invoice.company as any)?.name,
+    );
+    return { sent };
+  }
+
+  async broadcastNoticeSms(noticeId: string, companyId: string): Promise<{ sent: number; failed: number }> {
+    const notice = await this.prisma.schoolNotice.findFirst({ where: { id: noticeId, companyId }, include: { company: { select: { name: true } } } });
+    if (!notice) throw new NotFoundException('Notice not found');
+
+    const students = await this.prisma.student.findMany({
+      where: { companyId, status: 'ACTIVE' },
+      select: { guardianPhone: true },
+    });
+    const phones = [...new Set(students.map(s => s.guardianPhone).filter(Boolean))] as string[];
+    return this.sms.sendNotice(phones, (notice as any).title, (notice.company as any)?.name);
   }
 
   async getAttendanceSummary(companyId: string, studentId: string, month?: string) {

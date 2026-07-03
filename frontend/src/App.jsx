@@ -46,6 +46,16 @@ import Homework from './pages/school/Homework';
 import Library from './pages/school/Library';
 import Hostel from './pages/school/Hostel';
 import Transport from './pages/school/Transport';
+import PortalLogin from './pages/portal/PortalLogin';
+import PortalLayout from './components/layout/PortalLayout';
+import PortalDashboard from './pages/portal/PortalDashboard';
+import PortalAttendance from './pages/portal/PortalAttendance';
+import PortalFees from './pages/portal/PortalFees';
+import PortalResults from './pages/portal/PortalResults';
+import PortalHomework from './pages/portal/PortalHomework';
+import PortalNotices from './pages/portal/PortalNotices';
+import PortalTimetable from './pages/portal/PortalTimetable';
+import PaymentReturn from './pages/portal/PaymentReturn';
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isAuthenticated, navigateToLogin, user } = useAuth();
@@ -135,6 +145,18 @@ function App() {
           <Router>
             <Routes>
               <Route path="/login" element={<Login />} />
+              {/* Portal — completely separate auth from admin */}
+              <Route path="/portal/login" element={<PortalLogin />} />
+              <Route path="/portal" element={<PortalLayout />}>
+                <Route index element={<PortalDashboard />} />
+                <Route path="attendance" element={<PortalAttendance />} />
+                <Route path="fees" element={<PortalFees />} />
+                <Route path="results" element={<PortalResults />} />
+                <Route path="homework" element={<PortalHomework />} />
+                <Route path="notices" element={<PortalNotices />} />
+                <Route path="timetable" element={<PortalTimetable />} />
+              </Route>
+              <Route path="/portal/payment/return" element={<PaymentReturn />} />
               <Route path="*" element={<AuthenticatedApp />} />
             </Routes>
           </Router>

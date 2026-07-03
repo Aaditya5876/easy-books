@@ -268,6 +268,8 @@ export const feesApi = {
   generateBulk: (data: object) => apiClient.post('/api/v1/school/fee-invoices/bulk', data),
   receipt: (id: string) =>
     apiClient.get(`/api/v1/school/fee-invoices/${id}/receipt`, { params: { companyId: companyId() } }),
+  sendFeeReminderSms: (invoiceId: string) =>
+    apiClient.post(`/api/v1/school/sms/fee-reminder/${invoiceId}`, { companyId: companyId() }),
 };
 
 export const examResultsApi = {
@@ -298,6 +300,8 @@ export const noticesApi = {
     apiClient.put(`/api/v1/school/notices/${id}`, data, { params: { companyId: companyId() } }),
   remove: (id: string) =>
     apiClient.delete(`/api/v1/school/notices/${id}`, { params: { companyId: companyId() } }),
+  broadcastSms: (id: string) =>
+    apiClient.post(`/api/v1/school/notices/${id}/broadcast-sms`, { companyId: companyId() }),
 };
 
 export const schoolEventsApi = {
@@ -376,4 +380,39 @@ export const usersApi = {
   invite: (cid: string, data: object) => apiClient.post('/api/v1/users/invite', data, { params: { companyId: cid } }),
   changeRole: (userId: string, cid: string, role: string) =>
     apiClient.patch(`/api/v1/users/${userId}/role`, { role }, { params: { companyId: cid } }),
+};
+
+// ── Portal API (parent/student token-based auth) ─────────────────────────────
+
+const portalToken = () => localStorage.getItem('portal_token') || '';
+const portalHeaders = () => ({ Authorization: `Bearer ${portalToken()}` });
+
+export const portalApi = {
+  login: (data: object) => apiClient.post('/api/v1/portal/login', data),
+  setPassword: (data: object) => apiClient.post('/api/v1/portal/set-password', data),
+  me: () => apiClient.get('/api/v1/portal/me', { headers: portalHeaders() }),
+  attendance: () => apiClient.get('/api/v1/portal/attendance', { headers: portalHeaders() }),
+  fees: () => apiClient.get('/api/v1/portal/fees', { headers: portalHeaders() }),
+  results: () => apiClient.get('/api/v1/portal/results', { headers: portalHeaders() }),
+  homework: (classId?: string) => apiClient.get('/api/v1/portal/homework', { headers: portalHeaders(), params: { classId } }),
+  notices: () => apiClient.get('/api/v1/portal/notices', { headers: portalHeaders() }),
+  timetable: (classId?: string) => apiClient.get('/api/v1/portal/timetable', { headers: portalHeaders(), params: { classId } }),
+  initiateEsewa: (invoiceId: string) =>
+    apiClient.post(`/api/v1/portal/pay/esewa/${invoiceId}`, {}, { headers: portalHeaders() }),
+  verifyEsewa: (data: { data: string; invoiceId: string; companyId: string }) =>
+    apiClient.post('/api/v1/portal/pay/esewa/verify', data),
+  initiateKhalti: (invoiceId: string) =>
+    apiClient.post(`/api/v1/portal/pay/khalti/${invoiceId}`, {}, { headers: portalHeaders() }),
+  verifyKhalti: (data: { pidx: string; invoiceId: string; companyId: string }) =>
+    apiClient.post('/api/v1/portal/pay/khalti/verify', data),
+};
+
+// ── AI API (admin only, requires GEMINI_API_KEY on server) ───────────────────
+
+export const aiApi = {
+  generateNotice: (data: object) => apiClient.post('/api/v1/ai/generate-notice', data),
+  reportCardComment: (data: object) => apiClient.post('/api/v1/ai/report-card-comment', data),
+  classInsights: (data: object) => apiClient.post('/api/v1/ai/class-insights', data),
+  feeReminder: (data: object) => apiClient.post('/api/v1/ai/fee-reminder', data),
+  homeworkDescription: (data: object) => apiClient.post('/api/v1/ai/homework-description', data),
 };

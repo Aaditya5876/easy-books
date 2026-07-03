@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Search, Pencil, Trash2, GraduationCap, X, ArrowRight } from 'lucide-react';
-import { studentsApi, classesApi } from '@/api';
+import { Plus, Search, Pencil, Trash2, GraduationCap, X, ArrowRight, KeyRound } from 'lucide-react';
+import { studentsApi, classesApi, portalApi } from '@/api';
 import { getActiveCompanyId } from '@/lib/companyContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -126,6 +126,63 @@ function StudentDialog({ open, onClose, initial, classes, companyId }) {
   );
 }
 
+function PortalPasswordDialog({ open, onClose, student, companyId }) {
+  const [form, setForm] = useState({ phone: student?.guardianPhone || '', password: '', type: 'PARENT' });
+  const [loading, setLoading] = useState(false);
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    if (!form.phone.trim()) { toast.error('Phone number is required'); return; }
+    if (form.password.length < 6) { toast.error('Password must be at least 6 characters'); return; }
+    setLoading(true);
+    try {
+      await portalApi.setPassword({ studentId: student.id, ...form, companyId });
+      toast.success(`Portal access set for ${student.name}'s ${form.type.toLowerCase()}`);
+      onClose();
+    } catch (err) {
+      toast.error(err?.response?.data?.message || 'Failed to set password');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onClose}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Set Portal Access</DialogTitle>
+        </DialogHeader>
+        <p className="text-sm text-muted-foreground -mt-1">
+          Set login credentials for <strong>{student?.name}</strong>'s portal access.
+        </p>
+        <form onSubmit={handleSubmit} className="space-y-4 pt-1">
+          <div className="space-y-1.5">
+            <Label>Access Type</Label>
+            <select className="w-full border rounded-md px-3 py-2 text-sm bg-background" value={form.type} onChange={e => set('type', e.target.value)}>
+              <option value="PARENT">Parent</option>
+              <option value="STUDENT">Student</option>
+            </select>
+          </div>
+          <div className="space-y-1.5">
+            <Label>Phone Number *</Label>
+            <Input placeholder="98XXXXXXXX" value={form.phone} onChange={e => set('phone', e.target.value)} />
+            <p className="text-xs text-muted-foreground">This will be the login username</p>
+          </div>
+          <div className="space-y-1.5">
+            <Label>Password *</Label>
+            <Input type="password" placeholder="Min 6 characters" value={form.password} onChange={e => set('password', e.target.value)} />
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
+            <Button type="submit" disabled={loading}>{loading ? 'Setting…' : 'Set Portal Access'}</Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function PromoteDialog({ open, onClose, classes, companyId }) {
   const qc = useQueryClient();
   const [fromClassId, setFromClassId] = useState('');
@@ -220,6 +277,7 @@ export default function Students() {
   const [filterClass, setFilterClass] = useState('');
   const [dialog, setDialog] = useState(null);
   const [promoteDialog, setPromoteDialog] = useState(false);
+  const [portalDialog, setPortalDialog] = useState(null);
 
   const { data: classes = [] } = useQuery({
     queryKey: ['classes', companyId],
@@ -350,6 +408,13 @@ export default function Students() {
                     <td className="px-5 py-3">
                       <div className="flex items-center gap-2 justify-end">
                         <button
+                          onClick={() => setPortalDialog(student)}
+                          className="p-1.5 rounded hover:bg-emerald-50 text-muted-foreground hover:text-emerald-700 transition-colors"
+                          title="Set Portal Access"
+                        >
+                          <KeyRound className="w-3.5 h-3.5" />
+                        </button>
+                        <button
                           onClick={() => setDialog({ mode: 'edit', student })}
                           className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
                         >
@@ -388,6 +453,15 @@ export default function Students() {
           open={promoteDialog}
           onClose={() => setPromoteDialog(false)}
           classes={classes}
+          companyId={companyId}
+        />
+      )}
+
+      {portalDialog && (
+        <PortalPasswordDialog
+          open={!!portalDialog}
+          onClose={() => setPortalDialog(null)}
+          student={portalDialog}
           companyId={companyId}
         />
       )}

@@ -1,7 +1,10 @@
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { GraduationCap, DollarSign, AlertCircle, Users, TrendingUp, CheckCircle } from 'lucide-react';
-import { schoolDashboardApi } from '@/api';
+import { GraduationCap, DollarSign, AlertCircle, Users, TrendingUp, CheckCircle, Sparkles } from 'lucide-react';
+import { schoolDashboardApi, aiApi } from '@/api';
 import { getActiveCompanyId } from '@/lib/companyContext';
+import { toast } from 'sonner';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 function StatCard({ icon: Icon, label, value, sub, color = 'blue', loading }) {
   const colors = {
@@ -33,6 +36,9 @@ function StatCard({ icon: Icon, label, value, sub, color = 'blue', loading }) {
 
 export default function SchoolDashboard() {
   const companyId = getActiveCompanyId();
+  const [insightsDialog, setInsightsDialog] = useState(false);
+  const [insights, setInsights] = useState(null);
+  const [insightsLoading, setInsightsLoading] = useState(false);
 
   const { data, isLoading } = useQuery({
     queryKey: ['school-dashboard', companyId],
@@ -47,11 +53,43 @@ export default function SchoolDashboard() {
       ? 'Rs. ' + Number(n).toLocaleString('en-NP', { minimumFractionDigits: 2 })
       : 'Rs. 0.00';
 
+  async function getClassInsights() {
+    if (!data) { toast.error('Dashboard data not loaded yet'); return; }
+    setInsightsLoading(true);
+    setInsightsDialog(true);
+    try {
+      const res = await aiApi.classInsights({
+        totalStudents: data.totalStudents,
+        totalClasses: data.totalClasses,
+        attendanceToday: data.attendanceToday,
+        studentsWithDues: data.studentsWithDues,
+        totalPendingFees: data.totalPendingFees,
+        feeCollectedThisMonth: data.feeCollectedThisMonth,
+      });
+      setInsights(res.data.insights);
+    } catch (e) {
+      toast.error(e?.response?.data?.message || 'AI insights failed — check GEMINI_API_KEY');
+      setInsightsDialog(false);
+    } finally {
+      setInsightsLoading(false);
+    }
+  }
+
   return (
     <div className="p-6 space-y-6 max-w-6xl">
-      <div>
-        <h1 className="text-2xl font-bold">School Dashboard</h1>
-        <p className="text-muted-foreground text-sm mt-1">Overview of students, fees, and attendance</p>
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="text-2xl font-bold">School Dashboard</h1>
+          <p className="text-muted-foreground text-sm mt-1">Overview of students, fees, and attendance</p>
+        </div>
+        <button
+          onClick={getClassInsights}
+          disabled={isLoading}
+          className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-violet-50 text-violet-700 text-sm font-medium hover:bg-violet-100 transition-colors disabled:opacity-50"
+        >
+          <Sparkles className="w-4 h-4" />
+          Class Insights
+        </button>
       </div>
 
       {/* Stat cards */}
@@ -140,6 +178,28 @@ export default function SchoolDashboard() {
           </div>
         )}
       </div>
+
+      <Dialog open={insightsDialog} onOpenChange={setInsightsDialog}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-violet-600" /> AI Class Insights
+            </DialogTitle>
+          </DialogHeader>
+          {insightsLoading ? (
+            <div className="py-8 text-center text-muted-foreground text-sm">Analyzing school data…</div>
+          ) : (
+            <div className="space-y-3 pt-1">
+              {(insights || []).map((insight, i) => (
+                <div key={i} className="flex gap-3 p-3 rounded-lg bg-violet-50 border border-violet-100">
+                  <div className="w-6 h-6 rounded-full bg-violet-200 text-violet-800 flex items-center justify-center text-xs font-bold shrink-0">{i + 1}</div>
+                  <p className="text-sm text-gray-800">{typeof insight === 'string' ? insight : insight.text || JSON.stringify(insight)}</p>
+                </div>
+              ))}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
