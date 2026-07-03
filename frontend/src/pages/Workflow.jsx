@@ -193,8 +193,8 @@ function SlideOutPanel({ task, onClose, onSave }) {
   useEffect(() => {
     if (task) {
       setEditing({ ...task });
-      setSalesForm(f => ({ ...EMPTY_SALES, notes: task.title || '', ...f, notes: task.title || '' }));
-      setPurchaseForm(f => ({ ...EMPTY_PURCHASE, notes: task.title || '', ...f, notes: task.title || '' }));
+      setSalesForm(f => ({ ...EMPTY_SALES, ...f, notes: task.title || '' }));
+      setPurchaseForm(f => ({ ...EMPTY_PURCHASE, ...f, notes: task.title || '' }));
     } else {
       setEditing(null);
     }

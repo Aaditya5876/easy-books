@@ -13,6 +13,7 @@ export class SchoolController {
   // ── Dashboard ────────────────────────────────────────────────────────────────
 
   @Get('dashboard')
+  @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'TEACHER', 'LIBRARIAN')
   @ApiOperation({ summary: 'School dashboard summary' })
   @ApiQuery({ name: 'companyId', required: true })
   getDashboard(@Query('companyId') companyId: string) {
@@ -22,6 +23,7 @@ export class SchoolController {
   // ── Academic Years ────────────────────────────────────────────────────────────
 
   @Get('academic-years')
+  @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'TEACHER')
   @ApiQuery({ name: 'companyId', required: true })
   listAcademicYears(@Query('companyId') companyId: string) {
     return this.service.listAcademicYears(companyId);
@@ -47,6 +49,7 @@ export class SchoolController {
   // ── Classes ──────────────────────────────────────────────────────────────────
 
   @Get('classes')
+  @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'TEACHER', 'LIBRARIAN')
   @ApiQuery({ name: 'companyId', required: true })
   listClasses(@Query('companyId') companyId: string) {
     return this.service.listClasses(companyId);
@@ -72,6 +75,7 @@ export class SchoolController {
   // ── Students ─────────────────────────────────────────────────────────────────
 
   @Get('students')
+  @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'TEACHER', 'LIBRARIAN')
   @ApiQuery({ name: 'companyId', required: true })
   @ApiQuery({ name: 'classId', required: false })
   listStudents(@Query('companyId') companyId: string, @Query('classId') classId?: string) {
@@ -79,6 +83,7 @@ export class SchoolController {
   }
 
   @Get('students/:id')
+  @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'TEACHER', 'LIBRARIAN')
   @ApiQuery({ name: 'companyId', required: true })
   getStudent(@Param('id') id: string, @Query('companyId') companyId: string) {
     return this.service.getStudent(id, companyId);
@@ -109,6 +114,7 @@ export class SchoolController {
   // ── Subjects ─────────────────────────────────────────────────────────────────
 
   @Get('subjects')
+  @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'TEACHER')
   @ApiQuery({ name: 'companyId', required: true })
   listSubjects(@Query('companyId') companyId: string) {
     return this.service.listSubjects(companyId);
@@ -133,6 +139,7 @@ export class SchoolController {
   // ── Student Attendance ────────────────────────────────────────────────────────
 
   @Get('attendance')
+  @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'TEACHER')
   @ApiQuery({ name: 'companyId', required: true })
   @ApiQuery({ name: 'classId', required: true })
   @ApiQuery({ name: 'date', required: true })
@@ -145,11 +152,13 @@ export class SchoolController {
   }
 
   @Post('attendance')
+  @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'TEACHER')
   saveAttendance(@Body() body: { companyId: string; classId: string; date: string; academicYearId?: string; entries: Array<{ studentId: string; status: string; notes?: string }> }) {
     return this.service.saveAttendance(body.companyId, body.classId, body.date, body.academicYearId, body.entries);
   }
 
   @Get('attendance/report')
+  @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'TEACHER')
   @ApiQuery({ name: 'companyId', required: true })
   @ApiQuery({ name: 'classId', required: true })
   @ApiQuery({ name: 'startDate', required: true })
@@ -164,6 +173,7 @@ export class SchoolController {
   }
 
   @Get('attendance/summary')
+  @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'TEACHER')
   @ApiQuery({ name: 'companyId', required: true })
   @ApiQuery({ name: 'studentId', required: true })
   @ApiQuery({ name: 'month', required: false })
@@ -239,6 +249,7 @@ export class SchoolController {
   // ── Exam Results ──────────────────────────────────────────────────────────────
 
   @Get('exam-results')
+  @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'TEACHER')
   @ApiQuery({ name: 'companyId', required: true })
   @ApiQuery({ name: 'examName', required: false })
   @ApiQuery({ name: 'studentId', required: false })
@@ -251,6 +262,7 @@ export class SchoolController {
   }
 
   @Get('exam-results/report-card')
+  @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'TEACHER')
   @ApiQuery({ name: 'companyId', required: true })
   @ApiQuery({ name: 'studentId', required: true })
   @ApiQuery({ name: 'examName', required: true })
@@ -263,11 +275,13 @@ export class SchoolController {
   }
 
   @Post('exam-results')
+  @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'TEACHER')
   createExamResult(@Body() body: any) {
     return this.service.createExamResult(body);
   }
 
   @Put('exam-results/:id')
+  @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'TEACHER')
   updateExamResult(@Param('id') id: string, @Body() body: any) {
     return this.service.updateExamResult(id, body);
   }
@@ -277,9 +291,42 @@ export class SchoolController {
     return this.service.deleteExamResult(id);
   }
 
+  // ── Exam Schedules ────────────────────────────────────────────────────────────
+
+  @Get('exam-schedules')
+  @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'TEACHER', 'LIBRARIAN')
+  @ApiQuery({ name: 'companyId', required: true })
+  @ApiQuery({ name: 'classId', required: false })
+  @ApiQuery({ name: 'examName', required: false })
+  listExamSchedules(
+    @Query('companyId') companyId: string,
+    @Query('classId') classId?: string,
+    @Query('examName') examName?: string,
+  ) {
+    return this.service.listExamSchedules(companyId, classId, examName);
+  }
+
+  @Post('exam-schedules')
+  createExamSchedule(@Body() body: any) {
+    return this.service.createExamSchedule(body);
+  }
+
+  @Put('exam-schedules/:id')
+  @ApiQuery({ name: 'companyId', required: true })
+  updateExamSchedule(@Param('id') id: string, @Query('companyId') companyId: string, @Body() body: any) {
+    return this.service.updateExamSchedule(id, companyId, body);
+  }
+
+  @Delete('exam-schedules/:id')
+  @ApiQuery({ name: 'companyId', required: true })
+  deleteExamSchedule(@Param('id') id: string, @Query('companyId') companyId: string) {
+    return this.service.deleteExamSchedule(id, companyId);
+  }
+
   // ── Timetable ─────────────────────────────────────────────────────────────────
 
   @Get('timetable')
+  @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'TEACHER')
   @ApiQuery({ name: 'companyId', required: true })
   @ApiQuery({ name: 'classId', required: true })
   getTimetable(@Query('companyId') companyId: string, @Query('classId') classId: string) {
@@ -300,6 +347,7 @@ export class SchoolController {
   // ── Notices ───────────────────────────────────────────────────────────────────
 
   @Get('notices')
+  @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'TEACHER', 'LIBRARIAN')
   @ApiQuery({ name: 'companyId', required: true })
   listNotices(@Query('companyId') companyId: string) {
     return this.service.listNotices(companyId);
@@ -339,6 +387,7 @@ export class SchoolController {
   // ── Events ────────────────────────────────────────────────────────────────────
 
   @Get('events')
+  @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'TEACHER', 'LIBRARIAN')
   @ApiQuery({ name: 'companyId', required: true })
   @ApiQuery({ name: 'month', required: false })
   listEvents(@Query('companyId') companyId: string, @Query('month') month?: string) {
@@ -365,6 +414,7 @@ export class SchoolController {
   // ── Study Materials ───────────────────────────────────────────────────────────
 
   @Get('study-materials')
+  @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'TEACHER')
   @ApiQuery({ name: 'companyId', required: true })
   @ApiQuery({ name: 'classId', required: false })
   @ApiQuery({ name: 'subjectId', required: false })
@@ -377,6 +427,7 @@ export class SchoolController {
   }
 
   @Post('study-materials')
+  @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'TEACHER')
   createStudyMaterial(@Body() body: any) {
     return this.service.createStudyMaterial(body);
   }
@@ -390,6 +441,7 @@ export class SchoolController {
   // ── Homework ──────────────────────────────────────────────────────────────────
 
   @Get('homework')
+  @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'TEACHER')
   @ApiQuery({ name: 'companyId', required: true })
   @ApiQuery({ name: 'classId', required: false })
   @ApiQuery({ name: 'subjectId', required: false })
@@ -402,17 +454,20 @@ export class SchoolController {
   }
 
   @Post('homework')
+  @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'TEACHER')
   createHomework(@Body() body: any) {
     return this.service.createHomework(body);
   }
 
   @Put('homework/:id')
+  @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'TEACHER')
   @ApiQuery({ name: 'companyId', required: true })
   updateHomework(@Param('id') id: string, @Query('companyId') companyId: string, @Body() body: any) {
     return this.service.updateHomework(id, companyId, body);
   }
 
   @Delete('homework/:id')
+  @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'TEACHER')
   @ApiQuery({ name: 'companyId', required: true })
   deleteHomework(@Param('id') id: string, @Query('companyId') companyId: string) {
     return this.service.deleteHomework(id, companyId);
@@ -421,29 +476,34 @@ export class SchoolController {
   // ── Library ───────────────────────────────────────────────────────────────────
 
   @Get('library/books')
+  @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'LIBRARIAN')
   @ApiQuery({ name: 'companyId', required: true })
   listBooks(@Query('companyId') companyId: string) {
     return this.service.listBooks(companyId);
   }
 
   @Post('library/books')
+  @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'LIBRARIAN')
   createBook(@Body() body: any) {
     return this.service.createBook(body);
   }
 
   @Put('library/books/:id')
+  @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'LIBRARIAN')
   @ApiQuery({ name: 'companyId', required: true })
   updateBook(@Param('id') id: string, @Query('companyId') companyId: string, @Body() body: any) {
     return this.service.updateBook(id, companyId, body);
   }
 
   @Delete('library/books/:id')
+  @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'LIBRARIAN')
   @ApiQuery({ name: 'companyId', required: true })
   deleteBook(@Param('id') id: string, @Query('companyId') companyId: string) {
     return this.service.deleteBook(id, companyId);
   }
 
   @Get('library/issues')
+  @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'LIBRARIAN')
   @ApiQuery({ name: 'companyId', required: true })
   @ApiQuery({ name: 'status', required: false })
   listIssues(@Query('companyId') companyId: string, @Query('status') status?: string) {
@@ -451,11 +511,13 @@ export class SchoolController {
   }
 
   @Post('library/issues')
+  @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'LIBRARIAN')
   issueBook(@Body() body: any) {
     return this.service.issueBook(body);
   }
 
   @Patch('library/issues/:id/return')
+  @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'LIBRARIAN')
   @ApiQuery({ name: 'companyId', required: true })
   returnBook(@Param('id') id: string, @Query('companyId') companyId: string, @Body() body: { fine?: number }) {
     return this.service.returnBook(id, companyId, body.fine);

@@ -484,6 +484,55 @@ export class SchoolService {
     return this.prisma.examResult.delete({ where: { id } });
   }
 
+  // ── Exam Schedules ────────────────────────────────────────────────────────────
+
+  async listExamSchedules(companyId: string, classId?: string, examName?: string) {
+    return this.prisma.examSchedule.findMany({
+      where: {
+        companyId,
+        ...(classId ? { classId } : {}),
+        ...(examName ? { examName } : {}),
+      },
+      orderBy: [{ examDate: 'asc' }, { startTime: 'asc' }],
+      include: {
+        class: { select: { name: true, section: true } },
+        subject: { select: { name: true } },
+      },
+    });
+  }
+
+  async createExamSchedule(data: {
+    companyId: string;
+    classId: string;
+    subjectId?: string;
+    examName: string;
+    examDate: string;
+    startTime?: string;
+    endTime?: string;
+    roomNumber?: string;
+    notes?: string;
+  }) {
+    return this.prisma.examSchedule.create({
+      data: { ...data, examDate: new Date(data.examDate) },
+    });
+  }
+
+  async updateExamSchedule(id: string, companyId: string, data: any) {
+    const existing = await this.prisma.examSchedule.findFirst({ where: { id, companyId } });
+    if (!existing) throw new NotFoundException('Exam schedule not found');
+    const { companyId: _c, id: _i, ...rest } = data;
+    return this.prisma.examSchedule.update({
+      where: { id },
+      data: { ...rest, ...(rest.examDate ? { examDate: new Date(rest.examDate) } : {}) },
+    });
+  }
+
+  async deleteExamSchedule(id: string, companyId: string) {
+    const existing = await this.prisma.examSchedule.findFirst({ where: { id, companyId } });
+    if (!existing) throw new NotFoundException('Exam schedule not found');
+    return this.prisma.examSchedule.delete({ where: { id } });
+  }
+
   // ── Timetable ─────────────────────────────────────────────────────────────────
 
   async getTimetable(companyId: string, classId: string) {

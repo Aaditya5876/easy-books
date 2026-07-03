@@ -34,6 +34,8 @@ const ROLE_COLORS = {
   ADMIN: 'bg-red-100 text-red-700',
   ACCOUNTANT: 'bg-blue-100 text-blue-700',
   STAFF: 'bg-green-100 text-green-700',
+  TEACHER: 'bg-amber-100 text-amber-700',
+  LIBRARIAN: 'bg-teal-100 text-teal-700',
   SUPER_ADMIN: 'bg-purple-100 text-purple-700',
 };
 
@@ -54,6 +56,7 @@ export default function Settings() {
   const { canEdit, canDelete, canManageUsers } = useRole();
   const { prefs, updatePref, resetPrefs } = usePreferences();
   const isAdmin = user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN';
+  const isSchool = user?.defaultCompany?.businessType === 'SCHOOL';
   const activeCompanyId = getActiveCompanyId();
   const logoInputRef = useRef(null);
 
@@ -419,6 +422,8 @@ export default function Settings() {
                           >
                             <option value="STAFF">STAFF</option>
                             <option value="ACCOUNTANT">ACCOUNTANT</option>
+                            {isSchool && <option value="TEACHER">TEACHER</option>}
+                            {isSchool && <option value="LIBRARIAN">LIBRARIAN</option>}
                             <option value="ADMIN">ADMIN</option>
                           </select>
                         )}
@@ -1109,6 +1114,10 @@ export default function Settings() {
                   {[
                     { v: 'STAFF', label: 'Staff', desc: 'Day-to-day operations' },
                     { v: 'ACCOUNTANT', label: 'Accountant', desc: 'Full financial access' },
+                    ...(isSchool ? [
+                      { v: 'TEACHER', label: 'Teacher', desc: 'Attendance, exams, homework, materials' },
+                      { v: 'LIBRARIAN', label: 'Librarian', desc: 'Library books, issues and returns' },
+                    ] : []),
                   ].map(r => (
                     <button
                       key={r.v}

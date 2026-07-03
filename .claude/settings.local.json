@@ -4,7 +4,9 @@
       "PowerShell(npm --version)",
       "PowerShell(node --version)",
       "PowerShell(netstat -ano)",
-      "PowerShell(Get-Process -Name \"node\" -ErrorAction SilentlyContinue | Select-Object Id, ProcessName, CPU, @{n='Mem\\(MB\\)';e={[math]::Round\\($_.WorkingSet/1MB,1\\)}})"
+      "PowerShell(Get-Process -Name \"node\" -ErrorAction SilentlyContinue | Select-Object Id, ProcessName, CPU, @{n='Mem\\(MB\\)';e={[math]::Round\\($_.WorkingSet/1MB,1\\)}})",
+      "Bash(npx prisma *)",
+      "Bash(npm run *)"
     ]
   }
 }

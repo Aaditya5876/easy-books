@@ -14,6 +14,8 @@ enum UserRole {
   ADMIN
   ACCOUNTANT
   STAFF
+  TEACHER
+  LIBRARIAN
 }
 
 enum EmployeeStatus {
@@ -234,6 +236,7 @@ model Company {
   transportRoutes      TransportRoute[]
   studentTransports    StudentTransport[]
   portalUsers          PortalUser[]
+  examSchedules        ExamSchedule[]
 
   @@map("companies")
 }
@@ -915,6 +918,7 @@ model SchoolClass {
   timetableEntries   TimetableEntry[]
   studyMaterials     StudyMaterial[]
   homeworks          Homework[]
+  examSchedules      ExamSchedule[]
 
   @@unique([companyId, name, section])
   @@map("school_classes")
@@ -964,6 +968,7 @@ model Subject {
   timetableEntries TimetableEntry[]
   studyMaterials   StudyMaterial[]
   homeworks        Homework[]
+  examSchedules    ExamSchedule[]
 
   @@unique([companyId, name])
   @@map("subjects")
@@ -1004,6 +1009,26 @@ model FeeInvoice {
   updatedAt   DateTime         @updatedAt
 
   @@map("fee_invoices")
+}
+
+model ExamSchedule {
+  id         String      @id @default(uuid())
+  companyId  String
+  company    Company     @relation(fields: [companyId], references: [id])
+  classId    String
+  class      SchoolClass @relation(fields: [classId], references: [id])
+  subjectId  String?
+  subject    Subject?    @relation(fields: [subjectId], references: [id])
+  examName   String      // "First Terminal 2082", "Unit Test 1"
+  examDate   DateTime    @db.Date
+  startTime  String?     // "10:00"
+  endTime    String?     // "13:00"
+  roomNumber String?
+  notes      String?
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+
+  @@map("exam_schedules")
 }
 
 model ExamResult {

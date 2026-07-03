@@ -46,6 +46,7 @@ import Homework from './pages/school/Homework';
 import Library from './pages/school/Library';
 import Hostel from './pages/school/Hostel';
 import Transport from './pages/school/Transport';
+import ExamSchedule from './pages/school/ExamSchedule';
 import PortalLogin from './pages/portal/PortalLogin';
 import PortalLayout from './components/layout/PortalLayout';
 import PortalDashboard from './pages/portal/PortalDashboard';
@@ -57,9 +58,43 @@ import PortalNotices from './pages/portal/PortalNotices';
 import PortalTimetable from './pages/portal/PortalTimetable';
 import PaymentReturn from './pages/portal/PaymentReturn';
 
+// `roles` = also available to these restricted roles (TEACHER / LIBRARIAN).
+// Routes without `roles` are not registered for restricted roles.
+const schoolRoutes = [
+  { path: '/', page: SchoolDashboard, roles: ['TEACHER', 'LIBRARIAN'] },
+  { path: '/students', page: Students, roles: ['TEACHER', 'LIBRARIAN'] },
+  { path: '/classes', page: Classes, roles: ['TEACHER'] },
+  { path: '/subjects', page: Subjects, roles: ['TEACHER'] },
+  { path: '/fees', page: Fees },
+  { path: '/exams', page: Exams, roles: ['TEACHER'] },
+  { path: '/exam-schedule', page: ExamSchedule, roles: ['TEACHER'] },
+  { path: '/student-attendance', page: StudentAttendance, roles: ['TEACHER'] },
+  { path: '/academic-years', page: AcademicYear },
+  { path: '/timetable', page: Timetable, roles: ['TEACHER'] },
+  { path: '/notices', page: Notices, roles: ['TEACHER', 'LIBRARIAN'] },
+  { path: '/events', page: Events, roles: ['TEACHER', 'LIBRARIAN'] },
+  { path: '/study-materials', page: StudyMaterials, roles: ['TEACHER'] },
+  { path: '/homework', page: Homework, roles: ['TEACHER'] },
+  { path: '/library', page: Library, roles: ['LIBRARIAN'] },
+  { path: '/hostel', page: Hostel },
+  { path: '/transport', page: Transport },
+  { path: '/communication', page: Communication },
+  { path: '/memo', page: Memo },
+  // Shared modules — reused as-is
+  { path: '/employees', page: Employees },
+  { path: '/attendance', page: Attendance },
+  { path: '/payroll', page: Payroll },
+  { path: '/ledger', page: Ledger },
+  { path: '/transactions', page: Transactions },
+  { path: '/reports', page: Reports },
+  { path: '/settings', page: Settings },
+];
+
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isAuthenticated, navigateToLogin, user } = useAuth();
   const isSchool = user?.defaultCompany?.businessType === 'SCHOOL';
+  const role = user?.role;
+  const restrictedRole = role === 'TEACHER' || role === 'LIBRARIAN';
 
   if (isLoadingAuth) {
     return (
@@ -79,30 +114,11 @@ const AuthenticatedApp = () => {
       <Route element={<Layout />}>
         {isSchool ? (
           <>
-            <Route path="/" element={<SchoolDashboard />} />
-            <Route path="/students" element={<Students />} />
-            <Route path="/classes" element={<Classes />} />
-            <Route path="/subjects" element={<Subjects />} />
-            <Route path="/fees" element={<Fees />} />
-            <Route path="/exams" element={<Exams />} />
-            <Route path="/student-attendance" element={<StudentAttendance />} />
-            <Route path="/academic-years" element={<AcademicYear />} />
-            <Route path="/timetable" element={<Timetable />} />
-            <Route path="/notices" element={<Notices />} />
-            <Route path="/events" element={<Events />} />
-            <Route path="/study-materials" element={<StudyMaterials />} />
-            <Route path="/homework" element={<Homework />} />
-            <Route path="/library" element={<Library />} />
-            <Route path="/hostel" element={<Hostel />} />
-            <Route path="/transport" element={<Transport />} />
-            {/* Shared modules — reused as-is */}
-            <Route path="/employees" element={<Employees />} />
-            <Route path="/attendance" element={<Attendance />} />
-            <Route path="/payroll" element={<Payroll />} />
-            <Route path="/ledger" element={<Ledger />} />
-            <Route path="/transactions" element={<Transactions />} />
-            <Route path="/reports" element={<Reports />} />
-            <Route path="/settings" element={<Settings />} />
+            {schoolRoutes
+              .filter(r => !restrictedRole || r.roles?.includes(role))
+              .map(({ path, page: Page }) => (
+                <Route key={path} path={path} element={<Page />} />
+              ))}
           </>
         ) : (
           <>

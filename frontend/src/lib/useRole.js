@@ -7,12 +7,16 @@ export function useRole() {
   const isAdmin      = role === 'ADMIN' || role === 'SUPER_ADMIN';
   const isAccountant = role === 'ACCOUNTANT';
   const isStaff      = role === 'STAFF';
+  const isTeacher    = role === 'TEACHER';
+  const isLibrarian  = role === 'LIBRARIAN';
 
   return {
     role,
     isAdmin,
     isAccountant,
     isStaff,
+    isTeacher,
+    isLibrarian,
     isSuperAdmin: role === 'SUPER_ADMIN',
     // What each level can do
     canCreate:      isAdmin || isAccountant,  // ADMIN + ACCOUNTANT

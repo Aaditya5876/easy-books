@@ -7,7 +7,7 @@ import {
   ChevronLeft, ChevronRight, Building2, ChevronDown, ClipboardList, BarChart2,
   Kanban, UserCircle, Settings, Shield,
   GraduationCap, School, BookMarked, DollarSign, ClipboardCheck, Trophy,
-  Megaphone, CalendarDays, Clock, CalendarCheck2,
+  Megaphone, CalendarDays, Clock, CalendarCheck2, CalendarClock,
   FolderOpen, Library, Home, Bus
 } from 'lucide-react';
 import { cn } from "@/lib/utils";
@@ -88,13 +88,15 @@ const navSections = [
   },
 ];
 
+// `roles` on an item = also visible to these restricted roles (TEACHER / LIBRARIAN).
+// Items without `roles` are hidden from restricted roles entirely.
 const schoolNavSections = [
   {
     label: 'Main',
     labelColor: 'text-sidebar-muted',
     activeClass: 'bg-sidebar-primary text-sidebar-primary-foreground shadow-sm',
     items: [
-      { icon: LayoutDashboard, label: 'Dashboard', path: '/' },
+      { icon: LayoutDashboard, label: 'Dashboard', path: '/', roles: ['TEACHER', 'LIBRARIAN'] },
       { icon: BarChart2, label: 'Reports', path: '/reports' },
     ]
   },
@@ -103,14 +105,15 @@ const schoolNavSections = [
     labelColor: 'text-emerald-400',
     activeClass: 'bg-emerald-600 text-white shadow-sm shadow-emerald-900/30',
     items: [
-      { icon: GraduationCap, label: 'Students', path: '/students' },
-      { icon: School, label: 'Classes', path: '/classes' },
-      { icon: BookMarked, label: 'Subjects', path: '/subjects' },
-      { icon: CalendarCheck2, label: 'Attendance', path: '/student-attendance' },
-      { icon: Clock, label: 'Timetable', path: '/timetable' },
-      { icon: Trophy, label: 'Exams', path: '/exams' },
-      { icon: FolderOpen, label: 'Study Materials', path: '/study-materials' },
-      { icon: ClipboardList, label: 'Homework', path: '/homework' },
+      { icon: GraduationCap, label: 'Students', path: '/students', roles: ['TEACHER', 'LIBRARIAN'] },
+      { icon: School, label: 'Classes', path: '/classes', roles: ['TEACHER'] },
+      { icon: BookMarked, label: 'Subjects', path: '/subjects', roles: ['TEACHER'] },
+      { icon: CalendarCheck2, label: 'Attendance', path: '/student-attendance', roles: ['TEACHER'] },
+      { icon: Clock, label: 'Timetable', path: '/timetable', roles: ['TEACHER'] },
+      { icon: Trophy, label: 'Exams', path: '/exams', roles: ['TEACHER'] },
+      { icon: CalendarClock, label: 'Exam Schedule', path: '/exam-schedule', roles: ['TEACHER'] },
+      { icon: FolderOpen, label: 'Study Materials', path: '/study-materials', roles: ['TEACHER'] },
+      { icon: ClipboardList, label: 'Homework', path: '/homework', roles: ['TEACHER'] },
     ]
   },
   {
@@ -128,9 +131,18 @@ const schoolNavSections = [
     labelColor: 'text-amber-400',
     activeClass: 'bg-amber-600 text-white shadow-sm shadow-amber-900/30',
     items: [
-      { icon: Megaphone, label: 'Notices', path: '/notices' },
-      { icon: CalendarDays, label: 'Events', path: '/events' },
-      { icon: Library, label: 'Library', path: '/library' },
+      { icon: Megaphone, label: 'Notices', path: '/notices', roles: ['TEACHER', 'LIBRARIAN'] },
+      { icon: CalendarDays, label: 'Events', path: '/events', roles: ['TEACHER', 'LIBRARIAN'] },
+      { icon: MessageSquare, label: 'Communication', path: '/communication' },
+      { icon: FileText, label: 'Memo', path: '/memo' },
+    ]
+  },
+  {
+    label: 'Facilities',
+    labelColor: 'text-violet-400',
+    activeClass: 'bg-violet-600 text-white shadow-sm shadow-violet-900/30',
+    items: [
+      { icon: Library, label: 'Library', path: '/library', roles: ['LIBRARIAN'] },
       { icon: Home, label: 'Hostel', path: '/hostel' },
       { icon: Bus, label: 'Transport', path: '/transport' },
     ]
@@ -160,7 +172,7 @@ const schoolNavSections = [
 
 export default function SidebarNav({ collapsed, onToggle }) {
   const location = useLocation();
-  const { isAdmin, canViewPayroll } = useRole();
+  const { isAdmin, canViewPayroll, isTeacher, isLibrarian, role } = useRole();
   const { prefs } = usePreferences();
   const { user } = useAuth();
   const isSchool = user?.defaultCompany?.businessType === 'SCHOOL';
@@ -181,11 +193,20 @@ export default function SidebarNav({ collapsed, onToggle }) {
 
   const activeSections = isSchool ? schoolNavSections : navSections;
 
-  const visibleSections = activeSections.filter(section => {
-    if (section.minRole === 'admin') return isAdmin;
-    if (section.minRole === 'accountant') return canViewPayroll;
-    return true;
-  });
+  // TEACHER / LIBRARIAN only see items explicitly tagged with their role
+  const restrictedRole = isTeacher || isLibrarian;
+
+  const visibleSections = activeSections
+    .filter(section => {
+      if (section.minRole === 'admin') return isAdmin;
+      if (section.minRole === 'accountant') return canViewPayroll;
+      return true;
+    })
+    .map(section => ({
+      ...section,
+      items: section.items.filter(item => !restrictedRole || item.roles?.includes(role)),
+    }))
+    .filter(section => section.items.length > 0);
 
   return (
     <aside

@@ -3,7 +3,9 @@ import { PrismaService } from '../../../core/db/psql/prisma.client';
 import { MailService } from './mail.service';
 import * as bcrypt from 'bcrypt';
 
-const ROLE_HIERARCHY = ['STAFF', 'ACCOUNTANT', 'ADMIN', 'SUPER_ADMIN'];
+const ROLE_HIERARCHY = ['STAFF', 'TEACHER', 'LIBRARIAN', 'ACCOUNTANT', 'ADMIN', 'SUPER_ADMIN'];
+// Roles an ADMIN may grant (everything below ADMIN)
+const ADMIN_GRANTABLE = ['STAFF', 'TEACHER', 'LIBRARIAN', 'ACCOUNTANT'];
 
 @Injectable()
 export class UserServiceImpl {
@@ -17,8 +19,8 @@ export class UserServiceImpl {
       throw new BadRequestException(`Invalid role: ${data.role}`);
     }
 
-    if (invitedByRole === 'ADMIN' && !['STAFF', 'ACCOUNTANT'].includes(data.role)) {
-      throw new ForbiddenException('ADMIN can only invite STAFF or ACCOUNTANT');
+    if (invitedByRole === 'ADMIN' && !ADMIN_GRANTABLE.includes(data.role)) {
+      throw new ForbiddenException('ADMIN can only invite STAFF, TEACHER, LIBRARIAN or ACCOUNTANT');
     }
 
     const company = await this.prisma.company.findUnique({ where: { id: companyId } });
@@ -69,8 +71,8 @@ export class UserServiceImpl {
       throw new BadRequestException(`Invalid role: ${newRole}`);
     }
 
-    if (changedByRole === 'ADMIN' && !['STAFF', 'ACCOUNTANT'].includes(newRole)) {
-      throw new ForbiddenException('ADMIN can only assign STAFF or ACCOUNTANT roles');
+    if (changedByRole === 'ADMIN' && !ADMIN_GRANTABLE.includes(newRole)) {
+      throw new ForbiddenException('ADMIN can only assign STAFF, TEACHER, LIBRARIAN or ACCOUNTANT roles');
     }
 
     const user = await this.prisma.user.findUnique({ where: { id: targetUserId } });

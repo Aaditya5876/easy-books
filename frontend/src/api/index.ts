@@ -285,6 +285,16 @@ export const examResultsApi = {
     apiClient.delete(`/api/v1/school/exam-results/${id}`, { params: { companyId: companyId() } }),
 };
 
+export const examSchedulesApi = {
+  list: (params?: object) =>
+    apiClient.get('/api/v1/school/exam-schedules', { params: { companyId: companyId(), ...params } }),
+  create: (data: object) => apiClient.post('/api/v1/school/exam-schedules', data),
+  update: (id: string, data: object) =>
+    apiClient.put(`/api/v1/school/exam-schedules/${id}`, data, { params: { companyId: companyId() } }),
+  remove: (id: string) =>
+    apiClient.delete(`/api/v1/school/exam-schedules/${id}`, { params: { companyId: companyId() } }),
+};
+
 export const timetableApi = {
   get: (classId: string) =>
     apiClient.get('/api/v1/school/timetable', { params: { companyId: companyId(), classId } }),
