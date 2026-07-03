@@ -1,0 +1,718 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Easy Books — School Management Report</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --ink:       #0F172A;
+      --ink-mid:   #475569;
+      --ink-light: #94A3B8;
+      --rule:      #E2E8F0;
+      --page:      #F6F8FB;
+      --card:      #FFFFFF;
+      --accent:    #1E3A8A;
+      --accent-lt: #EFF6FF;
+      --green:     #15803D;
+      --green-lt:  #F0FDF4;
+      --amber:     #92400E;
+      --amber-lt:  #FFFBEB;
+    }
+
+    body {
+      background: var(--page);
+      color: var(--ink);
+      font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+      font-size: 14px;
+      line-height: 1.6;
+      padding: 48px 24px 80px;
+    }
+
+    .wrap { max-width: 900px; margin: 0 auto; }
+
+    /* ── Header ── */
+    .report-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+      padding-bottom: 28px;
+      border-bottom: 2px solid var(--ink);
+      margin-bottom: 40px;
+    }
+
+    .report-header h1 {
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      color: var(--ink);
+    }
+
+    .report-header .sub {
+      font-size: 13px;
+      color: var(--ink-mid);
+      margin-top: 4px;
+      letter-spacing: 0.01em;
+    }
+
+    .badge-demo {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--green-lt);
+      color: var(--green);
+      border: 1px solid #BBF7D0;
+      padding: 5px 12px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+
+    .badge-demo::before {
+      content: '';
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--green);
+      display: block;
+    }
+
+    /* ── Stat row ── */
+    .stat-row {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 0;
+      margin-bottom: 48px;
+      border: 1px solid var(--rule);
+      background: var(--card);
+    }
+
+    .stat-cell {
+      padding: 24px 28px 20px;
+      border-right: 1px solid var(--rule);
+    }
+
+    .stat-cell:last-child { border-right: none; }
+
+    .stat-num {
+      font-family: Georgia, 'Times New Roman', serif;
+      font-size: 60px;
+      line-height: 1;
+      font-weight: normal;
+      color: var(--ink);
+      font-variant-numeric: tabular-nums;
+      letter-spacing: -0.03em;
+    }
+
+    .stat-rule {
+      width: 28px;
+      height: 2px;
+      background: var(--accent);
+      margin: 8px 0;
+    }
+
+    .stat-label {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.10em;
+      text-transform: uppercase;
+      color: var(--ink-light);
+    }
+
+    /* ── Section ── */
+    .section { margin-bottom: 44px; }
+
+    .section-head {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 20px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid var(--rule);
+    }
+
+    .section-head h2 {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--ink-mid);
+    }
+
+    .section-count {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--ink-light);
+      letter-spacing: 0.04em;
+    }
+
+    /* ── Module groups ── */
+    .module-groups { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+    .mod-group {
+      background: var(--card);
+      border: 1px solid var(--rule);
+      border-top: 3px solid var(--accent);
+      padding: 16px 18px;
+    }
+
+    .mod-group-label {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 10px;
+    }
+
+    .mod-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+
+    .mod-list li {
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+      font-size: 13px;
+      color: var(--ink-mid);
+    }
+
+    .mod-list li::before {
+      content: '—';
+      color: var(--rule);
+      font-size: 12px;
+      flex-shrink: 0;
+    }
+
+    .mod-list li strong {
+      color: var(--ink);
+      font-weight: 600;
+    }
+
+    .mod-list li span {
+      color: var(--ink-light);
+      font-size: 12px;
+    }
+
+    /* ── Portal grid ── */
+    .portal-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+    }
+
+    .portal-card {
+      background: var(--amber-lt);
+      border: 1px solid #FDE68A;
+      padding: 12px 14px;
+    }
+
+    .portal-card .pc-name {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--ink);
+      margin-bottom: 3px;
+    }
+
+    .portal-card .pc-desc {
+      font-size: 11px;
+      color: var(--amber);
+      line-height: 1.4;
+    }
+
+    /* ── AI table ── */
+    .ai-table-wrap { overflow-x: auto; }
+
+    .ai-table {
+      width: 100%;
+      border-collapse: collapse;
+      background: var(--card);
+      border: 1px solid var(--rule);
+    }
+
+    .ai-table thead tr {
+      background: var(--green-lt);
+      border-bottom: 2px solid #BBF7D0;
+    }
+
+    .ai-table thead th {
+      text-align: left;
+      padding: 10px 16px;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.10em;
+      text-transform: uppercase;
+      color: var(--green);
+    }
+
+    .ai-table tbody tr { border-bottom: 1px solid var(--rule); }
+    .ai-table tbody tr:last-child { border-bottom: none; }
+
+    .ai-table tbody td {
+      padding: 12px 16px;
+      font-size: 13px;
+      vertical-align: top;
+    }
+
+    .ai-table .td-feature { font-weight: 600; color: var(--ink); white-space: nowrap; }
+    .ai-table .td-where { color: var(--ink-mid); }
+    .ai-table .td-what { color: var(--ink-mid); font-size: 12px; line-height: 1.5; }
+
+    .ai-badge {
+      display: inline-block;
+      background: var(--green-lt);
+      color: var(--green);
+      border: 1px solid #BBF7D0;
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      padding: 1px 7px;
+      white-space: nowrap;
+    }
+
+    /* ── Integrations ── */
+    .integrations { display: flex; flex-wrap: wrap; gap: 12px; }
+
+    .integ-card {
+      background: var(--card);
+      border: 1px solid var(--rule);
+      padding: 14px 18px;
+      min-width: 180px;
+      flex: 1;
+    }
+
+    .integ-card .ic-type {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.10em;
+      text-transform: uppercase;
+      margin-bottom: 4px;
+    }
+
+    .integ-card .ic-name {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--ink);
+      margin-bottom: 4px;
+    }
+
+    .integ-card .ic-note {
+      font-size: 11px;
+      color: var(--ink-light);
+      line-height: 1.4;
+    }
+
+    .ic-type.sms { color: #0369A1; }
+    .ic-type.pay { color: #15803D; }
+    .ic-type.ai  { color: #7C3AED; }
+
+    /* ── Env / readiness table ── */
+    .env-table-wrap { overflow-x: auto; }
+
+    .env-table {
+      width: 100%;
+      border-collapse: collapse;
+      background: var(--card);
+      border: 1px solid var(--rule);
+    }
+
+    .env-table th {
+      text-align: left;
+      padding: 9px 14px;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.10em;
+      text-transform: uppercase;
+      color: var(--ink-light);
+      background: #F8FAFC;
+      border-bottom: 1px solid var(--rule);
+    }
+
+    .env-table td {
+      padding: 10px 14px;
+      font-size: 12px;
+      border-bottom: 1px solid var(--rule);
+      vertical-align: top;
+      color: var(--ink-mid);
+    }
+
+    .env-table tr:last-child td { border-bottom: none; }
+
+    .env-table code {
+      font-family: 'Courier New', Courier, monospace;
+      font-size: 11px;
+      background: #F1F5F9;
+      color: var(--accent);
+      padding: 1px 5px;
+      letter-spacing: 0.02em;
+    }
+
+    .tag-ready {
+      display: inline-block;
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      padding: 2px 8px;
+    }
+
+    .tag-ready.yes { background: var(--green-lt);  color: var(--green); border: 1px solid #BBF7D0; }
+    .tag-ready.env { background: var(--amber-lt);  color: var(--amber); border: 1px solid #FDE68A; }
+
+    /* ── Tech stack strip ── */
+    .tech-strip {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 0;
+    }
+
+    .tech-pill {
+      background: var(--card);
+      border: 1px solid var(--rule);
+      padding: 6px 14px;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--ink-mid);
+      letter-spacing: 0.02em;
+    }
+
+    .tech-pill strong {
+      color: var(--ink);
+      font-weight: 600;
+    }
+
+    /* ── Footer ── */
+    .report-footer {
+      margin-top: 52px;
+      padding-top: 20px;
+      border-top: 1px solid var(--rule);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .report-footer .ft-left { font-size: 11px; color: var(--ink-light); letter-spacing: 0.04em; }
+    .report-footer .ft-right { font-size: 11px; color: var(--ink-light); }
+
+    /* ── Print ── */
+    @media print {
+      body { background: #fff; padding: 24px; }
+      .stat-cell, .mod-group, .integ-card { break-inside: avoid; }
+    }
+
+    /* ── Responsive ── */
+    @media (max-width: 640px) {
+      .stat-row { grid-template-columns: repeat(2, 1fr); }
+      .stat-cell { border-right: none; border-bottom: 1px solid var(--rule); }
+      .stat-cell:nth-child(odd) { border-right: 1px solid var(--rule); }
+      .stat-cell:nth-last-child(-n+2) { border-bottom: none; }
+      .module-groups { grid-template-columns: 1fr; }
+      .portal-grid { grid-template-columns: 1fr 1fr; }
+      .stat-num { font-size: 44px; }
+      .report-header { flex-direction: column; }
+    }
+  </style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- Header -->
+  <header class="report-header">
+    <div>
+      <h1>Easy Books — School Management</h1>
+      <p class="sub">Feature completion report &nbsp;·&nbsp; July 3, 2026</p>
+    </div>
+    <div class="badge-demo">Demo Ready</div>
+  </header>
+
+  <!-- Stat row -->
+  <div class="stat-row">
+    <div class="stat-cell">
+      <div class="stat-num">16</div>
+      <div class="stat-rule"></div>
+      <div class="stat-label">Admin Modules</div>
+    </div>
+    <div class="stat-cell">
+      <div class="stat-num">9</div>
+      <div class="stat-rule"></div>
+      <div class="stat-label">Portal Pages</div>
+    </div>
+    <div class="stat-cell">
+      <div class="stat-num">5</div>
+      <div class="stat-rule"></div>
+      <div class="stat-label">AI Features</div>
+    </div>
+    <div class="stat-cell">
+      <div class="stat-num">2</div>
+      <div class="stat-rule"></div>
+      <div class="stat-label">Payment Gateways</div>
+    </div>
+  </div>
+
+  <!-- Admin Modules -->
+  <section class="section">
+    <div class="section-head">
+      <h2>Admin Modules</h2>
+      <span class="section-count">16 total</span>
+    </div>
+    <div class="module-groups">
+
+      <div class="mod-group">
+        <div class="mod-group-label">Core Management</div>
+        <ul class="mod-list">
+          <li><strong>School Dashboard</strong> <span>Summary stats + AI insights</span></li>
+          <li><strong>Students</strong> <span>CRUD, promote, portal password setup</span></li>
+          <li><strong>Classes</strong> <span>Class and section management</span></li>
+          <li><strong>Subjects</strong> <span>Subject catalog</span></li>
+          <li><strong>Academic Years</strong> <span>Year tracking</span></li>
+        </ul>
+      </div>
+
+      <div class="mod-group">
+        <div class="mod-group-label">Academic</div>
+        <ul class="mod-list">
+          <li><strong>Student Attendance</strong> <span>Daily marking, auto-SMS absent alerts</span></li>
+          <li><strong>Exams</strong> <span>Results, report card, AI-generated comments</span></li>
+          <li><strong>Timetable</strong> <span>Class-wise weekly schedule</span></li>
+          <li><strong>Homework</strong> <span>Assignments with AI description writer</span></li>
+          <li><strong>Study Materials</strong> <span>Upload &amp; share resources</span></li>
+        </ul>
+      </div>
+
+      <div class="mod-group">
+        <div class="mod-group-label">Finance</div>
+        <ul class="mod-list">
+          <li><strong>Fee Structures</strong> <span>Monthly / term / annual, per class</span></li>
+          <li><strong>Fee Invoices</strong> <span>Bulk generation, record payment, receipt print</span></li>
+          <li><strong>SMS Reminders</strong> <span>One-click SMS to guardian per invoice</span></li>
+        </ul>
+      </div>
+
+      <div class="mod-group">
+        <div class="mod-group-label">Communication</div>
+        <ul class="mod-list">
+          <li><strong>Notices</strong> <span>AI-written, SMS broadcast to all guardians</span></li>
+          <li><strong>Events</strong> <span>School calendar and event management</span></li>
+        </ul>
+      </div>
+
+      <div class="mod-group">
+        <div class="mod-group-label">Facilities</div>
+        <ul class="mod-list">
+          <li><strong>Library</strong> <span>Book inventory, issue / return, fine tracking</span></li>
+          <li><strong>Hostel</strong> <span>Room management, student allocations</span></li>
+          <li><strong>Transport</strong> <span>Routes, student assignments</span></li>
+        </ul>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- Portal -->
+  <section class="section">
+    <div class="section-head">
+      <h2>Parent / Student Portal</h2>
+      <span class="section-count">9 pages · token-based auth · completely separate from admin login</span>
+    </div>
+    <div class="portal-grid">
+      <div class="portal-card">
+        <div class="pc-name">Login</div>
+        <div class="pc-desc">Parent or student, phone + password</div>
+      </div>
+      <div class="portal-card">
+        <div class="pc-name">Dashboard</div>
+        <div class="pc-desc">Quick summary view on login</div>
+      </div>
+      <div class="portal-card">
+        <div class="pc-name">Attendance</div>
+        <div class="pc-desc">Monthly summary, present / absent log</div>
+      </div>
+      <div class="portal-card">
+        <div class="pc-name">Fees</div>
+        <div class="pc-desc">Invoices + eSewa / Khalti online payment</div>
+      </div>
+      <div class="portal-card">
+        <div class="pc-name">Exam Results</div>
+        <div class="pc-desc">Per-subject marks, percentage badge</div>
+      </div>
+      <div class="portal-card">
+        <div class="pc-name">Homework</div>
+        <div class="pc-desc">Due dates, overdue highlighted in red</div>
+      </div>
+      <div class="portal-card">
+        <div class="pc-name">Notices</div>
+        <div class="pc-desc">Priority badges, audience chips</div>
+      </div>
+      <div class="portal-card">
+        <div class="pc-name">Timetable</div>
+        <div class="pc-desc">Monday – Saturday class schedule</div>
+      </div>
+      <div class="portal-card">
+        <div class="pc-name">Payment Return</div>
+        <div class="pc-desc">Callback page after eSewa / Khalti redirect</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- AI Features -->
+  <section class="section">
+    <div class="section-head">
+      <h2>AI Features</h2>
+      <span class="section-count">5 features · Gemini 2.0 Flash · requires GEMINI_API_KEY</span>
+    </div>
+    <div class="ai-table-wrap">
+      <table class="ai-table">
+        <thead>
+          <tr>
+            <th>Feature</th>
+            <th>Where it appears</th>
+            <th>What it does</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="td-feature"><span class="ai-badge">AI</span>&nbsp; Class Insights</td>
+            <td class="td-where">School Dashboard</td>
+            <td class="td-what">Analyses total students, class count, today's attendance — returns actionable observations for the principal</td>
+          </tr>
+          <tr>
+            <td class="td-feature"><span class="ai-badge">AI</span>&nbsp; Notice Generator</td>
+            <td class="td-where">Notices → Post Notice</td>
+            <td class="td-what">Writes a full formal notice from just a topic/title and audience selection</td>
+          </tr>
+          <tr>
+            <td class="td-feature"><span class="ai-badge">AI</span>&nbsp; Homework Description</td>
+            <td class="td-where">Homework → Add Homework</td>
+            <td class="td-what">Generates clear homework instructions from subject, topic, class name, and due date</td>
+          </tr>
+          <tr>
+            <td class="td-feature"><span class="ai-badge">AI</span>&nbsp; Fee Reminder SMS</td>
+            <td class="td-where">Fees → Invoice row</td>
+            <td class="td-what">Sends a personalised SMS reminder to the student's guardian — AI-composed, delivered via Sparrow SMS</td>
+          </tr>
+          <tr>
+            <td class="td-feature"><span class="ai-badge">AI</span>&nbsp; Report Card Comment</td>
+            <td class="td-where">Exams → Report Card</td>
+            <td class="td-what">Writes a teacher-style comment based on the student's per-subject marks and overall percentage</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- Integrations -->
+  <section class="section">
+    <div class="section-head">
+      <h2>Integrations</h2>
+      <span class="section-count">Nepal-specific · all keys via environment variables</span>
+    </div>
+    <div class="integrations">
+      <div class="integ-card">
+        <div class="ic-type sms">SMS</div>
+        <div class="ic-name">Sparrow SMS</div>
+        <div class="ic-note">Absent alerts on attendance, fee reminders, notice broadcast to all guardians</div>
+      </div>
+      <div class="integ-card">
+        <div class="ic-type pay">Payment</div>
+        <div class="ic-name">eSewa v2</div>
+        <div class="ic-note">HMAC-SHA256 signed · form POST redirect · auto test mode if no product code set</div>
+      </div>
+      <div class="integ-card">
+        <div class="ic-type pay">Payment</div>
+        <div class="ic-name">Khalti</div>
+        <div class="ic-note">REST initiate → redirect → pidx verify · sandbox mode on test_ secret key</div>
+      </div>
+      <div class="integ-card">
+        <div class="ic-type ai">Artificial Intelligence</div>
+        <div class="ic-name">Gemini 2.0 Flash</div>
+        <div class="ic-note">5 school-specific prompts · graceful fallback if key is absent</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Tech Stack -->
+  <section class="section">
+    <div class="section-head">
+      <h2>Technology Stack</h2>
+      <span class="section-count">production-grade monorepo</span>
+    </div>
+    <div class="tech-strip">
+      <div class="tech-pill"><strong>Frontend</strong> React 18 + Vite</div>
+      <div class="tech-pill"><strong>Backend</strong> NestJS + Prisma ORM</div>
+      <div class="tech-pill"><strong>Database</strong> PostgreSQL</div>
+      <div class="tech-pill"><strong>Auth</strong> JWT + HttpOnly cookies (admin) · Bearer token (portal)</div>
+      <div class="tech-pill"><strong>Multi-tenant</strong> companyId on every record</div>
+      <div class="tech-pill"><strong>Architecture</strong> npm workspaces monorepo</div>
+    </div>
+  </section>
+
+  <!-- Demo Readiness -->
+  <section class="section">
+    <div class="section-head">
+      <h2>Demo Readiness</h2>
+      <span class="section-count">what works without any keys vs what needs configuration</span>
+    </div>
+    <div class="env-table-wrap">
+      <table class="env-table">
+        <thead>
+          <tr>
+            <th>Environment Variable</th>
+            <th>Enables</th>
+            <th>Without it</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>GEMINI_API_KEY</code></td>
+            <td>All 5 AI features</td>
+            <td>Error toast shown, app does not crash</td>
+            <td><span class="tag-ready env">Needs Key</span></td>
+          </tr>
+          <tr>
+            <td><code>SMS_API_KEY</code> + <code>SMS_SENDER_ID</code></td>
+            <td>All SMS sending (Sparrow)</td>
+            <td>Silently skipped, logs warning on server</td>
+            <td><span class="tag-ready env">Needs Key</span></td>
+          </tr>
+          <tr>
+            <td><code>ESEWA_SECRET_KEY</code> + <code>ESEWA_PRODUCT_CODE</code></td>
+            <td>eSewa live payments</td>
+            <td>Runs on eSewa sandbox (EPAYTEST)</td>
+            <td><span class="tag-ready yes">Test Mode OK</span></td>
+          </tr>
+          <tr>
+            <td><code>KHALTI_SECRET_KEY</code></td>
+            <td>Khalti live payments</td>
+            <td>Runs on Khalti sandbox if test_ key provided</td>
+            <td><span class="tag-ready yes">Test Mode OK</span></td>
+          </tr>
+          <tr>
+            <td colspan="1">— (no key needed)</td>
+            <td colspan="2">All 16 admin modules, full portal, attendance, fees, results, timetable, library, hostel, transport</td>
+            <td><span class="tag-ready yes">Ready Now</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <footer class="report-footer">
+    <div class="ft-left">Easy Books · School Management Module · v1.0 · July 2026</div>
+    <div class="ft-right">Confidential — for partners only</div>
+  </footer>
+
+</div>
+</body>
+</html>
