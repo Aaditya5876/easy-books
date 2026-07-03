@@ -86,7 +86,7 @@
     /* ── Stat row ── */
     .stat-row {
       display: grid;
-      grid-template-columns: repeat(4, 1fr);
+      grid-template-columns: repeat(5, 1fr);
       gap: 0;
       margin-bottom: 48px;
       border: 1px solid var(--rule);
@@ -367,6 +367,27 @@
     .tag-ready.yes { background: var(--green-lt);  color: var(--green); border: 1px solid #BBF7D0; }
     .tag-ready.env { background: var(--amber-lt);  color: var(--amber); border: 1px solid #FDE68A; }
 
+    /* ── Role tags ── */
+    .role-tag {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      padding: 3px 10px;
+      white-space: nowrap;
+    }
+    .role-tag.superadmin { background: #F5F3FF; color: #6D28D9; border: 1px solid #DDD6FE; }
+    .role-tag.admin      { background: #FEF2F2; color: #B91C1C; border: 1px solid #FECACA; }
+    .role-tag.accountant { background: #EFF6FF; color: #1D4ED8; border: 1px solid #BFDBFE; }
+    .role-tag.staff      { background: #F0FDF4; color: #15803D; border: 1px solid #BBF7D0; }
+    .role-tag.teacher    { background: #FFFBEB; color: #92400E; border: 1px solid #FDE68A; }
+    .role-tag.librarian  { background: #F0FDFA; color: #0F766E; border: 1px solid #99F6E4; }
+    .role-tag.portal     { background: #F8FAFC; color: #475569; border: 1px solid #E2E8F0; }
+
+    .role-table td.td-role { white-space: nowrap; }
+    .role-table td.td-access { color: var(--ink-mid); line-height: 1.55; }
+    .role-table td.td-no { color: var(--ink-light); line-height: 1.55; }
+
     /* ── Tech stack strip ── */
     .tech-strip {
       display: flex;
@@ -439,7 +460,7 @@
   <!-- Stat row -->
   <div class="stat-row">
     <div class="stat-cell">
-      <div class="stat-num">16</div>
+      <div class="stat-num">21</div>
       <div class="stat-rule"></div>
       <div class="stat-label">Admin Modules</div>
     </div>
@@ -447,6 +468,11 @@
       <div class="stat-num">9</div>
       <div class="stat-rule"></div>
       <div class="stat-label">Portal Pages</div>
+    </div>
+    <div class="stat-cell">
+      <div class="stat-num">6</div>
+      <div class="stat-rule"></div>
+      <div class="stat-label">User Roles</div>
     </div>
     <div class="stat-cell">
       <div class="stat-num">5</div>
@@ -464,7 +490,7 @@
   <section class="section">
     <div class="section-head">
       <h2>Admin Modules</h2>
-      <span class="section-count">16 total</span>
+      <span class="section-count">21 total</span>
     </div>
     <div class="module-groups">
 
@@ -484,6 +510,7 @@
         <ul class="mod-list">
           <li><strong>Student Attendance</strong> <span>Daily marking, auto-SMS absent alerts</span></li>
           <li><strong>Exams</strong> <span>Results, report card, AI-generated comments</span></li>
+          <li><strong>Exam Schedule</strong> <span>Date-sheet per exam — class, subject, time, room</span></li>
           <li><strong>Timetable</strong> <span>Class-wise weekly schedule</span></li>
           <li><strong>Homework</strong> <span>Assignments with AI description writer</span></li>
           <li><strong>Study Materials</strong> <span>Upload &amp; share resources</span></li>
@@ -504,6 +531,8 @@
         <ul class="mod-list">
           <li><strong>Notices</strong> <span>AI-written, SMS broadcast to all guardians</span></li>
           <li><strong>Events</strong> <span>School calendar and event management</span></li>
+          <li><strong>Communication Log</strong> <span>Internal message board, shared from Easy Books</span></li>
+          <li><strong>Memo</strong> <span>Internal memo documents</span></li>
         </ul>
       </div>
 
@@ -516,6 +545,62 @@
         </ul>
       </div>
 
+    </div>
+  </section>
+
+  <!-- Roles & Access -->
+  <section class="section">
+    <div class="section-head">
+      <h2>User Roles &amp; Access</h2>
+      <span class="section-count">6 staff roles + portal login · enforced in sidebar, routes and API guards</span>
+    </div>
+    <div class="env-table-wrap">
+      <table class="env-table role-table">
+        <thead>
+          <tr>
+            <th>Role</th>
+            <th>Can Use</th>
+            <th>Cannot Use</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="td-role"><span class="role-tag superadmin">Super Admin</span></td>
+            <td class="td-access">Everything — bypasses all role restrictions across companies</td>
+            <td class="td-no">—</td>
+          </tr>
+          <tr>
+            <td class="td-role"><span class="role-tag admin">Admin</span></td>
+            <td class="td-access">All 21 modules, Settings, user management (invite Teacher / Librarian / Accountant / Staff), SMS broadcast, all deletes, student promotion</td>
+            <td class="td-no">—</td>
+          </tr>
+          <tr>
+            <td class="td-role"><span class="role-tag accountant">Accountant</span></td>
+            <td class="td-access">Full finance — Fees, Ledger, Transactions, bulk invoices, Payroll &amp; HR — plus all academic modules</td>
+            <td class="td-no">Settings, user management, most deletes</td>
+          </tr>
+          <tr>
+            <td class="td-role"><span class="role-tag staff">Staff</span></td>
+            <td class="td-access">Day-to-day operations — academic modules, fees entry, facilities, notices</td>
+            <td class="td-no">Payroll &amp; HR, Settings, user management, deletes</td>
+          </tr>
+          <tr>
+            <td class="td-role"><span class="role-tag teacher">Teacher</span></td>
+            <td class="td-access">Dashboard, Students, Classes, Subjects, Attendance marking, Timetable, Exams (enter results), Exam Schedule, Homework, Study Materials, Notices, Events</td>
+            <td class="td-no">Anything financial — Fees, Ledger, Payroll — plus Library, Hostel, Transport, Settings</td>
+          </tr>
+          <tr>
+            <td class="td-role"><span class="role-tag librarian">Librarian</span></td>
+            <td class="td-access">Dashboard, Library (books, issue / return, fines), Students (for issuing), Notices, Events</td>
+            <td class="td-no">Everything else</td>
+          </tr>
+          <tr>
+            <td class="td-role"><span class="role-tag portal">Parent / Student</span></td>
+            <td class="td-access">Separate portal login (phone + password) — attendance, fees with online payment, results, homework, notices, timetable</td>
+            <td class="td-no">No access to the admin panel at all</td>
+          </tr>
+        </tbody>
+      </table>
     </div>
   </section>
 
@@ -700,7 +785,7 @@
           </tr>
           <tr>
             <td colspan="1">— (no key needed)</td>
-            <td colspan="2">All 16 admin modules, full portal, attendance, fees, results, timetable, library, hostel, transport</td>
+            <td colspan="2">All 21 admin modules, all 6 roles, full portal, attendance, fees, exam schedule, results, timetable, library, hostel, transport</td>
             <td><span class="tag-ready yes">Ready Now</span></td>
           </tr>
         </tbody>
@@ -709,7 +794,7 @@
   </section>
 
   <footer class="report-footer">
-    <div class="ft-left">Easy Books · School Management Module · v1.0 · July 2026</div>
+    <div class="ft-left">Easy Books · School Management Module · v1.1 · July 2026</div>
     <div class="ft-right">Confidential — for partners only</div>
   </footer>
 

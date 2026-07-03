@@ -309,7 +309,7 @@ export default function Exams() {
   const filtered = filterExam ? results.filter(r => r.examName === filterExam) : results;
 
   return (
-    <div className="p-6 space-y-5 max-w-6xl">
+    <div className="p-6 space-y-5">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">Exams & Results</h1>

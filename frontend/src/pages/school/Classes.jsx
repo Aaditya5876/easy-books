@@ -103,7 +103,7 @@ export default function Classes() {
   const teacherName = (id) => employees.find(e => e.id === id)?.name || '—';
 
   return (
-    <div className="p-6 space-y-5 max-w-4xl">
+    <div className="p-6 space-y-5">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">Classes & Sections</h1>

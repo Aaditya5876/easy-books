@@ -414,7 +414,7 @@ export default function Fees() {
   const FREQ = { MONTHLY: 'Monthly', TERM: 'Per Term', ANNUAL: 'Annual' };
 
   return (
-    <div className="p-6 space-y-5 max-w-6xl">
+    <div className="p-6 space-y-5">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">Fee Management</h1>

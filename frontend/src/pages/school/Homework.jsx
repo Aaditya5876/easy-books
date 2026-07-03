@@ -164,7 +164,7 @@ export default function Homework() {
   const fmtDate = (d) => d ? new Date(d).toLocaleDateString('en-NP', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
 
   return (
-    <div className="p-6 space-y-5 max-w-5xl">
+    <div className="p-6 space-y-5">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">Homework</h1>

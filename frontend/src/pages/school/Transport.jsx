@@ -169,7 +169,7 @@ export default function Transport() {
   const fmtAmt = (n) => `Rs. ${Number(n).toLocaleString('en-NP')}`;
 
   return (
-    <div className="p-6 space-y-5 max-w-5xl">
+    <div className="p-6 space-y-5">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">Transport Management</h1>

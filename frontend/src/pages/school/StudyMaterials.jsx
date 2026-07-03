@@ -137,7 +137,7 @@ export default function StudyMaterials() {
   const filtered = materials.filter(m => !search || m.title.toLowerCase().includes(search.toLowerCase()));
 
   return (
-    <div className="p-6 space-y-5 max-w-5xl">
+    <div className="p-6 space-y-5">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">Study Materials</h1>
