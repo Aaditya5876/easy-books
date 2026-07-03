@@ -29,6 +29,10 @@ export class SchoolService {
       pendingInvoices,
       presentToday,
       absentToday,
+      academicYearCount,
+      subjectCount,
+      teacherCount,
+      feeStructureCount,
     ] = await Promise.all([
       this.prisma.student.count({ where: { companyId } }),
       this.prisma.student.count({ where: { companyId, status: 'ACTIVE' } }),
@@ -49,6 +53,10 @@ export class SchoolService {
       }),
       this.prisma.studentAttendance.count({ where: { companyId, date: { gte: todayStart, lt: todayEnd }, status: 'PRESENT' } }),
       this.prisma.studentAttendance.count({ where: { companyId, date: { gte: todayStart, lt: todayEnd }, status: 'ABSENT' } }),
+      this.prisma.academicYear.count({ where: { companyId } }),
+      this.prisma.subject.count({ where: { companyId } }),
+      this.prisma.employee.count({ where: { companyId, deletedAt: null } }),
+      this.prisma.feeStructure.count({ where: { companyId } }),
     ]);
 
     const totalPendingFees = pendingInvoices.reduce(
@@ -78,6 +86,14 @@ export class SchoolService {
       studentsWithDues,
       attendanceToday: { present: presentToday, absent: absentToday },
       pendingFeesList,
+      setup: {
+        academicYears: academicYearCount,
+        teachers: teacherCount,
+        classes: totalClasses,
+        subjects: subjectCount,
+        students: totalStudents,
+        feeStructures: feeStructureCount,
+      },
     };
   }
 

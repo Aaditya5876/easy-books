@@ -1,10 +1,60 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { GraduationCap, DollarSign, AlertCircle, Users, TrendingUp, CheckCircle, Sparkles } from 'lucide-react';
+import { GraduationCap, DollarSign, AlertCircle, Users, TrendingUp, CheckCircle, Sparkles, Circle, ChevronRight } from 'lucide-react';
 import { schoolDashboardApi, aiApi } from '@/api';
 import { getActiveCompanyId } from '@/lib/companyContext';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+
+// First-run checklist, ordered by dependency — each step needs the previous ones.
+// Hidden once every step has at least one record.
+const SETUP_STEPS = [
+  { key: 'academicYears', label: 'Create an academic year', desc: 'e.g. 2083-84 — used to tag attendance', path: '/academic-years' },
+  { key: 'teachers', label: 'Add teachers', desc: 'Needed to assign class teachers & payroll', path: '/employees' },
+  { key: 'classes', label: 'Create classes & sections', desc: 'e.g. Grade 1 (A) — students belong to these', path: '/classes' },
+  { key: 'subjects', label: 'Add subjects', desc: 'Used by timetable, exams & homework', path: '/subjects' },
+  { key: 'students', label: 'Enroll students', desc: 'One by one, or Import from Excel in one go', path: '/students' },
+  { key: 'feeStructures', label: 'Define fee structures', desc: 'Tuition, exam, transport fees per class', path: '/fees' },
+];
+
+function GettingStarted({ setup }) {
+  const done = SETUP_STEPS.filter(s => (setup?.[s.key] ?? 0) > 0).length;
+  if (!setup || done === SETUP_STEPS.length) return null;
+
+  return (
+    <div className="bg-white rounded-xl border border-blue-100 overflow-hidden">
+      <div className="px-5 py-4 border-b bg-blue-50/50 flex items-center justify-between">
+        <div>
+          <h2 className="font-semibold">Getting Started</h2>
+          <p className="text-xs text-muted-foreground mt-0.5">Set up your school in order — each step unlocks the next</p>
+        </div>
+        <span className="text-sm font-medium text-blue-700 tabular-nums">{done}/{SETUP_STEPS.length} done</span>
+      </div>
+      <div className="divide-y">
+        {SETUP_STEPS.map((step, i) => {
+          const isDone = (setup[step.key] ?? 0) > 0;
+          return (
+            <Link
+              key={step.key}
+              to={step.path}
+              className={`flex items-center gap-3 px-5 py-3 hover:bg-muted/40 transition-colors ${isDone ? 'opacity-60' : ''}`}
+            >
+              {isDone
+                ? <CheckCircle className="w-5 h-5 text-emerald-500 shrink-0" />
+                : <Circle className="w-5 h-5 text-muted-foreground/40 shrink-0" />}
+              <div className="flex-1 min-w-0">
+                <p className={`text-sm font-medium ${isDone ? 'line-through' : ''}`}>{i + 1}. {step.label}</p>
+                <p className="text-xs text-muted-foreground truncate">{step.desc}</p>
+              </div>
+              {!isDone && <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />}
+            </Link>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 function StatCard({ icon: Icon, label, value, sub, color = 'blue', loading }) {
   const colors = {
@@ -91,6 +141,8 @@ export default function SchoolDashboard() {
           Class Insights
         </button>
       </div>
+
+      {!isLoading && <GettingStarted setup={data?.setup} />}
 
       {/* Stat cards */}
       <div className="grid grid-cols-2 md:grid-cols-3 gap-4">

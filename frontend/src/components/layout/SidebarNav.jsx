@@ -90,6 +90,9 @@ const navSections = [
 
 // `roles` on an item = also visible to these restricted roles (TEACHER / LIBRARIAN).
 // Items without `roles` are hidden from restricted roles entirely.
+// `minRole` on an item mirrors the section-level gate (admin / accountant).
+// Sections are ordered by first-run dependency: Setup holds what everything
+// else needs (year → teachers → classes → subjects), then daily-use modules.
 const schoolNavSections = [
   {
     label: 'Main',
@@ -101,13 +104,22 @@ const schoolNavSections = [
     ]
   },
   {
+    label: 'Setup',
+    labelColor: 'text-rose-400',
+    activeClass: 'bg-rose-600 text-white shadow-sm shadow-rose-900/30',
+    items: [
+      { icon: CalendarDays, label: 'Academic Years', path: '/academic-years' },
+      { icon: UserCircle, label: 'Teachers', path: '/employees', minRole: 'accountant' },
+      { icon: School, label: 'Classes', path: '/classes', roles: ['TEACHER'] },
+      { icon: BookMarked, label: 'Subjects', path: '/subjects', roles: ['TEACHER'] },
+    ]
+  },
+  {
     label: 'Academic',
     labelColor: 'text-emerald-400',
     activeClass: 'bg-emerald-600 text-white shadow-sm shadow-emerald-900/30',
     items: [
       { icon: GraduationCap, label: 'Students', path: '/students', roles: ['TEACHER', 'LIBRARIAN'] },
-      { icon: School, label: 'Classes', path: '/classes', roles: ['TEACHER'] },
-      { icon: BookMarked, label: 'Subjects', path: '/subjects', roles: ['TEACHER'] },
       { icon: CalendarCheck2, label: 'Attendance', path: '/student-attendance', roles: ['TEACHER'] },
       { icon: Clock, label: 'Timetable', path: '/timetable', roles: ['TEACHER'] },
       { icon: Trophy, label: 'Exams', path: '/exams', roles: ['TEACHER'] },
@@ -153,7 +165,6 @@ const schoolNavSections = [
     activeClass: 'bg-sky-600 text-white shadow-sm shadow-sky-900/30',
     minRole: 'accountant',
     items: [
-      { icon: UserCircle, label: 'Teachers', path: '/employees' },
       { icon: CalendarCheck, label: 'Staff Attendance', path: '/attendance' },
       { icon: Banknote, label: 'Payroll', path: '/payroll' },
     ]
@@ -164,7 +175,6 @@ const schoolNavSections = [
     activeClass: 'bg-rose-600 text-white shadow-sm shadow-rose-900/30',
     minRole: 'admin',
     items: [
-      { icon: CalendarDays, label: 'Academic Years', path: '/academic-years' },
       { icon: Settings, label: 'Settings', path: '/settings' },
     ]
   },
@@ -177,7 +187,7 @@ export default function SidebarNav({ collapsed, onToggle }) {
   const { user } = useAuth();
   const isSchool = user?.defaultCompany?.businessType === 'SCHOOL';
   const [expandedSections, setExpandedSections] = useState(
-    navSections.map(() => true)
+    Array(Math.max(navSections.length, schoolNavSections.length)).fill(true)
   );
 
   const hasBgColor = !!prefs.sidebarColor;
@@ -204,7 +214,11 @@ export default function SidebarNav({ collapsed, onToggle }) {
     })
     .map(section => ({
       ...section,
-      items: section.items.filter(item => !restrictedRole || item.roles?.includes(role)),
+      items: section.items.filter(item => {
+        if (item.minRole === 'admin' && !isAdmin) return false;
+        if (item.minRole === 'accountant' && !canViewPayroll) return false;
+        return !restrictedRole || item.roles?.includes(role);
+      }),
     }))
     .filter(section => section.items.length > 0);
 
