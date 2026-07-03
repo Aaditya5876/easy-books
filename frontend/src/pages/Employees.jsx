@@ -15,9 +15,11 @@ import PageLoader from '../components/PageLoader';
 import EmptyState from '../components/EmptyState';
 import {
   UserCircle, User, Phone, Mail, MapPin, Hash,
-  Building2, Award, Calendar, Briefcase, FileText,
+  Building2, Award, Calendar, Briefcase, FileText, Upload,
 } from 'lucide-react';
 import { useRole } from "@/lib/useRole";
+import BulkImportDialog from '../components/shared/BulkImportDialog';
+import { EMPLOYEE_FIELDS } from '../components/shared/bulkImportFields';
 
 const statusColors = {
   active: 'bg-green-100 text-green-700',
@@ -229,6 +231,7 @@ export default function Employees() {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editEmployee, setEditEmployee] = useState(null);
+  const [importOpen, setImportOpen] = useState(false);
   const [colFilters, setColFilters] = useState({ name: '', department: '', designation: '', status: '' });
   const setCol = (key, val) => setColFilters(f => ({ ...f, [key]: val }));
   const [form, setForm] = useState(EMPTY_FORM);
@@ -299,6 +302,21 @@ export default function Employees() {
         subtitle="Manage employee records"
         onAdd={() => setShowForm(true)}
         addLabel="Add Employee"
+      >
+        {canEdit && (
+          <Button variant="outline" className="gap-2" onClick={() => setImportOpen(true)}>
+            <Upload className="w-4 h-4" /> Import
+          </Button>
+        )}
+      </PageHeader>
+
+      <BulkImportDialog
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        entity="employees"
+        title="Import Employees"
+        fields={EMPLOYEE_FIELDS}
+        onDone={load}
       />
 
       {employees.length === 0 ? (

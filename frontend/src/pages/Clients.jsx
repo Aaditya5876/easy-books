@@ -19,9 +19,11 @@ import {
 import PageLoader from '../components/PageLoader';
 import EmptyState from '../components/EmptyState';
 import {
-  UserCheck, Building2, Phone, Mail, MapPin, Hash, Wallet, CreditCard, FileText, Truck, User
+  UserCheck, Building2, Phone, Mail, MapPin, Hash, Wallet, CreditCard, FileText, Truck, User, Upload
 } from 'lucide-react';
 import { useRole } from "@/lib/useRole";
+import BulkImportDialog from '../components/shared/BulkImportDialog';
+import { CLIENT_FIELDS } from '../components/shared/bulkImportFields';
 
 const CRM_STATUSES = ['lead', 'prospect', 'active', 'inactive'];
 const PAYMENT_TERMS = ['Immediate', 'NET-15', 'NET-30', 'NET-45', 'NET-60'];
@@ -38,6 +40,7 @@ export default function Clients() {
   const [showAdd, setShowAdd] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
   const [editClient, setEditClient] = useState(null);
+  const [importOpen, setImportOpen] = useState(false);
 
   useEffect(() => {
     if (companyId) loadData();
@@ -107,7 +110,22 @@ export default function Clients() {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <PageHeader title="Clients" subtitle={`${clients.length} clients · CRM Overview`} searchValue={search} onSearchChange={setSearch} onAdd={() => setShowAdd(true)} addLabel="Add Client" />
+      <PageHeader title="Clients" subtitle={`${clients.length} clients · CRM Overview`} searchValue={search} onSearchChange={setSearch} onAdd={() => setShowAdd(true)} addLabel="Add Client">
+        {canEdit && (
+          <Button variant="outline" className="gap-2" onClick={() => setImportOpen(true)}>
+            <Upload className="w-4 h-4" /> Import
+          </Button>
+        )}
+      </PageHeader>
+
+      <BulkImportDialog
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        entity="clients"
+        title="Import Clients"
+        fields={CLIENT_FIELDS}
+        onDone={loadData}
+      />
 
       {/* CRM Summary */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">

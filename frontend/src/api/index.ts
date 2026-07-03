@@ -285,6 +285,11 @@ export const examResultsApi = {
     apiClient.delete(`/api/v1/school/exam-results/${id}`, { params: { companyId: companyId() } }),
 };
 
+export const bulkImportApi = {
+  import: (entity: string, rows: object[]) =>
+    apiClient.post(`/api/v1/bulk/${entity}`, { companyId: companyId(), rows }),
+};
+
 export const examSchedulesApi = {
   list: (params?: object) =>
     apiClient.get('/api/v1/school/exam-schedules', { params: { companyId: companyId(), ...params } }),

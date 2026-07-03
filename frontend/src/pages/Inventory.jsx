@@ -20,8 +20,10 @@ import {
 } from "@/components/ui/select";
 import {
   AlertTriangle, Package, ImagePlus, X, Trash2, Tag, ArrowUpDown, History,
-  FileText, Award, Hash, Layers, Truck, MapPin, Calendar, Clock, MessageSquare
+  FileText, Award, Hash, Layers, Truck, MapPin, Calendar, Clock, MessageSquare, Upload
 } from 'lucide-react';
+import BulkImportDialog from '../components/shared/BulkImportDialog';
+import { INVENTORY_FIELDS } from '../components/shared/bulkImportFields';
 import PageLoader from '../components/PageLoader';
 import EmptyState from '../components/EmptyState';
 import { useRole } from "@/lib/useRole";
@@ -79,6 +81,7 @@ export default function Inventory() {
   const setFilter = (key, val) => setFilters(f => ({ ...f, [key]: val }));
   const hasFilters = Object.values(filters).some(v => v);
   const [showAdd, setShowAdd] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [selectedItem, setSelectedItem] = useState(null);
@@ -308,6 +311,11 @@ export default function Inventory() {
         addLabel="Add Stock"
       >
         {canEdit && (
+          <Button onClick={() => setImportOpen(true)} variant="outline" className="gap-2">
+            <Upload className="w-4 h-4" />Import
+          </Button>
+        )}
+        {canEdit && (
           <Button onClick={handleAdjustClick} variant="outline" className="gap-2" disabled={!selectedItem}>
             <ArrowUpDown className="w-4 h-4" />Adjust Stock
           </Button>
@@ -326,6 +334,15 @@ export default function Inventory() {
           </Button>
         )}
       </PageHeader>
+
+      <BulkImportDialog
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        entity="inventory"
+        title="Import Inventory Items"
+        fields={INVENTORY_FIELDS}
+        onDone={loadItems}
+      />
 
       {lowStockCount > 0 && (
         <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-center gap-3">

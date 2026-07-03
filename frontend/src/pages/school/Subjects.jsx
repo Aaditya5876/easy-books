@@ -10,8 +10,10 @@ import {
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
-import { BookMarked, Plus, Pencil, Trash2 } from 'lucide-react';
+import { BookMarked, Plus, Pencil, Trash2, Upload } from 'lucide-react';
 import { toast } from 'sonner';
+import BulkImportDialog from '@/components/shared/BulkImportDialog';
+import { SUBJECT_FIELDS } from '@/components/shared/bulkImportFields';
 
 function SubjectDialog({ open, onClose, subject }) {
   const qc = useQueryClient();
@@ -66,6 +68,7 @@ function SubjectDialog({ open, onClose, subject }) {
 export default function Subjects() {
   const qc = useQueryClient();
   const [dialog, setDialog] = useState({ open: false, subject: null });
+  const [importOpen, setImportOpen] = useState(false);
 
   const { data: subjects = [], isLoading } = useQuery({
     queryKey: ['school-subjects'],
@@ -90,10 +93,24 @@ export default function Subjects() {
           <BookMarked className="h-6 w-6 text-primary" />
           <h1 className="text-2xl font-bold">Subjects</h1>
         </div>
-        <Button onClick={() => setDialog({ open: true, subject: null })}>
-          <Plus className="h-4 w-4 mr-1" /> Add Subject
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => setImportOpen(true)}>
+            <Upload className="h-4 w-4 mr-1" /> Import
+          </Button>
+          <Button onClick={() => setDialog({ open: true, subject: null })}>
+            <Plus className="h-4 w-4 mr-1" /> Add Subject
+          </Button>
+        </div>
       </div>
+
+      <BulkImportDialog
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        entity="subjects"
+        title="Import Subjects"
+        fields={SUBJECT_FIELDS}
+        onDone={() => qc.invalidateQueries({ queryKey: ['school-subjects'] })}
+      />
 
       <div className="rounded-md border bg-card">
         <Table>

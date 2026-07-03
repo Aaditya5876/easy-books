@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Pencil, Trash2, BookOpen, ArrowLeftRight } from 'lucide-react';
+import { Plus, Pencil, Trash2, BookOpen, ArrowLeftRight, Upload } from 'lucide-react';
+import BulkImportDialog from '@/components/shared/BulkImportDialog';
+import { BOOK_FIELDS } from '@/components/shared/bulkImportFields';
 import { libraryApi } from '@/api';
 import { getActiveCompanyId } from '@/lib/companyContext';
 import { Button } from '@/components/ui/button';
@@ -183,6 +185,7 @@ export default function Library() {
   const [issueDialog, setIssueDialog] = useState(false);
   const [returnDialog, setReturnDialog] = useState(null);
   const [search, setSearch] = useState('');
+  const [importOpen, setImportOpen] = useState(false);
 
   const { data: books = [], isLoading: loadingBooks } = useQuery({
     queryKey: ['library-books', companyId],
@@ -214,6 +217,11 @@ export default function Library() {
         </div>
         <div className="flex gap-2">
           {tab === 'books' && (
+            <Button variant="outline" onClick={() => setImportOpen(true)}>
+              <Upload className="w-4 h-4 mr-2" /> Import
+            </Button>
+          )}
+          {tab === 'books' && (
             <Button variant="outline" onClick={() => setIssueDialog(true)}>
               <ArrowLeftRight className="w-4 h-4 mr-2" /> Issue Book
             </Button>
@@ -225,6 +233,15 @@ export default function Library() {
           )}
         </div>
       </div>
+
+      <BulkImportDialog
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        entity="books"
+        title="Import Books"
+        fields={BOOK_FIELDS}
+        onDone={() => qc.invalidateQueries({ queryKey: ['library-books'] })}
+      />
 
       {/* Tabs */}
       <div className="flex gap-1 bg-muted/40 p-1 rounded-lg w-fit">

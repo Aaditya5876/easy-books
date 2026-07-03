@@ -18,9 +18,11 @@ import {
 import PageLoader from '../components/PageLoader';
 import EmptyState from '../components/EmptyState';
 import {
-  Users, Building2, Phone, Mail, MapPin, Hash, Wallet, CreditCard, FileText, Truck, User
+  Users, Building2, Phone, Mail, MapPin, Hash, Wallet, CreditCard, FileText, Truck, User, Upload
 } from 'lucide-react';
 import { useRole } from "@/lib/useRole";
+import BulkImportDialog from '../components/shared/BulkImportDialog';
+import { VENDOR_FIELDS } from '../components/shared/bulkImportFields';
 
 const PAYMENT_TERMS = ['Immediate', 'NET-15', 'NET-30', 'NET-45', 'NET-60'];
 const EMPTY_FORM = { name: '', contact_person: '', phone: '', email: '', address: '', pan_vat: '', opening_balance: '', credit_limit: '', payment_terms: 'Immediate', notes: '' };
@@ -36,6 +38,7 @@ export default function Vendors() {
   const [showAdd, setShowAdd] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
   const [editVendor, setEditVendor] = useState(null);
+  const [importOpen, setImportOpen] = useState(false);
 
   useEffect(() => {
     if (companyId) loadData();
@@ -94,7 +97,22 @@ export default function Vendors() {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <PageHeader title="Vendors" subtitle={`${vendors.length} vendors`} searchValue={search} onSearchChange={setSearch} onAdd={() => setShowAdd(true)} addLabel="Add Vendor" />
+      <PageHeader title="Vendors" subtitle={`${vendors.length} vendors`} searchValue={search} onSearchChange={setSearch} onAdd={() => setShowAdd(true)} addLabel="Add Vendor">
+        {canEdit && (
+          <Button variant="outline" className="gap-2" onClick={() => setImportOpen(true)}>
+            <Upload className="w-4 h-4" /> Import
+          </Button>
+        )}
+      </PageHeader>
+
+      <BulkImportDialog
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        entity="vendors"
+        title="Import Vendors"
+        fields={VENDOR_FIELDS}
+        onDone={loadData}
+      />
 
       {vendors.length === 0 ? (
         <EmptyState icon={Users} title="No vendors yet" description="Add your first vendor to start tracking purchases." action={<Button onClick={() => setShowAdd(true)}>Add Vendor</Button>} />

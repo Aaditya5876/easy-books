@@ -6,7 +6,8 @@
       "PowerShell(netstat -ano)",
       "PowerShell(Get-Process -Name \"node\" -ErrorAction SilentlyContinue | Select-Object Id, ProcessName, CPU, @{n='Mem\\(MB\\)';e={[math]::Round\\($_.WorkingSet/1MB,1\\)}})",
       "Bash(npx prisma *)",
-      "Bash(npm run *)"
+      "Bash(npm run *)",
+      "Bash(npx tsc *)"
     ]
   }
 }

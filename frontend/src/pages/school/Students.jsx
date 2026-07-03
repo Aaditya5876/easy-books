@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Search, Pencil, Trash2, GraduationCap, X, ArrowRight, KeyRound } from 'lucide-react';
+import { Plus, Search, Pencil, Trash2, GraduationCap, X, ArrowRight, KeyRound, Upload } from 'lucide-react';
+import BulkImportDialog from '@/components/shared/BulkImportDialog';
+import { STUDENT_FIELDS } from '@/components/shared/bulkImportFields';
 import { studentsApi, classesApi, portalApi } from '@/api';
 import { getActiveCompanyId } from '@/lib/companyContext';
 import { Button } from '@/components/ui/button';
@@ -278,6 +280,7 @@ export default function Students() {
   const [dialog, setDialog] = useState(null);
   const [promoteDialog, setPromoteDialog] = useState(false);
   const [portalDialog, setPortalDialog] = useState(null);
+  const [importOpen, setImportOpen] = useState(false);
 
   const { data: classes = [] } = useQuery({
     queryKey: ['classes', companyId],
@@ -319,6 +322,9 @@ export default function Students() {
           <p className="text-muted-foreground text-sm mt-1">{students.length} enrolled</p>
         </div>
         <div className="flex gap-2">
+          <Button variant="outline" onClick={() => setImportOpen(true)}>
+            <Upload className="w-4 h-4 mr-1" /> Import
+          </Button>
           <Button variant="outline" onClick={() => setPromoteDialog(true)}>
             <ArrowRight className="w-4 h-4 mr-1" /> Promote
           </Button>
@@ -327,6 +333,19 @@ export default function Students() {
           </Button>
         </div>
       </div>
+
+      <BulkImportDialog
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        entity="students"
+        title="Import Students"
+        fields={STUDENT_FIELDS}
+        onDone={() => {
+          qc.invalidateQueries({ queryKey: ['students'] });
+          qc.invalidateQueries({ queryKey: ['classes'] });
+          qc.invalidateQueries({ queryKey: ['school-dashboard'] });
+        }}
+      />
 
       {/* Filters */}
       <div className="flex gap-3 flex-wrap">
