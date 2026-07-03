@@ -1,6 +1,37 @@
 import { useQuery } from '@tanstack/react-query';
+import { motion } from 'framer-motion';
 import { portalApi } from '@/api';
 import { Trophy } from 'lucide-react';
+import { pageVariants, containerVariants, cardVariants } from '@/lib/portalAnimations';
+
+function gradeColor(pct) {
+  if (pct >= 80) return { color: '#10B981', bg: '#F0FDF4', label: 'Excellent' };
+  if (pct >= 60) return { color: '#3B82F6', bg: '#EFF6FF', label: 'Good' };
+  if (pct >= 40) return { color: '#F59E0B', bg: '#FFFBEB', label: 'Average' };
+  return { color: '#F43F5E', bg: '#FFF1F2', label: 'Needs Work' };
+}
+
+function ScoreBar({ obtained, total }) {
+  const pct = total > 0 ? (obtained / total) * 100 : 0;
+  const gc  = gradeColor(pct);
+  return (
+    <div className="w-full">
+      <div className="flex items-center justify-between mb-1">
+        <span className="text-xs text-slate-500 tabular-nums">{obtained} / {total}</span>
+        <span className="text-xs font-semibold tabular-nums" style={{ color: gc.color }}>{pct.toFixed(0)}%</span>
+      </div>
+      <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
+        <motion.div
+          className="h-full rounded-full"
+          style={{ background: gc.color }}
+          initial={{ width: 0 }}
+          animate={{ width: `${pct}%` }}
+          transition={{ duration: 1, ease: 'easeOut', delay: 0.2 }}
+        />
+      </div>
+    </div>
+  );
+}
 
 export default function PortalResults() {
   const { data: results = [], isLoading } = useQuery({
@@ -11,69 +42,75 @@ export default function PortalResults() {
   const examNames = [...new Set(results.map(r => r.examName))];
 
   return (
-    <div className="p-6 space-y-6 max-w-3xl">
-      <h1 className="text-2xl font-bold text-gray-900">Exam Results</h1>
+    <motion.div variants={pageVariants} initial="initial" animate="animate" exit="exit" className="p-5 md:p-7 space-y-5 max-w-2xl">
+      <h1 className="text-2xl font-bold text-slate-900">Exam Results</h1>
 
       {isLoading ? (
-        <div className="bg-white rounded-xl border border-gray-200 p-12 text-center text-gray-400 text-sm">Loading…</div>
+        <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center text-slate-400 text-sm">Loading…</div>
       ) : results.length === 0 ? (
-        <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
-          <Trophy className="w-10 h-10 text-gray-200 mx-auto mb-3" />
-          <p className="text-gray-400 text-sm">No exam results yet</p>
+        <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center">
+          <Trophy className="w-10 h-10 text-slate-200 mx-auto mb-3" />
+          <p className="text-slate-400 text-sm">No exam results yet</p>
         </div>
       ) : (
-        examNames.map(examName => {
-          const examResults = results.filter(r => r.examName === examName);
-          const totalObtained = examResults.reduce((s, r) => s + Number(r.marksObtained), 0);
-          const totalMax = examResults.reduce((s, r) => s + Number(r.totalMarks), 0);
-          const pct = totalMax > 0 ? ((totalObtained / totalMax) * 100).toFixed(1) : '—';
-          return (
-            <div key={examName} className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-              <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
-                <h2 className="font-semibold text-gray-900">{examName}</h2>
-                <div className="text-right">
-                  <span className="text-sm font-bold text-gray-900">{totalObtained} / {totalMax}</span>
-                  <span className={`ml-2 inline-flex px-2 py-0.5 rounded-full text-xs font-bold ${
-                    Number(pct) >= 80 ? 'bg-emerald-100 text-emerald-700' :
-                    Number(pct) >= 60 ? 'bg-blue-100 text-blue-700' :
-                    Number(pct) >= 40 ? 'bg-amber-100 text-amber-700' :
-                    'bg-red-100 text-red-700'
-                  }`}>{pct}%</span>
+        <motion.div variants={containerVariants} initial="initial" animate="animate" className="space-y-5">
+          {examNames.map(examName => {
+            const examResults    = results.filter(r => r.examName === examName);
+            const totalObtained  = examResults.reduce((s, r) => s + Number(r.marksObtained), 0);
+            const totalMax       = examResults.reduce((s, r) => s + Number(r.totalMarks), 0);
+            const pct            = totalMax > 0 ? (totalObtained / totalMax) * 100 : 0;
+            const gc             = gradeColor(pct);
+
+            return (
+              <motion.div key={examName} variants={cardVariants} className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+                {/* Header */}
+                <div className="px-5 py-4 flex items-center justify-between" style={{ background: gc.bg }}>
+                  <div>
+                    <h2 className="font-bold text-slate-900">{examName}</h2>
+                    <p className="text-xs mt-0.5" style={{ color: gc.color }}>{gc.label}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-2xl font-bold tabular-nums" style={{ color: gc.color }}>
+                      {pct.toFixed(1)}%
+                    </p>
+                    <p className="text-xs text-slate-500 tabular-nums">{totalObtained} / {totalMax} marks</p>
+                  </div>
                 </div>
-              </div>
-              <table className="w-full text-sm">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="text-left px-5 py-2.5 text-xs font-medium text-gray-400 uppercase tracking-wide">Subject</th>
-                    <th className="text-right px-5 py-2.5 text-xs font-medium text-gray-400 uppercase tracking-wide">Marks</th>
-                    <th className="text-right px-5 py-2.5 text-xs font-medium text-gray-400 uppercase tracking-wide">%</th>
-                    <th className="text-left px-5 py-2.5 text-xs font-medium text-gray-400 uppercase tracking-wide">Grade</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {examResults.map(r => {
-                    const subjectPct = ((Number(r.marksObtained) / Number(r.totalMarks)) * 100).toFixed(1);
+
+                {/* Subject rows */}
+                <div className="divide-y divide-slate-100">
+                  {examResults.map((r, i) => {
+                    const sPct = Number(r.totalMarks) > 0
+                      ? (Number(r.marksObtained) / Number(r.totalMarks)) * 100
+                      : 0;
                     return (
-                      <tr key={r.id} className="hover:bg-gray-50">
-                        <td className="px-5 py-3 text-gray-800">{r.subject?.name || '—'}</td>
-                        <td className="px-5 py-3 text-right tabular-nums text-gray-700">
-                          {Number(r.marksObtained).toFixed(0)} / {Number(r.totalMarks).toFixed(0)}
-                        </td>
-                        <td className="px-5 py-3 text-right tabular-nums text-gray-600">{subjectPct}%</td>
-                        <td className="px-5 py-3">
-                          {r.grade ? (
-                            <span className="inline-flex px-2 py-0.5 rounded-full text-xs font-bold bg-blue-100 text-blue-700">{r.grade}</span>
-                          ) : '—'}
-                        </td>
-                      </tr>
+                      <motion.div
+                        key={r.id}
+                        initial={{ opacity: 0, x: -10 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: 0.05 * i, duration: 0.3 }}
+                        className="px-5 py-3"
+                      >
+                        <div className="flex items-center justify-between mb-1.5">
+                          <p className="text-sm font-semibold text-slate-800">{r.subject?.name || '—'}</p>
+                          <div className="flex items-center gap-2">
+                            {r.grade && (
+                              <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700">
+                                {r.grade}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <ScoreBar obtained={Number(r.marksObtained)} total={Number(r.totalMarks)} />
+                      </motion.div>
                     );
                   })}
-                </tbody>
-              </table>
-            </div>
-          );
-        })
+                </div>
+              </motion.div>
+            );
+          })}
+        </motion.div>
       )}
-    </div>
+    </motion.div>
   );
 }

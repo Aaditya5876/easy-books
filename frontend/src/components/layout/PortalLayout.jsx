@@ -1,33 +1,39 @@
 import { useEffect, useState } from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
+import { AnimatePresence, motion } from 'framer-motion';
 import {
   LayoutDashboard, CalendarCheck, DollarSign, Trophy,
-  ClipboardList, Megaphone, Clock, LogOut, BookOpen, ChevronRight
+  ClipboardList, Megaphone, Clock, LogOut, BookOpen,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-const navItems = [
-  { icon: LayoutDashboard, label: 'Dashboard', path: '/portal' },
-  { icon: CalendarCheck,   label: 'Attendance',  path: '/portal/attendance' },
-  { icon: DollarSign,      label: 'Fees',         path: '/portal/fees' },
-  { icon: Trophy,          label: 'Results',       path: '/portal/results' },
-  { icon: ClipboardList,   label: 'Homework',     path: '/portal/homework' },
-  { icon: Megaphone,       label: 'Notices',       path: '/portal/notices' },
-  { icon: Clock,           label: 'Timetable',     path: '/portal/timetable' },
+const NAV = [
+  { icon: LayoutDashboard, label: 'Home',       path: '/portal',            color: '#3B82F6' },
+  { icon: CalendarCheck,   label: 'Attendance', path: '/portal/attendance', color: '#10B981' },
+  { icon: DollarSign,      label: 'Fees',       path: '/portal/fees',       color: '#F59E0B' },
+  { icon: Trophy,          label: 'Results',    path: '/portal/results',    color: '#8B5CF6' },
+  { icon: ClipboardList,   label: 'Homework',   path: '/portal/homework',   color: '#F97316' },
+  { icon: Megaphone,       label: 'Notices',    path: '/portal/notices',    color: '#F43F5E' },
+  { icon: Clock,           label: 'Timetable',  path: '/portal/timetable',  color: '#14B8A6' },
 ];
 
+function isActive(item, pathname) {
+  return item.path === '/portal'
+    ? pathname === '/portal'
+    : pathname.startsWith(item.path);
+}
+
 export default function PortalLayout() {
-  const navigate = useNavigate();
-  const location = useLocation();
-  const [student, setStudent] = useState(null);
+  const navigate  = useNavigate();
+  const location  = useLocation();
+  const [student, setStudent]     = useState(null);
   const [portalType, setPortalType] = useState('PARENT');
 
   useEffect(() => {
     const token = localStorage.getItem('portal_token');
     if (!token) { navigate('/portal/login', { replace: true }); return; }
     try {
-      const s = JSON.parse(localStorage.getItem('portal_student') || 'null');
-      setStudent(s);
+      setStudent(JSON.parse(localStorage.getItem('portal_student') || 'null'));
       setPortalType(localStorage.getItem('portal_type') || 'PARENT');
     } catch { navigate('/portal/login', { replace: true }); }
   }, [navigate]);
@@ -39,73 +45,153 @@ export default function PortalLayout() {
     navigate('/portal/login', { replace: true });
   }
 
+  const initials = student?.name?.[0]?.toUpperCase() || 'S';
+
   return (
-    <div className="flex min-h-screen bg-gray-50">
-      {/* Sidebar */}
-      <aside className="w-60 bg-white border-r border-gray-200 flex flex-col fixed h-screen z-30">
-        {/* Logo */}
-        <div className="flex items-center gap-3 px-4 h-16 border-b border-gray-100">
-          <div className="w-8 h-8 rounded-lg bg-emerald-600 flex items-center justify-center">
+    <div className="flex min-h-screen bg-slate-50">
+
+      {/* ── Desktop sidebar ── */}
+      <aside className="hidden md:flex w-64 bg-slate-900 flex-col fixed h-screen z-30">
+
+        {/* Brand */}
+        <div className="flex items-center gap-3 px-5 h-16 border-b border-slate-800">
+          <div className="w-8 h-8 rounded-xl bg-blue-500 flex items-center justify-center shadow-lg shadow-blue-500/30">
             <BookOpen className="w-4 h-4 text-white" />
           </div>
           <div>
-            <p className="text-sm font-bold text-gray-900">EasyBooks</p>
-            <p className="text-[10px] text-gray-400">{portalType === 'STUDENT' ? 'Student Portal' : 'Parent Portal'}</p>
+            <p className="text-sm font-bold text-white leading-none">EasyBooks</p>
+            <p className="text-[10px] text-slate-400 mt-0.5">
+              {portalType === 'STUDENT' ? 'Student Portal' : 'Parent Portal'}
+            </p>
           </div>
         </div>
 
         {/* Student card */}
         {student && (
-          <div className="mx-3 mt-4 p-3 rounded-xl bg-emerald-50 border border-emerald-100">
-            <div className="w-9 h-9 rounded-full bg-emerald-600 flex items-center justify-center text-white font-bold text-sm mb-2">
-              {student.name?.[0]?.toUpperCase() || 'S'}
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.15 }}
+            className="mx-4 mt-5 p-4 rounded-2xl bg-slate-800 border border-slate-700"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-white font-bold text-sm shadow-lg">
+                {initials}
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-white truncate leading-tight">{student.name}</p>
+                {student.class && (
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    {student.class.name}{student.class.section ? ` · ${student.class.section}` : ''}
+                  </p>
+                )}
+                {student.rollNumber && (
+                  <p className="text-xs text-slate-500">Roll {student.rollNumber}</p>
+                )}
+              </div>
             </div>
-            <p className="text-sm font-semibold text-gray-900 leading-tight">{student.name}</p>
-            {student.class && (
-              <p className="text-xs text-emerald-700 mt-0.5">
-                {student.class.name}{student.class.section ? ` (${student.class.section})` : ''}
-              </p>
-            )}
-            {student.rollNumber && <p className="text-xs text-gray-400">Roll: {student.rollNumber}</p>}
-          </div>
+          </motion.div>
         )}
 
         {/* Nav */}
-        <nav className="flex-1 px-2 py-4 space-y-0.5 overflow-y-auto">
-          {navItems.map(item => {
-            const Icon = item.icon;
-            const isActive = location.pathname === item.path ||
-              (item.path !== '/portal' && location.pathname.startsWith(item.path));
+        <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
+          {NAV.map((item, i) => {
+            const Icon    = item.icon;
+            const active  = isActive(item, location.pathname);
             return (
-              <Link key={item.path} to={item.path}
-                className={cn(
-                  'flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors',
-                  isActive
-                    ? 'bg-emerald-600 text-white'
-                    : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
-                )}>
-                <Icon className="w-4 h-4 shrink-0" />
-                <span>{item.label}</span>
-                {isActive && <ChevronRight className="w-3.5 h-3.5 ml-auto" />}
-              </Link>
+              <motion.div
+                key={item.path}
+                initial={{ opacity: 0, x: -16 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.05 * i, duration: 0.3 }}
+              >
+                <Link
+                  to={item.path}
+                  className={cn(
+                    'flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all',
+                    active ? 'text-white' : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                  )}
+                  style={active ? { background: `${item.color}22` } : {}}
+                >
+                  <Icon
+                    className="w-4 h-4 shrink-0 transition-colors"
+                    style={active ? { color: item.color } : {}}
+                  />
+                  <span>{item.label}</span>
+                  {active && (
+                    <motion.div
+                      layoutId="sidebar-indicator"
+                      className="ml-auto w-1.5 h-1.5 rounded-full"
+                      style={{ background: item.color }}
+                    />
+                  )}
+                </Link>
+              </motion.div>
             );
           })}
         </nav>
 
         {/* Logout */}
-        <div className="p-3 border-t border-gray-100">
-          <button onClick={logout}
-            className="flex items-center gap-2 w-full px-3 py-2 rounded-lg text-sm text-gray-500 hover:bg-red-50 hover:text-red-600 transition-colors">
+        <div className="p-4 border-t border-slate-800">
+          <button
+            onClick={logout}
+            className="flex items-center gap-2 w-full px-3 py-2.5 rounded-xl text-sm text-slate-400 hover:bg-red-500/10 hover:text-red-400 transition-colors"
+          >
             <LogOut className="w-4 h-4" />
             Sign Out
           </button>
         </div>
       </aside>
 
-      {/* Main */}
-      <main className="flex-1 ml-60 min-h-screen">
-        <Outlet />
+      {/* ── Main ── */}
+      <main className="flex-1 md:ml-64 min-h-screen pb-20 md:pb-0">
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={location.pathname}
+            initial={{ opacity: 0, y: 18 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
+          >
+            <Outlet />
+          </motion.div>
+        </AnimatePresence>
       </main>
+
+      {/* ── Mobile bottom nav ── */}
+      <nav className="fixed bottom-0 left-0 right-0 z-40 md:hidden bg-white border-t border-gray-100 shadow-xl">
+        <div className="flex items-stretch">
+          {NAV.map(item => {
+            const Icon   = item.icon;
+            const active = isActive(item, location.pathname);
+            return (
+              <Link
+                key={item.path}
+                to={item.path}
+                className="flex-1 flex flex-col items-center justify-center py-2 gap-0.5 relative"
+              >
+                {active && (
+                  <motion.div
+                    layoutId="bottom-indicator"
+                    className="absolute top-0 left-1/2 -translate-x-1/2 w-6 h-0.5 rounded-full"
+                    style={{ background: item.color }}
+                  />
+                )}
+                <Icon
+                  className="w-5 h-5 transition-colors"
+                  style={active ? { color: item.color } : { color: '#94A3B8' }}
+                />
+                <span
+                  className="text-[9px] font-medium transition-colors leading-none"
+                  style={active ? { color: item.color } : { color: '#94A3B8' }}
+                >
+                  {item.label}
+                </span>
+              </Link>
+            );
+          })}
+        </div>
+      </nav>
     </div>
   );
 }

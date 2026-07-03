@@ -1,7 +1,51 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { Link } from 'react-router-dom';
+import { motion } from 'framer-motion';
+import { animate } from 'framer-motion';
 import { portalApi } from '@/api';
-import { CalendarCheck, DollarSign, ClipboardList, AlertCircle } from 'lucide-react';
+import { CalendarCheck, DollarSign, ClipboardList, AlertCircle, ChevronRight, Trophy } from 'lucide-react';
+import { containerVariants, cardVariants, itemVariants } from '@/lib/portalAnimations';
+
+function CountUp({ to, suffix = '' }) {
+  const ref = useRef(null);
+  useEffect(() => {
+    const controls = animate(0, Number(to) || 0, {
+      duration: 1.4,
+      ease: 'easeOut',
+      onUpdate(v) { if (ref.current) ref.current.textContent = Math.round(v) + suffix; },
+    });
+    return () => controls.stop();
+  }, [to, suffix]);
+  return <span ref={ref}>0{suffix}</span>;
+}
+
+const STAT_CARDS = [
+  {
+    key: 'attendance',
+    label: 'Attendance',
+    icon: CalendarCheck,
+    color: '#10B981',
+    bg: '#F0FDF4',
+    link: '/portal/attendance',
+  },
+  {
+    key: 'fees',
+    label: 'Pending Fees',
+    icon: DollarSign,
+    color: '#F59E0B',
+    bg: '#FFFBEB',
+    link: '/portal/fees',
+  },
+  {
+    key: 'homework',
+    label: 'Overdue Tasks',
+    icon: ClipboardList,
+    color: '#F43F5E',
+    bg: '#FFF1F2',
+    link: '/portal/homework',
+  },
+];
 
 export default function PortalDashboard() {
   const [student, setStudent] = useState(null);
@@ -26,119 +70,160 @@ export default function PortalDashboard() {
     enabled: !!student?.classId,
   });
 
-  const pendingFees = fees.filter(f => f.status === 'PENDING' || f.status === 'PARTIAL');
-  const overdueHw = homework.filter(h => new Date(h.dueDate) < new Date());
+  const pendingFees  = fees.filter(f => f.status === 'PENDING' || f.status === 'PARTIAL');
+  const overdueHw    = homework.filter(h => new Date(h.dueDate) < new Date());
   const fmtAmt = (n) => `Rs. ${Number(n).toLocaleString('en-NP')}`;
 
+  const statValues = {
+    attendance: attendance?.summary?.percentage ?? 0,
+    fees:       pendingFees.length,
+    homework:   overdueHw.length,
+  };
+  const statSuffix = { attendance: '%', fees: '', homework: '' };
+
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+
   return (
-    <div className="p-6 space-y-6 max-w-4xl">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">
-          Welcome{student?.name ? `, ${student.name}` : ''}
+    <div className="p-5 md:p-7 space-y-6 max-w-2xl">
+
+      {/* Greeting */}
+      <motion.div initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
+        <h1 className="text-2xl md:text-3xl font-bold text-slate-900">
+          {greeting}{student?.name ? `, ${student.name.split(' ')[0]}` : ''} 👋
         </h1>
-        <p className="text-sm text-gray-500 mt-1">
-          {student?.class ? `${student.class.name}${student.class.section ? ` (${student.class.section})` : ''}` : 'Your academic overview'}
+        <p className="text-slate-500 text-sm mt-1">
+          {student?.class
+            ? `${student.class.name}${student.class.section ? ` · Section ${student.class.section}` : ''}`
+            : 'Your academic overview'}
         </p>
-      </div>
+      </motion.div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="bg-white rounded-xl border border-gray-200 p-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-emerald-50 flex items-center justify-center">
-              <CalendarCheck className="w-5 h-5 text-emerald-600" />
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-gray-900">{attendance?.summary?.percentage ?? '—'}%</p>
-              <p className="text-xs text-gray-500">Attendance</p>
-            </div>
-          </div>
-          {attendance && (
-            <p className="text-xs text-gray-400 mt-2">{attendance.summary.present} present / {attendance.summary.total} days</p>
-          )}
-        </div>
-
-        <div className="bg-white rounded-xl border border-gray-200 p-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-amber-50 flex items-center justify-center">
-              <DollarSign className="w-5 h-5 text-amber-600" />
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-gray-900">{pendingFees.length}</p>
-              <p className="text-xs text-gray-500">Pending Fees</p>
-            </div>
-          </div>
-          {pendingFees.length > 0 && (
-            <p className="text-xs text-amber-600 mt-2">
-              Total due: {fmtAmt(pendingFees.reduce((s, f) => s + (Number(f.totalAmount) - Number(f.paidAmount)), 0))}
-            </p>
-          )}
-        </div>
-
-        <div className="bg-white rounded-xl border border-gray-200 p-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-red-50 flex items-center justify-center">
-              <ClipboardList className="w-5 h-5 text-red-600" />
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-gray-900">{overdueHw.length}</p>
-              <p className="text-xs text-gray-500">Overdue Homework</p>
-            </div>
-          </div>
-        </div>
-      </div>
+      {/* Stat cards */}
+      <motion.div
+        className="grid grid-cols-3 gap-3"
+        variants={containerVariants}
+        initial="initial"
+        animate="animate"
+      >
+        {STAT_CARDS.map(card => {
+          const Icon = card.icon;
+          return (
+            <motion.div key={card.key} variants={cardVariants}>
+              <Link to={card.link}>
+                <motion.div
+                  whileTap={{ scale: 0.96 }}
+                  className="rounded-2xl p-4 cursor-pointer border border-white shadow-sm"
+                  style={{ background: card.bg }}
+                >
+                  <div
+                    className="w-9 h-9 rounded-xl flex items-center justify-center mb-3"
+                    style={{ background: card.color + '22' }}
+                  >
+                    <Icon className="w-4.5 h-4.5" style={{ color: card.color }} />
+                  </div>
+                  <p className="text-2xl font-bold text-slate-900">
+                    <CountUp to={statValues[card.key]} suffix={statSuffix[card.key]} />
+                  </p>
+                  <p className="text-xs text-slate-500 mt-0.5 font-medium">{card.label}</p>
+                </motion.div>
+              </Link>
+            </motion.div>
+          );
+        })}
+      </motion.div>
 
       {/* Pending fees */}
       {pendingFees.length > 0 && (
-        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-          <div className="px-5 py-3 border-b border-gray-100 flex items-center gap-2">
-            <AlertCircle className="w-4 h-4 text-amber-500" />
-            <h2 className="text-sm font-semibold text-gray-900">Pending Fee Invoices</h2>
+        <motion.div
+          variants={cardVariants}
+          initial="initial"
+          animate="animate"
+          className="bg-amber-50 border border-amber-200 rounded-2xl overflow-hidden"
+        >
+          <div className="px-5 py-3.5 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 text-amber-600" />
+              <h2 className="text-sm font-semibold text-amber-900">Pending Fee Invoices</h2>
+            </div>
+            <Link to="/portal/fees" className="text-xs text-amber-700 font-medium flex items-center gap-0.5 hover:text-amber-900">
+              Pay now <ChevronRight className="w-3.5 h-3.5" />
+            </Link>
           </div>
-          <div className="divide-y divide-gray-100">
-            {pendingFees.slice(0, 5).map(f => (
-              <div key={f.id} className="px-5 py-3 flex items-center justify-between">
+          <motion.div
+            className="divide-y divide-amber-100 bg-white/60"
+            variants={containerVariants}
+            initial="initial"
+            animate="animate"
+          >
+            {pendingFees.slice(0, 4).map(f => (
+              <motion.div key={f.id} variants={itemVariants} className="px-5 py-3 flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-gray-900">{f.month}</p>
-                  {f.description && <p className="text-xs text-gray-400">{f.description}</p>}
+                  <p className="text-sm font-medium text-slate-800">{f.month}</p>
+                  {f.description && <p className="text-xs text-slate-400">{f.description}</p>}
                 </div>
                 <div className="text-right">
-                  <p className="text-sm font-semibold text-amber-600">
-                    {fmtAmt(Number(f.totalAmount) - Number(f.paidAmount))} due
+                  <p className="text-sm font-bold text-amber-700">
+                    {fmtAmt(Number(f.totalAmount) - Number(f.paidAmount))}
                   </p>
-                  <span className={`text-xs px-2 py-0.5 rounded-full ${f.status === 'PARTIAL' ? 'bg-amber-50 text-amber-700' : 'bg-red-50 text-red-700'}`}>
+                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${f.status === 'PARTIAL' ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'}`}>
                     {f.status}
                   </span>
                 </div>
-              </div>
+              </motion.div>
             ))}
-          </div>
-        </div>
+          </motion.div>
+        </motion.div>
       )}
 
       {/* Upcoming homework */}
       {homework.length > 0 && (
-        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-          <div className="px-5 py-3 border-b border-gray-100">
-            <h2 className="text-sm font-semibold text-gray-900">Upcoming Homework</h2>
+        <motion.div
+          variants={cardVariants}
+          initial="initial"
+          animate="animate"
+          className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm"
+        >
+          <div className="px-5 py-3.5 flex items-center justify-between border-b border-slate-100">
+            <div className="flex items-center gap-2">
+              <ClipboardList className="w-4 h-4 text-orange-500" />
+              <h2 className="text-sm font-semibold text-slate-900">Upcoming Homework</h2>
+            </div>
+            <Link to="/portal/homework" className="text-xs text-slate-500 flex items-center gap-0.5 hover:text-slate-700">
+              View all <ChevronRight className="w-3.5 h-3.5" />
+            </Link>
           </div>
-          <div className="divide-y divide-gray-100">
+          <motion.div className="divide-y divide-slate-100" variants={containerVariants} initial="initial" animate="animate">
             {homework.slice(0, 5).map(h => {
               const overdue = new Date(h.dueDate) < new Date();
               return (
-                <div key={h.id} className="px-5 py-3 flex items-start justify-between gap-4">
+                <motion.div key={h.id} variants={itemVariants} className="px-5 py-3 flex items-start justify-between gap-4">
                   <div>
-                    <p className="text-sm font-medium text-gray-900">{h.title}</p>
-                    {h.subject && <p className="text-xs text-emerald-700">{h.subject.name}</p>}
+                    <p className="text-sm font-medium text-slate-800">{h.title}</p>
+                    {h.subject && <p className="text-xs text-orange-600 font-medium mt-0.5">{h.subject.name}</p>}
                   </div>
-                  <span className={`text-xs px-2 py-0.5 rounded-full shrink-0 ${overdue ? 'bg-red-50 text-red-700' : 'bg-gray-100 text-gray-600'}`}>
+                  <span className={`text-xs px-2.5 py-1 rounded-full shrink-0 font-medium ${overdue ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-600'}`}>
                     {new Date(h.dueDate).toLocaleDateString('en-NP', { day: 'numeric', month: 'short' })}
                   </span>
-                </div>
+                </motion.div>
               );
             })}
-          </div>
-        </div>
+          </motion.div>
+        </motion.div>
+      )}
+
+      {/* All clear */}
+      {pendingFees.length === 0 && homework.length === 0 && attendance && (
+        <motion.div
+          variants={cardVariants}
+          initial="initial"
+          animate="animate"
+          className="bg-emerald-50 border border-emerald-200 rounded-2xl p-6 text-center"
+        >
+          <Trophy className="w-10 h-10 text-emerald-500 mx-auto mb-2" />
+          <p className="font-semibold text-emerald-900">All caught up!</p>
+          <p className="text-sm text-emerald-700 mt-1">No pending fees or overdue homework.</p>
+        </motion.div>
       )}
     </div>
   );

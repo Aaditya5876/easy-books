@@ -1,10 +1,22 @@
 import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { motion } from 'framer-motion';
 import { portalApi } from '@/api';
 import { Clock } from 'lucide-react';
+import { pageVariants, containerVariants, cardVariants } from '@/lib/portalAnimations';
 
-const DAYS = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY'];
-const DAY_SHORT = { MONDAY: 'Mon', TUESDAY: 'Tue', WEDNESDAY: 'Wed', THURSDAY: 'Thu', FRIDAY: 'Fri', SATURDAY: 'Sat' };
+const DAYS = ['MONDAY','TUESDAY','WEDNESDAY','THURSDAY','FRIDAY','SATURDAY'];
+const DAY_LABEL = { MONDAY:'Monday', TUESDAY:'Tuesday', WEDNESDAY:'Wednesday', THURSDAY:'Thursday', FRIDAY:'Friday', SATURDAY:'Saturday' };
+const DAY_SHORT = { MONDAY:'Mon', TUESDAY:'Tue', WEDNESDAY:'Wed', THURSDAY:'Thu', FRIDAY:'Fri', SATURDAY:'Sat' };
+
+const SUBJECT_COLORS = ['#3B82F6','#10B981','#8B5CF6','#F97316','#F43F5E','#14B8A6','#F59E0B','#6366F1'];
+function subjectColor(name = '') {
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) & 0xFFFFFF;
+  return SUBJECT_COLORS[Math.abs(h) % SUBJECT_COLORS.length];
+}
+
+const today = new Date().toLocaleDateString('en-US', { weekday: 'long' }).toUpperCase();
 
 export default function PortalTimetable() {
   const [student, setStudent] = useState(null);
@@ -26,41 +38,68 @@ export default function PortalTimetable() {
   const activeDays = DAYS.filter(d => byDay[d].length > 0);
 
   return (
-    <div className="p-6 space-y-5 max-w-4xl">
-      <h1 className="text-2xl font-bold text-gray-900">Timetable</h1>
+    <motion.div variants={pageVariants} initial="initial" animate="animate" exit="exit" className="p-5 md:p-7 space-y-5 max-w-3xl">
+      <h1 className="text-2xl font-bold text-slate-900">Timetable</h1>
 
       {isLoading ? (
-        <div className="bg-white rounded-xl border border-gray-200 p-12 text-center text-gray-400 text-sm">Loading…</div>
+        <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center text-slate-400 text-sm">Loading…</div>
       ) : timetable.length === 0 ? (
-        <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
-          <Clock className="w-10 h-10 text-gray-200 mx-auto mb-3" />
-          <p className="text-gray-400 text-sm">No timetable set for your class yet</p>
+        <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center">
+          <Clock className="w-10 h-10 text-slate-200 mx-auto mb-3" />
+          <p className="text-slate-400 text-sm">No timetable set for your class yet</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {activeDays.map(day => (
-            <div key={day} className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-              <div className="px-4 py-3 bg-emerald-600 text-white">
-                <h2 className="font-semibold text-sm">{DAY_SHORT[day] || day}</h2>
-              </div>
-              <div className="divide-y divide-gray-100">
-                {byDay[day].map(e => (
-                  <div key={e.id} className="flex items-center gap-3 px-4 py-3">
-                    <div className="w-16 text-xs text-gray-400 tabular-nums shrink-0">
-                      {e.startTime}<br />{e.endTime}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-900">{e.subject?.name || e.subjectName || '—'}</p>
-                      {e.teacherName && <p className="text-xs text-gray-400">{e.teacherName}</p>}
-                    </div>
-                    {e.room && <span className="text-xs text-gray-400 shrink-0">{e.room}</span>}
-                  </div>
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
+        <motion.div variants={containerVariants} initial="initial" animate="animate" className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {activeDays.map(day => {
+            const isToday = day === today;
+            return (
+              <motion.div key={day} variants={cardVariants} className={`bg-white rounded-2xl border overflow-hidden shadow-sm ${isToday ? 'border-blue-300 ring-2 ring-blue-100' : 'border-slate-200'}`}>
+                {/* Day header */}
+                <div className={`px-4 py-3 flex items-center justify-between ${isToday ? 'bg-blue-600' : 'bg-slate-800'}`}>
+                  <h2 className="font-bold text-sm text-white">{DAY_LABEL[day]}</h2>
+                  {isToday && (
+                    <span className="text-[10px] font-bold px-2 py-0.5 bg-white/20 text-white rounded-full tracking-wide">
+                      TODAY
+                    </span>
+                  )}
+                </div>
+
+                {/* Periods */}
+                <div className="divide-y divide-slate-100">
+                  {byDay[day].map((e, i) => {
+                    const subjectName = e.subject?.name || e.subjectName || '—';
+                    const color = subjectColor(subjectName);
+                    return (
+                      <motion.div
+                        key={e.id}
+                        initial={{ opacity: 0, x: -8 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: 0.05 * i }}
+                        className="flex items-center gap-3 px-4 py-3"
+                      >
+                        <div className="text-center shrink-0">
+                          <p className="text-[10px] text-slate-400 font-medium tabular-nums">{e.startTime}</p>
+                          <div className="w-px h-2 bg-slate-200 mx-auto my-0.5" />
+                          <p className="text-[10px] text-slate-400 font-medium tabular-nums">{e.endTime}</p>
+                        </div>
+                        <div
+                          className="w-1 h-10 rounded-full shrink-0"
+                          style={{ background: color }}
+                        />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-slate-900 truncate">{subjectName}</p>
+                          {e.teacherName && <p className="text-xs text-slate-400 truncate">{e.teacherName}</p>}
+                          {e.room && <p className="text-xs text-slate-400">Room {e.room}</p>}
+                        </div>
+                      </motion.div>
+                    );
+                  })}
+                </div>
+              </motion.div>
+            );
+          })}
+        </motion.div>
       )}
-    </div>
+    </motion.div>
   );
 }
