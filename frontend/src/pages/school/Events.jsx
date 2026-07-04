@@ -45,7 +45,7 @@ function EventDialog({ open, onClose, event }) {
         ? schoolEventsApi.update(event.id, d)
         : schoolEventsApi.create({ ...d, companyId: companyId() }),
     onSuccess: () => {
-      qc.invalidateQueries(['school-events']);
+      qc.invalidateQueries({ queryKey: ['school-events'] });
       toast.success(isEdit ? 'Event updated' : 'Event created');
       onClose();
     },
@@ -118,7 +118,8 @@ export default function Events() {
 
   const remove = useMutation({
     mutationFn: (id) => schoolEventsApi.remove(id),
-    onSuccess: () => { qc.invalidateQueries(['school-events']); toast.success('Event deleted'); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['school-events'] }); toast.success('Event deleted'); },
+    onError: (e) => toast.error(e.response?.data?.message || 'Failed to delete event'),
   });
 
   const prevMonth = () => setCurrentMonth(d => new Date(d.getFullYear(), d.getMonth() - 1, 1));

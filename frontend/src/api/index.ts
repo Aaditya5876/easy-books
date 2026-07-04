@@ -285,6 +285,17 @@ export const examResultsApi = {
     apiClient.delete(`/api/v1/school/exam-results/${id}`, { params: { companyId: companyId() } }),
 };
 
+export const schoolAnalyticsApi = {
+  attendance: (month?: string) =>
+    apiClient.get('/api/v1/school/analytics/attendance', { params: { companyId: companyId(), month } }),
+  fees: () =>
+    apiClient.get('/api/v1/school/analytics/fees', { params: { companyId: companyId() } }),
+  academics: (examName?: string) =>
+    apiClient.get('/api/v1/school/analytics/academics', { params: { companyId: companyId(), examName } }),
+  operations: () =>
+    apiClient.get('/api/v1/school/analytics/operations', { params: { companyId: companyId() } }),
+};
+
 export const bulkImportApi = {
   import: (entity: string, rows: object[]) =>
     apiClient.post(`/api/v1/bulk/${entity}`, { companyId: companyId(), rows }),

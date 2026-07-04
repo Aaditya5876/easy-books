@@ -2,22 +2,62 @@ import { Controller, Get, Post, Put, Patch, Delete, Body, Param, Query } from '@
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { Roles } from '../../../../modules/decorators/roles.decorator';
 import { SchoolService } from '../../../../application/services/school.service';
+import { SchoolAnalyticsService } from '../../../../application/services/school-analytics.service';
 
 @ApiTags('School')
 @ApiBearerAuth()
 @Roles('STAFF', 'ACCOUNTANT', 'ADMIN')
 @Controller('api/v1/school')
 export class SchoolController {
-  constructor(private readonly service: SchoolService) {}
+  constructor(
+    private readonly service: SchoolService,
+    private readonly analytics: SchoolAnalyticsService,
+  ) {}
 
   // ── Dashboard ────────────────────────────────────────────────────────────────
 
   @Get('dashboard')
   @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'TEACHER', 'LIBRARIAN')
-  @ApiOperation({ summary: 'School dashboard summary' })
+  @ApiOperation({ summary: 'School dashboard summary with analytics extras' })
   @ApiQuery({ name: 'companyId', required: true })
-  getDashboard(@Query('companyId') companyId: string) {
-    return this.service.getDashboardSummary(companyId);
+  async getDashboard(@Query('companyId') companyId: string) {
+    const [summary, extras] = await Promise.all([
+      this.service.getDashboardSummary(companyId),
+      this.analytics.dashboardExtras(companyId),
+    ]);
+    return { ...summary, ...extras };
+  }
+
+  // ── Analytics / Reports ──────────────────────────────────────────────────────
+
+  @Get('analytics/attendance')
+  @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'TEACHER')
+  @ApiQuery({ name: 'companyId', required: true })
+  @ApiQuery({ name: 'month', required: false, description: 'YYYY-MM, defaults to current month' })
+  getAttendanceAnalytics(@Query('companyId') companyId: string, @Query('month') month?: string) {
+    return this.analytics.attendanceReport(companyId, month);
+  }
+
+  @Get('analytics/fees')
+  @Roles('STAFF', 'ACCOUNTANT', 'ADMIN')
+  @ApiQuery({ name: 'companyId', required: true })
+  getFeesAnalytics(@Query('companyId') companyId: string) {
+    return this.analytics.feesReport(companyId);
+  }
+
+  @Get('analytics/academics')
+  @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'TEACHER')
+  @ApiQuery({ name: 'companyId', required: true })
+  @ApiQuery({ name: 'examName', required: false })
+  getAcademicsAnalytics(@Query('companyId') companyId: string, @Query('examName') examName?: string) {
+    return this.analytics.academicsReport(companyId, examName);
+  }
+
+  @Get('analytics/operations')
+  @Roles('STAFF', 'ACCOUNTANT', 'ADMIN')
+  @ApiQuery({ name: 'companyId', required: true })
+  getOperationsAnalytics(@Query('companyId') companyId: string) {
+    return this.analytics.operationsReport(companyId);
   }
 
   // ── Academic Years ────────────────────────────────────────────────────────────

@@ -23,7 +23,7 @@ function SubjectDialog({ open, onClose, subject }) {
   const save = useMutation({
     mutationFn: (d) => isEdit ? subjectsApi.update(subject.id, d) : subjectsApi.create(d),
     onSuccess: () => {
-      qc.invalidateQueries(['school-subjects']);
+      qc.invalidateQueries({ queryKey: ['school-subjects'] });
       toast.success(isEdit ? 'Subject updated' : 'Subject created');
       onClose();
     },
@@ -77,7 +77,7 @@ export default function Subjects() {
 
   const remove = useMutation({
     mutationFn: (id) => subjectsApi.remove(id),
-    onSuccess: () => { qc.invalidateQueries(['school-subjects']); toast.success('Subject deleted'); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['school-subjects'] }); toast.success('Subject deleted'); },
     onError: (e) => toast.error(e.response?.data?.message || 'Cannot delete subject'),
   });
 

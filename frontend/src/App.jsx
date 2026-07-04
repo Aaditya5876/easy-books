@@ -47,6 +47,7 @@ import Library from './pages/school/Library';
 import Hostel from './pages/school/Hostel';
 import Transport from './pages/school/Transport';
 import ExamSchedule from './pages/school/ExamSchedule';
+import SchoolReports from './pages/school/SchoolReports';
 import PortalLogin from './pages/portal/PortalLogin';
 import PortalLayout from './components/layout/PortalLayout';
 import PortalDashboard from './pages/portal/PortalDashboard';
@@ -86,7 +87,7 @@ const schoolRoutes = [
   { path: '/payroll', page: Payroll },
   { path: '/ledger', page: Ledger },
   { path: '/transactions', page: Transactions },
-  { path: '/reports', page: Reports },
+  { path: '/reports', page: SchoolReports },
   { path: '/settings', page: Settings },
 ];
 

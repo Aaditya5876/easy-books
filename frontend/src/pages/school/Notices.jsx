@@ -38,7 +38,7 @@ function NoticeDialog({ open, onClose, notice }) {
         ? noticesApi.update(notice.id, d)
         : noticesApi.create({ ...d, companyId: companyId() }),
     onSuccess: () => {
-      qc.invalidateQueries(['school-notices']);
+      qc.invalidateQueries({ queryKey: ['school-notices'] });
       toast.success(isEdit ? 'Notice updated' : 'Notice posted');
       onClose();
     },
@@ -173,7 +173,7 @@ export default function Notices() {
 
   const remove = useMutation({
     mutationFn: (id) => noticesApi.remove(id),
-    onSuccess: () => { qc.invalidateQueries(['school-notices']); toast.success('Notice deleted'); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['school-notices'] }); toast.success('Notice deleted'); },
     onError: (e) => toast.error(e.response?.data?.message || 'Cannot delete'),
   });
 

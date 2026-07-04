@@ -1,12 +1,32 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../../core/db/psql/prisma.client';
 import { SmsService } from './sms.service';
+import { AiService } from './ai.service';
+
+// Forms send whole entity objects (with id/relations/_count) and bare "YYYY-MM-DD"
+// strings; Prisma rejects unknown keys and date-only strings. Whitelist + coerce here
+// so every create/update accepts what the UI actually sends.
+const DATE_KEYS = new Set(['startDate', 'endDate', 'dueDate', 'examDate', 'dateOfBirth', 'admissionDate', 'expiresAt']);
+
+function clean(data: any, allowed: string[], intKeys: string[] = []) {
+  const out: any = {};
+  for (const k of allowed) {
+    if (data?.[k] === undefined) continue;
+    let v = data[k];
+    if (v === '') v = null;
+    if (v !== null && DATE_KEYS.has(k)) v = new Date(v);
+    if (v !== null && intKeys.includes(k)) v = parseInt(String(v), 10);
+    out[k] = v;
+  }
+  return out;
+}
 
 @Injectable()
 export class SchoolService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly sms: SmsService,
+    private readonly ai: AiService,
   ) {}
 
   // ── Dashboard ────────────────────────────────────────────────────────────────
@@ -103,16 +123,18 @@ export class SchoolService {
     return this.prisma.academicYear.findMany({ where: { companyId }, orderBy: { startDate: 'desc' } });
   }
 
-  async createAcademicYear(data: { companyId: string; name: string; startDate: Date; endDate: Date; isCurrent?: boolean }) {
+  async createAcademicYear(body: any) {
+    const data = clean(body, ['companyId', 'name', 'startDate', 'endDate', 'isCurrent']);
     if (data.isCurrent) {
       await this.prisma.academicYear.updateMany({ where: { companyId: data.companyId }, data: { isCurrent: false } });
     }
     return this.prisma.academicYear.create({ data });
   }
 
-  async updateAcademicYear(id: string, companyId: string, data: { name?: string; startDate?: Date; endDate?: Date; isCurrent?: boolean }) {
+  async updateAcademicYear(id: string, companyId: string, body: any) {
     const year = await this.prisma.academicYear.findFirst({ where: { id, companyId } });
     if (!year) throw new NotFoundException('Academic year not found');
+    const data = clean(body, ['name', 'startDate', 'endDate', 'isCurrent']);
     if (data.isCurrent) {
       await this.prisma.academicYear.updateMany({ where: { companyId }, data: { isCurrent: false } });
     }
@@ -122,6 +144,8 @@ export class SchoolService {
   async deleteAcademicYear(id: string, companyId: string) {
     const year = await this.prisma.academicYear.findFirst({ where: { id, companyId } });
     if (!year) throw new NotFoundException('Academic year not found');
+    const attendance = await this.prisma.studentAttendance.count({ where: { academicYearId: id } });
+    if (attendance > 0) throw new BadRequestException(`Cannot delete — ${attendance} attendance records are tagged to this year`);
     return this.prisma.academicYear.delete({ where: { id } });
   }
 
@@ -135,19 +159,42 @@ export class SchoolService {
     });
   }
 
-  async createClass(data: { companyId: string; name: string; section?: string; classTeacherId?: string }) {
-    return this.prisma.schoolClass.create({ data });
+  async createClass(body: any) {
+    return this.prisma.schoolClass.create({
+      data: clean(body, ['companyId', 'name', 'section', 'classTeacherId']),
+    });
   }
 
-  async updateClass(id: string, data: { name?: string; section?: string; classTeacherId?: string }) {
+  async updateClass(id: string, body: any) {
     const cls = await this.prisma.schoolClass.findUnique({ where: { id } });
     if (!cls) throw new NotFoundException('Class not found');
-    return this.prisma.schoolClass.update({ where: { id }, data });
+    return this.prisma.schoolClass.update({
+      where: { id },
+      data: clean(body, ['name', 'section', 'classTeacherId']),
+    });
   }
 
   async deleteClass(id: string, companyId: string) {
     const studentCount = await this.prisma.student.count({ where: { classId: id } });
     if (studentCount > 0) throw new BadRequestException(`Cannot delete — ${studentCount} students are enrolled in this class`);
+    const blockers: string[] = [];
+    const [attendance, timetable, homework, materials, examSchedules, feeStructures] = await Promise.all([
+      this.prisma.studentAttendance.count({ where: { classId: id } }),
+      this.prisma.timetableEntry.count({ where: { classId: id } }),
+      this.prisma.homework.count({ where: { classId: id } }),
+      this.prisma.studyMaterial.count({ where: { classId: id } }),
+      this.prisma.examSchedule.count({ where: { classId: id } }),
+      this.prisma.feeStructure.count({ where: { classId: id } }),
+    ]);
+    if (attendance) blockers.push(`${attendance} attendance records`);
+    if (timetable) blockers.push(`${timetable} timetable entries`);
+    if (homework) blockers.push(`${homework} homework assignments`);
+    if (materials) blockers.push(`${materials} study materials`);
+    if (examSchedules) blockers.push(`${examSchedules} exam schedules`);
+    if (feeStructures) blockers.push(`${feeStructures} fee structures`);
+    if (blockers.length) {
+      throw new BadRequestException(`Cannot delete — this class has ${blockers.join(', ')}. Remove those first.`);
+    }
     return this.prisma.schoolClass.delete({ where: { id } });
   }
 
@@ -167,14 +214,24 @@ export class SchoolService {
     return student;
   }
 
-  async createStudent(data: any) {
-    return this.prisma.student.create({ data });
+  private static readonly STUDENT_FIELDS = [
+    'classId', 'name', 'rollNumber', 'dateOfBirth', 'gender', 'address',
+    'guardianName', 'guardianPhone', 'guardianEmail', 'admissionDate', 'status',
+  ];
+
+  async createStudent(body: any) {
+    return this.prisma.student.create({
+      data: clean(body, ['companyId', ...SchoolService.STUDENT_FIELDS]),
+    });
   }
 
-  async updateStudent(id: string, data: any) {
+  async updateStudent(id: string, body: any) {
     const student = await this.prisma.student.findUnique({ where: { id } });
     if (!student) throw new NotFoundException('Student not found');
-    return this.prisma.student.update({ where: { id }, data });
+    return this.prisma.student.update({
+      where: { id },
+      data: clean(body, SchoolService.STUDENT_FIELDS),
+    });
   }
 
   async deleteStudent(id: string, companyId: string) {
@@ -199,15 +256,33 @@ export class SchoolService {
     return this.prisma.subject.findMany({ where: { companyId }, orderBy: { name: 'asc' } });
   }
 
-  async createSubject(data: { companyId: string; name: string; code?: string }) {
-    return this.prisma.subject.create({ data });
+  async createSubject(body: any) {
+    return this.prisma.subject.create({ data: clean(body, ['companyId', 'name', 'code']) });
   }
 
-  async updateSubject(id: string, data: { name?: string; code?: string }) {
-    return this.prisma.subject.update({ where: { id }, data });
+  async updateSubject(id: string, body: any) {
+    return this.prisma.subject.update({ where: { id }, data: clean(body, ['name', 'code']) });
   }
 
   async deleteSubject(id: string, companyId: string) {
+    const subject = await this.prisma.subject.findFirst({ where: { id, companyId } });
+    if (!subject) throw new NotFoundException('Subject not found');
+    const blockers: string[] = [];
+    const [results, timetable, homework, materials, examSchedules] = await Promise.all([
+      this.prisma.examResult.count({ where: { subjectId: id } }),
+      this.prisma.timetableEntry.count({ where: { subjectId: id } }),
+      this.prisma.homework.count({ where: { subjectId: id } }),
+      this.prisma.studyMaterial.count({ where: { subjectId: id } }),
+      this.prisma.examSchedule.count({ where: { subjectId: id } }),
+    ]);
+    if (results) blockers.push(`${results} exam results`);
+    if (timetable) blockers.push(`${timetable} timetable entries`);
+    if (homework) blockers.push(`${homework} homework assignments`);
+    if (materials) blockers.push(`${materials} study materials`);
+    if (examSchedules) blockers.push(`${examSchedules} exam schedules`);
+    if (blockers.length) {
+      throw new BadRequestException(`Cannot delete — "${subject.name}" is used by ${blockers.join(', ')}. Remove those first.`);
+    }
     return this.prisma.subject.delete({ where: { id } });
   }
 
@@ -271,19 +346,31 @@ export class SchoolService {
   async sendFeeReminderSms(invoiceId: string, companyId: string): Promise<{ sent: boolean }> {
     const invoice = await this.prisma.feeInvoice.findFirst({
       where: { id: invoiceId, companyId },
-      include: { student: { select: { name: true, guardianPhone: true } }, company: { select: { name: true } } },
+      include: { student: { select: { name: true, guardianName: true, guardianPhone: true } }, company: { select: { name: true } } },
     });
     if (!invoice) throw new NotFoundException('Invoice not found');
-    const phone = (invoice.student as any)?.guardianPhone;
+    const student = invoice.student as any;
+    const phone = student?.guardianPhone;
     if (!phone) throw new BadRequestException('No guardian phone on record');
     const amount = Number(invoice.totalAmount) - Number(invoice.paidAmount);
-    const sent = await this.sms.sendFeeReminder(
-      (invoice.student as any)?.name,
-      phone,
-      amount,
-      invoice.month,
-      (invoice.company as any)?.name,
-    );
+
+    // AI-composed message, falling back to the fixed template if Gemini is unavailable
+    let aiMessage: string | undefined;
+    try {
+      const daysOverdue = invoice.dueDate
+        ? Math.max(0, Math.floor((Date.now() - new Date(invoice.dueDate).getTime()) / 86_400_000))
+        : 0;
+      const res = await this.ai.generateFeeReminder(
+        student?.name, student?.guardianName ?? 'Guardian', invoice.month, amount, daysOverdue,
+      );
+      aiMessage = res.message;
+    } catch {
+      // no GEMINI_API_KEY or AI error — template fallback below
+    }
+
+    const sent = aiMessage
+      ? await this.sms.send(phone, aiMessage)
+      : await this.sms.sendFeeReminder(student?.name, phone, amount, invoice.month, (invoice.company as any)?.name);
     return { sent };
   }
 
@@ -354,12 +441,17 @@ export class SchoolService {
     });
   }
 
-  async createFeeStructure(data: any) {
-    return this.prisma.feeStructure.create({ data });
+  async createFeeStructure(body: any) {
+    return this.prisma.feeStructure.create({
+      data: clean(body, ['companyId', 'classId', 'name', 'amount', 'frequency']),
+    });
   }
 
-  async updateFeeStructure(id: string, data: any) {
-    return this.prisma.feeStructure.update({ where: { id }, data });
+  async updateFeeStructure(id: string, body: any) {
+    return this.prisma.feeStructure.update({
+      where: { id },
+      data: clean(body, ['classId', 'name', 'amount', 'frequency']),
+    });
   }
 
   async deleteFeeStructure(id: string) {
@@ -382,8 +474,10 @@ export class SchoolService {
     });
   }
 
-  async createFeeInvoice(data: any) {
-    return this.prisma.feeInvoice.create({ data });
+  async createFeeInvoice(body: any) {
+    return this.prisma.feeInvoice.create({
+      data: clean(body, ['companyId', 'studentId', 'month', 'description', 'totalAmount', 'paidAmount', 'discount', 'fine', 'dueDate', 'status', 'notes']),
+    });
   }
 
   async generateBulkInvoices(companyId: string, classId: string, month: string, feeStructureIds: string[]) {
@@ -488,12 +582,21 @@ export class SchoolService {
     return { student, results, company, examName, totalObtained, totalMax, percentage };
   }
 
-  async createExamResult(data: any) {
-    return this.prisma.examResult.create({ data });
+  private static readonly EXAM_RESULT_FIELDS = [
+    'studentId', 'subjectId', 'examName', 'marksObtained', 'totalMarks', 'grade', 'remarks', 'examDate',
+  ];
+
+  async createExamResult(body: any) {
+    return this.prisma.examResult.create({
+      data: clean(body, ['companyId', ...SchoolService.EXAM_RESULT_FIELDS]),
+    });
   }
 
-  async updateExamResult(id: string, data: any) {
-    return this.prisma.examResult.update({ where: { id }, data });
+  async updateExamResult(id: string, body: any) {
+    return this.prisma.examResult.update({
+      where: { id },
+      data: clean(body, SchoolService.EXAM_RESULT_FIELDS),
+    });
   }
 
   async deleteExamResult(id: string) {
@@ -533,13 +636,12 @@ export class SchoolService {
     });
   }
 
-  async updateExamSchedule(id: string, companyId: string, data: any) {
+  async updateExamSchedule(id: string, companyId: string, body: any) {
     const existing = await this.prisma.examSchedule.findFirst({ where: { id, companyId } });
     if (!existing) throw new NotFoundException('Exam schedule not found');
-    const { companyId: _c, id: _i, ...rest } = data;
     return this.prisma.examSchedule.update({
       where: { id },
-      data: { ...rest, ...(rest.examDate ? { examDate: new Date(rest.examDate) } : {}) },
+      data: clean(body, ['classId', 'subjectId', 'examName', 'examDate', 'startTime', 'endTime', 'roomNumber', 'notes']),
     });
   }
 
@@ -559,17 +661,12 @@ export class SchoolService {
     });
   }
 
-  async upsertTimetableEntry(data: {
-    companyId: string;
-    classId: string;
-    subjectId?: string;
-    teacherId?: string;
-    dayOfWeek: number;
-    periodNumber: number;
-    startTime: string;
-    endTime: string;
-    roomNumber?: string;
-  }) {
+  async upsertTimetableEntry(body: any) {
+    const data = clean(
+      body,
+      ['companyId', 'classId', 'subjectId', 'teacherId', 'dayOfWeek', 'periodNumber', 'startTime', 'endTime', 'roomNumber'],
+      ['dayOfWeek', 'periodNumber'],
+    );
     return this.prisma.timetableEntry.upsert({
       where: { classId_dayOfWeek_periodNumber: { classId: data.classId, dayOfWeek: data.dayOfWeek, periodNumber: data.periodNumber } },
       create: data,
@@ -590,14 +687,18 @@ export class SchoolService {
     });
   }
 
-  async createNotice(data: { companyId: string; title: string; content: string; targetAudience?: string; expiresAt?: Date }) {
+  async createNotice(body: any) {
+    const data = clean(body, ['companyId', 'title', 'content', 'targetAudience', 'isPublished', 'expiresAt']);
     return this.prisma.schoolNotice.create({ data: { ...data, publishedAt: new Date() } });
   }
 
-  async updateNotice(id: string, companyId: string, data: { title?: string; content?: string; targetAudience?: string; isPublished?: boolean; expiresAt?: Date }) {
+  async updateNotice(id: string, companyId: string, body: any) {
     const notice = await this.prisma.schoolNotice.findFirst({ where: { id, companyId } });
     if (!notice) throw new NotFoundException('Notice not found');
-    return this.prisma.schoolNotice.update({ where: { id }, data });
+    return this.prisma.schoolNotice.update({
+      where: { id },
+      data: clean(body, ['title', 'content', 'targetAudience', 'isPublished', 'expiresAt']),
+    });
   }
 
   async deleteNotice(id: string, companyId: string) {
@@ -617,14 +718,19 @@ export class SchoolService {
     return this.prisma.schoolEvent.findMany({ where, orderBy: { startDate: 'asc' } });
   }
 
-  async createEvent(data: { companyId: string; title: string; description?: string; startDate: Date; endDate?: Date; eventType?: string }) {
-    return this.prisma.schoolEvent.create({ data: data as any });
+  async createEvent(body: any) {
+    return this.prisma.schoolEvent.create({
+      data: clean(body, ['companyId', 'title', 'description', 'startDate', 'endDate', 'eventType']),
+    });
   }
 
-  async updateEvent(id: string, companyId: string, data: any) {
+  async updateEvent(id: string, companyId: string, body: any) {
     const event = await this.prisma.schoolEvent.findFirst({ where: { id, companyId } });
     if (!event) throw new NotFoundException('Event not found');
-    return this.prisma.schoolEvent.update({ where: { id }, data });
+    return this.prisma.schoolEvent.update({
+      where: { id },
+      data: clean(body, ['title', 'description', 'startDate', 'endDate', 'eventType']),
+    });
   }
 
   async deleteEvent(id: string, companyId: string) {
@@ -644,8 +750,10 @@ export class SchoolService {
     });
   }
 
-  async createStudyMaterial(data: { companyId: string; title: string; fileUrl: string; fileType?: string; classId?: string; subjectId?: string; description?: string; uploadedBy?: string }) {
-    return this.prisma.studyMaterial.create({ data });
+  async createStudyMaterial(body: any) {
+    return this.prisma.studyMaterial.create({
+      data: clean(body, ['companyId', 'title', 'fileUrl', 'fileType', 'classId', 'subjectId', 'description', 'uploadedBy']),
+    });
   }
 
   async deleteStudyMaterial(id: string, companyId: string) {
@@ -667,14 +775,19 @@ export class SchoolService {
     });
   }
 
-  async createHomework(data: { companyId: string; classId: string; title: string; dueDate: Date; subjectId?: string; description?: string; fileUrl?: string }) {
-    return this.prisma.homework.create({ data });
+  async createHomework(body: any) {
+    return this.prisma.homework.create({
+      data: clean(body, ['companyId', 'classId', 'subjectId', 'title', 'description', 'dueDate', 'fileUrl']),
+    });
   }
 
-  async updateHomework(id: string, companyId: string, data: any) {
+  async updateHomework(id: string, companyId: string, body: any) {
     const hw = await this.prisma.homework.findFirst({ where: { id, companyId } });
     if (!hw) throw new NotFoundException('Homework not found');
-    return this.prisma.homework.update({ where: { id }, data });
+    return this.prisma.homework.update({
+      where: { id },
+      data: clean(body, ['classId', 'subjectId', 'title', 'description', 'dueDate', 'fileUrl']),
+    });
   }
 
   async deleteHomework(id: string, companyId: string) {
@@ -693,14 +806,19 @@ export class SchoolService {
     });
   }
 
-  async createBook(data: { companyId: string; title: string; author?: string; isbn?: string; category?: string; totalCopies?: number; availableCopies?: number; shelfLocation?: string }) {
+  async createBook(body: any) {
+    const data = clean(body, ['companyId', 'title', 'author', 'isbn', 'category', 'totalCopies', 'availableCopies', 'shelfLocation'], ['totalCopies', 'availableCopies']);
+    if (data.availableCopies == null) data.availableCopies = data.totalCopies ?? 1;
     return this.prisma.book.create({ data });
   }
 
-  async updateBook(id: string, companyId: string, data: any) {
+  async updateBook(id: string, companyId: string, body: any) {
     const book = await this.prisma.book.findFirst({ where: { id, companyId } });
     if (!book) throw new NotFoundException('Book not found');
-    return this.prisma.book.update({ where: { id }, data });
+    return this.prisma.book.update({
+      where: { id },
+      data: clean(body, ['title', 'author', 'isbn', 'category', 'totalCopies', 'availableCopies', 'shelfLocation'], ['totalCopies', 'availableCopies']),
+    });
   }
 
   async deleteBook(id: string, companyId: string) {
@@ -708,7 +826,12 @@ export class SchoolService {
     if (!book) throw new NotFoundException('Book not found');
     const activeIssues = await this.prisma.bookIssue.count({ where: { bookId: id, status: 'ISSUED' } });
     if (activeIssues > 0) throw new BadRequestException('Cannot delete — book has active issues');
-    return this.prisma.book.delete({ where: { id } });
+    // Returned-issue history would violate the FK — remove it along with the book
+    const [, deleted] = await this.prisma.$transaction([
+      this.prisma.bookIssue.deleteMany({ where: { bookId: id } }),
+      this.prisma.book.delete({ where: { id } }),
+    ]);
+    return deleted;
   }
 
   async listIssues(companyId: string, status?: string) {
@@ -722,7 +845,8 @@ export class SchoolService {
     });
   }
 
-  async issueBook(data: { companyId: string; bookId: string; studentId?: string; memberName?: string; dueDate: Date }) {
+  async issueBook(body: any) {
+    const data = clean(body, ['companyId', 'bookId', 'studentId', 'memberName', 'dueDate']);
     const book = await this.prisma.book.findFirst({ where: { id: data.bookId, companyId: data.companyId } });
     if (!book) throw new NotFoundException('Book not found');
     if (book.availableCopies < 1) throw new BadRequestException('No copies available');
@@ -753,14 +877,19 @@ export class SchoolService {
     });
   }
 
-  async createHostelRoom(data: { companyId: string; roomNumber: string; floor?: string; capacity?: number; monthlyFee?: number; facilities?: string }) {
-    return this.prisma.hostelRoom.create({ data });
+  async createHostelRoom(body: any) {
+    return this.prisma.hostelRoom.create({
+      data: clean(body, ['companyId', 'roomNumber', 'floor', 'capacity', 'monthlyFee', 'facilities'], ['capacity']),
+    });
   }
 
-  async updateHostelRoom(id: string, companyId: string, data: any) {
+  async updateHostelRoom(id: string, companyId: string, body: any) {
     const room = await this.prisma.hostelRoom.findFirst({ where: { id, companyId } });
     if (!room) throw new NotFoundException('Room not found');
-    return this.prisma.hostelRoom.update({ where: { id }, data });
+    return this.prisma.hostelRoom.update({
+      where: { id },
+      data: clean(body, ['roomNumber', 'floor', 'capacity', 'monthlyFee', 'facilities'], ['capacity']),
+    });
   }
 
   async deleteHostelRoom(id: string, companyId: string) {
@@ -768,7 +897,12 @@ export class SchoolService {
     if (!room) throw new NotFoundException('Room not found');
     const active = await this.prisma.hostelAllocation.count({ where: { roomId: id, isActive: true } });
     if (active > 0) throw new BadRequestException('Cannot delete — room has active residents');
-    return this.prisma.hostelRoom.delete({ where: { id } });
+    // Past (inactive) allocations would violate the FK — remove history with the room
+    const [, deleted] = await this.prisma.$transaction([
+      this.prisma.hostelAllocation.deleteMany({ where: { roomId: id } }),
+      this.prisma.hostelRoom.delete({ where: { id } }),
+    ]);
+    return deleted;
   }
 
   async listHostelAllocations(companyId: string, roomId?: string) {
@@ -782,7 +916,8 @@ export class SchoolService {
     });
   }
 
-  async allocateStudent(data: { companyId: string; roomId: string; studentId: string; startDate?: Date }) {
+  async allocateStudent(body: any) {
+    const data = clean(body, ['companyId', 'roomId', 'studentId', 'startDate']);
     const room = await this.prisma.hostelRoom.findFirst({
       where: { id: data.roomId, companyId: data.companyId },
       include: { _count: { select: { allocations: { where: { isActive: true } } } } },
@@ -810,14 +945,19 @@ export class SchoolService {
     });
   }
 
-  async createTransportRoute(data: { companyId: string; routeName: string; description?: string; stops?: string; monthlyFee?: number; driverName?: string; vehicleNumber?: string }) {
-    return this.prisma.transportRoute.create({ data });
+  async createTransportRoute(body: any) {
+    return this.prisma.transportRoute.create({
+      data: clean(body, ['companyId', 'routeName', 'description', 'stops', 'monthlyFee', 'driverName', 'vehicleNumber']),
+    });
   }
 
-  async updateTransportRoute(id: string, companyId: string, data: any) {
+  async updateTransportRoute(id: string, companyId: string, body: any) {
     const route = await this.prisma.transportRoute.findFirst({ where: { id, companyId } });
     if (!route) throw new NotFoundException('Route not found');
-    return this.prisma.transportRoute.update({ where: { id }, data });
+    return this.prisma.transportRoute.update({
+      where: { id },
+      data: clean(body, ['routeName', 'description', 'stops', 'monthlyFee', 'driverName', 'vehicleNumber']),
+    });
   }
 
   async deleteTransportRoute(id: string, companyId: string) {
@@ -825,7 +965,12 @@ export class SchoolService {
     if (!route) throw new NotFoundException('Route not found');
     const active = await this.prisma.studentTransport.count({ where: { routeId: id, isActive: true } });
     if (active > 0) throw new BadRequestException('Cannot delete — route has active student assignments');
-    return this.prisma.transportRoute.delete({ where: { id } });
+    // Past (inactive) assignments would violate the FK — remove history with the route
+    const [, deleted] = await this.prisma.$transaction([
+      this.prisma.studentTransport.deleteMany({ where: { routeId: id } }),
+      this.prisma.transportRoute.delete({ where: { id } }),
+    ]);
+    return deleted;
   }
 
   async listTransportAssignments(companyId: string, routeId?: string) {
@@ -839,7 +984,8 @@ export class SchoolService {
     });
   }
 
-  async assignStudentTransport(data: { companyId: string; routeId: string; studentId: string; pickupStop?: string }) {
+  async assignStudentTransport(body: any) {
+    const data = clean(body, ['companyId', 'routeId', 'studentId', 'pickupStop']);
     const existing = await this.prisma.studentTransport.findFirst({ where: { studentId: data.studentId, companyId: data.companyId, isActive: true } });
     if (existing) throw new BadRequestException('Student is already assigned to a transport route');
     return this.prisma.studentTransport.create({ data });

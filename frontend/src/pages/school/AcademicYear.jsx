@@ -34,7 +34,7 @@ function AcademicYearDialog({ open, onClose, year }) {
         ? academicYearsApi.update(year.id, d)
         : academicYearsApi.create({ ...d, companyId: companyId() }),
     onSuccess: () => {
-      qc.invalidateQueries(['academic-years']);
+      qc.invalidateQueries({ queryKey: ['academic-years'] });
       toast.success(isEdit ? 'Academic year updated' : 'Academic year created');
       onClose();
     },
@@ -112,7 +112,7 @@ export default function AcademicYear() {
 
   const remove = useMutation({
     mutationFn: (id) => academicYearsApi.remove(id),
-    onSuccess: () => { qc.invalidateQueries(['academic-years']); toast.success('Academic year deleted'); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['academic-years'] }); toast.success('Academic year deleted'); },
     onError: (e) => toast.error(e.response?.data?.message || 'Cannot delete'),
   });
 

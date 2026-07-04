@@ -38,7 +38,7 @@ function PeriodDialog({ open, onClose, entry, classId }) {
   const save = useMutation({
     mutationFn: (d) => timetableApi.upsert({ ...d, companyId: companyId(), classId }),
     onSuccess: () => {
-      qc.invalidateQueries(['timetable', classId]);
+      qc.invalidateQueries({ queryKey: ['timetable', classId] });
       toast.success('Period saved');
       onClose();
     },
@@ -47,7 +47,12 @@ function PeriodDialog({ open, onClose, entry, classId }) {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    save.mutate({ ...form, dayOfWeek: Number(form.dayOfWeek), periodNumber: Number(form.periodNumber), subjectId: form.subjectId || undefined });
+    save.mutate({
+      ...form,
+      dayOfWeek: Number(form.dayOfWeek),
+      periodNumber: Number(form.periodNumber),
+      subjectId: form.subjectId && form.subjectId !== 'FREE' ? form.subjectId : undefined,
+    });
   };
 
   return (
@@ -79,10 +84,10 @@ function PeriodDialog({ open, onClose, entry, classId }) {
           </div>
           <div className="space-y-1">
             <Label>Subject</Label>
-            <Select value={form.subjectId} onValueChange={v => setForm(p => ({ ...p, subjectId: v }))}>
+            <Select value={form.subjectId || 'FREE'} onValueChange={v => setForm(p => ({ ...p, subjectId: v === 'FREE' ? '' : v }))}>
               <SelectTrigger><SelectValue placeholder="Select subject" /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="">— Free / Break —</SelectItem>
+                <SelectItem value="FREE">— Free / Break —</SelectItem>
                 {subjects.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
               </SelectContent>
             </Select>
@@ -129,7 +134,8 @@ export default function Timetable() {
 
   const remove = useMutation({
     mutationFn: (id) => timetableApi.remove(id),
-    onSuccess: () => { qc.invalidateQueries(['timetable', classId]); toast.success('Period cleared'); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['timetable', classId] }); toast.success('Period cleared'); },
+    onError: (e) => toast.error(e.response?.data?.message || 'Failed to clear period'),
   });
 
   // Build grid: day → period → entry

@@ -19,7 +19,11 @@ const EMPTY_FORM = {
 function StudentDialog({ open, onClose, initial, classes, companyId }) {
   const qc = useQueryClient();
   const isEdit = !!initial?.id;
-  const [form, setForm] = useState(initial ? { ...EMPTY_FORM, ...initial } : EMPTY_FORM);
+  const [form, setForm] = useState(
+    initial
+      ? { ...EMPTY_FORM, ...initial, dateOfBirth: initial.dateOfBirth ? initial.dateOfBirth.split('T')[0] : '' }
+      : EMPTY_FORM,
+  );
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   const save = useMutation({
@@ -200,7 +204,7 @@ function PromoteDialog({ open, onClose, classes, companyId }) {
   const promote = useMutation({
     mutationFn: () => studentsApi.promote({ companyId, fromClassId, toClassId, studentIds: selected }),
     onSuccess: (r) => {
-      qc.invalidateQueries(['students']);
+      qc.invalidateQueries({ queryKey: ['students'] });
       toast.success(`${r.data.promoted} students promoted`);
       onClose();
     },

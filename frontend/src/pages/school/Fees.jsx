@@ -242,8 +242,8 @@ function BulkInvoiceDialog({ open, onClose, classes, companyId }) {
   const generate = useMutation({
     mutationFn: () => feesApi.generateBulk({ companyId, classId, month, feeStructureIds: selectedStructures }),
     onSuccess: (r) => {
-      qc.invalidateQueries(['fee-invoices']);
-      qc.invalidateQueries(['school-dashboard']);
+      qc.invalidateQueries({ queryKey: ['fee-invoices'] });
+      qc.invalidateQueries({ queryKey: ['school-dashboard'] });
       toast.success(`Created ${r.data.created} invoices. ${r.data.skipped} already existed.`);
       onClose();
     },

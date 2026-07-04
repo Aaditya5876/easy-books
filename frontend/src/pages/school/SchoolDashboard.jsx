@@ -1,8 +1,11 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { GraduationCap, DollarSign, AlertCircle, Users, TrendingUp, CheckCircle, Sparkles, Circle, ChevronRight } from 'lucide-react';
-import { schoolDashboardApi, aiApi } from '@/api';
+import {
+  LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend,
+} from 'recharts';
+import { GraduationCap, DollarSign, AlertCircle, Users, TrendingUp, CheckCircle, Sparkles, Circle, ChevronRight, CalendarClock, CalendarDays, ClipboardList } from 'lucide-react';
+import { schoolDashboardApi, schoolAnalyticsApi, aiApi } from '@/api';
 import { getActiveCompanyId } from '@/lib/companyContext';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -84,6 +87,86 @@ function StatCard({ icon: Icon, label, value, sub, color = 'blue', loading }) {
   );
 }
 
+function ChartCard({ title, sub, children, empty }) {
+  return (
+    <div className="bg-white rounded-xl border border-border p-5">
+      <div className="mb-3">
+        <h2 className="font-semibold text-sm">{title}</h2>
+        {sub && <p className="text-xs text-muted-foreground mt-0.5">{sub}</p>}
+      </div>
+      {empty ? (
+        <div className="h-52 flex items-center justify-center text-sm text-muted-foreground">{empty}</div>
+      ) : children}
+    </div>
+  );
+}
+
+// Horizontal per-class bars — grey when unmarked, red below 75%
+function TodayByClass({ rows }) {
+  return (
+    <div className="space-y-2.5 max-h-52 overflow-y-auto pr-1">
+      {rows.map(r => {
+        const unmarked = r.marked === 0;
+        const barColor = unmarked ? 'bg-slate-200' : r.pct < 75 ? 'bg-red-400' : 'bg-emerald-400';
+        return (
+          <div key={r.className} className="flex items-center gap-3 text-sm">
+            <span className="w-28 shrink-0 truncate">{r.className}</span>
+            <div className="flex-1 h-4 bg-muted rounded overflow-hidden">
+              <div className={`h-full ${barColor}`} style={{ width: unmarked ? '100%' : `${r.pct}%` }} />
+            </div>
+            <span className={`w-24 shrink-0 text-right text-xs tabular-nums ${unmarked ? 'text-muted-foreground italic' : r.pct < 75 ? 'text-red-600 font-medium' : 'text-muted-foreground'}`}>
+              {unmarked ? 'not marked' : `${r.present}/${r.marked} · ${r.pct}%`}
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function WeekAhead({ weekAhead }) {
+  const items = [
+    ...(weekAhead?.exams ?? []).map(e => ({
+      icon: CalendarClock, color: 'text-purple-600 bg-purple-50', date: e.date,
+      text: `${e.examName}${e.subject ? ` · ${e.subject}` : ''} — ${e.className}${e.startTime ? ` at ${e.startTime}` : ''}`,
+      tag: 'Exam',
+    })),
+    ...(weekAhead?.events ?? []).map(e => ({
+      icon: CalendarDays, color: 'text-amber-600 bg-amber-50', date: e.date,
+      text: e.title, tag: e.eventType,
+    })),
+    ...(weekAhead?.homework ?? []).map(h => ({
+      icon: ClipboardList, color: 'text-blue-600 bg-blue-50', date: h.dueDate,
+      text: `${h.title}${h.subject ? ` · ${h.subject}` : ''} — ${h.className}`, tag: 'Homework due',
+    })),
+  ].sort((a, b) => new Date(a.date) - new Date(b.date)).slice(0, 8);
+
+  if (items.length === 0) {
+    return <div className="h-52 flex items-center justify-center text-sm text-muted-foreground">Nothing scheduled for the next 7 days</div>;
+  }
+
+  return (
+    <div className="space-y-2 max-h-52 overflow-y-auto pr-1">
+      {items.map((item, i) => {
+        const Icon = item.icon;
+        return (
+          <div key={i} className="flex items-center gap-3 text-sm">
+            <div className={`p-1.5 rounded-md shrink-0 ${item.color}`}><Icon className="w-3.5 h-3.5" /></div>
+            <div className="flex-1 min-w-0">
+              <p className="truncate">{item.text}</p>
+              <p className="text-xs text-muted-foreground">
+                {new Date(item.date).toLocaleDateString('en-NP', { weekday: 'short', day: 'numeric', month: 'short' })} · {item.tag}
+              </p>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+const fmtRs = (n) => `Rs. ${Number(n ?? 0).toLocaleString('en-NP')}`;
+
 export default function SchoolDashboard() {
   const companyId = getActiveCompanyId();
   const [insightsDialog, setInsightsDialog] = useState(false);
@@ -108,13 +191,28 @@ export default function SchoolDashboard() {
     setInsightsLoading(true);
     setInsightsDialog(true);
     try {
+      // Exam data isn't on the dashboard payload — fetch it so the AI can
+      // comment on academics too. Non-fatal if there are no results yet.
+      const academics = await schoolAnalyticsApi.academics().then(r => r.data).catch(() => null);
+
       const res = await aiApi.classInsights({
-        totalStudents: data.totalStudents,
-        totalClasses: data.totalClasses,
-        attendanceToday: data.attendanceToday,
-        studentsWithDues: data.studentsWithDues,
-        totalPendingFees: data.totalPendingFees,
-        feeCollectedThisMonth: data.feeCollectedThisMonth,
+        classData: {
+          totalStudents: data.totalStudents,
+          totalClasses: data.totalClasses,
+          attendanceToday: data.attendanceToday,
+          attendanceLast30Days: data.attendanceTrend,
+          todayAttendanceByClass: data.todayByClass,
+          studentsWithDues: data.studentsWithDues,
+          totalPendingFees: data.totalPendingFees,
+          feeCollectedThisMonth: data.feeCollectedThisMonth,
+          feeCollectionByMonth: data.feeMonths,
+          latestExam: academics?.selected ?? null,
+          examPassRateByClass: academics?.passRateByClass ?? [],
+          weakestSubjects: (academics?.subjectAverages ?? [])
+            .slice()
+            .sort((a, b) => a.avgPct - b.avgPct)
+            .slice(0, 5),
+        },
       });
       setInsights(res.data.insights);
     } catch (e) {
@@ -191,6 +289,58 @@ export default function SchoolDashboard() {
           color="blue"
           loading={isLoading}
         />
+      </div>
+
+      {/* Analytics row 1 — attendance */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <ChartCard
+          title="Attendance Trend"
+          sub="Last 30 days — % of students present"
+          empty={!isLoading && !(data?.attendanceTrend?.length) ? 'No attendance marked yet' : null}
+        >
+          <ResponsiveContainer width="100%" height={210}>
+            <LineChart data={data?.attendanceTrend ?? []} margin={{ top: 5, right: 10, left: -20, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+              <XAxis dataKey="date" tick={{ fontSize: 11 }} tickFormatter={d => d.slice(5)} />
+              <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} unit="%" />
+              <Tooltip formatter={(v, name) => name === 'pct' ? [`${v}%`, 'Present'] : [v, name]} labelFormatter={d => d} />
+              <Line type="monotone" dataKey="pct" stroke="#10b981" strokeWidth={2} dot={false} name="pct" />
+            </LineChart>
+          </ResponsiveContainer>
+        </ChartCard>
+
+        <ChartCard
+          title="Today's Attendance by Class"
+          sub="Red = below 75% · grey = not marked yet"
+          empty={!isLoading && !(data?.todayByClass?.length) ? 'No classes created yet' : null}
+        >
+          <TodayByClass rows={data?.todayByClass ?? []} />
+        </ChartCard>
+      </div>
+
+      {/* Analytics row 2 — money + upcoming */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <ChartCard
+          title="Fee Collection by Month"
+          sub="Collected vs still pending, per fee month"
+          empty={!isLoading && !(data?.feeMonths?.length) ? 'No fee invoices generated yet' : null}
+        >
+          <ResponsiveContainer width="100%" height={210}>
+            <BarChart data={data?.feeMonths ?? []} margin={{ top: 5, right: 10, left: -10, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+              <XAxis dataKey="month" tick={{ fontSize: 11 }} />
+              <YAxis tick={{ fontSize: 11 }} tickFormatter={v => v >= 1000 ? `${Math.round(v / 1000)}k` : v} />
+              <Tooltip formatter={(v, name) => [fmtRs(v), name === 'collected' ? 'Collected' : 'Pending']} />
+              <Legend formatter={v => v === 'collected' ? 'Collected' : 'Pending'} wrapperStyle={{ fontSize: 12 }} />
+              <Bar dataKey="collected" stackId="a" fill="#10b981" />
+              <Bar dataKey="pending" stackId="a" fill="#f59e0b" radius={[4, 4, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </ChartCard>
+
+        <ChartCard title="This Week Ahead" sub="Exams, events and homework due in the next 7 days">
+          <WeekAhead weekAhead={data?.weekAhead} />
+        </ChartCard>
       </div>
 
       {/* Pending fees table */}

@@ -7,7 +7,7 @@ export class AiService {
     const key = process.env.GEMINI_API_KEY;
     if (!key) throw new ServiceUnavailableException('GEMINI_API_KEY not configured');
     const genAI = new GoogleGenerativeAI(key);
-    return genAI.getGenerativeModel({ model: 'gemini-2.0-flash-exp' });
+    return genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
   }
 
   private async generate(prompt: string): Promise<string> {
@@ -32,7 +32,7 @@ Keep it under 150 words. Professional and suitable for a school notice board.`;
 
   async generateReportComment(studentName: string, examResults: any[]) {
     const resultsText = examResults
-      .map(r => `${r.subjectName}: ${r.marksObtained}/${r.totalMarks}${r.grade ? ` (${r.grade})` : ''}`)
+      .map(r => `${r.subjectName ?? r.subject ?? 'Subject'}: ${r.marksObtained}/${r.totalMarks}${r.grade ? ` (${r.grade})` : ''}`)
       .join(', ');
     const prompt = `Write a teacher's remark for a Nepal school report card.
 Student: ${studentName}

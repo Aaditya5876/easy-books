@@ -40,7 +40,7 @@ function ScheduleDialog({ open, onClose, entry, classes, subjects }) {
         ? examSchedulesApi.update(entry.id, d)
         : examSchedulesApi.create({ ...d, companyId: companyId() }),
     onSuccess: () => {
-      qc.invalidateQueries(['exam-schedules']);
+      qc.invalidateQueries({ queryKey: ['exam-schedules'] });
       toast.success(isEdit ? 'Exam schedule updated' : 'Exam scheduled');
       onClose();
     },
@@ -152,7 +152,7 @@ export default function ExamSchedule() {
 
   const remove = useMutation({
     mutationFn: (id) => examSchedulesApi.remove(id),
-    onSuccess: () => { qc.invalidateQueries(['exam-schedules']); toast.success('Exam schedule deleted'); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['exam-schedules'] }); toast.success('Exam schedule deleted'); },
     onError: (e) => toast.error(e.response?.data?.message || 'Failed to delete'),
   });
 
