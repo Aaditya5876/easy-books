@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, Trophy, Pencil, Trash2, FileText, Sparkles } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { examResultsApi, studentsApi, subjectsApi, aiApi } from '@/api';
 import { getActiveCompanyId } from '@/lib/companyContext';
 import { Button } from '@/components/ui/button';
@@ -14,6 +15,7 @@ import { format } from 'date-fns';
 const EMPTY_FORM = { studentId: '', subjectId: '', examName: '', marksObtained: '', totalMarks: '', grade: '', remarks: '', examDate: '' };
 
 function ExamDialog({ open, onClose, initial, students, subjects, companyId }) {
+  const { t } = useTranslation();
   const qc = useQueryClient();
   const isEdit = !!initial?.id;
   const [form, setForm] = useState(initial ? { ...EMPTY_FORM, ...initial, marksObtained: String(initial.marksObtained), totalMarks: String(initial.totalMarks) } : EMPTY_FORM);
@@ -24,17 +26,17 @@ function ExamDialog({ open, onClose, initial, students, subjects, companyId }) {
       isEdit ? examResultsApi.update(initial.id, data) : examResultsApi.create(data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['exam-results'] });
-      toast.success(isEdit ? 'Result updated' : 'Result added');
+      toast.success(isEdit ? t('exams.resultUpdated', { defaultValue: 'Result updated' }) : t('exams.resultAdded', { defaultValue: 'Result added' }));
       onClose();
     },
-    onError: (err) => toast.error(err?.response?.data?.message || 'Failed to save result'),
+    onError: (err) => toast.error(err?.response?.data?.message || t('exams.failedToSaveResult', { defaultValue: 'Failed to save result' })),
   });
 
   function handleSubmit(e) {
     e.preventDefault();
-    if (!form.studentId) { toast.error('Select a student'); return; }
-    if (!form.examName.trim()) { toast.error('Exam name is required'); return; }
-    if (!form.marksObtained || !form.totalMarks) { toast.error('Enter marks'); return; }
+    if (!form.studentId) { toast.error(t('exams.selectAStudent', { defaultValue: 'Select a student' })); return; }
+    if (!form.examName.trim()) { toast.error(t('exams.examNameRequired', { defaultValue: 'Exam name is required' })); return; }
+    if (!form.marksObtained || !form.totalMarks) { toast.error(t('exams.enterMarks', { defaultValue: 'Enter marks' })); return; }
     save.mutate({
       ...form,
       marksObtained: parseFloat(form.marksObtained),
@@ -46,53 +48,53 @@ function ExamDialog({ open, onClose, initial, students, subjects, companyId }) {
   return (
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-sm">
-        <DialogHeader><DialogTitle>{isEdit ? 'Edit Result' : 'Add Exam Result'}</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle>{isEdit ? t('exams.editResult', { defaultValue: 'Edit Result' }) : t('exams.addExamResult', { defaultValue: 'Add Exam Result' })}</DialogTitle></DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-3 pt-2">
           <div className="space-y-1.5">
-            <Label>Student *</Label>
+            <Label>{t('exams.studentRequired', { defaultValue: 'Student *' })}</Label>
             <select className="w-full border rounded-md px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring" value={form.studentId} onChange={e => set('studentId', e.target.value)}>
-              <option value="">Select student…</option>
+              <option value="">{t('exams.selectStudent', { defaultValue: 'Select student…' })}</option>
               {students.map(s => <option key={s.id} value={s.id}>{s.name} {s.rollNumber ? `(${s.rollNumber})` : ''}</option>)}
             </select>
           </div>
           <div className="space-y-1.5">
-            <Label>Subject</Label>
+            <Label>{t('exams.subject', { defaultValue: 'Subject' })}</Label>
             <select className="w-full border rounded-md px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring" value={form.subjectId} onChange={e => set('subjectId', e.target.value)}>
-              <option value="">Select subject…</option>
+              <option value="">{t('exams.selectSubject', { defaultValue: 'Select subject…' })}</option>
               {subjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
           </div>
           <div className="space-y-1.5">
-            <Label>Exam Name *</Label>
-            <Input placeholder="e.g. First Terminal 2081" value={form.examName} onChange={e => set('examName', e.target.value)} />
+            <Label>{t('exams.examNameRequiredLabel', { defaultValue: 'Exam Name *' })}</Label>
+            <Input placeholder={t('exams.examNamePlaceholder', { defaultValue: 'e.g. First Terminal 2081' })} value={form.examName} onChange={e => set('examName', e.target.value)} />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label>Marks Obtained *</Label>
+              <Label>{t('exams.marksObtainedRequired', { defaultValue: 'Marks Obtained *' })}</Label>
               <Input type="number" placeholder="75" value={form.marksObtained} onChange={e => set('marksObtained', e.target.value)} />
             </div>
             <div className="space-y-1.5">
-              <Label>Total Marks *</Label>
+              <Label>{t('exams.totalMarksRequired', { defaultValue: 'Total Marks *' })}</Label>
               <Input type="number" placeholder="100" value={form.totalMarks} onChange={e => set('totalMarks', e.target.value)} />
             </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label>Grade</Label>
-              <Input placeholder="A+, A, B…" value={form.grade} onChange={e => set('grade', e.target.value)} />
+              <Label>{t('exams.grade', { defaultValue: 'Grade' })}</Label>
+              <Input placeholder={t('exams.gradePlaceholder', { defaultValue: 'A+, A, B…' })} value={form.grade} onChange={e => set('grade', e.target.value)} />
             </div>
             <div className="space-y-1.5">
-              <Label>Exam Date</Label>
+              <Label>{t('exams.examDate', { defaultValue: 'Exam Date' })}</Label>
               <Input type="date" value={form.examDate} onChange={e => set('examDate', e.target.value)} />
             </div>
           </div>
           <div className="space-y-1.5">
-            <Label>Remarks</Label>
-            <Input placeholder="Optional remarks" value={form.remarks} onChange={e => set('remarks', e.target.value)} />
+            <Label>{t('exams.remarks', { defaultValue: 'Remarks' })}</Label>
+            <Input placeholder={t('exams.remarksPlaceholder', { defaultValue: 'Optional remarks' })} value={form.remarks} onChange={e => set('remarks', e.target.value)} />
           </div>
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
-            <Button type="submit" disabled={save.isPending}>{save.isPending ? 'Saving…' : isEdit ? 'Save' : 'Add Result'}</Button>
+            <Button type="button" variant="outline" onClick={onClose}>{t('exams.cancel', { defaultValue: 'Cancel' })}</Button>
+            <Button type="submit" disabled={save.isPending}>{save.isPending ? t('exams.saving', { defaultValue: 'Saving…' }) : isEdit ? t('exams.save', { defaultValue: 'Save' }) : t('exams.addResult', { defaultValue: 'Add Result' })}</Button>
           </DialogFooter>
         </form>
       </DialogContent>
@@ -169,6 +171,7 @@ function printReportCard(data) {
 }
 
 function ReportCardDialog({ open, onClose, students, examNames }) {
+  const { t } = useTranslation();
   const companyId = getActiveCompanyId();
   const [studentId, setStudentId] = useState('');
   const [examName, setExamName] = useState('');
@@ -183,13 +186,13 @@ function ReportCardDialog({ open, onClose, students, examNames }) {
   });
 
   const handleGenerate = () => {
-    if (!studentId) { toast.error('Select a student'); return; }
-    if (!examName) { toast.error('Select an exam'); return; }
+    if (!studentId) { toast.error(t('exams.selectAStudent', { defaultValue: 'Select a student' })); return; }
+    if (!examName) { toast.error(t('exams.selectAnExam', { defaultValue: 'Select an exam' })); return; }
     setFetching(true);
   };
 
   async function generateComment() {
-    if (!cardData) { toast.error('Generate report card first'); return; }
+    if (!cardData) { toast.error(t('exams.generateReportCardFirst', { defaultValue: 'Generate report card first' })); return; }
     setAiLoading(true);
     try {
       const res = await aiApi.reportCardComment({
@@ -203,7 +206,7 @@ function ReportCardDialog({ open, onClose, students, examNames }) {
       });
       setAiComment(res.data.comment);
     } catch (e) {
-      toast.error(e?.response?.data?.message || 'AI comment failed');
+      toast.error(e?.response?.data?.message || t('exams.aiCommentFailed', { defaultValue: 'AI comment failed' }));
     } finally {
       setAiLoading(false);
     }
@@ -212,35 +215,35 @@ function ReportCardDialog({ open, onClose, students, examNames }) {
   return (
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-sm">
-        <DialogHeader><DialogTitle>Generate Report Card</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle>{t('exams.generateReportCard', { defaultValue: 'Generate Report Card' })}</DialogTitle></DialogHeader>
         <div className="space-y-4 pt-2">
           <div className="space-y-1">
-            <Label>Student *</Label>
+            <Label>{t('exams.studentRequired', { defaultValue: 'Student *' })}</Label>
             <select
               className="w-full border rounded-md px-3 py-2 text-sm bg-background"
               value={studentId}
               onChange={e => { setStudentId(e.target.value); setFetching(false); }}
             >
-              <option value="">Select student…</option>
+              <option value="">{t('exams.selectStudent', { defaultValue: 'Select student…' })}</option>
               {students.map(s => <option key={s.id} value={s.id}>{s.name} {s.rollNumber ? `(${s.rollNumber})` : ''}</option>)}
             </select>
           </div>
           <div className="space-y-1">
-            <Label>Exam *</Label>
+            <Label>{t('exams.examRequired', { defaultValue: 'Exam *' })}</Label>
             <select
               className="w-full border rounded-md px-3 py-2 text-sm bg-background"
               value={examName}
               onChange={e => { setExamName(e.target.value); setFetching(false); }}
             >
-              <option value="">Select exam…</option>
+              <option value="">{t('exams.selectExam', { defaultValue: 'Select exam…' })}</option>
               {examNames.map(n => <option key={n} value={n}>{n}</option>)}
             </select>
           </div>
-          {isLoading && <div className="text-sm text-muted-foreground">Loading report card…</div>}
+          {isLoading && <div className="text-sm text-muted-foreground">{t('exams.loadingReportCard', { defaultValue: 'Loading report card…' })}</div>}
           {cardData && !isLoading && (
             <div className="text-sm bg-muted rounded-md p-3 space-y-2">
               <div className="font-medium">{cardData.student?.name}</div>
-              <div className="text-muted-foreground">{cardData.results?.length} subjects · {cardData.percentage}% overall</div>
+              <div className="text-muted-foreground">{t('exams.subjectsOverall', { count: cardData.results?.length, percentage: cardData.percentage, defaultValue: '{{count}} subjects · {{percentage}}% overall' })}</div>
               <button
                 type="button"
                 onClick={generateComment}
@@ -248,7 +251,7 @@ function ReportCardDialog({ open, onClose, students, examNames }) {
                 className="flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full bg-violet-100 text-violet-700 hover:bg-violet-200 transition-colors disabled:opacity-50 mt-1"
               >
                 <Sparkles className="w-3 h-3" />
-                {aiLoading ? 'Writing…' : 'AI Remark'}
+                {aiLoading ? t('exams.writing', { defaultValue: 'Writing…' }) : t('exams.aiRemark', { defaultValue: 'AI Remark' })}
               </button>
               {aiComment && (
                 <div className="mt-2 p-2 bg-violet-50 rounded border border-violet-100 text-xs text-gray-700 italic">
@@ -259,13 +262,13 @@ function ReportCardDialog({ open, onClose, students, examNames }) {
           )}
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Close</Button>
+          <Button variant="outline" onClick={onClose}>{t('exams.close', { defaultValue: 'Close' })}</Button>
           <Button onClick={handleGenerate} disabled={isLoading}>
-            {isLoading ? 'Loading…' : 'Generate'}
+            {isLoading ? t('exams.loading', { defaultValue: 'Loading…' }) : t('exams.generate', { defaultValue: 'Generate' })}
           </Button>
           {cardData && (
             <Button onClick={() => printReportCard(cardData)}>
-              Print
+              {t('exams.print', { defaultValue: 'Print' })}
             </Button>
           )}
         </DialogFooter>
@@ -275,6 +278,7 @@ function ReportCardDialog({ open, onClose, students, examNames }) {
 }
 
 export default function Exams() {
+  const { t } = useTranslation();
   const companyId = getActiveCompanyId();
   const qc = useQueryClient();
   const [dialog, setDialog] = useState(null);
@@ -301,8 +305,8 @@ export default function Exams() {
 
   const remove = useMutation({
     mutationFn: (id) => examResultsApi.remove(id),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['exam-results'] }); toast.success('Result deleted'); },
-    onError: () => toast.error('Failed to delete'),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['exam-results'] }); toast.success(t('exams.resultDeleted', { defaultValue: 'Result deleted' })); },
+    onError: () => toast.error(t('exams.failedToDelete', { defaultValue: 'Failed to delete' })),
   });
 
   const examNames = [...new Set(results.map(r => r.examName))];
@@ -312,15 +316,15 @@ export default function Exams() {
     <div className="p-6 space-y-5">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Exams & Results</h1>
-          <p className="text-muted-foreground text-sm mt-1">{results.length} results recorded</p>
+          <h1 className="text-2xl font-bold">{t('exams.title', { defaultValue: 'Exams & Results' })}</h1>
+          <p className="text-muted-foreground text-sm mt-1">{t('exams.resultsRecorded', { count: results.length, defaultValue: '{{count}} results recorded' })}</p>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" onClick={() => setReportCardDialog(true)}>
-            <FileText className="w-4 h-4 mr-2" /> Report Card
+            <FileText className="w-4 h-4 mr-2" /> {t('exams.reportCard', { defaultValue: 'Report Card' })}
           </Button>
           <Button onClick={() => setDialog({ mode: 'add' })}>
-            <Plus className="w-4 h-4 mr-2" /> Add Result
+            <Plus className="w-4 h-4 mr-2" /> {t('exams.addResult', { defaultValue: 'Add Result' })}
           </Button>
         </div>
       </div>
@@ -331,7 +335,7 @@ export default function Exams() {
             onClick={() => setFilterExam('')}
             className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${!filterExam ? 'bg-primary text-primary-foreground border-primary' : 'border-border hover:bg-muted'}`}
           >
-            All Exams
+            {t('exams.allExams', { defaultValue: 'All Exams' })}
           </button>
           {examNames.map(name => (
             <button
@@ -347,24 +351,24 @@ export default function Exams() {
 
       <div className="bg-card rounded-xl border border-border overflow-hidden">
         {isLoading ? (
-          <div className="p-12 text-center text-muted-foreground text-sm">Loading results…</div>
+          <div className="p-12 text-center text-muted-foreground text-sm">{t('exams.loadingResults', { defaultValue: 'Loading results…' })}</div>
         ) : filtered.length === 0 ? (
           <div className="p-12 text-center">
             <Trophy className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
-            <p className="text-muted-foreground text-sm">No exam results yet</p>
-            <Button className="mt-4" size="sm" onClick={() => setDialog({ mode: 'add' })}>Add First Result</Button>
+            <p className="text-muted-foreground text-sm">{t('exams.noExamResultsYet', { defaultValue: 'No exam results yet' })}</p>
+            <Button className="mt-4" size="sm" onClick={() => setDialog({ mode: 'add' })}>{t('exams.addFirstResult', { defaultValue: 'Add First Result' })}</Button>
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-muted/40 border-b border-border">
                 <tr>
-                  <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">Student</th>
-                  <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">Class</th>
-                  <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">Exam</th>
-                  <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">Subject</th>
-                  <th className="text-right px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">Marks</th>
-                  <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">Grade</th>
+                  <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('exams.student', { defaultValue: 'Student' })}</th>
+                  <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('exams.class', { defaultValue: 'Class' })}</th>
+                  <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('exams.exam', { defaultValue: 'Exam' })}</th>
+                  <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('exams.subject', { defaultValue: 'Subject' })}</th>
+                  <th className="text-right px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('exams.marks', { defaultValue: 'Marks' })}</th>
+                  <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('exams.grade', { defaultValue: 'Grade' })}</th>
                   <th className="px-5 py-3" />
                 </tr>
               </thead>
@@ -393,7 +397,7 @@ export default function Exams() {
                         <button onClick={() => setDialog({ mode: 'edit', result: r })} className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors">
                           <Pencil className="w-3.5 h-3.5" />
                         </button>
-                        <button onClick={() => { if (window.confirm('Delete this result?')) remove.mutate(r.id); }} className="p-1.5 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600 transition-colors">
+                        <button onClick={() => { if (window.confirm(t('exams.deleteThisResult', { defaultValue: 'Delete this result?' }))) remove.mutate(r.id); }} className="p-1.5 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600 transition-colors">
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
                       </div>

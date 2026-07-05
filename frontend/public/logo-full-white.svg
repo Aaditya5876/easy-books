@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 250 64">
+  <g>
+    <path d="M32 50 L9 44 L9 27 L21 18 L32 26 Z" fill="#FFFFFF"/>
+    <path d="M32 50 L55 44 L55 24 L43 12 L32 26 Z" fill="#D9E2F5"/>
+    <path d="M14 36.5 L27 41" stroke="#101F4D" stroke-width="1.6" stroke-linecap="round" opacity=".18"/>
+    <path d="M37 41 L50 36.5" stroke="#101F4D" stroke-width="1.6" stroke-linecap="round" opacity=".18"/>
+    <rect x="42.3" y="4" width="1.4" height="9" rx="0.7" fill="#FFFFFF"/>
+    <path d="M43.7 3.6 L52.5 6 L46 8 L52.5 10 L43.7 12.4 Z" fill="#E8354F"/>
+  </g>
+  <text x="72" y="43" font-family="Segoe UI, system-ui, -apple-system, sans-serif" font-size="30" letter-spacing="-0.5" fill="#FFFFFF"><tspan font-weight="300">Easy</tspan><tspan font-weight="700">Books</tspan></text>
+</svg>

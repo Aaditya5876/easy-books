@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, Pencil, Trash2, BookOpen, ArrowLeftRight, Upload } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import BulkImportDialog from '@/components/shared/BulkImportDialog';
 import { BOOK_FIELDS } from '@/components/shared/bulkImportFields';
 import { libraryApi } from '@/api';
@@ -14,6 +15,7 @@ import { toast } from 'sonner';
 const EMPTY_BOOK = { title: '', author: '', isbn: '', category: '', totalCopies: 1, availableCopies: 1, shelfLocation: '' };
 
 function BookDialog({ open, onClose, initial, companyId }) {
+  const { t } = useTranslation();
   const qc = useQueryClient();
   const isEdit = !!initial?.id;
   const [form, setForm] = useState(initial ? {
@@ -25,58 +27,58 @@ function BookDialog({ open, onClose, initial, companyId }) {
 
   const save = useMutation({
     mutationFn: (data) => isEdit ? libraryApi.updateBook(initial.id, data) : libraryApi.createBook(data),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['library-books'] }); toast.success(isEdit ? 'Updated' : 'Book added'); onClose(); },
-    onError: (err) => toast.error(err?.response?.data?.message || 'Failed to save'),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['library-books'] }); toast.success(isEdit ? t('library.updated', { defaultValue: 'Updated' }) : t('library.bookAdded', { defaultValue: 'Book added' })); onClose(); },
+    onError: (err) => toast.error(err?.response?.data?.message || t('library.failedToSave', { defaultValue: 'Failed to save' })),
   });
 
   function handleSubmit(e) {
     e.preventDefault();
-    if (!form.title.trim()) { toast.error('Title is required'); return; }
+    if (!form.title.trim()) { toast.error(t('library.titleRequired', { defaultValue: 'Title is required' })); return; }
     save.mutate({ ...form, companyId, totalCopies: Number(form.totalCopies), availableCopies: Number(form.availableCopies) });
   }
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-md">
-        <DialogHeader><DialogTitle>{isEdit ? 'Edit Book' : 'Add Book'}</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle>{isEdit ? t('library.editBook', { defaultValue: 'Edit Book' }) : t('library.addBook', { defaultValue: 'Add Book' })}</DialogTitle></DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4 pt-2">
           <div className="space-y-1.5">
-            <Label>Title *</Label>
-            <Input placeholder="Book title" value={form.title} onChange={e => set('title', e.target.value)} />
+            <Label>{t('library.titleLabel', { defaultValue: 'Title *' })}</Label>
+            <Input placeholder={t('library.titlePlaceholder', { defaultValue: 'Book title' })} value={form.title} onChange={e => set('title', e.target.value)} />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label>Author</Label>
-              <Input placeholder="Author name" value={form.author} onChange={e => set('author', e.target.value)} />
+              <Label>{t('library.author', { defaultValue: 'Author' })}</Label>
+              <Input placeholder={t('library.authorPlaceholder', { defaultValue: 'Author name' })} value={form.author} onChange={e => set('author', e.target.value)} />
             </div>
             <div className="space-y-1.5">
-              <Label>ISBN</Label>
-              <Input placeholder="ISBN number" value={form.isbn} onChange={e => set('isbn', e.target.value)} />
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label>Category</Label>
-              <Input placeholder="e.g. Science, Math" value={form.category} onChange={e => set('category', e.target.value)} />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Shelf Location</Label>
-              <Input placeholder="e.g. A-12" value={form.shelfLocation} onChange={e => set('shelfLocation', e.target.value)} />
+              <Label>{t('library.isbn', { defaultValue: 'ISBN' })}</Label>
+              <Input placeholder={t('library.isbnPlaceholder', { defaultValue: 'ISBN number' })} value={form.isbn} onChange={e => set('isbn', e.target.value)} />
             </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label>Total Copies</Label>
+              <Label>{t('library.category', { defaultValue: 'Category' })}</Label>
+              <Input placeholder={t('library.categoryPlaceholder', { defaultValue: 'e.g. Science, Math' })} value={form.category} onChange={e => set('category', e.target.value)} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>{t('library.shelfLocation', { defaultValue: 'Shelf Location' })}</Label>
+              <Input placeholder={t('library.shelfLocationPlaceholder', { defaultValue: 'e.g. A-12' })} value={form.shelfLocation} onChange={e => set('shelfLocation', e.target.value)} />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label>{t('library.totalCopies', { defaultValue: 'Total Copies' })}</Label>
               <Input type="number" min="1" value={form.totalCopies} onChange={e => set('totalCopies', e.target.value)} />
             </div>
             <div className="space-y-1.5">
-              <Label>Available Copies</Label>
+              <Label>{t('library.availableCopies', { defaultValue: 'Available Copies' })}</Label>
               <Input type="number" min="0" value={form.availableCopies} onChange={e => set('availableCopies', e.target.value)} />
             </div>
           </div>
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
-            <Button type="submit" disabled={save.isPending}>{save.isPending ? 'Saving…' : isEdit ? 'Save Changes' : 'Add Book'}</Button>
+            <Button type="button" variant="outline" onClick={onClose}>{t('library.cancel', { defaultValue: 'Cancel' })}</Button>
+            <Button type="submit" disabled={save.isPending}>{save.isPending ? t('library.saving', { defaultValue: 'Saving…' }) : isEdit ? t('library.saveChanges', { defaultValue: 'Save Changes' }) : t('library.addBook', { defaultValue: 'Add Book' })}</Button>
           </DialogFooter>
         </form>
       </DialogContent>
@@ -85,6 +87,7 @@ function BookDialog({ open, onClose, initial, companyId }) {
 }
 
 function IssueDialog({ open, onClose, books, companyId }) {
+  const { t } = useTranslation();
   const qc = useQueryClient();
   const [form, setForm] = useState({ bookId: '', memberName: '', dueDate: '' });
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
@@ -94,45 +97,45 @@ function IssueDialog({ open, onClose, books, companyId }) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['library-books'] });
       qc.invalidateQueries({ queryKey: ['library-issues'] });
-      toast.success('Book issued');
+      toast.success(t('library.bookIssued', { defaultValue: 'Book issued' }));
       onClose();
     },
-    onError: (err) => toast.error(err?.response?.data?.message || 'Failed to issue'),
+    onError: (err) => toast.error(err?.response?.data?.message || t('library.failedToIssue', { defaultValue: 'Failed to issue' })),
   });
 
   function handleSubmit(e) {
     e.preventDefault();
-    if (!form.bookId) { toast.error('Select a book'); return; }
-    if (!form.memberName.trim()) { toast.error('Member name is required'); return; }
-    if (!form.dueDate) { toast.error('Due date is required'); return; }
+    if (!form.bookId) { toast.error(t('library.selectABook', { defaultValue: 'Select a book' })); return; }
+    if (!form.memberName.trim()) { toast.error(t('library.memberNameRequired', { defaultValue: 'Member name is required' })); return; }
+    if (!form.dueDate) { toast.error(t('library.dueDateRequired', { defaultValue: 'Due date is required' })); return; }
     issue.mutate({ companyId, bookId: form.bookId, memberName: form.memberName, dueDate: new Date(form.dueDate) });
   }
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-sm">
-        <DialogHeader><DialogTitle>Issue Book</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle>{t('library.issueBook', { defaultValue: 'Issue Book' })}</DialogTitle></DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4 pt-2">
           <div className="space-y-1.5">
-            <Label>Book *</Label>
+            <Label>{t('library.bookLabel', { defaultValue: 'Book *' })}</Label>
             <select className="w-full border rounded-md px-3 py-2 text-sm bg-background" value={form.bookId} onChange={e => set('bookId', e.target.value)}>
-              <option value="">Select book…</option>
+              <option value="">{t('library.selectBook', { defaultValue: 'Select book…' })}</option>
               {books.filter(b => b.availableCopies > 0).map(b => (
-                <option key={b.id} value={b.id}>{b.title} ({b.availableCopies} available)</option>
+                <option key={b.id} value={b.id}>{t('library.bookOption', { defaultValue: '{{title}} ({{count}} available)', title: b.title, count: b.availableCopies })}</option>
               ))}
             </select>
           </div>
           <div className="space-y-1.5">
-            <Label>Issued To *</Label>
-            <Input placeholder="Student or staff name" value={form.memberName} onChange={e => set('memberName', e.target.value)} />
+            <Label>{t('library.issuedToLabel', { defaultValue: 'Issued To *' })}</Label>
+            <Input placeholder={t('library.issuedToPlaceholder', { defaultValue: 'Student or staff name' })} value={form.memberName} onChange={e => set('memberName', e.target.value)} />
           </div>
           <div className="space-y-1.5">
-            <Label>Due Date *</Label>
+            <Label>{t('library.dueDateLabel', { defaultValue: 'Due Date *' })}</Label>
             <Input type="date" value={form.dueDate} onChange={e => set('dueDate', e.target.value)} />
           </div>
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
-            <Button type="submit" disabled={issue.isPending}>{issue.isPending ? 'Issuing…' : 'Issue Book'}</Button>
+            <Button type="button" variant="outline" onClick={onClose}>{t('library.cancel', { defaultValue: 'Cancel' })}</Button>
+            <Button type="submit" disabled={issue.isPending}>{issue.isPending ? t('library.issuing', { defaultValue: 'Issuing…' }) : t('library.issueBook', { defaultValue: 'Issue Book' })}</Button>
           </DialogFooter>
         </form>
       </DialogContent>
@@ -141,6 +144,7 @@ function IssueDialog({ open, onClose, books, companyId }) {
 }
 
 function ReturnDialog({ open, onClose, issue: issueRecord, companyId }) {
+  const { t } = useTranslation();
   const qc = useQueryClient();
   const [fine, setFine] = useState(0);
 
@@ -149,27 +153,27 @@ function ReturnDialog({ open, onClose, issue: issueRecord, companyId }) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['library-books'] });
       qc.invalidateQueries({ queryKey: ['library-issues'] });
-      toast.success('Book returned');
+      toast.success(t('library.bookReturned', { defaultValue: 'Book returned' }));
       onClose();
     },
-    onError: (err) => toast.error(err?.response?.data?.message || 'Failed'),
+    onError: (err) => toast.error(err?.response?.data?.message || t('library.failed', { defaultValue: 'Failed' })),
   });
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-sm">
-        <DialogHeader><DialogTitle>Return Book</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle>{t('library.returnBook', { defaultValue: 'Return Book' })}</DialogTitle></DialogHeader>
         <div className="space-y-4 pt-2">
           <p className="text-sm text-muted-foreground">
-            Returning <strong>{issueRecord?.book?.title}</strong> issued to <strong>{issueRecord?.memberName || issueRecord?.student?.name}</strong>
+            {t('library.returning', { defaultValue: 'Returning' })} <strong>{issueRecord?.book?.title}</strong> {t('library.issuedTo', { defaultValue: 'issued to' })} <strong>{issueRecord?.memberName || issueRecord?.student?.name}</strong>
           </p>
           <div className="space-y-1.5">
-            <Label>Fine (Rs.)</Label>
+            <Label>{t('library.fineLabel', { defaultValue: 'Fine (Rs.)' })}</Label>
             <Input type="number" min="0" value={fine} onChange={e => setFine(Number(e.target.value))} />
           </div>
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
-            <Button onClick={() => ret.mutate()} disabled={ret.isPending}>{ret.isPending ? 'Processing…' : 'Mark Returned'}</Button>
+            <Button type="button" variant="outline" onClick={onClose}>{t('library.cancel', { defaultValue: 'Cancel' })}</Button>
+            <Button onClick={() => ret.mutate()} disabled={ret.isPending}>{ret.isPending ? t('library.processing', { defaultValue: 'Processing…' }) : t('library.markReturned', { defaultValue: 'Mark Returned' })}</Button>
           </DialogFooter>
         </div>
       </DialogContent>
@@ -178,6 +182,7 @@ function ReturnDialog({ open, onClose, issue: issueRecord, companyId }) {
 }
 
 export default function Library() {
+  const { t } = useTranslation();
   const companyId = getActiveCompanyId();
   const qc = useQueryClient();
   const [tab, setTab] = useState('books');
@@ -201,8 +206,8 @@ export default function Library() {
 
   const removeBook = useMutation({
     mutationFn: (id) => libraryApi.removeBook(id),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['library-books'] }); toast.success('Deleted'); },
-    onError: (err) => toast.error(err?.response?.data?.message || 'Cannot delete'),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['library-books'] }); toast.success(t('library.deleted', { defaultValue: 'Deleted' })); },
+    onError: (err) => toast.error(err?.response?.data?.message || t('library.cannotDelete', { defaultValue: 'Cannot delete' })),
   });
 
   const filteredBooks = books.filter(b => !search || b.title.toLowerCase().includes(search.toLowerCase()));
@@ -212,23 +217,23 @@ export default function Library() {
     <div className="p-6 space-y-5">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Library</h1>
-          <p className="text-muted-foreground text-sm mt-1">{books.length} books in catalog</p>
+          <h1 className="text-2xl font-bold">{t('library.title', { defaultValue: 'Library' })}</h1>
+          <p className="text-muted-foreground text-sm mt-1">{t('library.booksInCatalog', { defaultValue: '{{count}} books in catalog', count: books.length })}</p>
         </div>
         <div className="flex gap-2">
           {tab === 'books' && (
             <Button variant="outline" onClick={() => setImportOpen(true)}>
-              <Upload className="w-4 h-4 mr-2" /> Import
+              <Upload className="w-4 h-4 mr-2" /> {t('library.import', { defaultValue: 'Import' })}
             </Button>
           )}
           {tab === 'books' && (
             <Button variant="outline" onClick={() => setIssueDialog(true)}>
-              <ArrowLeftRight className="w-4 h-4 mr-2" /> Issue Book
+              <ArrowLeftRight className="w-4 h-4 mr-2" /> {t('library.issueBook', { defaultValue: 'Issue Book' })}
             </Button>
           )}
           {tab === 'books' && (
             <Button onClick={() => setBookDialog({ mode: 'add' })}>
-              <Plus className="w-4 h-4 mr-2" /> Add Book
+              <Plus className="w-4 h-4 mr-2" /> {t('library.addBook', { defaultValue: 'Add Book' })}
             </Button>
           )}
         </div>
@@ -238,41 +243,41 @@ export default function Library() {
         open={importOpen}
         onClose={() => setImportOpen(false)}
         entity="books"
-        title="Import Books"
+        title={t('library.importBooks', { defaultValue: 'Import Books' })}
         fields={BOOK_FIELDS}
         onDone={() => qc.invalidateQueries({ queryKey: ['library-books'] })}
       />
 
       {/* Tabs */}
       <div className="flex gap-1 bg-muted/40 p-1 rounded-lg w-fit">
-        {['books', 'issues'].map(t => (
-          <button key={t} onClick={() => setTab(t)}
-            className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors capitalize ${tab === t ? 'bg-white shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
-            {t === 'books' ? 'Book Catalog' : 'Issued Books'}
+        {['books', 'issues'].map(tKey => (
+          <button key={tKey} onClick={() => setTab(tKey)}
+            className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors capitalize ${tab === tKey ? 'bg-white shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
+            {tKey === 'books' ? t('library.bookCatalog', { defaultValue: 'Book Catalog' }) : t('library.issuedBooks', { defaultValue: 'Issued Books' })}
           </button>
         ))}
       </div>
 
       {tab === 'books' && (
         <>
-          <Input placeholder="Search books…" value={search} onChange={e => setSearch(e.target.value)} className="max-w-xs" />
+          <Input placeholder={t('library.searchBooks', { defaultValue: 'Search books…' })} value={search} onChange={e => setSearch(e.target.value)} className="max-w-xs" />
           <div className="bg-white rounded-xl border border-border overflow-hidden">
             {loadingBooks ? (
-              <div className="p-12 text-center text-muted-foreground text-sm">Loading…</div>
+              <div className="p-12 text-center text-muted-foreground text-sm">{t('library.loading', { defaultValue: 'Loading…' })}</div>
             ) : filteredBooks.length === 0 ? (
               <div className="p-12 text-center">
                 <BookOpen className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
-                <p className="text-muted-foreground text-sm">No books yet. Add your first book.</p>
+                <p className="text-muted-foreground text-sm">{t('library.noBooksYet', { defaultValue: 'No books yet. Add your first book.' })}</p>
               </div>
             ) : (
               <table className="w-full text-sm">
                 <thead className="bg-muted/40 border-b border-border">
                   <tr>
-                    <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">Title</th>
-                    <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">Author</th>
-                    <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">Category</th>
-                    <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">Shelf</th>
-                    <th className="text-center px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">Available</th>
+                    <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('library.titleHeader', { defaultValue: 'Title' })}</th>
+                    <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('library.authorHeader', { defaultValue: 'Author' })}</th>
+                    <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('library.categoryHeader', { defaultValue: 'Category' })}</th>
+                    <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('library.shelfHeader', { defaultValue: 'Shelf' })}</th>
+                    <th className="text-center px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('library.availableHeader', { defaultValue: 'Available' })}</th>
                     <th className="px-5 py-3" />
                   </tr>
                 </thead>
@@ -293,7 +298,7 @@ export default function Library() {
                           <button onClick={() => setBookDialog({ mode: 'edit', book: b })} className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors">
                             <Pencil className="w-3.5 h-3.5" />
                           </button>
-                          <button onClick={() => { if (confirm(`Delete "${b.title}"?`)) removeBook.mutate(b.id); }}
+                          <button onClick={() => { if (confirm(t('library.confirmDeleteBook', { defaultValue: 'Delete "{{title}}"?', title: b.title }))) removeBook.mutate(b.id); }}
                             className="p-1.5 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600 transition-colors">
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
@@ -311,18 +316,18 @@ export default function Library() {
       {tab === 'issues' && (
         <div className="bg-white rounded-xl border border-border overflow-hidden">
           {loadingIssues ? (
-            <div className="p-12 text-center text-muted-foreground text-sm">Loading…</div>
+            <div className="p-12 text-center text-muted-foreground text-sm">{t('library.loading', { defaultValue: 'Loading…' })}</div>
           ) : issues.length === 0 ? (
-            <div className="p-12 text-center text-muted-foreground text-sm">No active issues.</div>
+            <div className="p-12 text-center text-muted-foreground text-sm">{t('library.noActiveIssues', { defaultValue: 'No active issues.' })}</div>
           ) : (
             <table className="w-full text-sm">
               <thead className="bg-muted/40 border-b border-border">
                 <tr>
-                  <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">Book</th>
-                  <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">Issued To</th>
-                  <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">Issue Date</th>
-                  <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">Due Date</th>
-                  <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">Status</th>
+                  <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('library.bookHeader', { defaultValue: 'Book' })}</th>
+                  <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('library.issuedToHeader', { defaultValue: 'Issued To' })}</th>
+                  <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('library.issueDateHeader', { defaultValue: 'Issue Date' })}</th>
+                  <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('library.dueDateHeader', { defaultValue: 'Due Date' })}</th>
+                  <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('library.statusHeader', { defaultValue: 'Status' })}</th>
                   <th className="px-5 py-3" />
                 </tr>
               </thead>
@@ -340,12 +345,12 @@ export default function Library() {
                           iss.status === 'RETURNED' ? 'bg-emerald-50 text-emerald-700' :
                           overdue ? 'bg-red-50 text-red-700' : 'bg-amber-50 text-amber-700'
                         }`}>
-                          {overdue && iss.status !== 'RETURNED' ? 'OVERDUE' : iss.status}
+                          {overdue && iss.status !== 'RETURNED' ? t('library.status_OVERDUE', { defaultValue: 'OVERDUE' }) : t(`library.status_${iss.status}`, { defaultValue: iss.status })}
                         </span>
                       </td>
                       <td className="px-5 py-3">
                         {iss.status === 'ISSUED' && (
-                          <Button size="sm" variant="outline" onClick={() => setReturnDialog(iss)}>Return</Button>
+                          <Button size="sm" variant="outline" onClick={() => setReturnDialog(iss)}>{t('library.return', { defaultValue: 'Return' })}</Button>
                         )}
                       </td>
                     </tr>

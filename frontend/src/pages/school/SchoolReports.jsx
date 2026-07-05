@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import {
   BarChart, Bar, LineChart, Line, ComposedChart, XAxis, YAxis, Tooltip,
   ResponsiveContainer, CartesianGrid, Legend,
@@ -45,6 +46,7 @@ const heatColor = (p) =>
 // ── Attendance tab ─────────────────────────────────────────────────────────────
 
 function AttendanceTab() {
+  const { t } = useTranslation();
   const now = new Date();
   const [month, setMonth] = useState(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`);
 
@@ -63,28 +65,28 @@ function AttendanceTab() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <Card title="Monthly Attendance by Class" sub="% present (late counts as present)">
-          {isLoading ? <Empty>Loading…</Empty> : !data?.byClass?.length ? <Empty>No attendance data for this month</Empty> : (
+        <Card title={t('reports.monthlyAttendanceByClass', { defaultValue: 'Monthly Attendance by Class' })} sub={t('reports.monthlyAttendanceByClassSub', { defaultValue: '% present (late counts as present)' })}>
+          {isLoading ? <Empty>{t('reports.loading', { defaultValue: 'Loading…' })}</Empty> : !data?.byClass?.length ? <Empty>{t('reports.noAttendanceDataForMonth', { defaultValue: 'No attendance data for this month' })}</Empty> : (
             <ResponsiveContainer width="100%" height={230}>
               <BarChart data={data.byClass} margin={{ top: 5, right: 10, left: -20, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                 <XAxis dataKey="className" tick={{ fontSize: 11 }} interval={0} angle={-20} textAnchor="end" height={50} />
                 <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} unit="%" />
-                <Tooltip formatter={(v) => [`${v}%`, 'Present']} />
+                <Tooltip formatter={(v) => [`${v}%`, t('reports.present', { defaultValue: 'Present' })]} />
                 <Bar dataKey="pct" fill="#10b981" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           )}
         </Card>
 
-        <Card title="Day-of-Week Pattern" sub="Average attendance % per weekday — spot recurring dips">
-          {isLoading ? <Empty>Loading…</Empty> : !data?.dayOfWeek?.some(d => d.marked > 0) ? <Empty>No data</Empty> : (
+        <Card title={t('reports.dayOfWeekPattern', { defaultValue: 'Day-of-Week Pattern' })} sub={t('reports.dayOfWeekPatternSub', { defaultValue: 'Average attendance % per weekday — spot recurring dips' })}>
+          {isLoading ? <Empty>{t('reports.loading', { defaultValue: 'Loading…' })}</Empty> : !data?.dayOfWeek?.some(d => d.marked > 0) ? <Empty>{t('reports.noData', { defaultValue: 'No data' })}</Empty> : (
             <ResponsiveContainer width="100%" height={230}>
               <BarChart data={data.dayOfWeek.filter(d => d.marked > 0)} margin={{ top: 5, right: 10, left: -20, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                 <XAxis dataKey="day" tick={{ fontSize: 11 }} />
                 <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} unit="%" />
-                <Tooltip formatter={(v) => [`${v}%`, 'Present']} />
+                <Tooltip formatter={(v) => [`${v}%`, t('reports.present', { defaultValue: 'Present' })]} />
                 <Bar dataKey="pct" fill="#6366f1" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
@@ -92,19 +94,19 @@ function AttendanceTab() {
         </Card>
       </div>
 
-      <Card title="Chronic Absentees" sub="Below 75% attendance this month (min. 5 marked days) — call the guardian">
-        {isLoading ? <Empty>Loading…</Empty> : !data?.chronicAbsentees?.length ? (
-          <Empty>No chronic absentees this month 🎉</Empty>
+      <Card title={t('reports.chronicAbsentees', { defaultValue: 'Chronic Absentees' })} sub={t('reports.chronicAbsenteesSub', { defaultValue: 'Below 75% attendance this month (min. 5 marked days) — call the guardian' })}>
+        {isLoading ? <Empty>{t('reports.loading', { defaultValue: 'Loading…' })}</Empty> : !data?.chronicAbsentees?.length ? (
+          <Empty>{t('reports.noChronicAbsentees', { defaultValue: 'No chronic absentees this month 🎉' })}</Empty>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-left text-xs uppercase tracking-wide text-muted-foreground border-b">
-                  <th className="px-3 py-2">Student</th>
-                  <th className="px-3 py-2">Class</th>
-                  <th className="px-3 py-2 text-right">Present / Marked</th>
+                  <th className="px-3 py-2">{t('reports.student', { defaultValue: 'Student' })}</th>
+                  <th className="px-3 py-2">{t('reports.class', { defaultValue: 'Class' })}</th>
+                  <th className="px-3 py-2 text-right">{t('reports.presentMarked', { defaultValue: 'Present / Marked' })}</th>
                   <th className="px-3 py-2 text-right">%</th>
-                  <th className="px-3 py-2">Guardian</th>
+                  <th className="px-3 py-2">{t('reports.guardian', { defaultValue: 'Guardian' })}</th>
                 </tr>
               </thead>
               <tbody className="divide-y">
@@ -138,6 +140,7 @@ function AttendanceTab() {
 // ── Fees tab ───────────────────────────────────────────────────────────────────
 
 function FeesTab() {
+  const { t } = useTranslation();
   const { data, isLoading } = useQuery({
     queryKey: ['analytics-fees'],
     queryFn: () => schoolAnalyticsApi.fees().then(r => r.data),
@@ -145,16 +148,16 @@ function FeesTab() {
 
   return (
     <div className="space-y-4">
-      <Card title="Collection Trend" sub="Per fee month — bars are amounts, line is collection rate %">
-        {isLoading ? <Empty>Loading…</Empty> : !data?.byMonth?.length ? <Empty>No fee invoices yet</Empty> : (
+      <Card title={t('reports.collectionTrend', { defaultValue: 'Collection Trend' })} sub={t('reports.collectionTrendSub', { defaultValue: 'Per fee month — bars are amounts, line is collection rate %' })}>
+        {isLoading ? <Empty>{t('reports.loading', { defaultValue: 'Loading…' })}</Empty> : !data?.byMonth?.length ? <Empty>{t('reports.noFeeInvoicesYet', { defaultValue: 'No fee invoices yet' })}</Empty> : (
           <ResponsiveContainer width="100%" height={260}>
             <ComposedChart data={data.byMonth} margin={{ top: 5, right: 0, left: -10, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
               <XAxis dataKey="month" tick={{ fontSize: 11 }} />
               <YAxis yAxisId="amt" tick={{ fontSize: 11 }} tickFormatter={kFmt} />
               <YAxis yAxisId="rate" orientation="right" domain={[0, 100]} tick={{ fontSize: 11 }} unit="%" />
-              <Tooltip formatter={(v, name) => name === 'rate' ? [`${v}%`, 'Collection rate'] : [fmtRs(v), name === 'collected' ? 'Collected' : 'Pending']} />
-              <Legend wrapperStyle={{ fontSize: 12 }} formatter={v => v === 'collected' ? 'Collected' : v === 'pending' ? 'Pending' : 'Rate %'} />
+              <Tooltip formatter={(v, name) => name === 'rate' ? [`${v}%`, t('reports.collectionRate', { defaultValue: 'Collection rate' })] : [fmtRs(v), name === 'collected' ? t('reports.collected', { defaultValue: 'Collected' }) : t('reports.pending', { defaultValue: 'Pending' })]} />
+              <Legend wrapperStyle={{ fontSize: 12 }} formatter={v => v === 'collected' ? t('reports.collected', { defaultValue: 'Collected' }) : v === 'pending' ? t('reports.pending', { defaultValue: 'Pending' }) : t('reports.ratePercent', { defaultValue: 'Rate %' })} />
               <Bar yAxisId="amt" dataKey="collected" stackId="a" fill="#10b981" />
               <Bar yAxisId="amt" dataKey="pending" stackId="a" fill="#f59e0b" radius={[4, 4, 0, 0]} />
               <Line yAxisId="rate" type="monotone" dataKey="rate" stroke="#6366f1" strokeWidth={2} dot={{ r: 3 }} />
@@ -164,8 +167,8 @@ function FeesTab() {
       </Card>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <Card title="Outstanding by Class" sub="Where the dues concentrate">
-          {isLoading ? <Empty>Loading…</Empty> : !data?.outstandingByClass?.length ? <Empty>No outstanding dues 🎉</Empty> : (
+        <Card title={t('reports.outstandingByClass', { defaultValue: 'Outstanding by Class' })} sub={t('reports.outstandingByClassSub', { defaultValue: 'Where the dues concentrate' })}>
+          {isLoading ? <Empty>{t('reports.loading', { defaultValue: 'Loading…' })}</Empty> : !data?.outstandingByClass?.length ? <Empty>{t('reports.noOutstandingDues', { defaultValue: 'No outstanding dues 🎉' })}</Empty> : (
             <div className="space-y-2.5 max-h-64 overflow-y-auto pr-1">
               {(() => {
                 const max = Math.max(...data.outstandingByClass.map(c => c.due), 1);
@@ -183,14 +186,14 @@ function FeesTab() {
           )}
         </Card>
 
-        <Card title="Dues Aging" sub="How long invoices have been unpaid — older is worse">
-          {isLoading ? <Empty>Loading…</Empty> : (
+        <Card title={t('reports.duesAging', { defaultValue: 'Dues Aging' })} sub={t('reports.duesAgingSub', { defaultValue: 'How long invoices have been unpaid — older is worse' })}>
+          {isLoading ? <Empty>{t('reports.loading', { defaultValue: 'Loading…' })}</Empty> : (
             <div className="grid grid-cols-2 gap-3">
               {(data?.aging ?? []).map(b => (
                 <div key={b.label} className={`rounded-lg border p-3 ${b.label === '90+ days' && b.total > 0 ? 'border-red-200 bg-red-50/50' : ''}`}>
                   <p className="text-xs text-muted-foreground">{b.label}</p>
                   <p className="text-lg font-bold tabular-nums mt-0.5">{fmtRs(b.total)}</p>
-                  <p className="text-xs text-muted-foreground">{b.count} invoice{b.count === 1 ? '' : 's'}</p>
+                  <p className="text-xs text-muted-foreground">{b.count} {b.count === 1 ? t('reports.invoice', { defaultValue: 'invoice' }) : t('reports.invoices', { defaultValue: 'invoices' })}</p>
                 </div>
               ))}
             </div>
@@ -199,16 +202,16 @@ function FeesTab() {
       </div>
 
       {(data?.aging ?? []).filter(b => b.top.length > 0).map(b => (
-        <Card key={b.label} title={`Top dues · ${b.label}`} sub={`${b.count} unpaid invoices in this bucket`}>
+        <Card key={b.label} title={`${t('reports.topDues', { defaultValue: 'Top dues' })} · ${b.label}`} sub={t('reports.unpaidInvoicesInBucket', { defaultValue: '{{count}} unpaid invoices in this bucket', count: b.count })}>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-left text-xs uppercase tracking-wide text-muted-foreground border-b">
-                  <th className="px-3 py-2">Student</th>
-                  <th className="px-3 py-2">Class</th>
-                  <th className="px-3 py-2">Fee Month</th>
-                  <th className="px-3 py-2 text-right">Days Overdue</th>
-                  <th className="px-3 py-2 text-right">Due</th>
+                  <th className="px-3 py-2">{t('reports.student', { defaultValue: 'Student' })}</th>
+                  <th className="px-3 py-2">{t('reports.class', { defaultValue: 'Class' })}</th>
+                  <th className="px-3 py-2">{t('reports.feeMonth', { defaultValue: 'Fee Month' })}</th>
+                  <th className="px-3 py-2 text-right">{t('reports.daysOverdue', { defaultValue: 'Days Overdue' })}</th>
+                  <th className="px-3 py-2 text-right">{t('reports.due', { defaultValue: 'Due' })}</th>
                 </tr>
               </thead>
               <tbody className="divide-y">
@@ -233,6 +236,7 @@ function FeesTab() {
 // ── Academics tab ──────────────────────────────────────────────────────────────
 
 function AcademicsTab() {
+  const { t } = useTranslation();
   const [examName, setExamName] = useState('');
 
   const { data, isLoading } = useQuery({
@@ -241,7 +245,7 @@ function AcademicsTab() {
   });
 
   if (!isLoading && !data?.selected) {
-    return <Empty>No exam results entered yet — add marks under Exams first</Empty>;
+    return <Empty>{t('reports.noExamResultsYet', { defaultValue: 'No exam results entered yet — add marks under Exams first' })}</Empty>;
   }
 
   return (
@@ -257,28 +261,28 @@ function AcademicsTab() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <Card title="Pass Rate by Class" sub={`Subject results ≥ 40% · ${data?.selected ?? ''}`}>
-          {isLoading ? <Empty>Loading…</Empty> : !data?.passRateByClass?.length ? <Empty>No results</Empty> : (
+        <Card title={t('reports.passRateByClass', { defaultValue: 'Pass Rate by Class' })} sub={`${t('reports.passRateByClassSub', { defaultValue: 'Subject results ≥ 40%' })} · ${data?.selected ?? ''}`}>
+          {isLoading ? <Empty>{t('reports.loading', { defaultValue: 'Loading…' })}</Empty> : !data?.passRateByClass?.length ? <Empty>{t('reports.noResults', { defaultValue: 'No results' })}</Empty> : (
             <ResponsiveContainer width="100%" height={230}>
               <BarChart data={data.passRateByClass} margin={{ top: 5, right: 10, left: -20, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                 <XAxis dataKey="className" tick={{ fontSize: 11 }} interval={0} angle={-20} textAnchor="end" height={50} />
                 <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} unit="%" />
-                <Tooltip formatter={(v) => [`${v}%`, 'Pass rate']} />
+                <Tooltip formatter={(v) => [`${v}%`, t('reports.passRate', { defaultValue: 'Pass rate' })]} />
                 <Bar dataKey="passRate" fill="#10b981" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           )}
         </Card>
 
-        <Card title="Grade Distribution" sub="Computed from percentage (NEB-style letters)">
-          {isLoading ? <Empty>Loading…</Empty> : (
+        <Card title={t('reports.gradeDistribution', { defaultValue: 'Grade Distribution' })} sub={t('reports.gradeDistributionSub', { defaultValue: 'Computed from percentage (NEB-style letters)' })}>
+          {isLoading ? <Empty>{t('reports.loading', { defaultValue: 'Loading…' })}</Empty> : (
             <ResponsiveContainer width="100%" height={230}>
               <BarChart data={data?.gradeDistribution ?? []} margin={{ top: 5, right: 10, left: -20, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                 <XAxis dataKey="grade" tick={{ fontSize: 11 }} />
                 <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
-                <Tooltip formatter={(v) => [v, 'Results']} />
+                <Tooltip formatter={(v) => [v, t('reports.results', { defaultValue: 'Results' })]} />
                 <Bar dataKey="count" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
@@ -286,16 +290,16 @@ function AcademicsTab() {
         </Card>
       </div>
 
-      <Card title="Subject Averages by Class" sub="Green ≥ 75% · amber 50–74% · red < 50% — red cells show where teaching effort is needed">
-        {isLoading ? <Empty>Loading…</Empty> : !data?.subjectAverages?.length ? <Empty>No results</Empty> : (
+      <Card title={t('reports.subjectAveragesByClass', { defaultValue: 'Subject Averages by Class' })} sub={t('reports.subjectAveragesByClassSub', { defaultValue: 'Green ≥ 75% · amber 50–74% · red < 50% — red cells show where teaching effort is needed' })}>
+        {isLoading ? <Empty>{t('reports.loading', { defaultValue: 'Loading…' })}</Empty> : !data?.subjectAverages?.length ? <Empty>{t('reports.noResults', { defaultValue: 'No results' })}</Empty> : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-left text-xs uppercase tracking-wide text-muted-foreground border-b">
-                  <th className="px-3 py-2">Class</th>
-                  <th className="px-3 py-2">Subject</th>
-                  <th className="px-3 py-2 text-right">Average</th>
-                  <th className="px-3 py-2 text-right">Students</th>
+                  <th className="px-3 py-2">{t('reports.class', { defaultValue: 'Class' })}</th>
+                  <th className="px-3 py-2">{t('reports.subject', { defaultValue: 'Subject' })}</th>
+                  <th className="px-3 py-2 text-right">{t('reports.average', { defaultValue: 'Average' })}</th>
+                  <th className="px-3 py-2 text-right">{t('reports.students', { defaultValue: 'Students' })}</th>
                 </tr>
               </thead>
               <tbody className="divide-y">
@@ -321,32 +325,33 @@ function AcademicsTab() {
 // ── Operations tab ─────────────────────────────────────────────────────────────
 
 function OperationsTab() {
+  const { t } = useTranslation();
   const { data, isLoading } = useQuery({
     queryKey: ['analytics-operations'],
     queryFn: () => schoolAnalyticsApi.operations().then(r => r.data),
   });
 
-  if (isLoading) return <Empty>Loading…</Empty>;
+  if (isLoading) return <Empty>{t('reports.loading', { defaultValue: 'Loading…' })}</Empty>;
 
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <Stat label="Hostel Occupancy" value={`${data?.hostel?.occupied ?? 0} / ${data?.hostel?.capacity ?? 0}`} sub={`${data?.hostel?.occupancyPct ?? 0}% of ${data?.hostel?.rooms ?? 0} rooms`} />
-        <Stat label="Overdue Library Books" value={data?.library?.overdueIssues ?? 0} sub="Issued and past due date" />
-        <Stat label="Library Fines Collected" value={fmtRs(data?.library?.finesCollected)} />
-        <Stat label="Staff Attendance" value={`${data?.staff?.attendancePct ?? 0}%`} sub={`${data?.staff?.markedThisMonth ?? 0} records this month`} />
+        <Stat label={t('reports.hostelOccupancy', { defaultValue: 'Hostel Occupancy' })} value={`${data?.hostel?.occupied ?? 0} / ${data?.hostel?.capacity ?? 0}`} sub={t('reports.hostelOccupancySub', { defaultValue: '{{pct}}% of {{rooms}} rooms', pct: data?.hostel?.occupancyPct ?? 0, rooms: data?.hostel?.rooms ?? 0 })} />
+        <Stat label={t('reports.overdueLibraryBooks', { defaultValue: 'Overdue Library Books' })} value={data?.library?.overdueIssues ?? 0} sub={t('reports.overdueLibraryBooksSub', { defaultValue: 'Issued and past due date' })} />
+        <Stat label={t('reports.libraryFinesCollected', { defaultValue: 'Library Fines Collected' })} value={fmtRs(data?.library?.finesCollected)} />
+        <Stat label={t('reports.staffAttendance', { defaultValue: 'Staff Attendance' })} value={`${data?.staff?.attendancePct ?? 0}%`} sub={t('reports.recordsThisMonth', { defaultValue: '{{count}} records this month', count: data?.staff?.markedThisMonth ?? 0 })} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <Card title="Most Issued Books" sub="All-time issue counts">
-          {!data?.library?.topBooks?.length ? <Empty>No books issued yet</Empty> : (
+        <Card title={t('reports.mostIssuedBooks', { defaultValue: 'Most Issued Books' })} sub={t('reports.mostIssuedBooksSub', { defaultValue: 'All-time issue counts' })}>
+          {!data?.library?.topBooks?.length ? <Empty>{t('reports.noBooksIssued', { defaultValue: 'No books issued yet' })}</Empty> : (
             <table className="w-full text-sm">
               <tbody className="divide-y">
                 {data.library.topBooks.map((b, i) => (
                   <tr key={i}>
                     <td className="px-2 py-2 text-muted-foreground w-8">{i + 1}.</td>
                     <td className="px-2 py-2 font-medium">{b.title}{b.author && <span className="text-xs text-muted-foreground ml-1">· {b.author}</span>}</td>
-                    <td className="px-2 py-2 text-right tabular-nums">{b.issues} issue{b.issues === 1 ? '' : 's'}</td>
+                    <td className="px-2 py-2 text-right tabular-nums">{t('reports.nIssues', { defaultValue: '{{count}} issues', count: b.issues })}</td>
                   </tr>
                 ))}
               </tbody>
@@ -354,15 +359,15 @@ function OperationsTab() {
           )}
         </Card>
 
-        <Card title="Transport Routes" sub="Active student assignments per route">
-          {!data?.transport?.length ? <Empty>No routes created yet</Empty> : (
+        <Card title={t('reports.transportRoutes', { defaultValue: 'Transport Routes' })} sub={t('reports.transportRoutesSub', { defaultValue: 'Active student assignments per route' })}>
+          {!data?.transport?.length ? <Empty>{t('reports.noRoutesCreated', { defaultValue: 'No routes created yet' })}</Empty> : (
             <table className="w-full text-sm">
               <tbody className="divide-y">
                 {data.transport.map((r, i) => (
                   <tr key={i}>
                     <td className="px-2 py-2 font-medium">{r.routeName}</td>
                     <td className="px-2 py-2 text-muted-foreground">{r.vehicleNumber || '—'}</td>
-                    <td className="px-2 py-2 text-right tabular-nums">{r.students} student{r.students === 1 ? '' : 's'}</td>
+                    <td className="px-2 py-2 text-right tabular-nums">{t('reports.nStudents', { defaultValue: '{{count}} students', count: r.students })}</td>
                   </tr>
                 ))}
               </tbody>
@@ -371,14 +376,14 @@ function OperationsTab() {
         </Card>
       </div>
 
-      <Card title="Payroll Cost by Month" sub="Net salary total (staff cost trend)">
-        {!data?.payrollByMonth?.length ? <Empty>No payroll processed yet</Empty> : (
+      <Card title={t('reports.payrollByMonth', { defaultValue: 'Payroll Cost by Month' })} sub={t('reports.payrollByMonthSub', { defaultValue: 'Net salary total (staff cost trend)' })}>
+        {!data?.payrollByMonth?.length ? <Empty>{t('reports.noPayrollYet', { defaultValue: 'No payroll processed yet' })}</Empty> : (
           <ResponsiveContainer width="100%" height={220}>
             <BarChart data={data.payrollByMonth} margin={{ top: 5, right: 10, left: -10, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
               <XAxis dataKey="month" tick={{ fontSize: 11 }} />
               <YAxis tick={{ fontSize: 11 }} tickFormatter={kFmt} />
-              <Tooltip formatter={(v) => [fmtRs(v), 'Net payroll']} />
+              <Tooltip formatter={(v) => [fmtRs(v), t('reports.netPayroll', { defaultValue: 'Net payroll' })]} />
               <Bar dataKey="total" fill="#0ea5e9" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
@@ -398,9 +403,10 @@ const TABS = [
 ];
 
 export default function SchoolReports() {
+  const { t } = useTranslation();
   const companyId = getActiveCompanyId();
   const [tab, setTab] = useState('attendance');
-  const Active = TABS.find(t => t.key === tab)?.component ?? AttendanceTab;
+  const Active = TABS.find(x => x.key === tab)?.component ?? AttendanceTab;
 
   if (!companyId) return null;
 
@@ -409,23 +415,23 @@ export default function SchoolReports() {
       <div className="flex items-center gap-2">
         <BarChart2 className="h-6 w-6 text-primary" />
         <div>
-          <h1 className="text-2xl font-bold">School Reports</h1>
-          <p className="text-muted-foreground text-sm">Attendance, fees, academics and operations analysis</p>
+          <h1 className="text-2xl font-bold">{t('reports.title', { defaultValue: 'School Reports' })}</h1>
+          <p className="text-muted-foreground text-sm">{t('reports.subtitle', { defaultValue: 'Attendance, fees, academics and operations analysis' })}</p>
         </div>
       </div>
 
       <div className="flex gap-1 bg-muted/40 p-1 rounded-lg w-fit">
-        {TABS.map(t => {
-          const Icon = t.icon;
+        {TABS.map(item => {
+          const Icon = item.icon;
           return (
             <button
-              key={t.key}
-              onClick={() => setTab(t.key)}
+              key={item.key}
+              onClick={() => setTab(item.key)}
               className={`flex items-center gap-1.5 px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                tab === t.key ? 'bg-white shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'
+                tab === item.key ? 'bg-white shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'
               }`}
             >
-              <Icon className="w-4 h-4" /> {t.label}
+              <Icon className="w-4 h-4" /> {t(`reports.tab_${item.key}`, { defaultValue: item.label })}
             </button>
           );
         })}

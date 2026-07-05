@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, Pencil, Trash2, ClipboardList, AlertCircle, Sparkles } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { homeworkApi, classesApi, subjectsApi, aiApi } from '@/api';
 import { getActiveCompanyId } from '@/lib/companyContext';
 import { Button } from '@/components/ui/button';
@@ -12,6 +13,7 @@ import { toast } from 'sonner';
 const EMPTY = { title: '', classId: '', subjectId: '', description: '', dueDate: '', fileUrl: '' };
 
 function HomeworkDialog({ open, onClose, initial, classes, subjects, companyId }) {
+  const { t } = useTranslation();
   const qc = useQueryClient();
   const isEdit = !!initial?.id;
   const [form, setForm] = useState(initial ? {
@@ -26,7 +28,7 @@ function HomeworkDialog({ open, onClose, initial, classes, subjects, companyId }
   const [aiLoading, setAiLoading] = useState(false);
 
   async function generateDescription() {
-    if (!form.title.trim()) { toast.error('Enter a title first'); return; }
+    if (!form.title.trim()) { toast.error(t('homework.enterTitleFirst', { defaultValue: 'Enter a title first' })); return; }
     const className = classes.find(c => c.id === form.classId)?.name || '';
     const subjectName = subjects.find(s => s.id === form.subjectId)?.name || '';
     setAiLoading(true);
@@ -38,9 +40,9 @@ function HomeworkDialog({ open, onClose, initial, classes, subjects, companyId }
         dueDate: form.dueDate || 'next class',
       });
       set('description', res.data.description);
-      toast.success('Description generated');
+      toast.success(t('homework.descriptionGenerated', { defaultValue: 'Description generated' }));
     } catch (e) {
-      toast.error(e?.response?.data?.message || 'AI failed — check GEMINI_API_KEY');
+      toast.error(e?.response?.data?.message || t('homework.aiFailed', { defaultValue: 'AI failed — check GEMINI_API_KEY' }));
     } finally {
       setAiLoading(false);
     }
@@ -50,52 +52,52 @@ function HomeworkDialog({ open, onClose, initial, classes, subjects, companyId }
     mutationFn: (data) => isEdit ? homeworkApi.update(initial.id, data) : homeworkApi.create(data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['homework'] });
-      toast.success(isEdit ? 'Updated' : 'Homework assigned');
+      toast.success(isEdit ? t('homework.updated', { defaultValue: 'Updated' }) : t('homework.homeworkAssigned', { defaultValue: 'Homework assigned' }));
       onClose();
     },
-    onError: (err) => toast.error(err?.response?.data?.message || 'Failed to save'),
+    onError: (err) => toast.error(err?.response?.data?.message || t('homework.failedToSave', { defaultValue: 'Failed to save' })),
   });
 
   function handleSubmit(e) {
     e.preventDefault();
-    if (!form.title.trim()) { toast.error('Title is required'); return; }
-    if (!form.classId) { toast.error('Class is required'); return; }
-    if (!form.dueDate) { toast.error('Due date is required'); return; }
+    if (!form.title.trim()) { toast.error(t('homework.titleRequired', { defaultValue: 'Title is required' })); return; }
+    if (!form.classId) { toast.error(t('homework.classRequired', { defaultValue: 'Class is required' })); return; }
+    if (!form.dueDate) { toast.error(t('homework.dueDateRequired', { defaultValue: 'Due date is required' })); return; }
     save.mutate({ ...form, companyId, dueDate: new Date(form.dueDate) });
   }
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-md">
-        <DialogHeader><DialogTitle>{isEdit ? 'Edit Homework' : 'Assign Homework'}</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle>{isEdit ? t('homework.editHomework', { defaultValue: 'Edit Homework' }) : t('homework.assignHomework', { defaultValue: 'Assign Homework' })}</DialogTitle></DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4 pt-2">
           <div className="space-y-1.5">
-            <Label>Title *</Label>
-            <Input placeholder="e.g. Chapter 5 Exercise" value={form.title} onChange={e => set('title', e.target.value)} />
+            <Label>{t('homework.title', { defaultValue: 'Title *' })}</Label>
+            <Input placeholder={t('homework.titlePlaceholder', { defaultValue: 'e.g. Chapter 5 Exercise' })} value={form.title} onChange={e => set('title', e.target.value)} />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label>Class *</Label>
+              <Label>{t('homework.class', { defaultValue: 'Class *' })}</Label>
               <select className="w-full border rounded-md px-3 py-2 text-sm bg-background" value={form.classId} onChange={e => set('classId', e.target.value)}>
-                <option value="">Select class</option>
+                <option value="">{t('homework.selectClass', { defaultValue: 'Select class' })}</option>
                 {classes.map(c => <option key={c.id} value={c.id}>{c.name}{c.section ? ` (${c.section})` : ''}</option>)}
               </select>
             </div>
             <div className="space-y-1.5">
-              <Label>Subject</Label>
+              <Label>{t('homework.subject', { defaultValue: 'Subject' })}</Label>
               <select className="w-full border rounded-md px-3 py-2 text-sm bg-background" value={form.subjectId} onChange={e => set('subjectId', e.target.value)}>
-                <option value="">All Subjects</option>
+                <option value="">{t('homework.allSubjects', { defaultValue: 'All Subjects' })}</option>
                 {subjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
               </select>
             </div>
           </div>
           <div className="space-y-1.5">
-            <Label>Due Date *</Label>
+            <Label>{t('homework.dueDate', { defaultValue: 'Due Date *' })}</Label>
             <Input type="date" value={form.dueDate} onChange={e => set('dueDate', e.target.value)} />
           </div>
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
-              <Label>Description</Label>
+              <Label>{t('homework.description', { defaultValue: 'Description' })}</Label>
               <button
                 type="button"
                 onClick={generateDescription}
@@ -103,23 +105,23 @@ function HomeworkDialog({ open, onClose, initial, classes, subjects, companyId }
                 className="flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full bg-violet-50 text-violet-700 hover:bg-violet-100 transition-colors disabled:opacity-50"
               >
                 <Sparkles className="w-3 h-3" />
-                {aiLoading ? 'Writing…' : 'Write with AI'}
+                {aiLoading ? t('homework.writing', { defaultValue: 'Writing…' }) : t('homework.writeWithAI', { defaultValue: 'Write with AI' })}
               </button>
             </div>
             <textarea
               className="w-full border rounded-md px-3 py-2 text-sm bg-background min-h-[80px] resize-none focus:outline-none focus:ring-2 focus:ring-ring"
-              placeholder="Instructions or details for students…"
+              placeholder={t('homework.descriptionPlaceholder', { defaultValue: 'Instructions or details for students…' })}
               value={form.description}
               onChange={e => set('description', e.target.value)}
             />
           </div>
           <div className="space-y-1.5">
-            <Label>Reference File URL <span className="text-muted-foreground">(Optional)</span></Label>
+            <Label>{t('homework.referenceFileUrl', { defaultValue: 'Reference File URL' })} <span className="text-muted-foreground">{t('homework.optional', { defaultValue: '(Optional)' })}</span></Label>
             <Input placeholder="https://…" value={form.fileUrl} onChange={e => set('fileUrl', e.target.value)} />
           </div>
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
-            <Button type="submit" disabled={save.isPending}>{save.isPending ? 'Saving…' : isEdit ? 'Save Changes' : 'Assign'}</Button>
+            <Button type="button" variant="outline" onClick={onClose}>{t('homework.cancel', { defaultValue: 'Cancel' })}</Button>
+            <Button type="submit" disabled={save.isPending}>{save.isPending ? t('homework.saving', { defaultValue: 'Saving…' }) : isEdit ? t('homework.saveChanges', { defaultValue: 'Save Changes' }) : t('homework.assign', { defaultValue: 'Assign' })}</Button>
           </DialogFooter>
         </form>
       </DialogContent>
@@ -132,6 +134,7 @@ function isOverdue(dueDate) {
 }
 
 export default function Homework() {
+  const { t } = useTranslation();
   const companyId = getActiveCompanyId();
   const qc = useQueryClient();
   const [dialog, setDialog] = useState(null);
@@ -157,8 +160,8 @@ export default function Homework() {
 
   const remove = useMutation({
     mutationFn: (id) => homeworkApi.remove(id),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['homework'] }); toast.success('Deleted'); },
-    onError: () => toast.error('Failed to delete'),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['homework'] }); toast.success(t('homework.deleted', { defaultValue: 'Deleted' })); },
+    onError: () => toast.error(t('homework.failedToDelete', { defaultValue: 'Failed to delete' })),
   });
 
   const fmtDate = (d) => d ? new Date(d).toLocaleDateString('en-NP', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
@@ -167,28 +170,28 @@ export default function Homework() {
     <div className="p-6 space-y-5">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Homework</h1>
-          <p className="text-muted-foreground text-sm mt-1">{homeworks.length} assignments</p>
+          <h1 className="text-2xl font-bold">{t('homework.pageTitle', { defaultValue: 'Homework' })}</h1>
+          <p className="text-muted-foreground text-sm mt-1">{t('homework.assignmentsCount', { defaultValue: '{{count}} assignments', count: homeworks.length })}</p>
         </div>
         <Button onClick={() => setDialog({ mode: 'add' })}>
-          <Plus className="w-4 h-4 mr-2" /> Assign Homework
+          <Plus className="w-4 h-4 mr-2" /> {t('homework.assignHomework', { defaultValue: 'Assign Homework' })}
         </Button>
       </div>
 
       <div className="flex gap-3">
         <select className="border rounded-md px-3 py-2 text-sm bg-background" value={filterClass} onChange={e => setFilterClass(e.target.value)}>
-          <option value="">All Classes</option>
+          <option value="">{t('homework.allClasses', { defaultValue: 'All Classes' })}</option>
           {classes.map(c => <option key={c.id} value={c.id}>{c.name}{c.section ? ` (${c.section})` : ''}</option>)}
         </select>
       </div>
 
       <div className="bg-white rounded-xl border border-border overflow-hidden">
         {isLoading ? (
-          <div className="p-12 text-center text-muted-foreground text-sm">Loading…</div>
+          <div className="p-12 text-center text-muted-foreground text-sm">{t('homework.loading', { defaultValue: 'Loading…' })}</div>
         ) : homeworks.length === 0 ? (
           <div className="p-12 text-center">
             <ClipboardList className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
-            <p className="text-muted-foreground text-sm">No homework assigned yet.</p>
+            <p className="text-muted-foreground text-sm">{t('homework.noHomework', { defaultValue: 'No homework assigned yet.' })}</p>
           </div>
         ) : (
           <div className="divide-y divide-border">
@@ -201,7 +204,7 @@ export default function Homework() {
                       <p className="font-medium text-sm">{hw.title}</p>
                       {overdue && (
                         <span className="flex items-center gap-1 text-xs bg-red-50 text-red-600 px-2 py-0.5 rounded-full">
-                          <AlertCircle className="w-3 h-3" /> Overdue
+                          <AlertCircle className="w-3 h-3" /> {t('homework.overdue', { defaultValue: 'Overdue' })}
                         </span>
                       )}
                     </div>
@@ -210,11 +213,11 @@ export default function Homework() {
                       {hw.class && <span className="text-xs bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-full">{hw.class.name}{hw.class.section ? ` (${hw.class.section})` : ''}</span>}
                       {hw.subject && <span className="text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full">{hw.subject.name}</span>}
                       <span className={`text-xs px-2 py-0.5 rounded-full ${overdue ? 'bg-red-50 text-red-700' : 'bg-amber-50 text-amber-700'}`}>
-                        Due: {fmtDate(hw.dueDate)}
+                        {t('homework.dueLabel', { defaultValue: 'Due: {{date}}', date: fmtDate(hw.dueDate) })}
                       </span>
                     </div>
                     {hw.fileUrl && (
-                      <a href={hw.fileUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 underline mt-1 inline-block">Reference file</a>
+                      <a href={hw.fileUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 underline mt-1 inline-block">{t('homework.referenceFile', { defaultValue: 'Reference file' })}</a>
                     )}
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
@@ -222,7 +225,7 @@ export default function Homework() {
                       <Pencil className="w-3.5 h-3.5" />
                     </button>
                     <button
-                      onClick={() => { if (confirm('Delete this homework?')) remove.mutate(hw.id); }}
+                      onClick={() => { if (confirm(t('homework.deleteConfirm', { defaultValue: 'Delete this homework?' }))) remove.mutate(hw.id); }}
                       className="p-1.5 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600 transition-colors"
                     >
                       <Trash2 className="w-3.5 h-3.5" />

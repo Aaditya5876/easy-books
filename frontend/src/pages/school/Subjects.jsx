@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import { subjectsApi } from '@/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -16,6 +17,7 @@ import BulkImportDialog from '@/components/shared/BulkImportDialog';
 import { SUBJECT_FIELDS } from '@/components/shared/bulkImportFields';
 
 function SubjectDialog({ open, onClose, subject }) {
+  const { t } = useTranslation();
   const qc = useQueryClient();
   const isEdit = !!subject;
   const [form, setForm] = useState({ name: subject?.name || '', code: subject?.code || '' });
@@ -24,17 +26,17 @@ function SubjectDialog({ open, onClose, subject }) {
     mutationFn: (d) => isEdit ? subjectsApi.update(subject.id, d) : subjectsApi.create(d),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['school-subjects'] });
-      toast.success(isEdit ? 'Subject updated' : 'Subject created');
+      toast.success(isEdit ? t('subjects.subjectUpdated', { defaultValue: 'Subject updated' }) : t('subjects.subjectCreated', { defaultValue: 'Subject created' }));
       onClose();
     },
-    onError: (e) => toast.error(e.response?.data?.message || 'Failed to save'),
+    onError: (e) => toast.error(e.response?.data?.message || t('subjects.failedToSave', { defaultValue: 'Failed to save' })),
   });
 
   const companyId = localStorage.getItem('easybooks_active_company') || '';
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (!form.name.trim()) return toast.error('Subject name is required');
+    if (!form.name.trim()) return toast.error(t('subjects.subjectNameRequired', { defaultValue: 'Subject name is required' }));
     save.mutate(isEdit ? { name: form.name, code: form.code } : { ...form, companyId });
   };
 
@@ -42,21 +44,21 @@ function SubjectDialog({ open, onClose, subject }) {
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-sm">
         <DialogHeader>
-          <DialogTitle>{isEdit ? 'Edit Subject' : 'Add Subject'}</DialogTitle>
+          <DialogTitle>{isEdit ? t('subjects.editSubject', { defaultValue: 'Edit Subject' }) : t('subjects.addSubject', { defaultValue: 'Add Subject' })}</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-1">
-            <Label>Subject Name *</Label>
-            <Input value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} placeholder="e.g. Mathematics" />
+            <Label>{t('subjects.subjectName', { defaultValue: 'Subject Name *' })}</Label>
+            <Input value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} placeholder={t('subjects.subjectNamePlaceholder', { defaultValue: 'e.g. Mathematics' })} />
           </div>
           <div className="space-y-1">
-            <Label>Subject Code</Label>
-            <Input value={form.code} onChange={e => setForm(p => ({ ...p, code: e.target.value }))} placeholder="e.g. MATH-10" />
+            <Label>{t('subjects.subjectCode', { defaultValue: 'Subject Code' })}</Label>
+            <Input value={form.code} onChange={e => setForm(p => ({ ...p, code: e.target.value }))} placeholder={t('subjects.subjectCodePlaceholder', { defaultValue: 'e.g. MATH-10' })} />
           </div>
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
+            <Button type="button" variant="outline" onClick={onClose}>{t('subjects.cancel', { defaultValue: 'Cancel' })}</Button>
             <Button type="submit" disabled={save.isPending}>
-              {save.isPending ? 'Saving…' : isEdit ? 'Update' : 'Create'}
+              {save.isPending ? t('subjects.saving', { defaultValue: 'Saving…' }) : isEdit ? t('subjects.update', { defaultValue: 'Update' }) : t('subjects.create', { defaultValue: 'Create' })}
             </Button>
           </DialogFooter>
         </form>
@@ -66,6 +68,7 @@ function SubjectDialog({ open, onClose, subject }) {
 }
 
 export default function Subjects() {
+  const { t } = useTranslation();
   const qc = useQueryClient();
   const [dialog, setDialog] = useState({ open: false, subject: null });
   const [importOpen, setImportOpen] = useState(false);
@@ -77,12 +80,12 @@ export default function Subjects() {
 
   const remove = useMutation({
     mutationFn: (id) => subjectsApi.remove(id),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['school-subjects'] }); toast.success('Subject deleted'); },
-    onError: (e) => toast.error(e.response?.data?.message || 'Cannot delete subject'),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['school-subjects'] }); toast.success(t('subjects.subjectDeleted', { defaultValue: 'Subject deleted' })); },
+    onError: (e) => toast.error(e.response?.data?.message || t('subjects.cannotDeleteSubject', { defaultValue: 'Cannot delete subject' })),
   });
 
   const handleDelete = (s) => {
-    if (!window.confirm(`Delete subject "${s.name}"?`)) return;
+    if (!window.confirm(t('subjects.confirmDelete', { defaultValue: 'Delete subject "{{name}}"?', name: s.name }))) return;
     remove.mutate(s.id);
   };
 
@@ -91,14 +94,14 @@ export default function Subjects() {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <BookMarked className="h-6 w-6 text-primary" />
-          <h1 className="text-2xl font-bold">Subjects</h1>
+          <h1 className="text-2xl font-bold">{t('subjects.title', { defaultValue: 'Subjects' })}</h1>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" onClick={() => setImportOpen(true)}>
-            <Upload className="h-4 w-4 mr-1" /> Import
+            <Upload className="h-4 w-4 mr-1" /> {t('subjects.import', { defaultValue: 'Import' })}
           </Button>
           <Button onClick={() => setDialog({ open: true, subject: null })}>
-            <Plus className="h-4 w-4 mr-1" /> Add Subject
+            <Plus className="h-4 w-4 mr-1" /> {t('subjects.addSubject', { defaultValue: 'Add Subject' })}
           </Button>
         </div>
       </div>
@@ -107,7 +110,7 @@ export default function Subjects() {
         open={importOpen}
         onClose={() => setImportOpen(false)}
         entity="subjects"
-        title="Import Subjects"
+        title={t('subjects.importSubjects', { defaultValue: 'Import Subjects' })}
         fields={SUBJECT_FIELDS}
         onDone={() => qc.invalidateQueries({ queryKey: ['school-subjects'] })}
       />
@@ -117,16 +120,16 @@ export default function Subjects() {
           <TableHeader>
             <TableRow>
               <TableHead>#</TableHead>
-              <TableHead>Subject Name</TableHead>
-              <TableHead>Code</TableHead>
-              <TableHead className="w-24">Actions</TableHead>
+              <TableHead>{t('subjects.subjectNameHeader', { defaultValue: 'Subject Name' })}</TableHead>
+              <TableHead>{t('subjects.codeHeader', { defaultValue: 'Code' })}</TableHead>
+              <TableHead className="w-24">{t('subjects.actionsHeader', { defaultValue: 'Actions' })}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {isLoading ? (
-              <TableRow><TableCell colSpan={4} className="text-center py-8 text-muted-foreground">Loading…</TableCell></TableRow>
+              <TableRow><TableCell colSpan={4} className="text-center py-8 text-muted-foreground">{t('subjects.loading', { defaultValue: 'Loading…' })}</TableCell></TableRow>
             ) : subjects.length === 0 ? (
-              <TableRow><TableCell colSpan={4} className="text-center py-12 text-muted-foreground">No subjects yet. Add your first subject.</TableCell></TableRow>
+              <TableRow><TableCell colSpan={4} className="text-center py-12 text-muted-foreground">{t('subjects.noSubjectsYet', { defaultValue: 'No subjects yet. Add your first subject.' })}</TableCell></TableRow>
             ) : subjects.map((s, i) => (
               <TableRow key={s.id}>
                 <TableCell className="text-muted-foreground">{i + 1}</TableCell>

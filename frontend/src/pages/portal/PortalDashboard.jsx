@@ -6,6 +6,7 @@ import { animate } from 'framer-motion';
 import { portalApi } from '@/api';
 import { CalendarCheck, DollarSign, ClipboardList, AlertCircle, ChevronRight, Trophy } from 'lucide-react';
 import { containerVariants, cardVariants, itemVariants } from '@/lib/portalAnimations';
+import { useTranslation } from 'react-i18next';
 
 function CountUp({ to, suffix = '' }) {
   const ref = useRef(null);
@@ -24,6 +25,7 @@ const STAT_CARDS = [
   {
     key: 'attendance',
     label: 'Attendance',
+    labelKey: 'portal.attendance',
     icon: CalendarCheck,
     color: '#10B981',
     bg: '#F0FDF4',
@@ -32,6 +34,7 @@ const STAT_CARDS = [
   {
     key: 'fees',
     label: 'Pending Fees',
+    labelKey: 'portal.pendingFees',
     icon: DollarSign,
     color: '#F59E0B',
     bg: '#FFFBEB',
@@ -40,6 +43,7 @@ const STAT_CARDS = [
   {
     key: 'homework',
     label: 'Overdue Tasks',
+    labelKey: 'portal.overdueTasks',
     icon: ClipboardList,
     color: '#F43F5E',
     bg: '#FFF1F2',
@@ -48,6 +52,7 @@ const STAT_CARDS = [
 ];
 
 export default function PortalDashboard() {
+  const { t } = useTranslation();
   const [student, setStudent] = useState(null);
 
   useEffect(() => {
@@ -82,7 +87,11 @@ export default function PortalDashboard() {
   const statSuffix = { attendance: '%', fees: '', homework: '' };
 
   const hour = new Date().getHours();
-  const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+  const greeting = hour < 12
+    ? t('portal.goodMorning', { defaultValue: 'Good morning' })
+    : hour < 17
+      ? t('portal.goodAfternoon', { defaultValue: 'Good afternoon' })
+      : t('portal.goodEvening', { defaultValue: 'Good evening' });
 
   return (
     <div className="p-5 md:p-7 space-y-6 max-w-2xl">
@@ -94,8 +103,8 @@ export default function PortalDashboard() {
         </h1>
         <p className="text-slate-500 text-sm mt-1">
           {student?.class
-            ? `${student.class.name}${student.class.section ? ` · Section ${student.class.section}` : ''}`
-            : 'Your academic overview'}
+            ? `${student.class.name}${student.class.section ? ` · ${t('portal.section', { defaultValue: 'Section {{section}}', section: student.class.section })}` : ''}`
+            : t('portal.academicOverview', { defaultValue: 'Your academic overview' })}
         </p>
       </motion.div>
 
@@ -125,7 +134,7 @@ export default function PortalDashboard() {
                   <p className="text-2xl font-bold text-slate-900">
                     <CountUp to={statValues[card.key]} suffix={statSuffix[card.key]} />
                   </p>
-                  <p className="text-xs text-slate-500 mt-0.5 font-medium">{card.label}</p>
+                  <p className="text-xs text-slate-500 mt-0.5 font-medium">{t(card.labelKey, { defaultValue: card.label })}</p>
                 </motion.div>
               </Link>
             </motion.div>
@@ -144,10 +153,10 @@ export default function PortalDashboard() {
           <div className="px-5 py-3.5 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <AlertCircle className="w-4 h-4 text-amber-600" />
-              <h2 className="text-sm font-semibold text-amber-900">Pending Fee Invoices</h2>
+              <h2 className="text-sm font-semibold text-amber-900">{t('portal.pendingFeeInvoices', { defaultValue: 'Pending Fee Invoices' })}</h2>
             </div>
             <Link to="/portal/fees" className="text-xs text-amber-700 font-medium flex items-center gap-0.5 hover:text-amber-900">
-              Pay now <ChevronRight className="w-3.5 h-3.5" />
+              {t('portal.payNow', { defaultValue: 'Pay now' })} <ChevronRight className="w-3.5 h-3.5" />
             </Link>
           </div>
           <motion.div
@@ -167,7 +176,9 @@ export default function PortalDashboard() {
                     {fmtAmt(Number(f.totalAmount) - Number(f.paidAmount))}
                   </p>
                   <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${f.status === 'PARTIAL' ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'}`}>
-                    {f.status}
+                    {f.status === 'PARTIAL'
+                      ? t('portal.partial', { defaultValue: 'Partial' })
+                      : t('portal.pending', { defaultValue: 'Pending' })}
                   </span>
                 </div>
               </motion.div>
@@ -187,10 +198,10 @@ export default function PortalDashboard() {
           <div className="px-5 py-3.5 flex items-center justify-between border-b border-slate-100">
             <div className="flex items-center gap-2">
               <ClipboardList className="w-4 h-4 text-orange-500" />
-              <h2 className="text-sm font-semibold text-slate-900">Upcoming Homework</h2>
+              <h2 className="text-sm font-semibold text-slate-900">{t('portal.upcomingHomework', { defaultValue: 'Upcoming Homework' })}</h2>
             </div>
             <Link to="/portal/homework" className="text-xs text-slate-500 flex items-center gap-0.5 hover:text-slate-700">
-              View all <ChevronRight className="w-3.5 h-3.5" />
+              {t('portal.viewAll', { defaultValue: 'View all' })} <ChevronRight className="w-3.5 h-3.5" />
             </Link>
           </div>
           <motion.div className="divide-y divide-slate-100" variants={containerVariants} initial="initial" animate="animate">
@@ -221,8 +232,8 @@ export default function PortalDashboard() {
           className="bg-emerald-50 border border-emerald-200 rounded-2xl p-6 text-center"
         >
           <Trophy className="w-10 h-10 text-emerald-500 mx-auto mb-2" />
-          <p className="font-semibold text-emerald-900">All caught up!</p>
-          <p className="text-sm text-emerald-700 mt-1">No pending fees or overdue homework.</p>
+          <p className="font-semibold text-emerald-900">{t('portal.allCaughtUp', { defaultValue: 'All caught up!' })}</p>
+          <p className="text-sm text-emerald-700 mt-1">{t('portal.noPendingItems', { defaultValue: 'No pending fees or overdue homework.' })}</p>
         </motion.div>
       )}
     </div>

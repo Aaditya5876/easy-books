@@ -3,12 +3,13 @@ import { motion } from 'framer-motion';
 import { portalApi } from '@/api';
 import { Trophy } from 'lucide-react';
 import { pageVariants, containerVariants, cardVariants } from '@/lib/portalAnimations';
+import { useTranslation } from 'react-i18next';
 
 function gradeColor(pct) {
-  if (pct >= 80) return { color: '#10B981', bg: '#F0FDF4', label: 'Excellent' };
-  if (pct >= 60) return { color: '#3B82F6', bg: '#EFF6FF', label: 'Good' };
-  if (pct >= 40) return { color: '#F59E0B', bg: '#FFFBEB', label: 'Average' };
-  return { color: '#F43F5E', bg: '#FFF1F2', label: 'Needs Work' };
+  if (pct >= 80) return { color: '#10B981', bg: '#F0FDF4', label: 'Excellent', labelKey: 'portal.excellent' };
+  if (pct >= 60) return { color: '#3B82F6', bg: '#EFF6FF', label: 'Good', labelKey: 'portal.good' };
+  if (pct >= 40) return { color: '#F59E0B', bg: '#FFFBEB', label: 'Average', labelKey: 'portal.average' };
+  return { color: '#F43F5E', bg: '#FFF1F2', label: 'Needs Work', labelKey: 'portal.needsWork' };
 }
 
 function ScoreBar({ obtained, total }) {
@@ -34,6 +35,7 @@ function ScoreBar({ obtained, total }) {
 }
 
 export default function PortalResults() {
+  const { t } = useTranslation();
   const { data: results = [], isLoading } = useQuery({
     queryKey: ['portal-results'],
     queryFn: () => portalApi.results().then(r => r.data),
@@ -43,14 +45,14 @@ export default function PortalResults() {
 
   return (
     <motion.div variants={pageVariants} initial="initial" animate="animate" exit="exit" className="p-5 md:p-7 space-y-5 max-w-2xl">
-      <h1 className="text-2xl font-bold text-slate-900">Exam Results</h1>
+      <h1 className="text-2xl font-bold text-slate-900">{t('portal.examResults', { defaultValue: 'Exam Results' })}</h1>
 
       {isLoading ? (
-        <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center text-slate-400 text-sm">Loading…</div>
+        <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center text-slate-400 text-sm">{t('portal.loading', { defaultValue: 'Loading…' })}</div>
       ) : results.length === 0 ? (
         <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center">
           <Trophy className="w-10 h-10 text-slate-200 mx-auto mb-3" />
-          <p className="text-slate-400 text-sm">No exam results yet</p>
+          <p className="text-slate-400 text-sm">{t('portal.noExamResults', { defaultValue: 'No exam results yet' })}</p>
         </div>
       ) : (
         <motion.div variants={containerVariants} initial="initial" animate="animate" className="space-y-5">
@@ -67,13 +69,13 @@ export default function PortalResults() {
                 <div className="px-5 py-4 flex items-center justify-between" style={{ background: gc.bg }}>
                   <div>
                     <h2 className="font-bold text-slate-900">{examName}</h2>
-                    <p className="text-xs mt-0.5" style={{ color: gc.color }}>{gc.label}</p>
+                    <p className="text-xs mt-0.5" style={{ color: gc.color }}>{gc.labelKey ? t(gc.labelKey, { defaultValue: gc.label }) : gc.label}</p>
                   </div>
                   <div className="text-right">
                     <p className="text-2xl font-bold tabular-nums" style={{ color: gc.color }}>
                       {pct.toFixed(1)}%
                     </p>
-                    <p className="text-xs text-slate-500 tabular-nums">{totalObtained} / {totalMax} marks</p>
+                    <p className="text-xs text-slate-500 tabular-nums">{t('portal.marksOf', { defaultValue: '{{obtained}} / {{total}} marks', obtained: totalObtained, total: totalMax })}</p>
                   </div>
                 </div>
 

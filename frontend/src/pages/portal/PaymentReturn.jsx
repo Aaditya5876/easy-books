@@ -3,6 +3,7 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { portalApi } from '@/api';
 import { Loader2 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 function CheckIcon() {
   return (
@@ -47,6 +48,7 @@ function CrossIcon() {
 }
 
 export default function PaymentReturn() {
+  const { t } = useTranslation();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const [status, setStatus] = useState('verifying');
@@ -90,8 +92,8 @@ export default function PaymentReturn() {
         {status === 'verifying' && (
           <>
             <Loader2 className="w-14 h-14 text-blue-500 mx-auto mb-5 animate-spin" />
-            <h1 className="text-xl font-bold text-slate-900">Verifying Payment…</h1>
-            <p className="text-sm text-slate-500 mt-2">Please wait, do not close this page.</p>
+            <h1 className="text-xl font-bold text-slate-900">{t('portal.verifyingPayment', { defaultValue: 'Verifying Payment…' })}</h1>
+            <p className="text-sm text-slate-500 mt-2">{t('portal.verifyingWait', { defaultValue: 'Please wait, do not close this page.' })}</p>
           </>
         )}
 
@@ -101,14 +103,14 @@ export default function PaymentReturn() {
               <CheckIcon />
             </div>
             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.9 }}>
-              <h1 className="text-xl font-bold text-slate-900">Payment Successful!</h1>
-              <p className="text-sm text-slate-500 mt-2">Your fee payment has been recorded.</p>
+              <h1 className="text-xl font-bold text-slate-900">{t('portal.paymentSuccess', { defaultValue: 'Payment Successful!' })}</h1>
+              <p className="text-sm text-slate-500 mt-2">{t('portal.paymentRecorded', { defaultValue: 'Your fee payment has been recorded.' })}</p>
               <motion.button
                 whileTap={{ scale: 0.97 }}
                 onClick={() => navigate('/portal/fees')}
                 className="mt-7 w-full h-12 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold transition-colors shadow-lg shadow-emerald-600/25"
               >
-                Back to Fees
+                {t('portal.backToFees', { defaultValue: 'Back to Fees' })}
               </motion.button>
             </motion.div>
           </>
@@ -120,14 +122,14 @@ export default function PaymentReturn() {
               <CrossIcon />
             </div>
             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.9 }}>
-              <h1 className="text-xl font-bold text-slate-900">Payment Failed</h1>
-              <p className="text-sm text-slate-500 mt-2">Your payment could not be completed. Please try again.</p>
+              <h1 className="text-xl font-bold text-slate-900">{t('portal.paymentFailed', { defaultValue: 'Payment Failed' })}</h1>
+              <p className="text-sm text-slate-500 mt-2">{t('portal.paymentFailedDesc', { defaultValue: 'Your payment could not be completed. Please try again.' })}</p>
               <motion.button
                 whileTap={{ scale: 0.97 }}
                 onClick={() => navigate('/portal/fees')}
                 className="mt-7 w-full h-12 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-sm font-semibold transition-colors"
               >
-                Back to Fees
+                {t('portal.backToFees', { defaultValue: 'Back to Fees' })}
               </motion.button>
             </motion.div>
           </>

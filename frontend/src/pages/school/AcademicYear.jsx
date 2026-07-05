@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import { academicYearsApi } from '@/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -19,6 +20,7 @@ import { format } from 'date-fns';
 const companyId = () => localStorage.getItem('easybooks_active_company') || '';
 
 function AcademicYearDialog({ open, onClose, year }) {
+  const { t } = useTranslation();
   const qc = useQueryClient();
   const isEdit = !!year;
   const [form, setForm] = useState({
@@ -35,16 +37,16 @@ function AcademicYearDialog({ open, onClose, year }) {
         : academicYearsApi.create({ ...d, companyId: companyId() }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['academic-years'] });
-      toast.success(isEdit ? 'Academic year updated' : 'Academic year created');
+      toast.success(isEdit ? t('years.yearUpdated', { defaultValue: 'Academic year updated' }) : t('years.yearCreated', { defaultValue: 'Academic year created' }));
       onClose();
     },
-    onError: (e) => toast.error(e.response?.data?.message || 'Failed to save'),
+    onError: (e) => toast.error(e.response?.data?.message || t('years.failedToSave', { defaultValue: 'Failed to save' })),
   });
 
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!form.name.trim() || !form.startDate || !form.endDate) {
-      return toast.error('Name, start date and end date are required');
+      return toast.error(t('years.fieldsRequired', { defaultValue: 'Name, start date and end date are required' }));
     }
     save.mutate(form);
   };
@@ -53,20 +55,20 @@ function AcademicYearDialog({ open, onClose, year }) {
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>{isEdit ? 'Edit Academic Year' : 'Add Academic Year'}</DialogTitle>
+          <DialogTitle>{isEdit ? t('years.editYear', { defaultValue: 'Edit Academic Year' }) : t('years.addYear', { defaultValue: 'Add Academic Year' })}</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-1">
-            <Label>Year Name *</Label>
+            <Label>{t('years.yearName', { defaultValue: 'Year Name *' })}</Label>
             <Input
               value={form.name}
               onChange={e => setForm(p => ({ ...p, name: e.target.value }))}
-              placeholder="e.g. 2081-82"
+              placeholder={t('years.yearNamePlaceholder', { defaultValue: 'e.g. 2081-82' })}
             />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
-              <Label>Start Date *</Label>
+              <Label>{t('years.startDate', { defaultValue: 'Start Date *' })}</Label>
               <Input
                 type="date"
                 value={form.startDate}
@@ -74,7 +76,7 @@ function AcademicYearDialog({ open, onClose, year }) {
               />
             </div>
             <div className="space-y-1">
-              <Label>End Date *</Label>
+              <Label>{t('years.endDate', { defaultValue: 'End Date *' })}</Label>
               <Input
                 type="date"
                 value={form.endDate}
@@ -87,12 +89,12 @@ function AcademicYearDialog({ open, onClose, year }) {
               checked={form.isCurrent}
               onCheckedChange={v => setForm(p => ({ ...p, isCurrent: v }))}
             />
-            <Label>Mark as current academic year</Label>
+            <Label>{t('years.markAsCurrent', { defaultValue: 'Mark as current academic year' })}</Label>
           </div>
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
+            <Button type="button" variant="outline" onClick={onClose}>{t('years.cancel', { defaultValue: 'Cancel' })}</Button>
             <Button type="submit" disabled={save.isPending}>
-              {save.isPending ? 'Saving…' : isEdit ? 'Update' : 'Create'}
+              {save.isPending ? t('years.saving', { defaultValue: 'Saving…' }) : isEdit ? t('years.update', { defaultValue: 'Update' }) : t('years.create', { defaultValue: 'Create' })}
             </Button>
           </DialogFooter>
         </form>
@@ -102,6 +104,7 @@ function AcademicYearDialog({ open, onClose, year }) {
 }
 
 export default function AcademicYear() {
+  const { t } = useTranslation();
   const qc = useQueryClient();
   const [dialog, setDialog] = useState({ open: false, year: null });
 
@@ -112,12 +115,12 @@ export default function AcademicYear() {
 
   const remove = useMutation({
     mutationFn: (id) => academicYearsApi.remove(id),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['academic-years'] }); toast.success('Academic year deleted'); },
-    onError: (e) => toast.error(e.response?.data?.message || 'Cannot delete'),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['academic-years'] }); toast.success(t('years.yearDeleted', { defaultValue: 'Academic year deleted' })); },
+    onError: (e) => toast.error(e.response?.data?.message || t('years.cannotDelete', { defaultValue: 'Cannot delete' })),
   });
 
   const handleDelete = (y) => {
-    if (!window.confirm(`Delete "${y.name}"?`)) return;
+    if (!window.confirm(t('years.confirmDelete', { defaultValue: 'Delete "{{name}}"?', name: y.name }))) return;
     remove.mutate(y.id);
   };
 
@@ -130,10 +133,10 @@ export default function AcademicYear() {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <CalendarDays className="h-6 w-6 text-primary" />
-          <h1 className="text-2xl font-bold">Academic Years</h1>
+          <h1 className="text-2xl font-bold">{t('years.title', { defaultValue: 'Academic Years' })}</h1>
         </div>
         <Button onClick={() => setDialog({ open: true, year: null })}>
-          <Plus className="h-4 w-4 mr-1" /> Add Year
+          <Plus className="h-4 w-4 mr-1" /> {t('years.addYearButton', { defaultValue: 'Add Year' })}
         </Button>
       </div>
 
@@ -141,18 +144,18 @@ export default function AcademicYear() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Year</TableHead>
-              <TableHead>Start Date</TableHead>
-              <TableHead>End Date</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead className="w-24">Actions</TableHead>
+              <TableHead>{t('years.yearHeader', { defaultValue: 'Year' })}</TableHead>
+              <TableHead>{t('years.startDateHeader', { defaultValue: 'Start Date' })}</TableHead>
+              <TableHead>{t('years.endDateHeader', { defaultValue: 'End Date' })}</TableHead>
+              <TableHead>{t('years.statusHeader', { defaultValue: 'Status' })}</TableHead>
+              <TableHead className="w-24">{t('years.actionsHeader', { defaultValue: 'Actions' })}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {isLoading ? (
-              <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">Loading…</TableCell></TableRow>
+              <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">{t('years.loading', { defaultValue: 'Loading…' })}</TableCell></TableRow>
             ) : years.length === 0 ? (
-              <TableRow><TableCell colSpan={5} className="text-center py-12 text-muted-foreground">No academic years yet. Add your first year.</TableCell></TableRow>
+              <TableRow><TableCell colSpan={5} className="text-center py-12 text-muted-foreground">{t('years.noYearsYet', { defaultValue: 'No academic years yet. Add your first year.' })}</TableCell></TableRow>
             ) : years.map(y => (
               <TableRow key={y.id}>
                 <TableCell className="font-semibold">{y.name}</TableCell>
@@ -160,9 +163,9 @@ export default function AcademicYear() {
                 <TableCell>{fmt(y.endDate)}</TableCell>
                 <TableCell>
                   {y.isCurrent ? (
-                    <Badge className="bg-green-100 text-green-800 border-green-200">Current</Badge>
+                    <Badge className="bg-green-100 text-green-800 border-green-200">{t('years.current', { defaultValue: 'Current' })}</Badge>
                   ) : (
-                    <Badge variant="outline" className="text-muted-foreground">Past</Badge>
+                    <Badge variant="outline" className="text-muted-foreground">{t('years.past', { defaultValue: 'Past' })}</Badge>
                   )}
                 </TableCell>
                 <TableCell>

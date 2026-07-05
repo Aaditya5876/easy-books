@@ -5,6 +5,7 @@ import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend,
 } from 'recharts';
 import { GraduationCap, DollarSign, AlertCircle, Users, TrendingUp, CheckCircle, Sparkles, Circle, ChevronRight, CalendarClock, CalendarDays, ClipboardList } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { schoolDashboardApi, schoolAnalyticsApi, aiApi } from '@/api';
 import { getActiveCompanyId } from '@/lib/companyContext';
 import { toast } from 'sonner';
@@ -22,6 +23,7 @@ const SETUP_STEPS = [
 ];
 
 function GettingStarted({ setup }) {
+  const { t } = useTranslation();
   const done = SETUP_STEPS.filter(s => (setup?.[s.key] ?? 0) > 0).length;
   if (!setup || done === SETUP_STEPS.length) return null;
 
@@ -29,10 +31,10 @@ function GettingStarted({ setup }) {
     <div className="bg-white rounded-xl border border-blue-100 overflow-hidden">
       <div className="px-5 py-4 border-b bg-blue-50/50 flex items-center justify-between">
         <div>
-          <h2 className="font-semibold">Getting Started</h2>
-          <p className="text-xs text-muted-foreground mt-0.5">Set up your school in order — each step unlocks the next</p>
+          <h2 className="font-semibold">{t('dashboard.gettingStarted', { defaultValue: 'Getting Started' })}</h2>
+          <p className="text-xs text-muted-foreground mt-0.5">{t('dashboard.gettingStartedSub', { defaultValue: 'Set up your school in order — each step unlocks the next' })}</p>
         </div>
-        <span className="text-sm font-medium text-blue-700 tabular-nums">{done}/{SETUP_STEPS.length} done</span>
+        <span className="text-sm font-medium text-blue-700 tabular-nums">{t('dashboard.stepsDone', { defaultValue: '{{done}}/{{total}} done', done, total: SETUP_STEPS.length })}</span>
       </div>
       <div className="divide-y">
         {SETUP_STEPS.map((step, i) => {
@@ -47,8 +49,8 @@ function GettingStarted({ setup }) {
                 ? <CheckCircle className="w-5 h-5 text-emerald-500 shrink-0" />
                 : <Circle className="w-5 h-5 text-muted-foreground/40 shrink-0" />}
               <div className="flex-1 min-w-0">
-                <p className={`text-sm font-medium ${isDone ? 'line-through' : ''}`}>{i + 1}. {step.label}</p>
-                <p className="text-xs text-muted-foreground truncate">{step.desc}</p>
+                <p className={`text-sm font-medium ${isDone ? 'line-through' : ''}`}>{i + 1}. {t(`dashboard.setup.${step.key}.label`, { defaultValue: step.label })}</p>
+                <p className="text-xs text-muted-foreground truncate">{t(`dashboard.setup.${step.key}.desc`, { defaultValue: step.desc })}</p>
               </div>
               {!isDone && <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />}
             </Link>
@@ -103,6 +105,7 @@ function ChartCard({ title, sub, children, empty }) {
 
 // Horizontal per-class bars — grey when unmarked, red below 75%
 function TodayByClass({ rows }) {
+  const { t } = useTranslation();
   return (
     <div className="space-y-2.5 max-h-52 overflow-y-auto pr-1">
       {rows.map(r => {
@@ -115,7 +118,7 @@ function TodayByClass({ rows }) {
               <div className={`h-full ${barColor}`} style={{ width: unmarked ? '100%' : `${r.pct}%` }} />
             </div>
             <span className={`w-24 shrink-0 text-right text-xs tabular-nums ${unmarked ? 'text-muted-foreground italic' : r.pct < 75 ? 'text-red-600 font-medium' : 'text-muted-foreground'}`}>
-              {unmarked ? 'not marked' : `${r.present}/${r.marked} · ${r.pct}%`}
+              {unmarked ? t('dashboard.notMarked', { defaultValue: 'not marked' }) : `${r.present}/${r.marked} · ${r.pct}%`}
             </span>
           </div>
         );
@@ -125,11 +128,12 @@ function TodayByClass({ rows }) {
 }
 
 function WeekAhead({ weekAhead }) {
+  const { t } = useTranslation();
   const items = [
     ...(weekAhead?.exams ?? []).map(e => ({
       icon: CalendarClock, color: 'text-purple-600 bg-purple-50', date: e.date,
       text: `${e.examName}${e.subject ? ` · ${e.subject}` : ''} — ${e.className}${e.startTime ? ` at ${e.startTime}` : ''}`,
-      tag: 'Exam',
+      tag: t('dashboard.tagExam', { defaultValue: 'Exam' }),
     })),
     ...(weekAhead?.events ?? []).map(e => ({
       icon: CalendarDays, color: 'text-amber-600 bg-amber-50', date: e.date,
@@ -137,12 +141,12 @@ function WeekAhead({ weekAhead }) {
     })),
     ...(weekAhead?.homework ?? []).map(h => ({
       icon: ClipboardList, color: 'text-blue-600 bg-blue-50', date: h.dueDate,
-      text: `${h.title}${h.subject ? ` · ${h.subject}` : ''} — ${h.className}`, tag: 'Homework due',
+      text: `${h.title}${h.subject ? ` · ${h.subject}` : ''} — ${h.className}`, tag: t('dashboard.tagHomeworkDue', { defaultValue: 'Homework due' }),
     })),
   ].sort((a, b) => new Date(a.date) - new Date(b.date)).slice(0, 8);
 
   if (items.length === 0) {
-    return <div className="h-52 flex items-center justify-center text-sm text-muted-foreground">Nothing scheduled for the next 7 days</div>;
+    return <div className="h-52 flex items-center justify-center text-sm text-muted-foreground">{t('dashboard.nothingScheduled', { defaultValue: 'Nothing scheduled for the next 7 days' })}</div>;
   }
 
   return (
@@ -168,6 +172,7 @@ function WeekAhead({ weekAhead }) {
 const fmtRs = (n) => `Rs. ${Number(n ?? 0).toLocaleString('en-NP')}`;
 
 export default function SchoolDashboard() {
+  const { t } = useTranslation();
   const companyId = getActiveCompanyId();
   const [insightsDialog, setInsightsDialog] = useState(false);
   const [insights, setInsights] = useState(null);
@@ -227,8 +232,8 @@ export default function SchoolDashboard() {
     <div className="p-6 space-y-6">
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-2xl font-bold">School Dashboard</h1>
-          <p className="text-muted-foreground text-sm mt-1">Overview of students, fees, and attendance</p>
+          <h1 className="text-2xl font-bold">{t('dashboard.title', { defaultValue: 'School Dashboard' })}</h1>
+          <p className="text-muted-foreground text-sm mt-1">{t('dashboard.subtitle', { defaultValue: 'Overview of students, fees, and attendance' })}</p>
         </div>
         <button
           onClick={getClassInsights}
@@ -236,7 +241,7 @@ export default function SchoolDashboard() {
           className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-violet-50 text-violet-700 text-sm font-medium hover:bg-violet-100 transition-colors disabled:opacity-50"
         >
           <Sparkles className="w-4 h-4" />
-          Class Insights
+          {t('dashboard.classInsights', { defaultValue: 'Class Insights' })}
         </button>
       </div>
 
@@ -246,45 +251,45 @@ export default function SchoolDashboard() {
       <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
         <StatCard
           icon={GraduationCap}
-          label="Total Students"
+          label={t('dashboard.totalStudents', { defaultValue: 'Total Students' })}
           value={fmt(data?.totalStudents)}
-          sub={`${fmt(data?.activeStudents)} active`}
+          sub={t('dashboard.nActive', { defaultValue: '{{count}} active', count: data?.activeStudents ?? 0 })}
           color="blue"
           loading={isLoading}
         />
         <StatCard
           icon={Users}
-          label="Total Classes"
+          label={t('dashboard.totalClasses', { defaultValue: 'Total Classes' })}
           value={fmt(data?.totalClasses)}
           color="violet"
           loading={isLoading}
         />
         <StatCard
           icon={TrendingUp}
-          label="Fee Collected (This Month)"
+          label={t('dashboard.feeCollectedMonth', { defaultValue: 'Fee Collected (This Month)' })}
           value={fmtAmt(data?.feeCollectedThisMonth)}
           color="green"
           loading={isLoading}
         />
         <StatCard
           icon={AlertCircle}
-          label="Pending Dues"
+          label={t('dashboard.pendingDues', { defaultValue: 'Pending Dues' })}
           value={fmtAmt(data?.totalPendingFees)}
-          sub={`${fmt(data?.studentsWithDues)} students`}
+          sub={t('dashboard.nStudents', { defaultValue: '{{count}} students', count: data?.studentsWithDues ?? 0 })}
           color="amber"
           loading={isLoading}
         />
         <StatCard
           icon={CheckCircle}
-          label="Attendance Today"
+          label={t('dashboard.attendanceToday', { defaultValue: 'Attendance Today' })}
           value={data?.attendanceToday ? `${data.attendanceToday.present} / ${data.attendanceToday.present + data.attendanceToday.absent}` : '—'}
-          sub={data?.attendanceToday ? `${data.attendanceToday.absent} absent` : undefined}
+          sub={data?.attendanceToday ? t('dashboard.nAbsent', { defaultValue: '{{count}} absent', count: data.attendanceToday.absent }) : undefined}
           color="green"
           loading={isLoading}
         />
         <StatCard
           icon={DollarSign}
-          label="Fee Collected (This Year)"
+          label={t('dashboard.feeCollectedYear', { defaultValue: 'Fee Collected (This Year)' })}
           value={fmtAmt(data?.feeCollectedThisYear)}
           color="blue"
           loading={isLoading}
@@ -294,9 +299,9 @@ export default function SchoolDashboard() {
       {/* Analytics row 1 — attendance */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <ChartCard
-          title="Attendance Trend"
-          sub="Last 30 days — % of students present"
-          empty={!isLoading && !(data?.attendanceTrend?.length) ? 'No attendance marked yet' : null}
+          title={t('dashboard.attendanceTrend', { defaultValue: 'Attendance Trend' })}
+          sub={t('dashboard.attendanceTrendSub', { defaultValue: 'Last 30 days — % of students present' })}
+          empty={!isLoading && !(data?.attendanceTrend?.length) ? t('dashboard.noAttendanceYet', { defaultValue: 'No attendance marked yet' }) : null}
         >
           <ResponsiveContainer width="100%" height={210}>
             <LineChart data={data?.attendanceTrend ?? []} margin={{ top: 5, right: 10, left: -20, bottom: 0 }}>
@@ -310,9 +315,9 @@ export default function SchoolDashboard() {
         </ChartCard>
 
         <ChartCard
-          title="Today's Attendance by Class"
-          sub="Red = below 75% · grey = not marked yet"
-          empty={!isLoading && !(data?.todayByClass?.length) ? 'No classes created yet' : null}
+          title={t('dashboard.todayByClass', { defaultValue: "Today's Attendance by Class" })}
+          sub={t('dashboard.todayByClassSub', { defaultValue: 'Red = below 75% · grey = not marked yet' })}
+          empty={!isLoading && !(data?.todayByClass?.length) ? t('dashboard.noClassesYet', { defaultValue: 'No classes created yet' }) : null}
         >
           <TodayByClass rows={data?.todayByClass ?? []} />
         </ChartCard>
@@ -321,9 +326,9 @@ export default function SchoolDashboard() {
       {/* Analytics row 2 — money + upcoming */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <ChartCard
-          title="Fee Collection by Month"
-          sub="Collected vs still pending, per fee month"
-          empty={!isLoading && !(data?.feeMonths?.length) ? 'No fee invoices generated yet' : null}
+          title={t('dashboard.feeByMonth', { defaultValue: 'Fee Collection by Month' })}
+          sub={t('dashboard.feeByMonthSub', { defaultValue: 'Collected vs still pending, per fee month' })}
+          empty={!isLoading && !(data?.feeMonths?.length) ? t('dashboard.noInvoicesYet', { defaultValue: 'No fee invoices generated yet' }) : null}
         >
           <ResponsiveContainer width="100%" height={210}>
             <BarChart data={data?.feeMonths ?? []} margin={{ top: 5, right: 10, left: -10, bottom: 0 }}>
@@ -338,7 +343,10 @@ export default function SchoolDashboard() {
           </ResponsiveContainer>
         </ChartCard>
 
-        <ChartCard title="This Week Ahead" sub="Exams, events and homework due in the next 7 days">
+        <ChartCard
+          title={t('dashboard.weekAhead', { defaultValue: 'This Week Ahead' })}
+          sub={t('dashboard.weekAheadSub', { defaultValue: 'Exams, events and homework due in the next 7 days' })}
+        >
           <WeekAhead weekAhead={data?.weekAhead} />
         </ChartCard>
       </div>
@@ -346,22 +354,22 @@ export default function SchoolDashboard() {
       {/* Pending fees table */}
       <div className="bg-white rounded-xl border border-border">
         <div className="px-5 py-4 border-b border-border flex items-center justify-between">
-          <h2 className="font-semibold text-sm">Students with Pending Fees</h2>
-          <span className="text-xs text-muted-foreground">{fmt(data?.studentsWithDues)} students</span>
+          <h2 className="font-semibold text-sm">{t('dashboard.pendingFeesTitle', { defaultValue: 'Students with Pending Fees' })}</h2>
+          <span className="text-xs text-muted-foreground">{t('dashboard.nStudents', { defaultValue: '{{count}} students', count: data?.studentsWithDues ?? 0 })}</span>
         </div>
         {isLoading ? (
-          <div className="p-8 text-center text-muted-foreground text-sm">Loading…</div>
+          <div className="p-8 text-center text-muted-foreground text-sm">{t('common.loading', { defaultValue: 'Loading…' })}</div>
         ) : data?.pendingFeesList?.length === 0 ? (
-          <div className="p-8 text-center text-muted-foreground text-sm">All fees are collected — great work!</div>
+          <div className="p-8 text-center text-muted-foreground text-sm">{t('dashboard.allFeesCollected', { defaultValue: 'All fees are collected — great work!' })}</div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-muted/40">
                 <tr>
-                  <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">Student</th>
-                  <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">Class</th>
-                  <th className="text-right px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">Due Amount</th>
-                  <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">Month</th>
+                  <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('common.student', { defaultValue: 'Student' })}</th>
+                  <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('common.class', { defaultValue: 'Class' })}</th>
+                  <th className="text-right px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('dashboard.dueAmount', { defaultValue: 'Due Amount' })}</th>
+                  <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('common.month', { defaultValue: 'Month' })}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
@@ -385,11 +393,11 @@ export default function SchoolDashboard() {
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Sparkles className="w-4 h-4 text-violet-600" /> AI Class Insights
+              <Sparkles className="w-4 h-4 text-violet-600" /> {t('dashboard.aiInsightsTitle', { defaultValue: 'AI Class Insights' })}
             </DialogTitle>
           </DialogHeader>
           {insightsLoading ? (
-            <div className="py-8 text-center text-muted-foreground text-sm">Analyzing school data…</div>
+            <div className="py-8 text-center text-muted-foreground text-sm">{t('dashboard.analyzing', { defaultValue: 'Analyzing school data…' })}</div>
           ) : (
             <div className="space-y-3 pt-1">
               {(insights || []).map((insight, i) => (

@@ -7,8 +7,10 @@ import {
   Search, Bell, Settings, LogOut, Building2, ChevronDown, Plus, Menu,
   Wrench, Calculator, RefreshCw, CalendarDays, UserCircle, CalendarCheck,
   UsersRound, Banknote, Sun, Moon, X, Package, Users, UserCheck,
-  AlertTriangle, FileText, ArrowLeftRight,
+  AlertTriangle, FileText, ArrowLeftRight, Globe,
 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
+import { toggleLanguage } from '@/i18n';
 import { usePreferences } from '@/lib/PreferencesContext';
 import { Button } from "@/components/ui/button";
 import {
@@ -21,6 +23,7 @@ import { getTodayBS } from '@/lib/nepaliDate';
 
 export default function TopBar({ onMobileMenuToggle, onToolOpen }) {
   const navigate = useNavigate();
+  const { i18n } = useTranslation();
   const { resolvedTheme, setTheme } = useTheme();
   const { prefs } = usePreferences();
   const [user, setUser] = useState(null);
@@ -272,6 +275,18 @@ export default function TopBar({ onMobileMenuToggle, onToolOpen }) {
             <Search className="w-4 h-4" />
           </Button>
         )}
+
+        {/* Language toggle */}
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => { toggleLanguage(); }}
+          className="text-muted-foreground hover:text-foreground gap-1.5 px-2"
+          title={i18n.language === 'ne' ? 'Switch to English' : 'नेपालीमा हेर्नुहोस्'}
+        >
+          <Globe className="w-4 h-4" />
+          <span className="text-xs font-semibold">{i18n.language === 'ne' ? 'ने' : 'EN'}</span>
+        </Button>
 
         {/* Dark mode toggle */}
         <Button

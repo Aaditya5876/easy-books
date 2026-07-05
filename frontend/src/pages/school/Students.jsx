@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, Search, Pencil, Trash2, GraduationCap, X, ArrowRight, KeyRound, Upload } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import BulkImportDialog from '@/components/shared/BulkImportDialog';
 import { STUDENT_FIELDS } from '@/components/shared/bulkImportFields';
 import { studentsApi, classesApi, portalApi } from '@/api';
@@ -17,6 +18,7 @@ const EMPTY_FORM = {
 };
 
 function StudentDialog({ open, onClose, initial, classes, companyId }) {
+  const { t } = useTranslation();
   const qc = useQueryClient();
   const isEdit = !!initial?.id;
   const [form, setForm] = useState(
@@ -32,15 +34,15 @@ function StudentDialog({ open, onClose, initial, classes, companyId }) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['students'] });
       qc.invalidateQueries({ queryKey: ['school-dashboard'] });
-      toast.success(isEdit ? 'Student updated' : 'Student enrolled');
+      toast.success(isEdit ? t('students.studentUpdated', { defaultValue: 'Student updated' }) : t('students.studentEnrolled', { defaultValue: 'Student enrolled' }));
       onClose();
     },
-    onError: (err) => toast.error(err?.response?.data?.message || 'Failed to save student'),
+    onError: (err) => toast.error(err?.response?.data?.message || t('students.failedToSaveStudent', { defaultValue: 'Failed to save student' })),
   });
 
   function handleSubmit(e) {
     e.preventDefault();
-    if (!form.name.trim()) { toast.error('Student name is required'); return; }
+    if (!form.name.trim()) { toast.error(t('students.nameRequired', { defaultValue: 'Student name is required' })); return; }
     save.mutate({ ...form, companyId });
   }
 
@@ -48,28 +50,28 @@ function StudentDialog({ open, onClose, initial, classes, companyId }) {
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{isEdit ? 'Edit Student' : 'Enroll New Student'}</DialogTitle>
+          <DialogTitle>{isEdit ? t('students.editStudent', { defaultValue: 'Edit Student' }) : t('students.enrollNewStudent', { defaultValue: 'Enroll New Student' })}</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4 pt-2">
           <div className="grid grid-cols-2 gap-3">
             <div className="col-span-2 space-y-1.5">
-              <Label>Full Name *</Label>
-              <Input placeholder="Student full name" value={form.name} onChange={e => set('name', e.target.value)} />
+              <Label>{t('students.fullName', { defaultValue: 'Full Name *' })}</Label>
+              <Input placeholder={t('students.fullNamePlaceholder', { defaultValue: 'Student full name' })} value={form.name} onChange={e => set('name', e.target.value)} />
             </div>
 
             <div className="space-y-1.5">
-              <Label>Roll Number</Label>
-              <Input placeholder="e.g. 101" value={form.rollNumber} onChange={e => set('rollNumber', e.target.value)} />
+              <Label>{t('students.rollNumber', { defaultValue: 'Roll Number' })}</Label>
+              <Input placeholder={t('students.rollNumberPlaceholder', { defaultValue: 'e.g. 101' })} value={form.rollNumber} onChange={e => set('rollNumber', e.target.value)} />
             </div>
 
             <div className="space-y-1.5">
-              <Label>Class</Label>
+              <Label>{t('students.class', { defaultValue: 'Class' })}</Label>
               <select
                 className="w-full border rounded-md px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring"
                 value={form.classId}
                 onChange={e => set('classId', e.target.value)}
               >
-                <option value="">Select class…</option>
+                <option value="">{t('students.selectClass', { defaultValue: 'Select class…' })}</option>
                 {classes.map(c => (
                   <option key={c.id} value={c.id}>
                     {c.name}{c.section ? ` (${c.section})` : ''}
@@ -79,51 +81,51 @@ function StudentDialog({ open, onClose, initial, classes, companyId }) {
             </div>
 
             <div className="space-y-1.5">
-              <Label>Gender</Label>
+              <Label>{t('students.gender', { defaultValue: 'Gender' })}</Label>
               <select
                 className="w-full border rounded-md px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring"
                 value={form.gender}
                 onChange={e => set('gender', e.target.value)}
               >
-                <option value="">Select…</option>
-                <option value="Male">Male</option>
-                <option value="Female">Female</option>
-                <option value="Other">Other</option>
+                <option value="">{t('students.select', { defaultValue: 'Select…' })}</option>
+                <option value="Male">{t('students.male', { defaultValue: 'Male' })}</option>
+                <option value="Female">{t('students.female', { defaultValue: 'Female' })}</option>
+                <option value="Other">{t('students.other', { defaultValue: 'Other' })}</option>
               </select>
             </div>
 
             <div className="space-y-1.5">
-              <Label>Date of Birth</Label>
+              <Label>{t('students.dateOfBirth', { defaultValue: 'Date of Birth' })}</Label>
               <Input type="date" value={form.dateOfBirth} onChange={e => set('dateOfBirth', e.target.value)} />
             </div>
 
             <div className="col-span-2 space-y-1.5">
-              <Label>Address</Label>
-              <Input placeholder="Student address" value={form.address} onChange={e => set('address', e.target.value)} />
+              <Label>{t('students.address', { defaultValue: 'Address' })}</Label>
+              <Input placeholder={t('students.addressPlaceholder', { defaultValue: 'Student address' })} value={form.address} onChange={e => set('address', e.target.value)} />
             </div>
           </div>
 
-          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide pt-2">Guardian Details</p>
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide pt-2">{t('students.guardianDetails', { defaultValue: 'Guardian Details' })}</p>
 
           <div className="grid grid-cols-2 gap-3">
             <div className="col-span-2 space-y-1.5">
-              <Label>Guardian Name</Label>
-              <Input placeholder="Parent / Guardian name" value={form.guardianName} onChange={e => set('guardianName', e.target.value)} />
+              <Label>{t('students.guardianName', { defaultValue: 'Guardian Name' })}</Label>
+              <Input placeholder={t('students.guardianNamePlaceholder', { defaultValue: 'Parent / Guardian name' })} value={form.guardianName} onChange={e => set('guardianName', e.target.value)} />
             </div>
             <div className="space-y-1.5">
-              <Label>Guardian Phone</Label>
-              <Input placeholder="98XXXXXXXX" value={form.guardianPhone} onChange={e => set('guardianPhone', e.target.value)} />
+              <Label>{t('students.guardianPhone', { defaultValue: 'Guardian Phone' })}</Label>
+              <Input placeholder={t('students.phonePlaceholder', { defaultValue: '98XXXXXXXX' })} value={form.guardianPhone} onChange={e => set('guardianPhone', e.target.value)} />
             </div>
             <div className="space-y-1.5">
-              <Label>Guardian Email</Label>
-              <Input type="email" placeholder="guardian@email.com" value={form.guardianEmail} onChange={e => set('guardianEmail', e.target.value)} />
+              <Label>{t('students.guardianEmail', { defaultValue: 'Guardian Email' })}</Label>
+              <Input type="email" placeholder={t('students.guardianEmailPlaceholder', { defaultValue: 'guardian@email.com' })} value={form.guardianEmail} onChange={e => set('guardianEmail', e.target.value)} />
             </div>
           </div>
 
           <DialogFooter className="pt-2">
-            <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
+            <Button type="button" variant="outline" onClick={onClose}>{t('students.cancel', { defaultValue: 'Cancel' })}</Button>
             <Button type="submit" disabled={save.isPending}>
-              {save.isPending ? 'Saving…' : isEdit ? 'Save Changes' : 'Enroll Student'}
+              {save.isPending ? t('students.saving', { defaultValue: 'Saving…' }) : isEdit ? t('students.saveChanges', { defaultValue: 'Save Changes' }) : t('students.enrollStudent', { defaultValue: 'Enroll Student' })}
             </Button>
           </DialogFooter>
         </form>
@@ -133,21 +135,22 @@ function StudentDialog({ open, onClose, initial, classes, companyId }) {
 }
 
 function PortalPasswordDialog({ open, onClose, student, companyId }) {
+  const { t } = useTranslation();
   const [form, setForm] = useState({ phone: student?.guardianPhone || '', password: '', type: 'PARENT' });
   const [loading, setLoading] = useState(false);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   async function handleSubmit(e) {
     e.preventDefault();
-    if (!form.phone.trim()) { toast.error('Phone number is required'); return; }
-    if (form.password.length < 6) { toast.error('Password must be at least 6 characters'); return; }
+    if (!form.phone.trim()) { toast.error(t('students.phoneRequired', { defaultValue: 'Phone number is required' })); return; }
+    if (form.password.length < 6) { toast.error(t('students.passwordMinLength', { defaultValue: 'Password must be at least 6 characters' })); return; }
     setLoading(true);
     try {
       await portalApi.setPassword({ studentId: student.id, ...form, companyId });
-      toast.success(`Portal access set for ${student.name}'s ${form.type.toLowerCase()}`);
+      toast.success(t('students.portalAccessSetFor', { defaultValue: "Portal access set for {{name}}'s {{type}}", name: student.name, type: form.type.toLowerCase() }));
       onClose();
     } catch (err) {
-      toast.error(err?.response?.data?.message || 'Failed to set password');
+      toast.error(err?.response?.data?.message || t('students.failedToSetPassword', { defaultValue: 'Failed to set password' }));
     } finally {
       setLoading(false);
     }
@@ -157,31 +160,31 @@ function PortalPasswordDialog({ open, onClose, student, companyId }) {
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-sm">
         <DialogHeader>
-          <DialogTitle>Set Portal Access</DialogTitle>
+          <DialogTitle>{t('students.setPortalAccess', { defaultValue: 'Set Portal Access' })}</DialogTitle>
         </DialogHeader>
         <p className="text-sm text-muted-foreground -mt-1">
-          Set login credentials for <strong>{student?.name}</strong>'s portal access.
+          {t('students.setCredentialsPrefix', { defaultValue: 'Set login credentials for' })} <strong>{student?.name}</strong>{t('students.setCredentialsSuffix', { defaultValue: "'s portal access." })}
         </p>
         <form onSubmit={handleSubmit} className="space-y-4 pt-1">
           <div className="space-y-1.5">
-            <Label>Access Type</Label>
+            <Label>{t('students.accessType', { defaultValue: 'Access Type' })}</Label>
             <select className="w-full border rounded-md px-3 py-2 text-sm bg-background" value={form.type} onChange={e => set('type', e.target.value)}>
-              <option value="PARENT">Parent</option>
-              <option value="STUDENT">Student</option>
+              <option value="PARENT">{t('students.parent', { defaultValue: 'Parent' })}</option>
+              <option value="STUDENT">{t('students.student', { defaultValue: 'Student' })}</option>
             </select>
           </div>
           <div className="space-y-1.5">
-            <Label>Phone Number *</Label>
-            <Input placeholder="98XXXXXXXX" value={form.phone} onChange={e => set('phone', e.target.value)} />
-            <p className="text-xs text-muted-foreground">This will be the login username</p>
+            <Label>{t('students.phoneNumber', { defaultValue: 'Phone Number *' })}</Label>
+            <Input placeholder={t('students.phonePlaceholder', { defaultValue: '98XXXXXXXX' })} value={form.phone} onChange={e => set('phone', e.target.value)} />
+            <p className="text-xs text-muted-foreground">{t('students.loginUsernameHint', { defaultValue: 'This will be the login username' })}</p>
           </div>
           <div className="space-y-1.5">
-            <Label>Password *</Label>
-            <Input type="password" placeholder="Min 6 characters" value={form.password} onChange={e => set('password', e.target.value)} />
+            <Label>{t('students.password', { defaultValue: 'Password *' })}</Label>
+            <Input type="password" placeholder={t('students.passwordPlaceholder', { defaultValue: 'Min 6 characters' })} value={form.password} onChange={e => set('password', e.target.value)} />
           </div>
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
-            <Button type="submit" disabled={loading}>{loading ? 'Setting…' : 'Set Portal Access'}</Button>
+            <Button type="button" variant="outline" onClick={onClose}>{t('students.cancel', { defaultValue: 'Cancel' })}</Button>
+            <Button type="submit" disabled={loading}>{loading ? t('students.setting', { defaultValue: 'Setting…' }) : t('students.setPortalAccess', { defaultValue: 'Set Portal Access' })}</Button>
           </DialogFooter>
         </form>
       </DialogContent>
@@ -190,6 +193,7 @@ function PortalPasswordDialog({ open, onClose, student, companyId }) {
 }
 
 function PromoteDialog({ open, onClose, classes, companyId }) {
+  const { t } = useTranslation();
   const qc = useQueryClient();
   const [fromClassId, setFromClassId] = useState('');
   const [toClassId, setToClassId] = useState('');
@@ -205,10 +209,10 @@ function PromoteDialog({ open, onClose, classes, companyId }) {
     mutationFn: () => studentsApi.promote({ companyId, fromClassId, toClassId, studentIds: selected }),
     onSuccess: (r) => {
       qc.invalidateQueries({ queryKey: ['students'] });
-      toast.success(`${r.data.promoted} students promoted`);
+      toast.success(t('students.studentsPromoted', { defaultValue: '{{count}} students promoted', count: r.data.promoted }));
       onClose();
     },
-    onError: (e) => toast.error(e.response?.data?.message || 'Failed to promote'),
+    onError: (e) => toast.error(e.response?.data?.message || t('students.failedToPromote', { defaultValue: 'Failed to promote' })),
   });
 
   const toggleAll = () => setSelected(selected.length === students.length ? [] : students.map(s => s.id));
@@ -216,22 +220,22 @@ function PromoteDialog({ open, onClose, classes, companyId }) {
   return (
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-md">
-        <DialogHeader><DialogTitle>Promote Students</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle>{t('students.promoteStudents', { defaultValue: 'Promote Students' })}</DialogTitle></DialogHeader>
         <div className="space-y-4 pt-2">
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
-              <Label>From Class *</Label>
+              <Label>{t('students.fromClass', { defaultValue: 'From Class *' })}</Label>
               <select className="w-full border rounded-md px-3 py-2 text-sm bg-background"
                 value={fromClassId} onChange={e => { setFromClassId(e.target.value); setSelected([]); }}>
-                <option value="">Select…</option>
+                <option value="">{t('students.select', { defaultValue: 'Select…' })}</option>
                 {classes.map(c => <option key={c.id} value={c.id}>{c.name}{c.section ? ` (${c.section})` : ''}</option>)}
               </select>
             </div>
             <div className="space-y-1">
-              <Label>To Class *</Label>
+              <Label>{t('students.toClass', { defaultValue: 'To Class *' })}</Label>
               <select className="w-full border rounded-md px-3 py-2 text-sm bg-background"
                 value={toClassId} onChange={e => setToClassId(e.target.value)}>
-                <option value="">Select…</option>
+                <option value="">{t('students.select', { defaultValue: 'Select…' })}</option>
                 {classes.filter(c => c.id !== fromClassId).map(c => <option key={c.id} value={c.id}>{c.name}{c.section ? ` (${c.section})` : ''}</option>)}
               </select>
             </div>
@@ -240,9 +244,9 @@ function PromoteDialog({ open, onClose, classes, companyId }) {
           {fromClassId && students.length > 0 && (
             <div>
               <div className="flex items-center justify-between mb-2">
-                <Label>Select Students ({selected.length}/{students.length})</Label>
+                <Label>{t('students.selectStudents', { defaultValue: 'Select Students ({{selected}}/{{total}})', selected: selected.length, total: students.length })}</Label>
                 <button className="text-xs text-primary underline" onClick={toggleAll}>
-                  {selected.length === students.length ? 'Deselect All' : 'Select All'}
+                  {selected.length === students.length ? t('students.deselectAll', { defaultValue: 'Deselect All' }) : t('students.selectAll', { defaultValue: 'Select All' })}
                 </button>
               </div>
               <div className="max-h-48 overflow-y-auto border rounded-md divide-y">
@@ -258,17 +262,17 @@ function PromoteDialog({ open, onClose, classes, companyId }) {
             </div>
           )}
           {fromClassId && students.length === 0 && (
-            <div className="text-sm text-muted-foreground text-center py-4">No active students in this class</div>
+            <div className="text-sm text-muted-foreground text-center py-4">{t('students.noActiveStudents', { defaultValue: 'No active students in this class' })}</div>
           )}
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button variant="outline" onClick={onClose}>{t('students.cancel', { defaultValue: 'Cancel' })}</Button>
           <Button
             onClick={() => promote.mutate()}
             disabled={promote.isPending || selected.length === 0 || !toClassId}
           >
             <ArrowRight className="w-4 h-4 mr-1" />
-            {promote.isPending ? 'Promoting…' : `Promote ${selected.length} Students`}
+            {promote.isPending ? t('students.promoting', { defaultValue: 'Promoting…' }) : t('students.promoteCount', { defaultValue: 'Promote {{count}} Students', count: selected.length })}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -277,6 +281,7 @@ function PromoteDialog({ open, onClose, classes, companyId }) {
 }
 
 export default function Students() {
+  const { t } = useTranslation();
   const companyId = getActiveCompanyId();
   const qc = useQueryClient();
   const [search, setSearch] = useState('');
@@ -303,9 +308,9 @@ export default function Students() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['students'] });
       qc.invalidateQueries({ queryKey: ['school-dashboard'] });
-      toast.success('Student removed');
+      toast.success(t('students.studentRemoved', { defaultValue: 'Student removed' }));
     },
-    onError: (err) => toast.error(err?.response?.data?.message || 'Failed to remove student'),
+    onError: (err) => toast.error(err?.response?.data?.message || t('students.failedToRemoveStudent', { defaultValue: 'Failed to remove student' })),
   });
 
   const filtered = students.filter(s =>
@@ -322,18 +327,18 @@ export default function Students() {
     <div className="p-6 space-y-5">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Students</h1>
-          <p className="text-muted-foreground text-sm mt-1">{students.length} enrolled</p>
+          <h1 className="text-2xl font-bold">{t('students.title', { defaultValue: 'Students' })}</h1>
+          <p className="text-muted-foreground text-sm mt-1">{t('students.enrolled', { defaultValue: '{{count}} enrolled', count: students.length })}</p>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" onClick={() => setImportOpen(true)}>
-            <Upload className="w-4 h-4 mr-1" /> Import
+            <Upload className="w-4 h-4 mr-1" /> {t('students.import', { defaultValue: 'Import' })}
           </Button>
           <Button variant="outline" onClick={() => setPromoteDialog(true)}>
-            <ArrowRight className="w-4 h-4 mr-1" /> Promote
+            <ArrowRight className="w-4 h-4 mr-1" /> {t('students.promote', { defaultValue: 'Promote' })}
           </Button>
           <Button onClick={() => setDialog({ mode: 'add' })}>
-            <Plus className="w-4 h-4 mr-2" /> Enroll Student
+            <Plus className="w-4 h-4 mr-2" /> {t('students.enrollStudent', { defaultValue: 'Enroll Student' })}
           </Button>
         </div>
       </div>
@@ -342,7 +347,7 @@ export default function Students() {
         open={importOpen}
         onClose={() => setImportOpen(false)}
         entity="students"
-        title="Import Students"
+        title={t('students.importStudents', { defaultValue: 'Import Students' })}
         fields={STUDENT_FIELDS}
         onDone={() => {
           qc.invalidateQueries({ queryKey: ['students'] });
@@ -356,7 +361,7 @@ export default function Students() {
         <div className="relative flex-1 min-w-[200px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
-            placeholder="Search by name or roll number…"
+            placeholder={t('students.searchPlaceholder', { defaultValue: 'Search by name or roll number…' })}
             className="pl-9"
             value={search}
             onChange={e => setSearch(e.target.value)}
@@ -372,7 +377,7 @@ export default function Students() {
           value={filterClass}
           onChange={e => setFilterClass(e.target.value)}
         >
-          <option value="">All Classes</option>
+          <option value="">{t('students.allClasses', { defaultValue: 'All Classes' })}</option>
           {classes.map(c => (
             <option key={c.id} value={c.id}>
               {c.name}{c.section ? ` (${c.section})` : ''}
@@ -384,16 +389,16 @@ export default function Students() {
       {/* Table */}
       <div className="bg-white rounded-xl border border-border overflow-hidden">
         {isLoading ? (
-          <div className="p-12 text-center text-muted-foreground text-sm">Loading students…</div>
+          <div className="p-12 text-center text-muted-foreground text-sm">{t('students.loadingStudents', { defaultValue: 'Loading students…' })}</div>
         ) : filtered.length === 0 ? (
           <div className="p-12 text-center">
             <GraduationCap className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
             <p className="text-muted-foreground text-sm">
-              {search || filterClass ? 'No students match your search' : 'No students enrolled yet'}
+              {search || filterClass ? t('students.noMatch', { defaultValue: 'No students match your search' }) : t('students.noStudentsYet', { defaultValue: 'No students enrolled yet' })}
             </p>
             {!search && !filterClass && (
               <Button className="mt-4" size="sm" onClick={() => setDialog({ mode: 'add' })}>
-                Enroll First Student
+                {t('students.enrollFirstStudent', { defaultValue: 'Enroll First Student' })}
               </Button>
             )}
           </div>
@@ -402,12 +407,12 @@ export default function Students() {
             <table className="w-full text-sm">
               <thead className="bg-muted/40 border-b border-border">
                 <tr>
-                  <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">Student</th>
-                  <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">Roll No.</th>
-                  <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">Class</th>
-                  <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">Guardian</th>
-                  <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">Phone</th>
-                  <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">Status</th>
+                  <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('students.studentHeader', { defaultValue: 'Student' })}</th>
+                  <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('students.rollNoHeader', { defaultValue: 'Roll No.' })}</th>
+                  <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('students.classHeader', { defaultValue: 'Class' })}</th>
+                  <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('students.guardianHeader', { defaultValue: 'Guardian' })}</th>
+                  <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('students.phoneHeader', { defaultValue: 'Phone' })}</th>
+                  <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('students.statusHeader', { defaultValue: 'Status' })}</th>
                   <th className="px-5 py-3" />
                 </tr>
               </thead>
@@ -425,7 +430,7 @@ export default function Students() {
                           ? 'bg-emerald-100 text-emerald-700'
                           : 'bg-muted text-muted-foreground'
                       }`}>
-                        {student.status}
+                        {t(`students.status_${student.status}`, { defaultValue: student.status })}
                       </span>
                     </td>
                     <td className="px-5 py-3">
@@ -433,7 +438,7 @@ export default function Students() {
                         <button
                           onClick={() => setPortalDialog(student)}
                           className="p-1.5 rounded hover:bg-emerald-50 text-muted-foreground hover:text-emerald-700 transition-colors"
-                          title="Set Portal Access"
+                          title={t('students.setPortalAccess', { defaultValue: 'Set Portal Access' })}
                         >
                           <KeyRound className="w-3.5 h-3.5" />
                         </button>
@@ -445,7 +450,7 @@ export default function Students() {
                         </button>
                         <button
                           onClick={() => {
-                            if (confirm(`Remove ${student.name}?`)) remove.mutate(student.id);
+                            if (confirm(t('students.confirmRemove', { defaultValue: 'Remove {{name}}?', name: student.name }))) remove.mutate(student.id);
                           }}
                           className="p-1.5 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600 transition-colors"
                         >

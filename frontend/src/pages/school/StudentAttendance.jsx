@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import { studentAttendanceApi, classesApi, academicYearsApi } from '@/api';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -26,6 +27,7 @@ const STATUS_COLORS = {
 const companyId = () => localStorage.getItem('easybooks_active_company') || '';
 
 export default function StudentAttendance() {
+  const { t } = useTranslation();
   const today = format(new Date(), 'yyyy-MM-dd');
   const [classId, setClassId] = useState('');
   const [date, setDate] = useState(today);
@@ -78,14 +80,14 @@ export default function StudentAttendance() {
         entries,
       }),
     onSuccess: () => {
-      toast.success('Attendance saved');
+      toast.success(t('attendance.saved', { defaultValue: 'Attendance saved' }));
       refetch();
     },
-    onError: (e) => toast.error(e.response?.data?.message || 'Failed to save'),
+    onError: (e) => toast.error(e.response?.data?.message || t('attendance.failedToSave', { defaultValue: 'Failed to save' })),
   });
 
   const handleSave = () => {
-    if (!classId) return toast.error('Select a class first');
+    if (!classId) return toast.error(t('attendance.selectClassFirst', { defaultValue: 'Select a class first' }));
     const entries = rows.map(r => ({ studentId: r.studentId, status: statuses[r.studentId] || 'PRESENT' }));
     save.mutate(entries);
   };
@@ -109,21 +111,21 @@ export default function StudentAttendance() {
     <div className="p-6 space-y-6">
       <div className="flex items-center gap-2">
         <UserCheck className="h-6 w-6 text-primary" />
-        <h1 className="text-2xl font-bold">Student Attendance</h1>
+        <h1 className="text-2xl font-bold">{t('attendance.title', { defaultValue: 'Student Attendance' })}</h1>
       </div>
 
       <Tabs defaultValue="mark">
         <TabsList>
-          <TabsTrigger value="mark">Mark Attendance</TabsTrigger>
-          <TabsTrigger value="report">Report</TabsTrigger>
+          <TabsTrigger value="mark">{t('attendance.markTab', { defaultValue: 'Mark Attendance' })}</TabsTrigger>
+          <TabsTrigger value="report">{t('attendance.reportTab', { defaultValue: 'Report' })}</TabsTrigger>
         </TabsList>
 
         <TabsContent value="mark" className="space-y-4 mt-4">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 bg-card rounded-lg border p-4">
             <div className="space-y-1">
-              <Label>Class *</Label>
+              <Label>{t('attendance.classRequired', { defaultValue: 'Class *' })}</Label>
               <Select value={classId} onValueChange={setClassId}>
-                <SelectTrigger><SelectValue placeholder="Select class" /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder={t('attendance.selectClass', { defaultValue: 'Select class' })} /></SelectTrigger>
                 <SelectContent>
                   {classes.map(c => (
                     <SelectItem key={c.id} value={c.id}>
@@ -134,7 +136,7 @@ export default function StudentAttendance() {
               </Select>
             </div>
             <div className="space-y-1">
-              <Label>Date</Label>
+              <Label>{t('attendance.date', { defaultValue: 'Date' })}</Label>
               <input
                 type="date"
                 value={date}
@@ -144,20 +146,20 @@ export default function StudentAttendance() {
               />
             </div>
             <div className="flex items-end gap-2 col-span-2">
-              <Button variant="outline" size="sm" onClick={() => markAll('PRESENT')}>All Present</Button>
-              <Button variant="outline" size="sm" onClick={() => markAll('ABSENT')}>All Absent</Button>
+              <Button variant="outline" size="sm" onClick={() => markAll('PRESENT')}>{t('attendance.allPresent', { defaultValue: 'All Present' })}</Button>
+              <Button variant="outline" size="sm" onClick={() => markAll('ABSENT')}>{t('attendance.allAbsent', { defaultValue: 'All Absent' })}</Button>
               <Button onClick={handleSave} disabled={save.isPending || rows.length === 0} className="ml-auto">
                 <Save className="h-4 w-4 mr-1" />
-                {save.isPending ? 'Saving…' : 'Save'}
+                {save.isPending ? t('attendance.saving', { defaultValue: 'Saving…' }) : t('attendance.save', { defaultValue: 'Save' })}
               </Button>
             </div>
           </div>
 
           {classId && rows.length > 0 && (
             <div className="flex gap-4 text-sm text-muted-foreground">
-              <span className="font-medium text-green-700">Present: {presentCount}</span>
-              <span className="font-medium text-red-700">Absent: {absentCount}</span>
-              <span>Total: {rows.length}</span>
+              <span className="font-medium text-green-700">{t('attendance.presentCount', { defaultValue: 'Present: {{count}}', count: presentCount })}</span>
+              <span className="font-medium text-red-700">{t('attendance.absentCount', { defaultValue: 'Absent: {{count}}', count: absentCount })}</span>
+              <span>{t('attendance.totalCount', { defaultValue: 'Total: {{count}}', count: rows.length })}</span>
             </div>
           )}
 
@@ -166,24 +168,24 @@ export default function StudentAttendance() {
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-12">#</TableHead>
-                  <TableHead>Roll No</TableHead>
-                  <TableHead>Student Name</TableHead>
-                  <TableHead>Status</TableHead>
+                  <TableHead>{t('attendance.rollNo', { defaultValue: 'Roll No' })}</TableHead>
+                  <TableHead>{t('attendance.studentName', { defaultValue: 'Student Name' })}</TableHead>
+                  <TableHead>{t('attendance.status', { defaultValue: 'Status' })}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {!classId ? (
                   <TableRow>
                     <TableCell colSpan={4} className="text-center py-12 text-muted-foreground">
-                      Select a class and date to mark attendance
+                      {t('attendance.selectClassAndDate', { defaultValue: 'Select a class and date to mark attendance' })}
                     </TableCell>
                   </TableRow>
                 ) : isLoading ? (
-                  <TableRow><TableCell colSpan={4} className="text-center py-8 text-muted-foreground">Loading…</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={4} className="text-center py-8 text-muted-foreground">{t('attendance.loading', { defaultValue: 'Loading…' })}</TableCell></TableRow>
                 ) : rows.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={4} className="text-center py-12 text-muted-foreground">
-                      No active students in this class
+                      {t('attendance.noActiveStudents', { defaultValue: 'No active students in this class' })}
                     </TableCell>
                   </TableRow>
                 ) : rows.map((r, i) => (
@@ -203,7 +205,7 @@ export default function StudentAttendance() {
                                 : 'bg-muted text-muted-foreground border-transparent hover:border-border'
                             }`}
                           >
-                            {s.charAt(0) + s.slice(1).toLowerCase()}
+                            {t(`attendance.status_${s}`, { defaultValue: s.charAt(0) + s.slice(1).toLowerCase() })}
                           </button>
                         ))}
                       </div>
@@ -218,9 +220,9 @@ export default function StudentAttendance() {
         <TabsContent value="report" className="space-y-4 mt-4">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 bg-card rounded-lg border p-4">
             <div className="space-y-1">
-              <Label>Class</Label>
+              <Label>{t('attendance.class', { defaultValue: 'Class' })}</Label>
               <Select value={reportClassId} onValueChange={v => { setReportClassId(v); setReportFetch(false); }}>
-                <SelectTrigger><SelectValue placeholder="Select class" /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder={t('attendance.selectClass', { defaultValue: 'Select class' })} /></SelectTrigger>
                 <SelectContent>
                   {classes.map(c => (
                     <SelectItem key={c.id} value={c.id}>
@@ -231,18 +233,18 @@ export default function StudentAttendance() {
               </Select>
             </div>
             <div className="space-y-1">
-              <Label>From Date</Label>
+              <Label>{t('attendance.fromDate', { defaultValue: 'From Date' })}</Label>
               <input type="date" value={reportStart} onChange={e => { setReportStart(e.target.value); setReportFetch(false); }}
                 className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm" />
             </div>
             <div className="space-y-1">
-              <Label>To Date</Label>
+              <Label>{t('attendance.toDate', { defaultValue: 'To Date' })}</Label>
               <input type="date" value={reportEnd} onChange={e => { setReportEnd(e.target.value); setReportFetch(false); }}
                 className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm" />
             </div>
             <div className="flex items-end">
               <Button onClick={() => setReportFetch(true)} disabled={!reportClassId || !reportStart || !reportEnd}>
-                <BarChart2 className="h-4 w-4 mr-1" /> Generate
+                <BarChart2 className="h-4 w-4 mr-1" /> {t('attendance.generate', { defaultValue: 'Generate' })}
               </Button>
             </div>
           </div>
@@ -252,20 +254,20 @@ export default function StudentAttendance() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Roll No</TableHead>
-                    <TableHead>Student Name</TableHead>
-                    <TableHead className="text-center">Present</TableHead>
-                    <TableHead className="text-center">Absent</TableHead>
-                    <TableHead className="text-center">Late</TableHead>
-                    <TableHead className="text-center">Excused</TableHead>
+                    <TableHead>{t('attendance.rollNo', { defaultValue: 'Roll No' })}</TableHead>
+                    <TableHead>{t('attendance.studentName', { defaultValue: 'Student Name' })}</TableHead>
+                    <TableHead className="text-center">{t('attendance.present', { defaultValue: 'Present' })}</TableHead>
+                    <TableHead className="text-center">{t('attendance.absent', { defaultValue: 'Absent' })}</TableHead>
+                    <TableHead className="text-center">{t('attendance.late', { defaultValue: 'Late' })}</TableHead>
+                    <TableHead className="text-center">{t('attendance.excused', { defaultValue: 'Excused' })}</TableHead>
                     <TableHead className="text-center">%</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {reportLoading ? (
-                    <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Loading…</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">{t('attendance.loading', { defaultValue: 'Loading…' })}</TableCell></TableRow>
                   ) : reportData.length === 0 ? (
-                    <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">No records found</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">{t('attendance.noRecords', { defaultValue: 'No records found' })}</TableCell></TableRow>
                   ) : reportData.map(r => {
                     const total = r.present + r.absent + r.late + r.excused;
                     const pct = total > 0 ? Math.round(((r.present + r.late) / total) * 100) : 0;

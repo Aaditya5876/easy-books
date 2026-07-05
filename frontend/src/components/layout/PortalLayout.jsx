@@ -6,15 +6,16 @@ import {
   ClipboardList, Megaphone, Clock, LogOut, BookOpen,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useTranslation } from 'react-i18next';
 
 const NAV = [
-  { icon: LayoutDashboard, label: 'Home',       path: '/portal',            color: '#3B82F6' },
-  { icon: CalendarCheck,   label: 'Attendance', path: '/portal/attendance', color: '#10B981' },
-  { icon: DollarSign,      label: 'Fees',       path: '/portal/fees',       color: '#F59E0B' },
-  { icon: Trophy,          label: 'Results',    path: '/portal/results',    color: '#8B5CF6' },
-  { icon: ClipboardList,   label: 'Homework',   path: '/portal/homework',   color: '#F97316' },
-  { icon: Megaphone,       label: 'Notices',    path: '/portal/notices',    color: '#F43F5E' },
-  { icon: Clock,           label: 'Timetable',  path: '/portal/timetable',  color: '#14B8A6' },
+  { icon: LayoutDashboard, label: 'Home',       labelKey: 'portal.home',       path: '/portal',            color: '#3B82F6' },
+  { icon: CalendarCheck,   label: 'Attendance', labelKey: 'portal.attendance', path: '/portal/attendance', color: '#10B981' },
+  { icon: DollarSign,      label: 'Fees',       labelKey: 'portal.fees',       path: '/portal/fees',       color: '#F59E0B' },
+  { icon: Trophy,          label: 'Results',    labelKey: 'portal.results',    path: '/portal/results',    color: '#8B5CF6' },
+  { icon: ClipboardList,   label: 'Homework',   labelKey: 'portal.homework',   path: '/portal/homework',   color: '#F97316' },
+  { icon: Megaphone,       label: 'Notices',    labelKey: 'portal.notices',    path: '/portal/notices',    color: '#F43F5E' },
+  { icon: Clock,           label: 'Timetable',  labelKey: 'portal.timetable',  path: '/portal/timetable',  color: '#14B8A6' },
 ];
 
 function isActive(item, pathname) {
@@ -24,6 +25,7 @@ function isActive(item, pathname) {
 }
 
 export default function PortalLayout() {
+  const { t } = useTranslation();
   const navigate  = useNavigate();
   const location  = useLocation();
   const [student, setStudent]     = useState(null);
@@ -61,7 +63,9 @@ export default function PortalLayout() {
           <div>
             <p className="text-sm font-bold text-white leading-none">EasyBooks</p>
             <p className="text-[10px] text-slate-400 mt-0.5">
-              {portalType === 'STUDENT' ? 'Student Portal' : 'Parent Portal'}
+              {portalType === 'STUDENT'
+                ? t('portal.studentPortal', { defaultValue: 'Student Portal' })
+                : t('portal.parentPortal', { defaultValue: 'Parent Portal' })}
             </p>
           </div>
         </div>
@@ -86,7 +90,7 @@ export default function PortalLayout() {
                   </p>
                 )}
                 {student.rollNumber && (
-                  <p className="text-xs text-slate-500">Roll {student.rollNumber}</p>
+                  <p className="text-xs text-slate-500">{t('portal.roll', { defaultValue: 'Roll {{roll}}', roll: student.rollNumber })}</p>
                 )}
               </div>
             </div>
@@ -117,7 +121,7 @@ export default function PortalLayout() {
                     className="w-4 h-4 shrink-0 transition-colors"
                     style={active ? { color: item.color } : {}}
                   />
-                  <span>{item.label}</span>
+                  <span>{t(item.labelKey, { defaultValue: item.label })}</span>
                   {active && (
                     <motion.div
                       layoutId="sidebar-indicator"
@@ -138,7 +142,7 @@ export default function PortalLayout() {
             className="flex items-center gap-2 w-full px-3 py-2.5 rounded-xl text-sm text-slate-400 hover:bg-red-500/10 hover:text-red-400 transition-colors"
           >
             <LogOut className="w-4 h-4" />
-            Sign Out
+            {t('portal.signOut', { defaultValue: 'Sign Out' })}
           </button>
         </div>
       </aside>
@@ -185,7 +189,7 @@ export default function PortalLayout() {
                   className="text-[9px] font-medium transition-colors leading-none"
                   style={active ? { color: item.color } : { color: '#94A3B8' }}
                 >
-                  {item.label}
+                  {t(item.labelKey, { defaultValue: item.label })}
                 </span>
               </Link>
             );

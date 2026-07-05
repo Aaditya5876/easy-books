@@ -3,16 +3,19 @@ import { motion } from 'framer-motion';
 import { portalApi } from '@/api';
 import { Megaphone } from 'lucide-react';
 import { pageVariants, containerVariants, itemVariants } from '@/lib/portalAnimations';
+import { useTranslation } from 'react-i18next';
 
 const AUDIENCE_LABELS = { ALL: 'Everyone', TEACHERS: 'Teachers', STUDENTS: 'Students', PARENTS: 'Parents' };
+const AUDIENCE_KEYS   = { ALL: 'portal.everyone', TEACHERS: 'portal.teachers', STUDENTS: 'portal.students', PARENTS: 'portal.parents' };
 
 const PRIORITY_CONFIG = {
-  HIGH:   { label: 'Important', color: '#F43F5E', bg: '#FFF1F2', bar: '#F43F5E' },
-  MEDIUM: { label: 'Notice',    color: '#F59E0B', bg: '#FFFBEB', bar: '#F59E0B' },
-  LOW:    { label: 'Info',      color: '#64748B', bg: '#F8FAFC', bar: '#CBD5E1' },
+  HIGH:   { label: 'Important', labelKey: 'portal.important', color: '#F43F5E', bg: '#FFF1F2', bar: '#F43F5E' },
+  MEDIUM: { label: 'Notice',    labelKey: 'portal.notice',    color: '#F59E0B', bg: '#FFFBEB', bar: '#F59E0B' },
+  LOW:    { label: 'Info',      labelKey: 'portal.info',      color: '#64748B', bg: '#F8FAFC', bar: '#CBD5E1' },
 };
 
 export default function PortalNotices() {
+  const { t } = useTranslation();
   const { data: notices = [], isLoading } = useQuery({
     queryKey: ['portal-notices'],
     queryFn: () => portalApi.notices().then(r => r.data),
@@ -23,20 +26,20 @@ export default function PortalNotices() {
   return (
     <motion.div variants={pageVariants} initial="initial" animate="animate" exit="exit" className="p-5 md:p-7 space-y-4 max-w-2xl">
       <div className="flex items-center gap-3">
-        <h1 className="text-2xl font-bold text-slate-900">School Notices</h1>
+        <h1 className="text-2xl font-bold text-slate-900">{t('portal.schoolNotices', { defaultValue: 'School Notices' })}</h1>
         {notices.length > 0 && (
           <span className="text-xs font-semibold px-2.5 py-1 bg-blue-100 text-blue-700 rounded-full">
-            {notices.length} notices
+            {t('portal.nNotices', { defaultValue: '{{count}} notices', count: notices.length })}
           </span>
         )}
       </div>
 
       {isLoading ? (
-        <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center text-slate-400 text-sm">Loading…</div>
+        <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center text-slate-400 text-sm">{t('portal.loading', { defaultValue: 'Loading…' })}</div>
       ) : notices.length === 0 ? (
         <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center">
           <Megaphone className="w-10 h-10 text-slate-200 mx-auto mb-3" />
-          <p className="text-slate-400 text-sm">No notices yet</p>
+          <p className="text-slate-400 text-sm">{t('portal.noNotices', { defaultValue: 'No notices yet' })}</p>
         </div>
       ) : (
         <motion.div variants={containerVariants} initial="initial" animate="animate" className="space-y-3">
@@ -64,12 +67,14 @@ export default function PortalNotices() {
                               className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide"
                               style={{ background: cfg.bg, color: cfg.color }}
                             >
-                              {cfg.label}
+                              {cfg.labelKey ? t(cfg.labelKey, { defaultValue: cfg.label }) : cfg.label}
                             </span>
                           )}
                           {n.targetAudience && n.targetAudience !== 'ALL' && (
                             <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-blue-50 text-blue-600">
-                              {AUDIENCE_LABELS[n.targetAudience] || n.targetAudience}
+                              {AUDIENCE_LABELS[n.targetAudience]
+                                ? t(AUDIENCE_KEYS[n.targetAudience], { defaultValue: AUDIENCE_LABELS[n.targetAudience] })
+                                : n.targetAudience}
                             </span>
                           )}
                         </div>

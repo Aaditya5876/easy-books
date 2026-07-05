@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import { timetableApi, classesApi, subjectsApi } from '@/api';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -14,12 +15,14 @@ import { Clock, Plus, X } from 'lucide-react';
 import { toast } from 'sonner';
 
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+const DAY_KEYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
 const WORK_DAYS = [0, 1, 2, 3, 4, 5]; // Sun–Fri for Nepal schools
 const PERIODS = [1, 2, 3, 4, 5, 6, 7, 8];
 
 const companyId = () => localStorage.getItem('easybooks_active_company') || '';
 
 function PeriodDialog({ open, onClose, entry, classId }) {
+  const { t } = useTranslation();
   const qc = useQueryClient();
   const [form, setForm] = useState({
     dayOfWeek: entry?.dayOfWeek ?? 1,
@@ -39,10 +42,10 @@ function PeriodDialog({ open, onClose, entry, classId }) {
     mutationFn: (d) => timetableApi.upsert({ ...d, companyId: companyId(), classId }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['timetable', classId] });
-      toast.success('Period saved');
+      toast.success(t('timetable.periodSaved', { defaultValue: 'Period saved' }));
       onClose();
     },
-    onError: (e) => toast.error(e.response?.data?.message || 'Failed to save'),
+    onError: (e) => toast.error(e.response?.data?.message || t('timetable.failedToSave', { defaultValue: 'Failed to save' })),
   });
 
   const handleSubmit = (e) => {
@@ -59,56 +62,56 @@ function PeriodDialog({ open, onClose, entry, classId }) {
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>Set Period</DialogTitle>
+          <DialogTitle>{t('timetable.setPeriod', { defaultValue: 'Set Period' })}</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
-              <Label>Day</Label>
+              <Label>{t('timetable.day', { defaultValue: 'Day' })}</Label>
               <Select value={String(form.dayOfWeek)} onValueChange={v => setForm(p => ({ ...p, dayOfWeek: Number(v) }))}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {WORK_DAYS.map(d => <SelectItem key={d} value={String(d)}>{DAYS[d]}</SelectItem>)}
+                  {WORK_DAYS.map(d => <SelectItem key={d} value={String(d)}>{t(`timetable.${DAY_KEYS[d]}`, { defaultValue: DAYS[d] })}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
             <div className="space-y-1">
-              <Label>Period #</Label>
+              <Label>{t('timetable.periodNumber', { defaultValue: 'Period #' })}</Label>
               <Select value={String(form.periodNumber)} onValueChange={v => setForm(p => ({ ...p, periodNumber: Number(v) }))}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {PERIODS.map(p => <SelectItem key={p} value={String(p)}>Period {p}</SelectItem>)}
+                  {PERIODS.map(p => <SelectItem key={p} value={String(p)}>{t('timetable.periodOption', { number: p, defaultValue: 'Period {{number}}' })}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
           </div>
           <div className="space-y-1">
-            <Label>Subject</Label>
+            <Label>{t('timetable.subject', { defaultValue: 'Subject' })}</Label>
             <Select value={form.subjectId || 'FREE'} onValueChange={v => setForm(p => ({ ...p, subjectId: v === 'FREE' ? '' : v }))}>
-              <SelectTrigger><SelectValue placeholder="Select subject" /></SelectTrigger>
+              <SelectTrigger><SelectValue placeholder={t('timetable.selectSubject', { defaultValue: 'Select subject' })} /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="FREE">— Free / Break —</SelectItem>
+                <SelectItem value="FREE">{t('timetable.freeBreak', { defaultValue: '— Free / Break —' })}</SelectItem>
                 {subjects.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
-              <Label>Start Time</Label>
+              <Label>{t('timetable.startTime', { defaultValue: 'Start Time' })}</Label>
               <Input type="time" value={form.startTime} onChange={e => setForm(p => ({ ...p, startTime: e.target.value }))} />
             </div>
             <div className="space-y-1">
-              <Label>End Time</Label>
+              <Label>{t('timetable.endTime', { defaultValue: 'End Time' })}</Label>
               <Input type="time" value={form.endTime} onChange={e => setForm(p => ({ ...p, endTime: e.target.value }))} />
             </div>
           </div>
           <div className="space-y-1">
-            <Label>Room</Label>
-            <Input value={form.roomNumber} onChange={e => setForm(p => ({ ...p, roomNumber: e.target.value }))} placeholder="e.g. Room 201" />
+            <Label>{t('timetable.room', { defaultValue: 'Room' })}</Label>
+            <Input value={form.roomNumber} onChange={e => setForm(p => ({ ...p, roomNumber: e.target.value }))} placeholder={t('timetable.roomPlaceholder', { defaultValue: 'e.g. Room 201' })} />
           </div>
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
-            <Button type="submit" disabled={save.isPending}>{save.isPending ? 'Saving…' : 'Save'}</Button>
+            <Button type="button" variant="outline" onClick={onClose}>{t('timetable.cancel', { defaultValue: 'Cancel' })}</Button>
+            <Button type="submit" disabled={save.isPending}>{save.isPending ? t('timetable.saving', { defaultValue: 'Saving…' }) : t('timetable.save', { defaultValue: 'Save' })}</Button>
           </DialogFooter>
         </form>
       </DialogContent>
@@ -117,6 +120,7 @@ function PeriodDialog({ open, onClose, entry, classId }) {
 }
 
 export default function Timetable() {
+  const { t } = useTranslation();
   const qc = useQueryClient();
   const [classId, setClassId] = useState('');
   const [dialog, setDialog] = useState({ open: false, entry: null });
@@ -134,8 +138,8 @@ export default function Timetable() {
 
   const remove = useMutation({
     mutationFn: (id) => timetableApi.remove(id),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['timetable', classId] }); toast.success('Period cleared'); },
-    onError: (e) => toast.error(e.response?.data?.message || 'Failed to clear period'),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['timetable', classId] }); toast.success(t('timetable.periodCleared', { defaultValue: 'Period cleared' })); },
+    onError: (e) => toast.error(e.response?.data?.message || t('timetable.failedToClearPeriod', { defaultValue: 'Failed to clear period' })),
   });
 
   // Build grid: day → period → entry
@@ -149,14 +153,14 @@ export default function Timetable() {
     <div className="p-6 space-y-6">
       <div className="flex items-center gap-2">
         <Clock className="h-6 w-6 text-primary" />
-        <h1 className="text-2xl font-bold">Class Timetable</h1>
+        <h1 className="text-2xl font-bold">{t('timetable.title', { defaultValue: 'Class Timetable' })}</h1>
       </div>
 
       <div className="flex items-center gap-4 bg-card rounded-lg border p-4">
         <div className="space-y-1 w-64">
-          <Label>Select Class</Label>
+          <Label>{t('timetable.selectClass', { defaultValue: 'Select Class' })}</Label>
           <Select value={classId} onValueChange={setClassId}>
-            <SelectTrigger><SelectValue placeholder="Choose a class…" /></SelectTrigger>
+            <SelectTrigger><SelectValue placeholder={t('timetable.chooseAClass', { defaultValue: 'Choose a class…' })} /></SelectTrigger>
             <SelectContent>
               {classes.map(c => (
                 <SelectItem key={c.id} value={c.id}>
@@ -168,7 +172,7 @@ export default function Timetable() {
         </div>
         {classId && (
           <Button className="mt-5" onClick={() => setDialog({ open: true, entry: null })}>
-            <Plus className="h-4 w-4 mr-1" /> Add Period
+            <Plus className="h-4 w-4 mr-1" /> {t('timetable.addPeriod', { defaultValue: 'Add Period' })}
           </Button>
         )}
       </div>
@@ -178,23 +182,23 @@ export default function Timetable() {
           <table className="w-full border-collapse text-sm">
             <thead>
               <tr>
-                <th className="border bg-muted px-3 py-2 text-left w-24">Period</th>
+                <th className="border bg-muted px-3 py-2 text-left w-24">{t('timetable.period', { defaultValue: 'Period' })}</th>
                 {WORK_DAYS.map(d => (
-                  <th key={d} className="border bg-muted px-3 py-2 text-center font-semibold">{DAYS[d]}</th>
+                  <th key={d} className="border bg-muted px-3 py-2 text-center font-semibold">{t(`timetable.${DAY_KEYS[d]}`, { defaultValue: DAYS[d] })}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {PERIODS.map(p => (
                 <tr key={p}>
-                  <td className="border bg-muted/50 px-3 py-2 font-medium text-center">P{p}</td>
+                  <td className="border bg-muted/50 px-3 py-2 font-medium text-center">{t('timetable.periodAbbrev', { number: p, defaultValue: 'P{{number}}' })}</td>
                   {WORK_DAYS.map(d => {
                     const e = grid[d]?.[p];
                     return (
                       <td key={d} className="border px-2 py-2 min-w-[120px] align-top">
                         {e ? (
                           <div className="bg-primary/10 rounded p-1.5 relative group">
-                            <div className="font-semibold text-primary text-xs">{e.subject?.name || 'Free'}</div>
+                            <div className="font-semibold text-primary text-xs">{e.subject?.name || t('timetable.free', { defaultValue: 'Free' })}</div>
                             <div className="text-xs text-muted-foreground">{e.startTime}–{e.endTime}</div>
                             {e.roomNumber && <div className="text-xs text-muted-foreground">{e.roomNumber}</div>}
                             <button
@@ -209,7 +213,7 @@ export default function Timetable() {
                             onClick={() => setDialog({ open: true, entry: { dayOfWeek: d, periodNumber: p } })}
                             className="w-full h-10 text-muted-foreground/40 hover:text-primary hover:bg-primary/5 rounded transition-colors text-xs"
                           >
-                            + Add
+                            {t('timetable.addCell', { defaultValue: '+ Add' })}
                           </button>
                         )}
                       </td>
@@ -224,7 +228,7 @@ export default function Timetable() {
 
       {!classId && (
         <div className="text-center py-20 text-muted-foreground">
-          Select a class to view or edit its timetable
+          {t('timetable.selectClassPrompt', { defaultValue: 'Select a class to view or edit its timetable' })}
         </div>
       )}
 

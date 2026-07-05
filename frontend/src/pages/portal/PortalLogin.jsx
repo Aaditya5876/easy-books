@@ -4,8 +4,10 @@ import { motion } from 'framer-motion';
 import { portalApi } from '@/api';
 import { toast } from 'sonner';
 import { BookOpen, Eye, EyeOff, Loader2 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 export default function PortalLogin() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const [form, setForm]       = useState({ phone: '', password: '', companyId: params.get('company') || '' });
@@ -19,9 +21,9 @@ export default function PortalLogin() {
 
   async function handleSubmit(e) {
     e.preventDefault();
-    if (!form.phone.trim())    { toast.error('Phone number is required'); return; }
-    if (!form.password)        { toast.error('Password is required'); return; }
-    if (!form.companyId.trim()) { toast.error('School ID is required'); return; }
+    if (!form.phone.trim())    { toast.error(t('portal.phoneRequired', { defaultValue: 'Phone number is required' })); return; }
+    if (!form.password)        { toast.error(t('portal.passwordRequired', { defaultValue: 'Password is required' })); return; }
+    if (!form.companyId.trim()) { toast.error(t('portal.schoolIdRequired', { defaultValue: 'School ID is required' })); return; }
     setLoading(true);
     try {
       const res = await portalApi.login(form);
@@ -30,7 +32,7 @@ export default function PortalLogin() {
       localStorage.setItem('portal_type',    res.data.portalType);
       navigate('/portal', { replace: true });
     } catch (err) {
-      toast.error(err?.response?.data?.message || 'Login failed. Check your details.');
+      toast.error(err?.response?.data?.message || t('portal.loginFailed', { defaultValue: 'Login failed. Check your details.' }));
     } finally {
       setLoading(false);
     }
@@ -82,7 +84,7 @@ export default function PortalLogin() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.35, duration: 0.4 }}
           >
-            Student / Parent Portal
+            {t('portal.studentParentPortal', { defaultValue: 'Student / Parent Portal' })}
           </motion.h1>
           <motion.p
             className="text-sm text-slate-400 mt-1"
@@ -90,7 +92,7 @@ export default function PortalLogin() {
             animate={{ opacity: 1 }}
             transition={{ delay: 0.45 }}
           >
-            Sign in to view your academic details
+            {t('portal.signInSubtitle', { defaultValue: 'Sign in to view your academic details' })}
           </motion.p>
         </div>
 
@@ -99,7 +101,7 @@ export default function PortalLogin() {
           <form onSubmit={handleSubmit} className="space-y-5">
 
             <div className="space-y-1.5">
-              <label className="block text-sm font-semibold text-slate-700">Phone Number</label>
+              <label className="block text-sm font-semibold text-slate-700">{t('portal.phoneNumber', { defaultValue: 'Phone Number' })}</label>
               <input
                 type="tel"
                 placeholder="98XXXXXXXX"
@@ -111,11 +113,11 @@ export default function PortalLogin() {
             </div>
 
             <div className="space-y-1.5">
-              <label className="block text-sm font-semibold text-slate-700">Password</label>
+              <label className="block text-sm font-semibold text-slate-700">{t('portal.password', { defaultValue: 'Password' })}</label>
               <div className="relative">
                 <input
                   type={showPw ? 'text' : 'password'}
-                  placeholder="Enter your password"
+                  placeholder={t('portal.passwordPlaceholder', { defaultValue: 'Enter your password' })}
                   value={form.password}
                   onChange={e => set('password', e.target.value)}
                   autoComplete="current-password"
@@ -132,14 +134,14 @@ export default function PortalLogin() {
             </div>
 
             <div className="space-y-1.5">
-              <label className="block text-sm font-semibold text-slate-700">School ID</label>
+              <label className="block text-sm font-semibold text-slate-700">{t('portal.schoolId', { defaultValue: 'School ID' })}</label>
               <input
-                placeholder="Provided by your school admin"
+                placeholder={t('portal.schoolIdPlaceholder', { defaultValue: 'Provided by your school admin' })}
                 value={form.companyId}
                 onChange={e => set('companyId', e.target.value)}
                 className="w-full h-12 px-4 rounded-xl border border-slate-200 text-slate-900 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all bg-slate-50"
               />
-              <p className="text-xs text-slate-400">Ask your school administrator for this ID</p>
+              <p className="text-xs text-slate-400">{t('portal.schoolIdHint', { defaultValue: 'Ask your school administrator for this ID' })}</p>
             </div>
 
             <motion.button
@@ -149,13 +151,15 @@ export default function PortalLogin() {
               className="w-full h-12 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold transition-colors flex items-center justify-center gap-2 shadow-lg shadow-blue-600/25 disabled:opacity-70 disabled:cursor-not-allowed mt-2"
             >
               {loading && <Loader2 className="w-4 h-4 animate-spin" />}
-              {loading ? 'Signing in…' : 'Sign In'}
+              {loading
+                ? t('portal.signingIn', { defaultValue: 'Signing in…' })
+                : t('portal.signIn', { defaultValue: 'Sign In' })}
             </motion.button>
           </form>
         </div>
 
         <p className="text-center text-xs text-slate-600 mt-6">
-          EasyBooks School Management · Nepal
+          {t('portal.footerTagline', { defaultValue: 'EasyBooks School Management · Nepal' })}
         </p>
       </motion.div>
     </div>

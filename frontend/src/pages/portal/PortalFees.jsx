@@ -5,12 +5,13 @@ import { portalApi } from '@/api';
 import { DollarSign, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { pageVariants, containerVariants, cardVariants, itemVariants } from '@/lib/portalAnimations';
+import { useTranslation } from 'react-i18next';
 
 const STATUS_CONFIG = {
-  PAID:    { label: 'Paid',    color: '#10B981', bg: '#F0FDF4' },
-  PARTIAL: { label: 'Partial', color: '#F59E0B', bg: '#FFFBEB' },
-  PENDING: { label: 'Pending', color: '#F43F5E', bg: '#FFF1F2' },
-  WAIVED:  { label: 'Waived',  color: '#94A3B8', bg: '#F8FAFC' },
+  PAID:    { label: 'Paid',    labelKey: 'portal.paid',    color: '#10B981', bg: '#F0FDF4' },
+  PARTIAL: { label: 'Partial', labelKey: 'portal.partial', color: '#F59E0B', bg: '#FFFBEB' },
+  PENDING: { label: 'Pending', labelKey: 'portal.pending', color: '#F43F5E', bg: '#FFF1F2' },
+  WAIVED:  { label: 'Waived',  labelKey: 'portal.waived',  color: '#94A3B8', bg: '#F8FAFC' },
 };
 
 function submitEsewaForm(paymentUrl, formFields) {
@@ -29,6 +30,7 @@ function submitEsewaForm(paymentUrl, formFields) {
 }
 
 export default function PortalFees() {
+  const { t } = useTranslation();
   const [payingId, setPayingId] = useState(null);
 
   const { data: fees = [], isLoading } = useQuery({
@@ -45,7 +47,7 @@ export default function PortalFees() {
       const res = await portalApi.initiateEsewa(invoiceId);
       submitEsewaForm(res.data.paymentUrl, res.data.formFields);
     } catch (e) {
-      toast.error(e?.response?.data?.message || 'Could not initiate eSewa payment');
+      toast.error(e?.response?.data?.message || t('portal.esewaInitError', { defaultValue: 'Could not initiate eSewa payment' }));
       setPayingId(null);
     }
   }
@@ -56,21 +58,21 @@ export default function PortalFees() {
       const res = await portalApi.initiateKhalti(invoiceId);
       window.location.href = res.data.paymentUrl;
     } catch (e) {
-      toast.error(e?.response?.data?.message || 'Could not initiate Khalti payment');
+      toast.error(e?.response?.data?.message || t('portal.khaltiInitError', { defaultValue: 'Could not initiate Khalti payment' }));
       setPayingId(null);
     }
   }
 
   return (
     <motion.div variants={pageVariants} initial="initial" animate="animate" exit="exit" className="p-5 md:p-7 space-y-5 max-w-2xl">
-      <h1 className="text-2xl font-bold text-slate-900">Fee Invoices</h1>
+      <h1 className="text-2xl font-bold text-slate-900">{t('portal.feeInvoices', { defaultValue: 'Fee Invoices' })}</h1>
 
       {fees.length > 0 && (
         <motion.div variants={containerVariants} initial="initial" animate="animate" className="grid grid-cols-3 gap-3">
           {[
-            { label: 'Total Invoices', value: fees.length,                                           color: '#64748B', bg: '#F8FAFC' },
-            { label: 'Paid',           value: fees.filter(f => f.status === 'PAID').length,          color: '#10B981', bg: '#F0FDF4' },
-            { label: 'Due',            value: fmtAmt(totalDue),                                      color: '#F59E0B', bg: '#FFFBEB' },
+            { label: t('portal.totalInvoices', { defaultValue: 'Total Invoices' }), value: fees.length,                                  color: '#64748B', bg: '#F8FAFC' },
+            { label: t('portal.paid', { defaultValue: 'Paid' }),                    value: fees.filter(f => f.status === 'PAID').length, color: '#10B981', bg: '#F0FDF4' },
+            { label: t('portal.due', { defaultValue: 'Due' }),                      value: fmtAmt(totalDue),                             color: '#F59E0B', bg: '#FFFBEB' },
           ].map(s => (
             <motion.div key={s.label} variants={cardVariants} className="rounded-2xl p-4 border" style={{ background: s.bg, borderColor: s.color + '30' }}>
               <p className="text-xl font-bold truncate" style={{ color: s.color }}>{s.value}</p>
@@ -82,11 +84,11 @@ export default function PortalFees() {
 
       <div className="space-y-3">
         {isLoading ? (
-          <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center text-slate-400 text-sm">Loading…</div>
+          <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center text-slate-400 text-sm">{t('portal.loading', { defaultValue: 'Loading…' })}</div>
         ) : fees.length === 0 ? (
           <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center">
             <DollarSign className="w-10 h-10 text-slate-200 mx-auto mb-3" />
-            <p className="text-slate-400 text-sm">No fee invoices yet</p>
+            <p className="text-slate-400 text-sm">{t('portal.noFeeInvoices', { defaultValue: 'No fee invoices yet' })}</p>
           </div>
         ) : (
           <motion.div variants={containerVariants} initial="initial" animate="animate" className="space-y-3">
@@ -104,22 +106,22 @@ export default function PortalFees() {
                         {f.description && <p className="text-xs text-slate-400 mt-0.5">{f.description}</p>}
                       </div>
                       <span className="shrink-0 inline-flex px-2.5 py-1 rounded-full text-xs font-semibold" style={{ background: cfg.bg, color: cfg.color }}>
-                        {cfg.label}
+                        {cfg.labelKey ? t(cfg.labelKey, { defaultValue: cfg.label }) : cfg.label}
                       </span>
                     </div>
 
                     <div className="flex items-center gap-4 text-sm mb-3">
                       <div>
-                        <p className="text-xs text-slate-400">Total</p>
+                        <p className="text-xs text-slate-400">{t('portal.total', { defaultValue: 'Total' })}</p>
                         <p className="font-semibold text-slate-800 tabular-nums">{fmtAmt(f.totalAmount)}</p>
                       </div>
                       <div>
-                        <p className="text-xs text-slate-400">Paid</p>
+                        <p className="text-xs text-slate-400">{t('portal.paid', { defaultValue: 'Paid' })}</p>
                         <p className="font-semibold text-emerald-600 tabular-nums">{fmtAmt(f.paidAmount)}</p>
                       </div>
                       {due > 0 && (
                         <div>
-                          <p className="text-xs text-slate-400">Due</p>
+                          <p className="text-xs text-slate-400">{t('portal.due', { defaultValue: 'Due' })}</p>
                           <p className="font-bold text-amber-600 tabular-nums">{fmtAmt(due)}</p>
                         </div>
                       )}
@@ -135,7 +137,7 @@ export default function PortalFees() {
                           style={{ background: '#60BB46' }}
                         >
                           {payingId === `${f.id}-esewa` && <Loader2 className="w-3 h-3 animate-spin" />}
-                          Pay with eSewa
+                          {t('portal.payWithEsewa', { defaultValue: 'Pay with eSewa' })}
                         </motion.button>
                         <motion.button
                           whileTap={{ scale: 0.96 }}
@@ -145,7 +147,7 @@ export default function PortalFees() {
                           style={{ background: '#5C2D91' }}
                         >
                           {payingId === `${f.id}-khalti` && <Loader2 className="w-3 h-3 animate-spin" />}
-                          Pay with Khalti
+                          {t('portal.payWithKhalti', { defaultValue: 'Pay with Khalti' })}
                         </motion.button>
                       </div>
                     )}

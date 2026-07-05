@@ -11,6 +11,7 @@ import {
   FolderOpen, Library, Home, Bus
 } from 'lucide-react';
 import { cn } from "@/lib/utils";
+import { useTranslation } from 'react-i18next';
 import { useRole } from "@/lib/useRole";
 import { usePreferences, isColorDark } from '@/lib/PreferencesContext';
 import { useAuth } from '@/lib/AuthContext';
@@ -182,6 +183,8 @@ const schoolNavSections = [
 
 export default function SidebarNav({ collapsed, onToggle }) {
   const location = useLocation();
+  const { t } = useTranslation();
+  const nt = (label) => t(`nav.${label}`, { defaultValue: label });
   const { isAdmin, canViewPayroll, isTeacher, isLibrarian, role } = useRole();
   const { prefs } = usePreferences();
   const { user } = useAuth();
@@ -270,7 +273,7 @@ export default function SidebarNav({ collapsed, onToggle }) {
               >
                 <span className="flex items-center gap-1.5">
                   {section.minRole === 'admin' && <Shield className="w-2.5 h-2.5" />}
-                  {section.label}
+                  {nt(section.label)}
                 </span>
                 <ChevronDown className={cn(
                   "w-3 h-3 transition-transform",
@@ -297,11 +300,11 @@ export default function SidebarNav({ collapsed, onToggle }) {
                     >
                       <Icon className="w-4 h-4 shrink-0" />
                       {!collapsed && (
-                        <span className="truncate text-[13px] font-medium">{item.label}</span>
+                        <span className="truncate text-[13px] font-medium">{nt(item.label)}</span>
                       )}
                       {collapsed && (
                         <div className="absolute left-full ml-2 px-2 py-1 bg-foreground text-background text-xs rounded opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all whitespace-nowrap z-50">
-                          {item.label}
+                          {nt(item.label)}
                         </div>
                       )}
                     </Link>
