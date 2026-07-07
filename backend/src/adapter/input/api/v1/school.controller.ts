@@ -3,6 +3,7 @@ import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger'
 import { Roles } from '../../../../modules/decorators/roles.decorator';
 import { SchoolService } from '../../../../application/services/school.service';
 import { SchoolAnalyticsService } from '../../../../application/services/school-analytics.service';
+import { SchoolFinanceService } from '../../../../application/services/school-finance.service';
 
 @ApiTags('School')
 @ApiBearerAuth()
@@ -12,6 +13,7 @@ export class SchoolController {
   constructor(
     private readonly service: SchoolService,
     private readonly analytics: SchoolAnalyticsService,
+    private readonly finance: SchoolFinanceService,
   ) {}
 
   // ── Dashboard ────────────────────────────────────────────────────────────────
@@ -118,8 +120,25 @@ export class SchoolController {
   @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'TEACHER', 'LIBRARIAN')
   @ApiQuery({ name: 'companyId', required: true })
   @ApiQuery({ name: 'classId', required: false })
-  listStudents(@Query('companyId') companyId: string, @Query('classId') classId?: string) {
-    return this.service.listStudents(companyId, classId);
+  @ApiQuery({ name: 'search', required: false, description: 'Search by name or roll number — used by search-as-you-type pickers' })
+  @ApiQuery({ name: 'status', required: false })
+  @ApiQuery({ name: 'page', required: false })
+  @ApiQuery({ name: 'pageSize', required: false })
+  listStudents(
+    @Query('companyId') companyId: string,
+    @Query('classId') classId?: string,
+    @Query('search') search?: string,
+    @Query('status') status?: string,
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
+  ) {
+    return this.service.listStudents(companyId, {
+      classId,
+      search,
+      status,
+      page: page ? parseInt(page, 10) : undefined,
+      pageSize: pageSize ? parseInt(pageSize, 10) : undefined,
+    });
   }
 
   @Get('students/:id')
@@ -256,12 +275,25 @@ export class SchoolController {
   @ApiQuery({ name: 'companyId', required: true })
   @ApiQuery({ name: 'status', required: false })
   @ApiQuery({ name: 'studentId', required: false })
+  @ApiQuery({ name: 'search', required: false, description: 'Search by student name or roll number' })
+  @ApiQuery({ name: 'page', required: false })
+  @ApiQuery({ name: 'pageSize', required: false })
   listFeeInvoices(
     @Query('companyId') companyId: string,
     @Query('status') status?: string,
     @Query('studentId') studentId?: string,
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
+    @Query('search') search?: string,
   ) {
-    return this.service.listFeeInvoices(companyId, status, studentId);
+    return this.service.listFeeInvoices(
+      companyId,
+      status,
+      studentId,
+      page ? parseInt(page, 10) : undefined,
+      pageSize ? parseInt(pageSize, 10) : undefined,
+      search,
+    );
   }
 
   @Post('fee-invoices')
@@ -276,8 +308,124 @@ export class SchoolController {
   }
 
   @Patch('fee-invoices/:id/payment')
-  recordPayment(@Param('id') id: string, @Body() body: { amount: number; notes?: string }) {
-    return this.service.recordPayment(id, body.amount, body.notes);
+  @ApiQuery({ name: 'companyId', required: true })
+  recordPayment(
+    @Param('id') id: string,
+    @Query('companyId') companyId: string,
+    @Body() body: { amount: number; method?: string; notes?: string },
+  ) {
+    return this.finance.recordPayment(companyId, id, body);
+  }
+
+  @Get('fee-invoices/:id/payments')
+  @ApiQuery({ name: 'companyId', required: true })
+  listInvoicePayments(@Param('id') id: string, @Query('companyId') companyId: string) {
+    return this.finance.listPayments(companyId, id);
+  }
+
+  // ── Fee Heads ─────────────────────────────────────────────────────────────────
+
+  @Get('fee-heads')
+  @ApiQuery({ name: 'companyId', required: true })
+  listFeeHeads(@Query('companyId') companyId: string) {
+    return this.finance.listFeeHeads(companyId);
+  }
+
+  @Post('fee-heads')
+  @Roles('ADMIN', 'ACCOUNTANT')
+  createFeeHead(@Body() body: any) {
+    return this.finance.createFeeHead(body);
+  }
+
+  @Post('fee-heads/defaults')
+  @Roles('ADMIN', 'ACCOUNTANT')
+  createDefaultFeeHeads(@Body() body: { companyId: string }) {
+    return this.finance.createDefaultFeeHeads(body.companyId);
+  }
+
+  @Put('fee-heads/:id')
+  @Roles('ADMIN', 'ACCOUNTANT')
+  @ApiQuery({ name: 'companyId', required: true })
+  updateFeeHead(@Param('id') id: string, @Query('companyId') companyId: string, @Body() body: any) {
+    return this.finance.updateFeeHead(id, companyId, body);
+  }
+
+  @Delete('fee-heads/:id')
+  @Roles('ADMIN')
+  @ApiQuery({ name: 'companyId', required: true })
+  deleteFeeHead(@Param('id') id: string, @Query('companyId') companyId: string) {
+    return this.finance.deleteFeeHead(id, companyId);
+  }
+
+  // ── Student Fee Profile / Scholarships / Packages ────────────────────────────
+
+  @Get('students/:id/fee-profile')
+  @ApiQuery({ name: 'companyId', required: true })
+  getStudentFeeProfile(@Param('id') id: string, @Query('companyId') companyId: string) {
+    return this.finance.getStudentFeeProfile(companyId, id);
+  }
+
+  @Post('students/:id/scholarships')
+  @Roles('ADMIN', 'ACCOUNTANT')
+  @ApiQuery({ name: 'companyId', required: true })
+  addScholarship(@Param('id') id: string, @Query('companyId') companyId: string, @Body() body: any) {
+    return this.finance.addScholarship(companyId, id, body);
+  }
+
+  @Delete('scholarships/:id')
+  @Roles('ADMIN', 'ACCOUNTANT')
+  @ApiQuery({ name: 'companyId', required: true })
+  removeScholarship(@Param('id') id: string, @Query('companyId') companyId: string) {
+    return this.finance.removeScholarship(companyId, id);
+  }
+
+  @Get('fee-packages')
+  @ApiQuery({ name: 'companyId', required: true })
+  listFeePackages(@Query('companyId') companyId: string) {
+    return this.finance.listPackages(companyId);
+  }
+
+  @Post('fee-packages')
+  @Roles('ADMIN', 'ACCOUNTANT')
+  createFeePackage(@Body() body: any) {
+    return this.finance.createPackage(body);
+  }
+
+  @Put('fee-packages/:id')
+  @Roles('ADMIN', 'ACCOUNTANT')
+  @ApiQuery({ name: 'companyId', required: true })
+  updateFeePackage(@Param('id') id: string, @Query('companyId') companyId: string, @Body() body: any) {
+    return this.finance.updatePackage(id, companyId, body);
+  }
+
+  @Delete('fee-packages/:id')
+  @Roles('ADMIN')
+  @ApiQuery({ name: 'companyId', required: true })
+  deleteFeePackage(@Param('id') id: string, @Query('companyId') companyId: string) {
+    return this.finance.deletePackage(id, companyId);
+  }
+
+  @Patch('students/:id/package')
+  @Roles('ADMIN', 'ACCOUNTANT')
+  @ApiQuery({ name: 'companyId', required: true })
+  assignPackage(@Param('id') id: string, @Query('companyId') companyId: string, @Body() body: { packageId: string | null }) {
+    return this.finance.assignPackage(companyId, id, body.packageId ?? null);
+  }
+
+  // ── Billing Run ───────────────────────────────────────────────────────────────
+
+  @Post('billing-run')
+  @Roles('ADMIN', 'ACCOUNTANT')
+  billingRun(@Body() body: { companyId: string; month: string; classId?: string; dueDate?: string }) {
+    return this.finance.billingRun(body.companyId, body.month, body.classId, body.dueDate);
+  }
+
+  // ── School Ledger Setup ───────────────────────────────────────────────────────
+
+  @Post('setup-ledger')
+  @Roles('ADMIN')
+  setupSchoolLedger(@Body() body: { companyId: string }) {
+    return this.finance.setupSchoolLedger(body.companyId);
   }
 
   @Get('fee-invoices/:id/receipt')

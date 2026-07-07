@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, Trophy, Pencil, Trash2, FileText, Sparkles } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { examResultsApi, studentsApi, subjectsApi, aiApi } from '@/api';
+import { examResultsApi, subjectsApi, aiApi } from '@/api';
+import StudentCombobox from '@/components/shared/StudentCombobox';
 import { getActiveCompanyId } from '@/lib/companyContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -14,7 +15,7 @@ import { format } from 'date-fns';
 
 const EMPTY_FORM = { studentId: '', subjectId: '', examName: '', marksObtained: '', totalMarks: '', grade: '', remarks: '', examDate: '' };
 
-function ExamDialog({ open, onClose, initial, students, subjects, companyId }) {
+function ExamDialog({ open, onClose, initial, subjects, companyId }) {
   const { t } = useTranslation();
   const qc = useQueryClient();
   const isEdit = !!initial?.id;
@@ -52,10 +53,12 @@ function ExamDialog({ open, onClose, initial, students, subjects, companyId }) {
         <form onSubmit={handleSubmit} className="space-y-3 pt-2">
           <div className="space-y-1.5">
             <Label>{t('exams.studentRequired', { defaultValue: 'Student *' })}</Label>
-            <select className="w-full border rounded-md px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring" value={form.studentId} onChange={e => set('studentId', e.target.value)}>
-              <option value="">{t('exams.selectStudent', { defaultValue: 'Select student…' })}</option>
-              {students.map(s => <option key={s.id} value={s.id}>{s.name} {s.rollNumber ? `(${s.rollNumber})` : ''}</option>)}
-            </select>
+            <StudentCombobox
+              value={form.studentId}
+              onChange={id => set('studentId', id)}
+              status=""
+              placeholder={t('exams.selectStudent', { defaultValue: 'Select student…' })}
+            />
           </div>
           <div className="space-y-1.5">
             <Label>{t('exams.subject', { defaultValue: 'Subject' })}</Label>
@@ -170,7 +173,7 @@ function printReportCard(data) {
   setTimeout(() => w.print(), 300);
 }
 
-function ReportCardDialog({ open, onClose, students, examNames }) {
+function ReportCardDialog({ open, onClose, examNames }) {
   const { t } = useTranslation();
   const companyId = getActiveCompanyId();
   const [studentId, setStudentId] = useState('');
@@ -219,14 +222,12 @@ function ReportCardDialog({ open, onClose, students, examNames }) {
         <div className="space-y-4 pt-2">
           <div className="space-y-1">
             <Label>{t('exams.studentRequired', { defaultValue: 'Student *' })}</Label>
-            <select
-              className="w-full border rounded-md px-3 py-2 text-sm bg-background"
+            <StudentCombobox
               value={studentId}
-              onChange={e => { setStudentId(e.target.value); setFetching(false); }}
-            >
-              <option value="">{t('exams.selectStudent', { defaultValue: 'Select student…' })}</option>
-              {students.map(s => <option key={s.id} value={s.id}>{s.name} {s.rollNumber ? `(${s.rollNumber})` : ''}</option>)}
-            </select>
+              onChange={id => { setStudentId(id); setFetching(false); }}
+              status=""
+              placeholder={t('exams.selectStudent', { defaultValue: 'Select student…' })}
+            />
           </div>
           <div className="space-y-1">
             <Label>{t('exams.examRequired', { defaultValue: 'Exam *' })}</Label>
@@ -284,12 +285,6 @@ export default function Exams() {
   const [dialog, setDialog] = useState(null);
   const [reportCardDialog, setReportCardDialog] = useState(false);
   const [filterExam, setFilterExam] = useState('');
-
-  const { data: students = [] } = useQuery({
-    queryKey: ['students', companyId],
-    queryFn: () => studentsApi.list().then(r => r.data),
-    enabled: !!companyId,
-  });
 
   const { data: subjects = [] } = useQuery({
     queryKey: ['subjects', companyId],
@@ -415,7 +410,6 @@ export default function Exams() {
           open={!!dialog}
           onClose={() => setDialog(null)}
           initial={dialog.mode === 'edit' ? dialog.result : null}
-          students={students}
           subjects={subjects}
           companyId={companyId}
         />
@@ -425,7 +419,6 @@ export default function Exams() {
         <ReportCardDialog
           open={reportCardDialog}
           onClose={() => setReportCardDialog(false)}
-          students={students}
           examNames={examNames}
         />
       )}

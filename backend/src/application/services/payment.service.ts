@@ -1,5 +1,6 @@
 import { Injectable, BadRequestException, Logger } from '@nestjs/common';
 import { PrismaService } from '../../../core/db/psql/prisma.client';
+import { SchoolFinanceService } from './school-finance.service';
 import * as crypto from 'crypto';
 
 const ESEWA_TEST_URL = 'https://rc-epay.esewa.com.np/api/epay/main/v2/form';
@@ -11,7 +12,10 @@ const KHALTI_LIVE_BASE = 'https://khalti.com';
 export class PaymentService {
   private readonly logger = new Logger(PaymentService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly finance: SchoolFinanceService,
+  ) {}
 
   // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -172,17 +176,16 @@ export class PaymentService {
     const invoice = await this.prisma.feeInvoice.findFirst({ where: { id: invoiceId, companyId } });
     if (!invoice) throw new BadRequestException('Invoice not found');
 
-    const newPaid = Number(invoice.paidAmount) + amount;
-    const newStatus = newPaid >= Number(invoice.totalAmount) - 0.01 ? 'PAID' : 'PARTIAL';
+    // Clamp to remaining — gateway rounding must never overshoot the invoice
+    const remaining = Number(invoice.totalAmount) - Number(invoice.paidAmount);
+    const pay = Math.min(amount, remaining);
 
-    await this.prisma.feeInvoice.update({
-      where: { id: invoiceId },
-      data: {
-        paidAmount: newPaid,
-        status: newStatus,
-        notes: `${gateway} ref: ${ref}`,
-      },
+    // Same path as counter payments: receipt number + ledger auto-posting
+    const payment = await this.finance.recordPayment(companyId, invoiceId, {
+      amount: pay,
+      method: gateway,
+      notes: `${gateway} ref: ${ref}`,
     });
-    this.logger.log(`Invoice ${invoiceId} marked ${newStatus} via ${gateway} (ref: ${ref})`);
+    this.logger.log(`Invoice ${invoiceId} paid via ${gateway} — receipt ${payment.receiptNo} (ref: ${ref})`);
   }
 }

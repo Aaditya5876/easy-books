@@ -20,11 +20,15 @@ import { motion } from 'framer-motion';
 import FloatingAccountDetail from '../components/ledger/FloatingAccountDetail';
 import EmptyState from '../components/EmptyState';
 import { useRole } from '@/lib/useRole';
+import { useAuth } from '@/lib/AuthContext';
+import { schoolFinanceApi } from '@/api';
 import { useToast } from '@/components/ui/use-toast';
 
 export default function Ledger() {
   const companyId = getActiveCompanyId();
   const { isAdmin } = useRole();
+  const { user } = useAuth();
+  const isSchool = user?.defaultCompany?.businessType === 'SCHOOL';
   const { toast } = useToast();
   const [accounts, setAccounts] = useState([]);
   const [entries, setEntries] = useState([]);
@@ -238,12 +242,30 @@ export default function Ledger() {
     <div className="space-y-6 animate-fade-in">
       <PageHeader
         title="Ledger"
-        subtitle="Purchase, Sales & Expense Accounts"
+        subtitle={isSchool ? 'School income & expense accounts' : 'Purchase, Sales & Expense Accounts'}
         searchValue={search}
         onSearchChange={setSearch}
         onAdd={() => setShowNewAccount(true)}
         addLabel="New Account"
-      />
+      >
+        {isSchool && (
+          <Button
+            variant="outline"
+            className="gap-2"
+            onClick={async () => {
+              try {
+                const res = await schoolFinanceApi.setupLedger();
+                toast({ title: `School accounts ready — ${res.data.created} new accounts created` });
+                loadData();
+              } catch (e) {
+                toast({ title: e?.response?.data?.message || 'Failed to set up accounts', variant: 'destructive' });
+              }
+            }}
+          >
+            <BookOpen className="w-4 h-4" /> School Accounts Setup
+          </Button>
+        )}
+      </PageHeader>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="bg-secondary">
@@ -368,19 +390,21 @@ export default function Ledger() {
                 <Wallet className="w-3.5 h-3.5" /> Financial Details
               </p>
 
-              {/* PAN/VAT */}
-              <div>
-                <Label className="text-xs font-medium">PAN / VAT No.</Label>
-                <div className="relative mt-1">
-                  <Hash className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
-                  <Input
-                    className="pl-8 h-9 text-sm"
-                    placeholder="e.g. 123456789 (optional)"
-                    value={newAccount.pan_vat}
-                    onChange={e => setNewAccount({ ...newAccount, pan_vat: e.target.value })}
-                  />
+              {/* PAN/VAT — business companies only; schools don't deal in VAT-registered parties */}
+              {!isSchool && (
+                <div>
+                  <Label className="text-xs font-medium">PAN / VAT No.</Label>
+                  <div className="relative mt-1">
+                    <Hash className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                    <Input
+                      className="pl-8 h-9 text-sm"
+                      placeholder="e.g. 123456789 (optional)"
+                      value={newAccount.pan_vat}
+                      onChange={e => setNewAccount({ ...newAccount, pan_vat: e.target.value })}
+                    />
+                  </div>
                 </div>
-              </div>
+              )}
 
               {/* Address */}
               <div>

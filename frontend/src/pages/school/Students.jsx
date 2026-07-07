@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Search, Pencil, Trash2, GraduationCap, X, ArrowRight, KeyRound, Upload } from 'lucide-react';
+import { Plus, Search, Pencil, Trash2, GraduationCap, X, ArrowRight, KeyRound, Upload, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import BulkImportDialog from '@/components/shared/BulkImportDialog';
 import { STUDENT_FIELDS } from '@/components/shared/bulkImportFields';
@@ -280,16 +280,28 @@ function PromoteDialog({ open, onClose, classes, companyId }) {
   );
 }
 
+const PAGE_SIZE = 50;
+
 export default function Students() {
   const { t } = useTranslation();
   const companyId = getActiveCompanyId();
   const qc = useQueryClient();
+  const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
   const [filterClass, setFilterClass] = useState('');
+  const [page, setPage] = useState(1);
   const [dialog, setDialog] = useState(null);
   const [promoteDialog, setPromoteDialog] = useState(false);
   const [portalDialog, setPortalDialog] = useState(null);
   const [importOpen, setImportOpen] = useState(false);
+
+  // Debounce the search box so we don't hit the server on every keystroke
+  useEffect(() => {
+    const timer = setTimeout(() => setSearch(searchInput.trim()), 300);
+    return () => clearTimeout(timer);
+  }, [searchInput]);
+
+  useEffect(() => { setPage(1); }, [search, filterClass]);
 
   const { data: classes = [] } = useQuery({
     queryKey: ['classes', companyId],
@@ -297,11 +309,17 @@ export default function Students() {
     enabled: !!companyId,
   });
 
-  const { data: students = [], isLoading } = useQuery({
-    queryKey: ['students', companyId, filterClass],
-    queryFn: () => studentsApi.list(filterClass || undefined).then(r => r.data),
+  const { data, isLoading, isPlaceholderData } = useQuery({
+    queryKey: ['students', companyId, filterClass, search, page],
+    queryFn: () => studentsApi.list({ classId: filterClass || undefined, search: search || undefined, page, pageSize: PAGE_SIZE }).then(r => r.data),
     enabled: !!companyId,
+    placeholderData: (prev) => prev,
   });
+
+  // Server always paginates here (page is always set), so `data` is `{ data, total }`
+  const students = data?.data ?? [];
+  const total = data?.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   const remove = useMutation({
     mutationFn: (id) => studentsApi.remove(id),
@@ -313,11 +331,6 @@ export default function Students() {
     onError: (err) => toast.error(err?.response?.data?.message || t('students.failedToRemoveStudent', { defaultValue: 'Failed to remove student' })),
   });
 
-  const filtered = students.filter(s =>
-    s.name.toLowerCase().includes(search.toLowerCase()) ||
-    (s.rollNumber || '').includes(search)
-  );
-
   const classLabel = (classId) => {
     const c = classes.find(c => c.id === classId);
     return c ? `${c.name}${c.section ? ` (${c.section})` : ''}` : '—';
@@ -328,7 +341,7 @@ export default function Students() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">{t('students.title', { defaultValue: 'Students' })}</h1>
-          <p className="text-muted-foreground text-sm mt-1">{t('students.enrolled', { defaultValue: '{{count}} enrolled', count: students.length })}</p>
+          <p className="text-muted-foreground text-sm mt-1">{t('students.enrolled', { defaultValue: '{{count}} enrolled', count: total })}</p>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" onClick={() => setImportOpen(true)}>
@@ -363,11 +376,11 @@ export default function Students() {
           <Input
             placeholder={t('students.searchPlaceholder', { defaultValue: 'Search by name or roll number…' })}
             className="pl-9"
-            value={search}
-            onChange={e => setSearch(e.target.value)}
+            value={searchInput}
+            onChange={e => setSearchInput(e.target.value)}
           />
-          {search && (
-            <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+          {searchInput && (
+            <button onClick={() => setSearchInput('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
               <X className="w-3.5 h-3.5" />
             </button>
           )}
@@ -390,7 +403,7 @@ export default function Students() {
       <div className="bg-white rounded-xl border border-border overflow-hidden">
         {isLoading ? (
           <div className="p-12 text-center text-muted-foreground text-sm">{t('students.loadingStudents', { defaultValue: 'Loading students…' })}</div>
-        ) : filtered.length === 0 ? (
+        ) : students.length === 0 ? (
           <div className="p-12 text-center">
             <GraduationCap className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
             <p className="text-muted-foreground text-sm">
@@ -403,7 +416,7 @@ export default function Students() {
             )}
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <div className={`overflow-x-auto ${isPlaceholderData ? 'opacity-60 transition-opacity' : ''}`}>
             <table className="w-full text-sm">
               <thead className="bg-muted/40 border-b border-border">
                 <tr>
@@ -417,7 +430,7 @@ export default function Students() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {filtered.map(student => (
+                {students.map(student => (
                   <tr key={student.id} className="hover:bg-muted/20">
                     <td className="px-5 py-3 font-medium">{student.name}</td>
                     <td className="px-5 py-3 text-muted-foreground tabular-nums">{student.rollNumber || '—'}</td>
@@ -462,6 +475,24 @@ export default function Students() {
                 ))}
               </tbody>
             </table>
+          </div>
+        )}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between px-5 py-3 border-t border-border text-sm">
+            <span className="text-muted-foreground">
+              {t('students.pageInfo', {
+                defaultValue: 'Page {{page}} of {{totalPages}} · {{total}} students',
+                page, totalPages, total,
+              })}
+            </span>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(p => Math.max(1, p - 1))}>
+                <ChevronLeft className="w-4 h-4 mr-1" /> {t('students.prevPage', { defaultValue: 'Previous' })}
+              </Button>
+              <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage(p => Math.min(totalPages, p + 1))}>
+                {t('students.nextPage', { defaultValue: 'Next' })} <ChevronRight className="w-4 h-4 ml-1" />
+              </Button>
+            </div>
           </div>
         )}
       </div>

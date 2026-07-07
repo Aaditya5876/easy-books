@@ -200,12 +200,45 @@ export class SchoolService {
 
   // ── Students ─────────────────────────────────────────────────────────────────
 
-  async listStudents(companyId: string, classId?: string) {
-    return this.prisma.student.findMany({
-      where: { companyId, ...(classId ? { classId } : {}) },
-      orderBy: [{ name: 'asc' }],
-      include: { class: { select: { name: true, section: true } } },
-    });
+  async listStudents(
+    companyId: string,
+    opts?: { classId?: string; search?: string; status?: string; page?: number; pageSize?: number },
+  ) {
+    const { classId, search, status, page, pageSize } = opts || {};
+    const where = {
+      companyId,
+      ...(classId ? { classId } : {}),
+      ...(status ? { status: status as any } : {}),
+      ...(search
+        ? {
+            OR: [
+              { name: { contains: search, mode: 'insensitive' as const } },
+              { rollNumber: { contains: search, mode: 'insensitive' as const } },
+            ],
+          }
+        : {}),
+    };
+    const include = { class: { select: { name: true, section: true } } };
+
+    // Search-as-you-type dropdowns — small capped result set, no count needed
+    if (search && !page) {
+      return this.prisma.student.findMany({ where, orderBy: [{ name: 'asc' }], take: 20, include });
+    }
+
+    // Paginated browse mode (Students admin table)
+    if (page) {
+      const take = Math.min(pageSize || 50, 200);
+      const skip = (Math.max(page, 1) - 1) * take;
+      const [data, total] = await Promise.all([
+        this.prisma.student.findMany({ where, orderBy: [{ name: 'asc' }], skip, take, include }),
+        this.prisma.student.count({ where }),
+      ]);
+      return { data, total, page, pageSize: take };
+    }
+
+    // Backward-compatible full list — only ever called scoped by class (attendance, promote dialog),
+    // which is inherently bounded to one classroom's size
+    return this.prisma.student.findMany({ where, orderBy: [{ name: 'asc' }], include });
   }
 
   async getStudent(id: string, companyId: string) {
@@ -443,14 +476,14 @@ export class SchoolService {
 
   async createFeeStructure(body: any) {
     return this.prisma.feeStructure.create({
-      data: clean(body, ['companyId', 'classId', 'name', 'amount', 'frequency']),
+      data: clean(body, ['companyId', 'classId', 'feeHeadId', 'name', 'amount', 'frequency']),
     });
   }
 
   async updateFeeStructure(id: string, body: any) {
     return this.prisma.feeStructure.update({
       where: { id },
-      data: clean(body, ['classId', 'name', 'amount', 'frequency']),
+      data: clean(body, ['classId', 'feeHeadId', 'name', 'amount', 'frequency']),
     });
   }
 
@@ -460,23 +493,60 @@ export class SchoolService {
 
   // ── Fee Invoices ──────────────────────────────────────────────────────────────
 
-  async listFeeInvoices(companyId: string, status?: string, studentId?: string) {
-    return this.prisma.feeInvoice.findMany({
-      where: {
-        companyId,
-        ...(status ? { status: status as any } : {}),
-        ...(studentId ? { studentId } : {}),
-      },
-      orderBy: { createdAt: 'desc' },
-      include: {
-        student: { select: { name: true, rollNumber: true, class: { select: { name: true, section: true } } } },
-      },
-    });
+  async listFeeInvoices(
+    companyId: string,
+    status?: string,
+    studentId?: string,
+    page?: number,
+    pageSize?: number,
+    search?: string,
+  ) {
+    const where = {
+      companyId,
+      ...(status ? { status: status as any } : {}),
+      ...(studentId ? { studentId } : {}),
+      ...(search
+        ? {
+            student: {
+              OR: [
+                { name: { contains: search, mode: 'insensitive' as const } },
+                { rollNumber: { contains: search, mode: 'insensitive' as const } },
+              ],
+            },
+          }
+        : {}),
+    };
+    const include = {
+      items: { include: { feeHead: { select: { name: true } } } },
+      payments: { orderBy: { paidAt: 'desc' as const } },
+      student: { select: { name: true, rollNumber: true, class: { select: { name: true, section: true } } } },
+    };
+
+    if (page) {
+      const take = Math.min(pageSize || 50, 200);
+      const skip = (Math.max(page, 1) - 1) * take;
+      const [data, total] = await Promise.all([
+        this.prisma.feeInvoice.findMany({ where, include, orderBy: { createdAt: 'desc' }, skip, take }),
+        this.prisma.feeInvoice.count({ where }),
+      ]);
+      return { data, total, page, pageSize: take };
+    }
+
+    // Backward-compatible full list — kept for callers that filter by a single studentId
+    // (inherently bounded to one student's invoice history)
+    return this.prisma.feeInvoice.findMany({ where, include, orderBy: { createdAt: 'desc' } });
   }
 
   async createFeeInvoice(body: any) {
+    const data = clean(body, ['companyId', 'studentId', 'month', 'description', 'totalAmount', 'paidAmount', 'discount', 'fine', 'dueDate', 'status', 'notes']);
     return this.prisma.feeInvoice.create({
-      data: clean(body, ['companyId', 'studentId', 'month', 'description', 'totalAmount', 'paidAmount', 'discount', 'fine', 'dueDate', 'status', 'notes']),
+      data: {
+        ...data,
+        // Manual invoices get a single line item so every invoice is itemized
+        items: {
+          create: [{ description: data.description || 'Fee', amount: data.totalAmount, feeHeadId: body.feeHeadId || null }],
+        },
+      },
     });
   }
 
@@ -495,35 +565,31 @@ export class SchoolService {
     });
     const existingIds = new Set(existing.map(e => e.studentId));
 
-    const toCreate = students
-      .filter(s => !existingIds.has(s.id))
-      .map(s => ({
-        companyId,
-        studentId: s.id,
-        month,
-        description: structures.map(s => s.name).join(', '),
-        totalAmount,
-        paidAmount: 0,
-        status: 'PENDING' as const,
-      }));
-
+    const toCreate = students.filter(s => !existingIds.has(s.id));
     if (toCreate.length === 0) return { created: 0, skipped: existing.length };
 
-    await this.prisma.feeInvoice.createMany({ data: toCreate });
+    // Sequential creates so each invoice gets its line items
+    for (const s of toCreate) {
+      await this.prisma.feeInvoice.create({
+        data: {
+          companyId,
+          studentId: s.id,
+          month,
+          description: structures.map(st => st.name).join(', '),
+          totalAmount,
+          paidAmount: 0,
+          status: 'PENDING',
+          items: {
+            create: structures.map(st => ({
+              feeHeadId: st.feeHeadId ?? null,
+              description: st.name,
+              amount: Number(st.amount),
+            })),
+          },
+        },
+      });
+    }
     return { created: toCreate.length, skipped: existing.length };
-  }
-
-  async recordPayment(id: string, amount: number, notes?: string) {
-    const invoice = await this.prisma.feeInvoice.findUnique({ where: { id } });
-    if (!invoice) throw new NotFoundException('Invoice not found');
-    const newPaid = Number(invoice.paidAmount) + amount;
-    const total = Number(invoice.totalAmount);
-    if (newPaid > total) throw new BadRequestException('Payment exceeds total amount');
-    const status = newPaid >= total ? 'PAID' : 'PARTIAL';
-    return this.prisma.feeInvoice.update({
-      where: { id },
-      data: { paidAmount: newPaid, status, paidDate: status === 'PAID' ? new Date() : undefined, notes },
-    });
   }
 
   async getFeeReceipt(id: string, companyId: string) {
@@ -534,6 +600,8 @@ export class SchoolService {
           include: { class: { select: { name: true, section: true } } },
         },
         company: { select: { name: true, address: true, phone: true, email: true } },
+        items: { include: { feeHead: { select: { name: true } } } },
+        payments: { orderBy: { paidAt: 'asc' } },
       },
     });
     if (!invoice) throw new NotFoundException('Invoice not found');

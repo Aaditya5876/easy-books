@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { Plus, Pencil, Trash2, Bus, UserMinus } from 'lucide-react';
-import { transportApi, studentsApi } from '@/api';
+import { transportApi } from '@/api';
+import StudentCombobox from '@/components/shared/StudentCombobox';
 import { getActiveCompanyId } from '@/lib/companyContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -73,7 +74,7 @@ function RouteDialog({ open, onClose, initial, companyId }) {
   );
 }
 
-function AssignDialog({ open, onClose, routes, students, companyId }) {
+function AssignDialog({ open, onClose, routes, companyId }) {
   const { t } = useTranslation();
   const qc = useQueryClient();
   const [form, setForm] = useState({ routeId: '', studentId: '', pickupStop: '' });
@@ -110,12 +111,11 @@ function AssignDialog({ open, onClose, routes, students, companyId }) {
           </div>
           <div className="space-y-1.5">
             <Label>{t('transport.studentLabel', { defaultValue: 'Student *' })}</Label>
-            <select className="w-full border rounded-md px-3 py-2 text-sm bg-background" value={form.studentId} onChange={e => set('studentId', e.target.value)}>
-              <option value="">{t('transport.selectStudent', { defaultValue: 'Select student…' })}</option>
-              {students.filter(s => s.status === 'ACTIVE').map(s => (
-                <option key={s.id} value={s.id}>{s.name}{s.rollNumber ? ` (${s.rollNumber})` : ''}</option>
-              ))}
-            </select>
+            <StudentCombobox
+              value={form.studentId}
+              onChange={id => set('studentId', id)}
+              placeholder={t('transport.selectStudent', { defaultValue: 'Select student…' })}
+            />
           </div>
           <div className="space-y-1.5">
             <Label>{t('transport.pickupStop', { defaultValue: 'Pickup Stop' })}</Label>
@@ -150,12 +150,6 @@ export default function Transport() {
     queryKey: ['transport-assignments', companyId, selectedRoute],
     queryFn: () => transportApi.listAssignments(selectedRoute || undefined).then(r => r.data),
     enabled: !!companyId && tab === 'students',
-  });
-
-  const { data: allStudents = [] } = useQuery({
-    queryKey: ['school-students', companyId],
-    queryFn: () => studentsApi.list().then(r => r.data),
-    enabled: !!companyId,
   });
 
   const removeRoute = useMutation({
@@ -294,7 +288,7 @@ export default function Transport() {
         <RouteDialog open={!!routeDialog} onClose={() => setRouteDialog(null)} initial={routeDialog.mode === 'edit' ? routeDialog.route : null} companyId={companyId} />
       )}
       {assignDialog && (
-        <AssignDialog open={assignDialog} onClose={() => setAssignDialog(false)} routes={routes} students={allStudents} companyId={companyId} />
+        <AssignDialog open={assignDialog} onClose={() => setAssignDialog(false)} routes={routes} companyId={companyId} />
       )}
     </div>
   );

@@ -221,7 +221,11 @@ export const academicYearsApi = {
 };
 
 export const studentsApi = {
-  list: (classId?: string) => apiClient.get('/api/v1/school/students', { params: { companyId: companyId(), classId } }),
+  list: (params?: { classId?: string; search?: string; page?: number; pageSize?: number } | string) => {
+    // Back-compat: many call sites still pass a bare classId string
+    const p = typeof params === 'string' ? { classId: params } : params;
+    return apiClient.get('/api/v1/school/students', { params: { companyId: companyId(), ...p } });
+  },
   get: (id: string) => apiClient.get(`/api/v1/school/students/${id}`, { params: { companyId: companyId() } }),
   create: (data: object) => apiClient.post('/api/v1/school/students', data),
   update: (id: string, data: object) => apiClient.put(`/api/v1/school/students/${id}`, data),
@@ -264,7 +268,7 @@ export const feesApi = {
     apiClient.get('/api/v1/school/fee-invoices', { params: { companyId: companyId(), ...params } }),
   createInvoice: (data: object) => apiClient.post('/api/v1/school/fee-invoices', data),
   recordPayment: (id: string, data: object) =>
-    apiClient.patch(`/api/v1/school/fee-invoices/${id}/payment`, data),
+    apiClient.patch(`/api/v1/school/fee-invoices/${id}/payment`, data, { params: { companyId: companyId() } }),
   generateBulk: (data: object) => apiClient.post('/api/v1/school/fee-invoices/bulk', data),
   receipt: (id: string) =>
     apiClient.get(`/api/v1/school/fee-invoices/${id}/receipt`, { params: { companyId: companyId() } }),
@@ -283,6 +287,40 @@ export const examResultsApi = {
   update: (id: string, data: object) => apiClient.put(`/api/v1/school/exam-results/${id}`, data),
   remove: (id: string) =>
     apiClient.delete(`/api/v1/school/exam-results/${id}`, { params: { companyId: companyId() } }),
+};
+
+export const schoolFinanceApi = {
+  listFeeHeads: () => apiClient.get('/api/v1/school/fee-heads', { params: { companyId: companyId() } }),
+  createFeeHead: (data: object) => apiClient.post('/api/v1/school/fee-heads', { ...data, companyId: companyId() }),
+  createDefaultFeeHeads: () => apiClient.post('/api/v1/school/fee-heads/defaults', { companyId: companyId() }),
+  updateFeeHead: (id: string, data: object) =>
+    apiClient.put(`/api/v1/school/fee-heads/${id}`, data, { params: { companyId: companyId() } }),
+  removeFeeHead: (id: string) =>
+    apiClient.delete(`/api/v1/school/fee-heads/${id}`, { params: { companyId: companyId() } }),
+
+  studentFeeProfile: (studentId: string) =>
+    apiClient.get(`/api/v1/school/students/${studentId}/fee-profile`, { params: { companyId: companyId() } }),
+  addScholarship: (studentId: string, data: object) =>
+    apiClient.post(`/api/v1/school/students/${studentId}/scholarships`, data, { params: { companyId: companyId() } }),
+  removeScholarship: (id: string) =>
+    apiClient.delete(`/api/v1/school/scholarships/${id}`, { params: { companyId: companyId() } }),
+
+  listPackages: () => apiClient.get('/api/v1/school/fee-packages', { params: { companyId: companyId() } }),
+  createPackage: (data: object) => apiClient.post('/api/v1/school/fee-packages', { ...data, companyId: companyId() }),
+  updatePackage: (id: string, data: object) =>
+    apiClient.put(`/api/v1/school/fee-packages/${id}`, data, { params: { companyId: companyId() } }),
+  removePackage: (id: string) =>
+    apiClient.delete(`/api/v1/school/fee-packages/${id}`, { params: { companyId: companyId() } }),
+  assignPackage: (studentId: string, packageId: string | null) =>
+    apiClient.patch(`/api/v1/school/students/${studentId}/package`, { packageId }, { params: { companyId: companyId() } }),
+
+  billingRun: (data: { month: string; classId?: string; dueDate?: string }) =>
+    apiClient.post('/api/v1/school/billing-run', { ...data, companyId: companyId() }),
+
+  listInvoicePayments: (invoiceId: string) =>
+    apiClient.get(`/api/v1/school/fee-invoices/${invoiceId}/payments`, { params: { companyId: companyId() } }),
+
+  setupLedger: () => apiClient.post('/api/v1/school/setup-ledger', { companyId: companyId() }),
 };
 
 export const schoolAnalyticsApi = {

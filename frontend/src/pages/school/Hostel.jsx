@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, Pencil, Trash2, Home, UserMinus } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { hostelApi, studentsApi } from '@/api';
+import { hostelApi } from '@/api';
+import StudentCombobox from '@/components/shared/StudentCombobox';
 
 import { getActiveCompanyId } from '@/lib/companyContext';
 import { Button } from '@/components/ui/button';
@@ -74,7 +75,7 @@ function RoomDialog({ open, onClose, initial, companyId }) {
   );
 }
 
-function AllocateDialog({ open, onClose, rooms, students, companyId }) {
+function AllocateDialog({ open, onClose, rooms, companyId }) {
   const { t } = useTranslation();
   const qc = useQueryClient();
   const [form, setForm] = useState({ roomId: '', studentId: '' });
@@ -123,12 +124,11 @@ function AllocateDialog({ open, onClose, rooms, students, companyId }) {
           </div>
           <div className="space-y-1.5">
             <Label>{t('hostel.studentLabel', { defaultValue: 'Student *' })}</Label>
-            <select className="w-full border rounded-md px-3 py-2 text-sm bg-background" value={form.studentId} onChange={e => set('studentId', e.target.value)}>
-              <option value="">{t('hostel.selectStudent', { defaultValue: 'Select student…' })}</option>
-              {students.filter(s => s.status === 'ACTIVE').map(s => (
-                <option key={s.id} value={s.id}>{s.name}{s.rollNumber ? ` (${s.rollNumber})` : ''}</option>
-              ))}
-            </select>
+            <StudentCombobox
+              value={form.studentId}
+              onChange={id => set('studentId', id)}
+              placeholder={t('hostel.selectStudent', { defaultValue: 'Select student…' })}
+            />
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose}>{t('hostel.cancel', { defaultValue: 'Cancel' })}</Button>
@@ -158,12 +158,6 @@ export default function Hostel() {
     queryKey: ['hostel-allocations', companyId],
     queryFn: () => hostelApi.listAllocations().then(r => r.data),
     enabled: !!companyId && tab === 'residents',
-  });
-
-  const { data: allStudents = [] } = useQuery({
-    queryKey: ['school-students', companyId],
-    queryFn: () => studentsApi.list().then(r => r.data),
-    enabled: !!companyId,
   });
 
   const removeRoom = useMutation({
@@ -307,7 +301,7 @@ export default function Hostel() {
         <RoomDialog open={!!roomDialog} onClose={() => setRoomDialog(null)} initial={roomDialog.mode === 'edit' ? roomDialog.room : null} companyId={companyId} />
       )}
       {allocDialog && (
-        <AllocateDialog open={allocDialog} onClose={() => setAllocDialog(false)} rooms={rooms} students={allStudents} companyId={companyId} />
+        <AllocateDialog open={allocDialog} onClose={() => setAllocDialog(false)} rooms={rooms} companyId={companyId} />
       )}
     </div>
   );
