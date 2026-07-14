@@ -3,6 +3,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, Trophy, Pencil, Trash2, FileText, Sparkles } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { examResultsApi, subjectsApi, aiApi } from '@/api';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import ExamSchedulePage from './ExamSchedule';
 import StudentCombobox from '@/components/shared/StudentCombobox';
 import { getActiveCompanyId } from '@/lib/companyContext';
 import { Button } from '@/components/ui/button';
@@ -285,6 +287,7 @@ export default function Exams() {
   const [dialog, setDialog] = useState(null);
   const [reportCardDialog, setReportCardDialog] = useState(false);
   const [filterExam, setFilterExam] = useState('');
+  const [activeTab, setActiveTab] = useState('results');
 
   const { data: subjects = [] } = useQuery({
     queryKey: ['subjects', companyId],
@@ -311,99 +314,113 @@ export default function Exams() {
     <div className="p-6 space-y-5">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">{t('exams.title', { defaultValue: 'Exams & Results' })}</h1>
+          <h1 className="text-2xl font-bold">{t('exams.title', { defaultValue: 'Exam' })}</h1>
           <p className="text-muted-foreground text-sm mt-1">{t('exams.resultsRecorded', { count: results.length, defaultValue: '{{count}} results recorded' })}</p>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={() => setReportCardDialog(true)}>
-            <FileText className="w-4 h-4 mr-2" /> {t('exams.reportCard', { defaultValue: 'Report Card' })}
-          </Button>
-          <Button onClick={() => setDialog({ mode: 'add' })}>
-            <Plus className="w-4 h-4 mr-2" /> {t('exams.addResult', { defaultValue: 'Add Result' })}
-          </Button>
-        </div>
       </div>
 
-      {examNames.length > 0 && (
-        <div className="flex gap-2 flex-wrap">
-          <button
-            onClick={() => setFilterExam('')}
-            className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${!filterExam ? 'bg-primary text-primary-foreground border-primary' : 'border-border hover:bg-muted'}`}
-          >
-            {t('exams.allExams', { defaultValue: 'All Exams' })}
-          </button>
-          {examNames.map(name => (
-            <button
-              key={name}
-              onClick={() => setFilterExam(name)}
-              className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${filterExam === name ? 'bg-primary text-primary-foreground border-primary' : 'border-border hover:bg-muted'}`}
-            >
-              {name}
-            </button>
-          ))}
-        </div>
-      )}
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-5">
+        <TabsList>
+          <TabsTrigger value="results">Results</TabsTrigger>
+          <TabsTrigger value="schedule">Schedule</TabsTrigger>
+        </TabsList>
 
-      <div className="bg-card rounded-xl border border-border overflow-hidden">
-        {isLoading ? (
-          <div className="p-12 text-center text-muted-foreground text-sm">{t('exams.loadingResults', { defaultValue: 'Loading results…' })}</div>
-        ) : filtered.length === 0 ? (
-          <div className="p-12 text-center">
-            <Trophy className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
-            <p className="text-muted-foreground text-sm">{t('exams.noExamResultsYet', { defaultValue: 'No exam results yet' })}</p>
-            <Button className="mt-4" size="sm" onClick={() => setDialog({ mode: 'add' })}>{t('exams.addFirstResult', { defaultValue: 'Add First Result' })}</Button>
+        <TabsContent value="results" className="space-y-5">
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" onClick={() => setReportCardDialog(true)}>
+              <FileText className="w-4 h-4 mr-2" /> {t('exams.reportCard', { defaultValue: 'Report Card' })}
+            </Button>
+            <Button onClick={() => setDialog({ mode: 'add' })}>
+              <Plus className="w-4 h-4 mr-2" /> {t('exams.addResult', { defaultValue: 'Add Result' })}
+            </Button>
           </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-muted/40 border-b border-border">
-                <tr>
-                  <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('exams.student', { defaultValue: 'Student' })}</th>
-                  <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('exams.class', { defaultValue: 'Class' })}</th>
-                  <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('exams.exam', { defaultValue: 'Exam' })}</th>
-                  <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('exams.subject', { defaultValue: 'Subject' })}</th>
-                  <th className="text-right px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('exams.marks', { defaultValue: 'Marks' })}</th>
-                  <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('exams.grade', { defaultValue: 'Grade' })}</th>
-                  <th className="px-5 py-3" />
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {filtered.map(r => (
-                  <tr key={r.id} className="hover:bg-muted/20">
-                    <td className="px-5 py-3 font-medium">{r.student?.name || '—'}</td>
-                    <td className="px-5 py-3 text-muted-foreground text-xs">
-                      {r.student?.class ? `${r.student.class.name}${r.student.class.section ? ` (${r.student.class.section})` : ''}` : '—'}
-                    </td>
-                    <td className="px-5 py-3 text-muted-foreground">{r.examName}</td>
-                    <td className="px-5 py-3 text-muted-foreground">{r.subject?.name || '—'}</td>
-                    <td className="px-5 py-3 text-right tabular-nums">
-                      {Number(r.marksObtained).toFixed(0)} / {Number(r.totalMarks).toFixed(0)}
-                      <span className="text-muted-foreground ml-1 text-xs">
-                        ({((Number(r.marksObtained) / Number(r.totalMarks)) * 100).toFixed(1)}%)
-                      </span>
-                    </td>
-                    <td className="px-5 py-3">
-                      {r.grade ? (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold bg-blue-100 text-blue-700">{r.grade}</span>
-                      ) : '—'}
-                    </td>
-                    <td className="px-5 py-3">
-                      <div className="flex gap-2 justify-end">
-                        <button onClick={() => setDialog({ mode: 'edit', result: r })} className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors">
-                          <Pencil className="w-3.5 h-3.5" />
-                        </button>
-                        <button onClick={() => { if (window.confirm(t('exams.deleteThisResult', { defaultValue: 'Delete this result?' }))) remove.mutate(r.id); }} className="p-1.5 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600 transition-colors">
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+
+          {examNames.length > 0 && (
+            <div className="flex gap-2 flex-wrap">
+              <button
+                onClick={() => setFilterExam('')}
+                className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${!filterExam ? 'bg-primary text-primary-foreground border-primary' : 'border-border hover:bg-muted'}`}
+              >
+                {t('exams.allExams', { defaultValue: 'All Exams' })}
+              </button>
+              {examNames.map(name => (
+                <button
+                  key={name}
+                  onClick={() => setFilterExam(name)}
+                  className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${filterExam === name ? 'bg-primary text-primary-foreground border-primary' : 'border-border hover:bg-muted'}`}
+                >
+                  {name}
+                </button>
+              ))}
+            </div>
+          )}
+
+          <div className="bg-card rounded-xl border border-border overflow-hidden">
+            {isLoading ? (
+              <div className="p-12 text-center text-muted-foreground text-sm">{t('exams.loadingResults', { defaultValue: 'Loading results…' })}</div>
+            ) : filtered.length === 0 ? (
+              <div className="p-12 text-center">
+                <Trophy className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
+                <p className="text-muted-foreground text-sm">{t('exams.noExamResultsYet', { defaultValue: 'No exam results yet' })}</p>
+                <Button className="mt-4" size="sm" onClick={() => setDialog({ mode: 'add' })}>{t('exams.addFirstResult', { defaultValue: 'Add First Result' })}</Button>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-muted/40 border-b border-border">
+                    <tr>
+                      <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('exams.student', { defaultValue: 'Student' })}</th>
+                      <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('exams.class', { defaultValue: 'Class' })}</th>
+                      <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('exams.exam', { defaultValue: 'Exam' })}</th>
+                      <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('exams.subject', { defaultValue: 'Subject' })}</th>
+                      <th className="text-right px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('exams.marks', { defaultValue: 'Marks' })}</th>
+                      <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('exams.grade', { defaultValue: 'Grade' })}</th>
+                      <th className="px-5 py-3" />
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {filtered.map(r => (
+                      <tr key={r.id} className="hover:bg-muted/20">
+                        <td className="px-5 py-3 font-medium">{r.student?.name || '—'}</td>
+                        <td className="px-5 py-3 text-muted-foreground text-xs">
+                          {r.student?.class ? `${r.student.class.name}${r.student.class.section ? ` (${r.student.class.section})` : ''}` : '—'}
+                        </td>
+                        <td className="px-5 py-3 text-muted-foreground">{r.examName}</td>
+                        <td className="px-5 py-3 text-muted-foreground">{r.subject?.name || '—'}</td>
+                        <td className="px-5 py-3 text-right tabular-nums">
+                          {Number(r.marksObtained).toFixed(0)} / {Number(r.totalMarks).toFixed(0)}
+                          <span className="text-muted-foreground ml-1 text-xs">
+                            ({((Number(r.marksObtained) / Number(r.totalMarks)) * 100).toFixed(1)}%)
+                          </span>
+                        </td>
+                        <td className="px-5 py-3">
+                          {r.grade ? (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold bg-blue-100 text-blue-700">{r.grade}</span>
+                          ) : '—'}
+                        </td>
+                        <td className="px-5 py-3">
+                          <div className="flex gap-2 justify-end">
+                            <button onClick={() => setDialog({ mode: 'edit', result: r })} className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors">
+                              <Pencil className="w-3.5 h-3.5" />
+                            </button>
+                            <button onClick={() => { if (window.confirm(t('exams.deleteThisResult', { defaultValue: 'Delete this result?' }))) remove.mutate(r.id); }} className="p-1.5 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600 transition-colors">
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
-        )}
-      </div>
+        </TabsContent>
+
+        <TabsContent value="schedule" className="space-y-5">
+          <ExamSchedulePage />
+        </TabsContent>
+      </Tabs>
 
       {dialog && (
         <ExamDialog

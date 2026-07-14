@@ -7,7 +7,6 @@ import DataTable from '../components/shared/DataTable';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
@@ -15,7 +14,7 @@ import PageLoader from '../components/PageLoader';
 import EmptyState from '../components/EmptyState';
 import {
   UserCircle, User, Phone, Mail, MapPin, Hash,
-  Building2, Award, Calendar, Briefcase, FileText, Upload,
+  Building2, Award, Calendar, Briefcase, Upload,
 } from 'lucide-react';
 import { useRole } from "@/lib/useRole";
 import BulkImportDialog from '../components/shared/BulkImportDialog';
@@ -39,7 +38,10 @@ const EMPTY_FORM = {
   date_of_joining: '',
   salary: '',
   status: 'active',
-  notes: '',
+  subject: '',
+  subjects: [],
+  section_from: '',
+  section_to: '',
 };
 
 /* ── Reusable two-column dialog body ─────────────────────────────────── */
@@ -110,17 +112,61 @@ function EmployeeFormBody({ data, onChange }) {
           </div>
         </div>
 
-        {/* Notes */}
-        <div className="space-y-1">
-          <Label className="text-xs">Notes</Label>
-          <div className="relative">
-            <FileText className="absolute left-2.5 top-3 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
-            <Textarea
-              className="pl-8 text-sm resize-none"
-              rows={3}
-              placeholder="Any additional notes..."
-              value={data.notes}
-              onChange={e => onChange('notes', e.target.value)}
+        {/* Subjects (single entry + add) */}
+        <div className="space-y-3">
+          <div className="grid grid-cols-[1fr_auto] gap-3 items-end">
+            <div className="space-y-1">
+              <Label className="text-xs">Subject</Label>
+              <Input
+                className="h-9 text-sm"
+                value={data.subject}
+                onChange={e => onChange('subject', e.target.value)}
+                placeholder="e.g. Mathematics"
+              />
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              className="h-9 px-4"
+              onClick={() => {
+                const next = data.subject?.trim();
+                if (!next) return;
+                onChange('subjects', [...(data.subjects || []), next]);
+                onChange('subject', '');
+              }}
+              disabled={!data.subject || !data.subject.trim()}
+            >
+              Add
+            </Button>
+          </div>
+          {data.subjects && data.subjects.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {data.subjects.map((s, i) => (
+                <button key={i} type="button" className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-2.5 py-1 text-xs text-slate-700 hover:bg-slate-200" onClick={() => onChange('subjects', data.subjects.filter((_, idx) => idx !== i))}>
+                  <span>{s}</span>
+                  <span className="font-bold">×</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Standard Range */}
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1">
+            <Label className="text-xs">Standards From</Label>
+            <Input
+              className="h-9 text-sm"
+              value={data.section_from}
+              onChange={e => onChange('section_from', e.target.value)}
+            />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">Standards To</Label>
+            <Input
+              className="h-9 text-sm"
+              value={data.section_to}
+              onChange={e => onChange('section_to', e.target.value)}
             />
           </div>
         </div>
@@ -246,7 +292,8 @@ export default function Employees() {
   }
 
   async function save() {
-    await api.Employee.create({ ...form, company_id: companyId, salary: parseFloat(form.salary) || 0 });
+    const { subject, subjects, ...rest } = form;
+    await api.Employee.create({ ...rest, company_id: companyId, salary: parseFloat(form.salary) || 0 });
     setForm(EMPTY_FORM);
     setShowForm(false);
     load();
@@ -254,7 +301,8 @@ export default function Employees() {
 
   async function updateEmployee() {
     if (!editEmployee) return;
-    await api.Employee.update(editEmployee.id, { ...editEmployee, salary: parseFloat(editEmployee.salary) || 0 });
+    const { subject, subjects, ...rest } = editEmployee;
+    await api.Employee.update(editEmployee.id, { ...rest, salary: parseFloat(rest.salary) || 0 });
     setEditEmployee(null);
     load();
   }
@@ -337,7 +385,7 @@ export default function Employees() {
 
       {/* Add Employee Dialog */}
       <Dialog open={showForm} onOpenChange={open => { setShowForm(open); if (!open) setForm(EMPTY_FORM); }}>
-        <DialogContent className="glass-dialog max-w-3xl overflow-hidden">
+        <DialogContent className="glass-dialog max-w-3xl max-h-[90vh] overflow-y-auto">
           <div className="h-1 bg-gradient-to-r from-indigo-400 to-blue-500 -mx-6 -mt-6 mb-4" />
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -357,7 +405,7 @@ export default function Employees() {
 
       {/* Edit Employee Dialog */}
       <Dialog open={!!editEmployee} onOpenChange={open => { if (!open) setEditEmployee(null); }}>
-        <DialogContent className="glass-dialog max-w-3xl overflow-hidden">
+        <DialogContent className="glass-dialog max-w-3xl max-h-[90vh] overflow-y-auto">
           <div className="h-1 bg-gradient-to-r from-indigo-400 to-blue-500 -mx-6 -mt-6 mb-4" />
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">

@@ -132,11 +132,11 @@ export class SchoolAnalyticsService {
 
   // ── Attendance report — month = "YYYY-MM" ────────────────────────────────────
 
-  async attendanceReport(companyId: string, month?: string) {
+  async attendanceReport(companyId: string, month?: string, startDate?: string, endDate?: string) {
     const now = new Date();
     const [y, m] = month ? month.split('-').map(Number) : [now.getFullYear(), now.getMonth() + 1];
-    const start = new Date(y, m - 1, 1);
-    const end = new Date(y, m, 1);
+    const start = startDate ? new Date(`${startDate}T00:00:00`) : new Date(y, m - 1, 1);
+    const end = endDate ? new Date(`${endDate}T23:59:59.999`) : new Date(y, m, 1);
 
     const [byClassRaw, byStudentRaw, byDateRaw, classes] = await Promise.all([
       this.prisma.studentAttendance.groupBy({
@@ -220,16 +220,23 @@ export class SchoolAnalyticsService {
 
   // ── Fees report ──────────────────────────────────────────────────────────────
 
-  async feesReport(companyId: string) {
+  async feesReport(companyId: string, startDate?: string, endDate?: string) {
+    const whereClause: any = { companyId };
+    if (startDate || endDate) {
+      whereClause.createdAt = {} as any;
+      if (startDate) whereClause.createdAt.gte = new Date(`${startDate}T00:00:00`);
+      if (endDate) whereClause.createdAt.lte = new Date(`${endDate}T23:59:59.999`);
+    }
+
     const [monthsRaw, pendingInvoices] = await Promise.all([
       this.prisma.feeInvoice.groupBy({
         by: ['month'],
-        where: { companyId },
+        where: whereClause,
         _sum: { totalAmount: true, paidAmount: true },
         _min: { createdAt: true },
       }),
       this.prisma.feeInvoice.findMany({
-        where: { companyId, status: { in: ['PENDING', 'PARTIAL'] } },
+        where: { ...whereClause, status: { in: ['PENDING', 'PARTIAL'] } },
         select: {
           totalAmount: true, paidAmount: true, dueDate: true, createdAt: true, month: true,
           student: { select: { name: true, rollNumber: true, class: { select: { name: true, section: true } } } },
@@ -292,10 +299,17 @@ export class SchoolAnalyticsService {
 
   // ── Academics report ─────────────────────────────────────────────────────────
 
-  async academicsReport(companyId: string, examName?: string) {
+  async academicsReport(companyId: string, examName?: string, startDate?: string, endDate?: string) {
+    const whereClause: any = { companyId };
+    if (startDate || endDate) {
+      whereClause.createdAt = {} as any;
+      if (startDate) whereClause.createdAt.gte = new Date(`${startDate}T00:00:00`);
+      if (endDate) whereClause.createdAt.lte = new Date(`${endDate}T23:59:59.999`);
+    }
+
     const examsRaw = await this.prisma.examResult.groupBy({
       by: ['examName'],
-      where: { companyId },
+      where: whereClause,
       _min: { createdAt: true },
     });
     const examNames = examsRaw
@@ -306,7 +320,7 @@ export class SchoolAnalyticsService {
     if (!selected) return { examNames: [], selected: null, subjectAverages: [], gradeDistribution: [], passRateByClass: [] };
 
     const results = await this.prisma.examResult.findMany({
-      where: { companyId, examName: selected },
+      where: { ...whereClause, examName: selected },
       select: {
         marksObtained: true, totalMarks: true,
         subject: { select: { name: true } },
@@ -356,9 +370,15 @@ export class SchoolAnalyticsService {
 
   // ── Operations report ────────────────────────────────────────────────────────
 
-  async operationsReport(companyId: string) {
+  async operationsReport(companyId: string, startDate?: string, endDate?: string) {
     const now = new Date();
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const whereClause: any = { companyId };
+    if (startDate || endDate) {
+      whereClause.createdAt = {} as any;
+      if (startDate) whereClause.createdAt.gte = new Date(`${startDate}T00:00:00`);
+      if (endDate) whereClause.createdAt.lte = new Date(`${endDate}T23:59:59.999`);
+    }
 
     const [topBooksRaw, overdueIssues, fines, rooms, activeAllocations, routes, staffAttendance, payrollRaw] = await Promise.all([
       this.prisma.bookIssue.groupBy({ by: ['bookId'], where: { companyId }, _count: true, orderBy: { _count: { bookId: 'desc' } }, take: 10 }),
@@ -371,7 +391,7 @@ export class SchoolAnalyticsService {
         select: { routeName: true, vehicleNumber: true, _count: { select: { studentTransports: { where: { isActive: true } } } } },
       }),
       this.prisma.attendance.groupBy({ by: ['status'], where: { companyId, date: { gte: monthStart } }, _count: true }),
-      this.prisma.payroll.groupBy({ by: ['month'], where: { companyId }, _sum: { netSalary: true }, _min: { createdAt: true } }),
+      this.prisma.payroll.groupBy({ by: ['month'], where: whereClause, _sum: { netSalary: true }, _min: { createdAt: true } }),
     ]);
 
     const books = await this.prisma.book.findMany({

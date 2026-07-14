@@ -13,7 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { toast } from 'sonner';
 
 const EMPTY_FORM = {
-  name: '', rollNumber: '', classId: '', gender: '', dateOfBirth: '',
+  name: '', rollNumber: '', section: '', classId: '', gender: '', dateOfBirth: '',
   address: '', guardianName: '', guardianPhone: '', guardianEmail: '',
 };
 
@@ -58,10 +58,14 @@ function StudentDialog({ open, onClose, initial, classes, companyId }) {
               <Label>{t('students.fullName', { defaultValue: 'Full Name *' })}</Label>
               <Input placeholder={t('students.fullNamePlaceholder', { defaultValue: 'Student full name' })} value={form.name} onChange={e => set('name', e.target.value)} />
             </div>
-
             <div className="space-y-1.5">
               <Label>{t('students.rollNumber', { defaultValue: 'Roll Number' })}</Label>
               <Input placeholder={t('students.rollNumberPlaceholder', { defaultValue: 'e.g. 101' })} value={form.rollNumber} onChange={e => set('rollNumber', e.target.value)} />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>Section</Label>
+              <Input placeholder="e.g. A" value={form.section} onChange={e => set('section', e.target.value)} />
             </div>
 
             <div className="space-y-1.5">

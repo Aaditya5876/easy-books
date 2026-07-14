@@ -20,7 +20,13 @@ function SubjectDialog({ open, onClose, subject }) {
   const { t } = useTranslation();
   const qc = useQueryClient();
   const isEdit = !!subject;
-  const [form, setForm] = useState({ name: subject?.name || '', code: subject?.code || '' });
+  const [form, setForm] = useState({
+    name: subject?.name || '',
+    code: subject?.code || '',
+    standards: subject?.standards || '',
+    bookReference: subject?.bookReference || subject?.book_reference || '',
+    chapters: subject?.chapters || subject?.numberOfChapters || subject?.chapters || '',
+  });
 
   const save = useMutation({
     mutationFn: (d) => isEdit ? subjectsApi.update(subject.id, d) : subjectsApi.create(d),
@@ -37,7 +43,14 @@ function SubjectDialog({ open, onClose, subject }) {
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!form.name.trim()) return toast.error(t('subjects.subjectNameRequired', { defaultValue: 'Subject name is required' }));
-    save.mutate(isEdit ? { name: form.name, code: form.code } : { ...form, companyId });
+    const payload = {
+      name: form.name,
+      code: form.code,
+      standards: form.standards,
+      book_reference: form.bookReference,
+      chapters: form.chapters ? parseInt(form.chapters, 10) : undefined,
+    };
+    save.mutate(isEdit ? payload : { ...payload, companyId });
   };
 
   return (
@@ -54,6 +67,18 @@ function SubjectDialog({ open, onClose, subject }) {
           <div className="space-y-1">
             <Label>{t('subjects.subjectCode', { defaultValue: 'Subject Code' })}</Label>
             <Input value={form.code} onChange={e => setForm(p => ({ ...p, code: e.target.value }))} placeholder={t('subjects.subjectCodePlaceholder', { defaultValue: 'e.g. MATH-10' })} />
+          </div>
+          <div className="space-y-1">
+            <Label>Standards</Label>
+            <Input value={form.standards} onChange={e => setForm(p => ({ ...p, standards: e.target.value }))} placeholder="e.g. 5th - 7th" />
+          </div>
+          <div className="space-y-1">
+            <Label>Books Reference</Label>
+            <Input value={form.bookReference} onChange={e => setForm(p => ({ ...p, bookReference: e.target.value }))} placeholder="e.g. NCERT, Rainbow" />
+          </div>
+          <div className="space-y-1">
+            <Label>Number of Chapters</Label>
+            <Input type="number" value={form.chapters} onChange={e => setForm(p => ({ ...p, chapters: e.target.value }))} placeholder="0" />
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose}>{t('subjects.cancel', { defaultValue: 'Cancel' })}</Button>
@@ -122,6 +147,9 @@ export default function Subjects() {
               <TableHead>#</TableHead>
               <TableHead>{t('subjects.subjectNameHeader', { defaultValue: 'Subject Name' })}</TableHead>
               <TableHead>{t('subjects.codeHeader', { defaultValue: 'Code' })}</TableHead>
+              <TableHead>{t('subjects.standardsHeader', { defaultValue: 'Standards' })}</TableHead>
+              <TableHead>{t('subjects.bookHeader', { defaultValue: 'Books' })}</TableHead>
+              <TableHead>{t('subjects.chaptersHeader', { defaultValue: 'Chapters' })}</TableHead>
               <TableHead className="w-24">{t('subjects.actionsHeader', { defaultValue: 'Actions' })}</TableHead>
             </TableRow>
           </TableHeader>
@@ -133,18 +161,21 @@ export default function Subjects() {
             ) : subjects.map((s, i) => (
               <TableRow key={s.id}>
                 <TableCell className="text-muted-foreground">{i + 1}</TableCell>
-                <TableCell className="font-medium">{s.name}</TableCell>
-                <TableCell>{s.code || <span className="text-muted-foreground">—</span>}</TableCell>
-                <TableCell>
-                  <div className="flex gap-1">
-                    <Button size="icon" variant="ghost" onClick={() => setDialog({ open: true, subject: s })}>
-                      <Pencil className="h-4 w-4" />
-                    </Button>
-                    <Button size="icon" variant="ghost" onClick={() => handleDelete(s)}>
-                      <Trash2 className="h-4 w-4 text-destructive" />
-                    </Button>
-                  </div>
-                </TableCell>
+                  <TableCell className="font-medium">{s.name}</TableCell>
+                  <TableCell>{s.code || <span className="text-muted-foreground">—</span>}</TableCell>
+                  <TableCell>{s.standards || s.standard || <span className="text-muted-foreground">—</span>}</TableCell>
+                  <TableCell>{s.book_reference || s.bookReference || <span className="text-muted-foreground">—</span>}</TableCell>
+                  <TableCell>{s.chapters ?? s.numberOfChapters ?? <span className="text-muted-foreground">—</span>}</TableCell>
+                  <TableCell>
+                    <div className="flex gap-1">
+                      <Button size="icon" variant="ghost" onClick={() => setDialog({ open: true, subject: s })}>
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button size="icon" variant="ghost" onClick={() => handleDelete(s)}>
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    </div>
+                  </TableCell>
               </TableRow>
             ))}
           </TableBody>

@@ -46,13 +46,18 @@ export default function Transactions() {
   const companyId = getActiveCompanyId();
   const [transactions, setTransactions] = useState([]);
   const [bankAccounts, setBankAccounts] = useState([]);
+  const [ledgerAccounts, setLedgerAccounts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('all');
   const [search, setSearch] = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
   const [colFilters, setColFilters] = useState({ description: '', party_name: '', category: '', status: '' });
   const setCol = (key, val) => setColFilters(f => ({ ...f, [key]: val }));
   const [showNew, setShowNew] = useState(false);
   const [payMethod, setPayMethod] = useState('cash');
+  const [addToLedger, setAddToLedger] = useState('none');
+  const [selectedLedgerAccountId, setSelectedLedgerAccountId] = useState('');
   const [activeBankId, setActiveBankId] = useState(null);
   const [showAddBank, setShowAddBank] = useState(false);
   const [browserAccount, setBrowserAccount] = useState(null);
@@ -75,13 +80,16 @@ export default function Transactions() {
 
   async function loadData() {
     setLoading(true);
-    const [txns, banks] = await Promise.all([
+    const [txns, banks, ledgerAccountsData] = await Promise.all([
       api.Transaction.filter({ company_id: companyId }, '-created_date', 100),
       api.BankAccount.filter({ company_id: companyId }),
+      api.LedgerAccount.filter({ company_id: companyId }),
     ]);
     setTransactions(txns);
     setBankAccounts(banks);
+    setLedgerAccounts(ledgerAccountsData);
     if (banks.length > 0 && !activeBankId) setActiveBankId(banks[0].id);
+    if (!selectedLedgerAccountId && ledgerAccountsData.length > 0) setSelectedLedgerAccountId(ledgerAccountsData[0].id);
     setLoading(false);
   }
 
@@ -107,19 +115,41 @@ export default function Transactions() {
     const entryDate = form.date_ad || new Date().toISOString().split('T')[0];
     const bsDate = adToBs(new Date(entryDate));
     const type = activeTab === 'all' ? 'cash' : activeTab;
-    await api.Transaction.create({
+    const payload = {
       ...form,
       type,
       company_id: companyId,
       date_ad: entryDate,
       date_bs: bsDate.formatted,
-    });
+    };
+
+    const createdTransaction = await api.Transaction.create(payload);
+
+    if (addToLedger === 'existing' && selectedLedgerAccountId) {
+      const amount = Number(form.amount || 0);
+      const ledgerEntryPayload = {
+        company_id: companyId,
+        account_id: selectedLedgerAccountId,
+        date_ad: entryDate,
+        date_bs: bsDate.formatted,
+        description: form.description || 'Transaction entry',
+        debit: form.category === 'income' ? 0 : amount,
+        credit: form.category === 'income' ? amount : 0,
+        reference_type: 'MANUAL',
+        reference_id: createdTransaction?.id,
+      };
+      await api.LedgerEntry.create(ledgerEntryPayload);
+    }
+
     setForm({
       category: 'income', amount: 0, description: '',
       bank_name: '', bank_account_number: '', cheque_number: '', cheque_date: '',
       cheque_issue_date: '', party_name: '', status: 'completed',
       date_ad: new Date().toISOString().split('T')[0], reference_number: '',
     });
+    setPayMethod('cash');
+    setAddToLedger('none');
+    setSelectedLedgerAccountId(ledgerAccounts[0]?.id || '');
     setShowNew(false);
     loadData();
   }
@@ -128,6 +158,8 @@ export default function Transactions() {
     if (activeTab !== 'all' && t.type !== activeTab) return false;
     if (!(t.description?.toLowerCase().includes(search.toLowerCase()) ||
       t.party_name?.toLowerCase().includes(search.toLowerCase()))) return false;
+    if (dateFrom && (t.date_ad || '') < dateFrom) return false;
+    if (dateTo && (t.date_ad || '') > dateTo) return false;
     if (colFilters.description && !t.description?.toLowerCase().includes(colFilters.description.toLowerCase())) return false;
     if (colFilters.party_name && !t.party_name?.toLowerCase().includes(colFilters.party_name.toLowerCase())) return false;
     if (colFilters.category && !(t.category || '').toLowerCase().includes(colFilters.category.toLowerCase())) return false;
@@ -200,6 +232,24 @@ export default function Transactions() {
         }}
         addLabel="New Transaction"
       />
+
+      <div className="rounded-xl border bg-card p-4 shadow-sm">
+        <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+          <div className="flex flex-1 flex-col gap-3 sm:flex-row">
+            <div className="flex-1">
+              <Label className="text-xs font-medium">From Date</Label>
+              <Input type="date" className="h-9 text-sm mt-1" value={dateFrom} onChange={e => setDateFrom(e.target.value)} />
+            </div>
+            <div className="flex-1">
+              <Label className="text-xs font-medium">To Date</Label>
+              <Input type="date" className="h-9 text-sm mt-1" value={dateTo} onChange={e => setDateTo(e.target.value)} />
+            </div>
+          </div>
+          <Button variant="outline" onClick={() => { setDateFrom(''); setDateTo(''); }} disabled={!dateFrom && !dateTo}>
+            Clear Dates
+          </Button>
+        </div>
+      </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         <div className="bg-card rounded-xl border p-4">
@@ -575,6 +625,37 @@ export default function Transactions() {
                 </div>
               </div>
 
+              {/* Add to ledger */}
+              <div>
+                <Label className="text-xs font-medium">Add to Ledger</Label>
+                <Select value={addToLedger} onValueChange={setAddToLedger}>
+                  <SelectTrigger className="h-9 text-sm mt-1"><SelectValue placeholder="Choose option" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Do not add to ledger</SelectItem>
+                    <SelectItem value="existing">Add to existing ledger account</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {addToLedger === 'existing' && (
+                <div>
+                  <Label className="text-xs font-medium">Ledger Account</Label>
+                  <Select value={selectedLedgerAccountId} onValueChange={setSelectedLedgerAccountId}>
+                    <SelectTrigger className="h-9 text-sm mt-1"><SelectValue placeholder="Choose ledger account" /></SelectTrigger>
+                    <SelectContent>
+                      {ledgerAccounts.length === 0 ? (
+                        <div className="px-3 py-2 text-sm text-muted-foreground">No ledger accounts available</div>
+                      ) : ledgerAccounts.map(account => (
+                        <SelectItem key={account.id} value={account.id}>
+                          {account.account_name || account.accountName || 'Unnamed account'}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground mt-1">This will create a ledger entry in the selected account.</p>
+                </div>
+              )}
+
               {/* Date */}
               <div>
                 <Label className="text-xs font-medium">Date *</Label>
@@ -702,7 +783,12 @@ export default function Transactions() {
 
           <DialogFooter className="mt-4">
             <Button variant="outline" onClick={() => setShowNew(false)}>Cancel</Button>
-            <Button onClick={createTransaction} disabled={!form.amount || !form.description}>Save</Button>
+            <Button
+              onClick={createTransaction}
+              disabled={!form.amount || !form.description || (addToLedger === 'existing' && !selectedLedgerAccountId)}
+            >
+              Save
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
