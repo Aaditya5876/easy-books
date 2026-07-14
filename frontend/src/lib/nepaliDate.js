@@ -108,6 +108,49 @@ export function getTodayBS() {
   return adToBs(new Date());
 }
 
+// Convert BS date (year, month, day) to AD Date object
+export function bsToAd(bsYear, bsMonth, bsDay) {
+  // Calculate days difference from BS_REF to target BS date
+  let days = 0;
+  if (bsYear === BS_REF.year && bsMonth === BS_REF.month) {
+    days = bsDay - BS_REF.day;
+  } else {
+    // If target is after reference
+    let y = BS_REF.year;
+    let m = BS_REF.month;
+    let d = BS_REF.day;
+    // Move forward or backward to target
+    const forward = (bsYear > BS_REF.year) || (bsYear === BS_REF.year && (bsMonth > BS_REF.month || (bsMonth === BS_REF.month && bsDay > BS_REF.day)));
+    if (forward) {
+      while (y < bsYear || m < bsMonth || d < bsDay) {
+        d++;
+        const daysInMonth = getDaysInBsMonth(y, m);
+        if (d > daysInMonth) {
+          d = 1;
+          m++;
+          if (m > 12) { m = 1; y++; }
+        }
+        days++;
+      }
+    } else {
+      // backward
+      while (y > bsYear || m > bsMonth || d > bsDay) {
+        d--;
+        if (d < 1) {
+          m--;
+          if (m < 1) { m = 12; y--; }
+          d = getDaysInBsMonth(y, m);
+        }
+        days--;
+      }
+    }
+  }
+
+  const ad = new Date(AD_REF);
+  ad.setDate(ad.getDate() + days);
+  return ad;
+}
+
 // Format BS date string
 export function formatBsDate(bsDateStr) {
   if (!bsDateStr) return '';

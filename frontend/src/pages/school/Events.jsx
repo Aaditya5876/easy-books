@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { schoolEventsApi } from '@/api';
@@ -14,8 +14,16 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog';
 import { CalendarCheck, Plus, Pencil, Trash2 } from 'lucide-react';
+import { adToBs, bsToAd, formatBsDate } from '@/lib/nepaliDate';
 import { toast } from 'sonner';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, getDay, isSameDay } from 'date-fns';
+
+const parseLocalDate = (value) => {
+  if (!value) return null;
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return null;
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+};
 
 const EVENT_TYPES = ['GENERAL', 'HOLIDAY', 'EXAM', 'SPORTS', 'CULTURAL', 'MEETING'];
 const TYPE_COLORS = {
@@ -32,15 +40,20 @@ const eventTypeLabel = (t, type) =>
 
 const companyId = () => localStorage.getItem('easybooks_active_company') || '';
 
-function EventDialog({ open, onClose, event }) {
+function EventDialog({ open, onClose, event, mode = 'AD', monthKey }) {
   const { t } = useTranslation();
   const qc = useQueryClient();
   const isEdit = !!event;
+  const queryKey = ['school-events', monthKey];
   const [form, setForm] = useState({
     title: event?.title || '',
     description: event?.description || '',
+    // always keep AD iso in startDate/endDate for saving
     startDate: event?.startDate ? event.startDate.split('T')[0] : '',
     endDate: event?.endDate ? event.endDate.split('T')[0] : '',
+    // keep BS strings when in BS mode
+    bsStart: event?.startDate ? adToBs(new Date(event.startDate)).formatted : '',
+    bsEnd: event?.endDate ? adToBs(new Date(event.endDate)).formatted : '',
     eventType: event?.eventType || 'GENERAL',
   });
 
@@ -84,16 +97,54 @@ function EventDialog({ open, onClose, event }) {
             </Select>
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1">
-              <Label>{t('events.startDate', { defaultValue: 'Start Date *' })}</Label>
-              <input type="date" value={form.startDate} onChange={e => setForm(p => ({ ...p, startDate: e.target.value }))}
-                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm" />
-            </div>
-            <div className="space-y-1">
-              <Label>{t('events.endDate', { defaultValue: 'End Date' })}</Label>
-              <input type="date" value={form.endDate} onChange={e => setForm(p => ({ ...p, endDate: e.target.value }))}
-                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm" />
-            </div>
+            {mode === 'AD' ? (
+              <>
+                <div className="space-y-1">
+                  <Label>{t('events.startDate', { defaultValue: 'Start Date *' })}</Label>
+                  <input type="date" value={form.startDate} onChange={e => setForm(p => ({ ...p, startDate: e.target.value }))}
+                    className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm" />
+                </div>
+                <div className="space-y-1">
+                  <Label>{t('events.endDate', { defaultValue: 'End Date' })}</Label>
+                  <input type="date" value={form.endDate} onChange={e => setForm(p => ({ ...p, endDate: e.target.value }))}
+                    className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm" />
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="space-y-1">
+                  <Label>{t('events.startDate', { defaultValue: 'Start Date *' })} (BS)</Label>
+                  <Input value={form.bsStart} onChange={e => {
+                    const v = e.target.value;
+                    setForm(p => ({ ...p, bsStart: v }));
+                    // try convert format YYYY-MM-DD
+                    const parts = v.split('-');
+                    if (parts.length === 3) {
+                      const [y, m, d] = parts.map(x => parseInt(x, 10));
+                      if (!isNaN(y) && !isNaN(m) && !isNaN(d)) {
+                        const ad = bsToAd(y, m, d);
+                        setForm(p => ({ ...p, startDate: ad.toISOString().split('T')[0] }));
+                      }
+                    }
+                  }} placeholder="YYYY-MM-DD" />
+                </div>
+                <div className="space-y-1">
+                  <Label>{t('events.endDate', { defaultValue: 'End Date' })} (BS)</Label>
+                  <Input value={form.bsEnd} onChange={e => {
+                    const v = e.target.value;
+                    setForm(p => ({ ...p, bsEnd: v }));
+                    const parts = v.split('-');
+                    if (parts.length === 3) {
+                      const [y, m, d] = parts.map(x => parseInt(x, 10));
+                      if (!isNaN(y) && !isNaN(m) && !isNaN(d)) {
+                        const ad = bsToAd(y, m, d);
+                        setForm(p => ({ ...p, endDate: ad.toISOString().split('T')[0] }));
+                      }
+                    }
+                  }} placeholder="YYYY-MM-DD" />
+                </div>
+              </>
+            )}
           </div>
           <div className="space-y-1">
             <Label>{t('events.description', { defaultValue: 'Description' })}</Label>
@@ -109,16 +160,22 @@ function EventDialog({ open, onClose, event }) {
   );
 }
 
-export default function Events() {
+export default function Events({ mode: propMode = 'AD' }) {
   const { t } = useTranslation();
   const qc = useQueryClient();
   const [dialog, setDialog] = useState({ open: false, event: null });
+  const [mode, setMode] = useState(propMode);
   const [currentMonth, setCurrentMonth] = useState(new Date());
+
+  useEffect(() => {
+    setMode(propMode);
+  }, [propMode]);
 
   const monthKey = format(currentMonth, 'yyyy-MM');
 
+  const queryKey = ['school-events', monthKey];
   const { data: events = [], isLoading } = useQuery({
-    queryKey: ['school-events', monthKey],
+    queryKey,
     queryFn: () => schoolEventsApi.list(monthKey).then(r => r.data),
   });
 
@@ -138,9 +195,9 @@ export default function Events() {
 
   const eventsOnDay = (day) =>
     events.filter(e => {
-      const start = new Date(e.startDate);
-      const end = e.endDate ? new Date(e.endDate) : start;
-      return day >= start && day <= end;
+      const start = parseLocalDate(e.startDate);
+      const end = parseLocalDate(e.endDate) || start;
+      return start && day >= start && day <= end;
     });
 
   const dayNames = [
@@ -153,23 +210,52 @@ export default function Events() {
     t('events.sat', { defaultValue: 'Sat' }),
   ];
 
+  const bsMonthLabel = (date) => {
+    const bs = adToBs(date);
+    return `${bs.monthName} ${bs.year}`;
+  };
+
+  const getDayLabel = (date) => {
+    if (mode === 'AD') {
+      return format(date, 'd');
+    }
+    return adToBs(date).day;
+  };
+
+  const highlightForEvents = (dayEvents) => {
+    if (!dayEvents.length) return '';
+    const types = new Set(dayEvents.map(e => e.eventType));
+    if (types.has('HOLIDAY')) return 'bg-red-200 text-red-900 border-red-300';
+    if (types.has('EXAM')) return 'bg-emerald-200 text-emerald-900 border-emerald-300';
+    return 'bg-yellow-200 text-yellow-900 border-yellow-300';
+  };
+
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <CalendarCheck className="h-6 w-6 text-primary" />
-          <h1 className="text-2xl font-bold">{t('events.schoolCalendar', { defaultValue: 'School Calendar' })}</h1>
+          <div>
+            <h1 className="text-2xl font-bold">{t('events.schoolCalendar', { defaultValue: 'School Calendar' })}</h1>
+            <p className="text-sm text-muted-foreground">{mode === 'AD' ? 'AD Calendar' : 'BS Calendar'}</p>
+          </div>
         </div>
-        <Button onClick={() => setDialog({ open: true, event: null })}>
-          <Plus className="h-4 w-4 mr-1" /> {t('events.addEvent', { defaultValue: 'Add Event' })}
-        </Button>
+        <div className="flex items-center gap-2">
+          <select className="rounded-md border px-2 py-1 text-sm" value={mode} onChange={e => setMode(e.target.value)}>
+            <option value="AD">AD</option>
+            <option value="BS">BS</option>
+          </select>
+          <Button onClick={() => setDialog({ open: true, event: null })}>
+            <Plus className="h-4 w-4 mr-1" /> {t('events.addEvent', { defaultValue: 'Add Event' })}
+          </Button>
+        </div>
       </div>
 
       {/* Calendar grid */}
       <div className="bg-card border rounded-lg p-4">
         <div className="flex items-center justify-between mb-4">
           <Button variant="outline" size="sm" onClick={prevMonth}>{t('events.prev', { defaultValue: '‹ Prev' })}</Button>
-          <h2 className="font-semibold text-lg">{format(currentMonth, 'MMMM yyyy')}</h2>
+          <h2 className="font-semibold text-lg">{mode === 'AD' ? format(currentMonth, 'MMMM yyyy') : bsMonthLabel(monthStart)}</h2>
           <Button variant="outline" size="sm" onClick={nextMonth}>{t('events.next', { defaultValue: 'Next ›' })}</Button>
         </div>
 
@@ -183,11 +269,15 @@ export default function Events() {
           {days.map(day => {
             const dayEvents = eventsOnDay(day);
             const isToday = isSameDay(day, new Date());
+            const highlightClass = highlightForEvents(dayEvents);
             return (
-              <div key={day.toISOString()} className={`bg-card px-1 py-1 min-h-[70px] ${isToday ? 'bg-primary/5' : ''}`}>
+              <div key={day.toISOString()} className={`px-1 py-1 min-h-[70px] ${highlightClass ? highlightClass : 'bg-card'} ${isToday ? 'ring-2 ring-primary/30' : ''}`}>
                 <div className={`text-xs font-medium mb-1 w-6 h-6 flex items-center justify-center rounded-full ${isToday ? 'bg-primary text-primary-foreground' : 'text-muted-foreground'}`}>
-                  {format(day, 'd')}
+                  {getDayLabel(day)}
                 </div>
+                {mode === 'BS' && (
+                  <div className="text-[10px] text-muted-foreground mb-1">{adToBs(day).monthName?.substring(0, 3)}</div>
+                )}
                 {dayEvents.slice(0, 2).map(e => (
                   <div key={e.id} className={`text-xs px-1 rounded mb-0.5 truncate border ${TYPE_COLORS[e.eventType] || TYPE_COLORS.GENERAL}`}>
                     {e.title}
@@ -239,6 +329,8 @@ export default function Events() {
           open={dialog.open}
           onClose={() => setDialog({ open: false, event: null })}
           event={dialog.event}
+          mode={mode}
+          monthKey={monthKey}
         />
       )}
     </div>

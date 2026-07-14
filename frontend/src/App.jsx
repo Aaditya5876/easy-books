@@ -2,7 +2,7 @@ import { Toaster } from "@/components/ui/toaster"
 import { QueryClientProvider } from '@tanstack/react-query'
 import { queryClientInstance } from '@/lib/query-client'
 import { ThemeProvider } from 'next-themes'
-import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
+import { BrowserRouter as Router, Navigate, Route, Routes } from 'react-router-dom';
 import PageNotFound from './lib/PageNotFound';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import { PreferencesProvider } from '@/lib/PreferencesContext';
@@ -37,7 +37,7 @@ import Fees from './pages/school/Fees';
 import Exams from './pages/school/Exams';
 import Subjects from './pages/school/Subjects';
 import StudentAttendance from './pages/school/StudentAttendance';
-import AcademicYear from './pages/school/AcademicYear';
+import CalendarEvents from './pages/school/CalendarEvents';
 import Timetable from './pages/school/Timetable';
 import Notices from './pages/school/Notices';
 import Events from './pages/school/Events';
@@ -46,7 +46,7 @@ import Homework from './pages/school/Homework';
 import Library from './pages/school/Library';
 import Hostel from './pages/school/Hostel';
 import Transport from './pages/school/Transport';
-import ExamSchedule from './pages/school/ExamSchedule';
+import Routine from './pages/school/Routine';
 import SchoolReports from './pages/school/SchoolReports';
 import PortalLogin from './pages/portal/PortalLogin';
 import PortalLayout from './components/layout/PortalLayout';
@@ -68,12 +68,11 @@ const schoolRoutes = [
   { path: '/subjects', page: Subjects, roles: ['TEACHER'] },
   { path: '/fees', page: Fees },
   { path: '/exams', page: Exams, roles: ['TEACHER'] },
-  { path: '/exam-schedule', page: ExamSchedule, roles: ['TEACHER'] },
   { path: '/student-attendance', page: StudentAttendance, roles: ['TEACHER'] },
-  { path: '/academic-years', page: AcademicYear },
+  { path: '/calendar-events', page: CalendarEvents },
   { path: '/timetable', page: Timetable, roles: ['TEACHER'] },
+  { path: '/routine', page: Routine, roles: ['TEACHER'] },
   { path: '/notices', page: Notices, roles: ['TEACHER', 'LIBRARIAN'] },
-  { path: '/events', page: Events, roles: ['TEACHER', 'LIBRARIAN'] },
   { path: '/study-materials', page: StudyMaterials, roles: ['TEACHER'] },
   { path: '/homework', page: Homework, roles: ['TEACHER'] },
   { path: '/library', page: Library, roles: ['LIBRARIAN'] },

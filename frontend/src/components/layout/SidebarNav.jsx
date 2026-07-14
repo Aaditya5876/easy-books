@@ -109,7 +109,7 @@ const schoolNavSections = [
     labelColor: 'text-rose-400',
     activeClass: 'bg-rose-600 text-white shadow-sm shadow-rose-900/30',
     items: [
-      { icon: CalendarDays, label: 'Academic Years', path: '/academic-years' },
+      { icon: CalendarDays, label: 'Calendar and Events', path: '/calendar-events' },
       { icon: UserCircle, label: 'Teachers', path: '/employees', minRole: 'accountant' },
       { icon: School, label: 'Classes', path: '/classes', roles: ['TEACHER'] },
       { icon: BookMarked, label: 'Subjects', path: '/subjects', roles: ['TEACHER'] },
@@ -123,8 +123,8 @@ const schoolNavSections = [
       { icon: GraduationCap, label: 'Students', path: '/students', roles: ['TEACHER', 'LIBRARIAN'] },
       { icon: CalendarCheck2, label: 'Attendance', path: '/student-attendance', roles: ['TEACHER'] },
       { icon: Clock, label: 'Timetable', path: '/timetable', roles: ['TEACHER'] },
-      { icon: Trophy, label: 'Exams', path: '/exams', roles: ['TEACHER'] },
-      { icon: CalendarClock, label: 'Exam Schedule', path: '/exam-schedule', roles: ['TEACHER'] },
+      { icon: CalendarDays, label: 'Routine', path: '/routine', roles: ['TEACHER'] },
+      { icon: Trophy, label: 'Exam', path: '/exams', roles: ['TEACHER'] },
       { icon: FolderOpen, label: 'Study Materials', path: '/study-materials', roles: ['TEACHER'] },
       { icon: ClipboardList, label: 'Homework', path: '/homework', roles: ['TEACHER'] },
     ]
@@ -145,7 +145,6 @@ const schoolNavSections = [
     activeClass: 'bg-amber-600 text-white shadow-sm shadow-amber-900/30',
     items: [
       { icon: Megaphone, label: 'Notices', path: '/notices', roles: ['TEACHER', 'LIBRARIAN'] },
-      { icon: CalendarDays, label: 'Events', path: '/events', roles: ['TEACHER', 'LIBRARIAN'] },
       { icon: MessageSquare, label: 'Communication', path: '/communication' },
       { icon: FileText, label: 'Memo', path: '/memo' },
     ]
@@ -294,7 +293,7 @@ export default function SidebarNav({ collapsed, onToggle }) {
                       className={cn(
                         "flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all group relative",
                         isActive
-                          ? section.activeClass
+                          ? cn(section.activeClass, "font-semibold shadow-sm")
                           : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
                       )}
                     >

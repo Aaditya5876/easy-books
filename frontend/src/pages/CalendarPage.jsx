@@ -1,16 +1,54 @@
 import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { getTodayBS, adToBs, NEPALI_MONTHS, ENGLISH_MONTHS } from '@/lib/nepaliDate';
+import { schoolEventsApi } from '@/api';
 import PageHeader from '../components/shared/PageHeader';
 import { Button } from "@/components/ui/button";
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { cn } from "@/lib/utils";
+import { format, getDay, isSameDay } from 'date-fns';
 
-export default function CalendarPage() {
+export default function CalendarPage({ mode = 'AD' }) {
   const today = new Date();
   const [currentMonth, setCurrentMonth] = useState(today.getMonth());
   const [currentYear, setCurrentYear] = useState(today.getFullYear());
 
   const todayBS = getTodayBS();
+  const monthKey = format(new Date(currentYear, currentMonth, 1), 'yyyy-MM');
+  const { data: events = [] } = useQuery({
+    queryKey: ['school-events', monthKey],
+    queryFn: () => schoolEventsApi.list(monthKey).then(r => r.data),
+  });
+
+  const parseLocalDate = (value) => {
+    if (!value) return null;
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return null;
+    return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  };
+
+  const getDayEventColor = (dayEvents) => {
+    if (!dayEvents.length) return '';
+    const types = new Set(dayEvents.map(e => e.eventType));
+    if (types.has('HOLIDAY')) return 'bg-red-200 text-red-900 border-red-300';
+    if (types.has('EXAM')) return 'bg-emerald-200 text-emerald-900 border-emerald-300';
+    return 'bg-yellow-200 text-yellow-900 border-yellow-300';
+  };
+
+  const eventsOnDay = (day) =>
+    events.filter(e => {
+      const start = parseLocalDate(e.startDate);
+      const end = parseLocalDate(e.endDate) || start;
+      return start && day >= start && day <= end;
+    });
+
+  const getDayLabel = (day) => {
+    if (mode === 'AD') {
+      return day;
+    }
+    const adDate = new Date(currentYear, currentMonth, day);
+    return adToBs(adDate).day;
+  };
 
   function prevMonth() {
     if (currentMonth === 0) {
@@ -91,10 +129,13 @@ export default function CalendarPage() {
         <div className="grid grid-cols-7">
           {days.map((day, idx) => {
             const bs = getBSForDay(day);
+            const dayEvents = day ? eventsOnDay(new Date(currentYear, currentMonth, day)) : [];
+            const eventColor = getDayEventColor(dayEvents);
             return (
               <div key={idx} className={cn(
                 "min-h-[72px] p-2 border-b border-r border-border",
                 !day && "bg-muted/30",
+                day && eventColor,
                 isToday(day) && "bg-primary/5"
               )}>
                 {day && (
@@ -103,12 +144,22 @@ export default function CalendarPage() {
                       "text-sm font-medium",
                       isToday(day) && "w-7 h-7 bg-primary text-primary-foreground rounded-full flex items-center justify-center"
                     )}>
-                      {day}
+                      {getDayLabel(day)}
                     </span>
                     {bs && (
                       <p className="text-[10px] text-muted-foreground mt-0.5">
                         {bs.day} {bs.monthName?.substring(0, 3)}
                       </p>
+                    )}
+                    {dayEvents.length > 0 && (
+                      <div className="mt-1 flex flex-wrap gap-1 text-[10px] text-muted-foreground">
+                        {dayEvents.slice(0, 2).map(e => (
+                          <span key={e.id} className="rounded-full bg-white/80 px-1 py-0.5 text-[9px] font-medium text-slate-700">
+                            {e.title}
+                          </span>
+                        ))}
+                        {dayEvents.length > 2 && <span className="rounded-full bg-white/80 px-1 py-0.5 text-[9px] font-medium text-slate-700">+{dayEvents.length - 2}</span>}
+                      </div>
                     )}
                   </>
                 )}

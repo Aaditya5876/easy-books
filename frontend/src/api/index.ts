@@ -324,14 +324,14 @@ export const schoolFinanceApi = {
 };
 
 export const schoolAnalyticsApi = {
-  attendance: (month?: string) =>
-    apiClient.get('/api/v1/school/analytics/attendance', { params: { companyId: companyId(), month } }),
-  fees: () =>
-    apiClient.get('/api/v1/school/analytics/fees', { params: { companyId: companyId() } }),
-  academics: (examName?: string) =>
-    apiClient.get('/api/v1/school/analytics/academics', { params: { companyId: companyId(), examName } }),
-  operations: () =>
-    apiClient.get('/api/v1/school/analytics/operations', { params: { companyId: companyId() } }),
+  attendance: (month?: string, startDate?: string, endDate?: string) =>
+    apiClient.get('/api/v1/school/analytics/attendance', { params: { companyId: companyId(), month, startDate, endDate } }),
+  fees: (startDate?: string, endDate?: string) =>
+    apiClient.get('/api/v1/school/analytics/fees', { params: { companyId: companyId(), startDate, endDate } }),
+  academics: (examName?: string, startDate?: string, endDate?: string) =>
+    apiClient.get('/api/v1/school/analytics/academics', { params: { companyId: companyId(), examName, startDate, endDate } }),
+  operations: (startDate?: string, endDate?: string) =>
+    apiClient.get('/api/v1/school/analytics/operations', { params: { companyId: companyId(), startDate, endDate } }),
 };
 
 export const bulkImportApi = {

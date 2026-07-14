@@ -36,30 +36,48 @@ export class SchoolController {
   @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'TEACHER')
   @ApiQuery({ name: 'companyId', required: true })
   @ApiQuery({ name: 'month', required: false, description: 'YYYY-MM, defaults to current month' })
-  getAttendanceAnalytics(@Query('companyId') companyId: string, @Query('month') month?: string) {
-    return this.analytics.attendanceReport(companyId, month);
+  @ApiQuery({ name: 'startDate', required: false, description: 'Optional inclusive start date' })
+  @ApiQuery({ name: 'endDate', required: false, description: 'Optional inclusive end date' })
+  getAttendanceAnalytics(
+    @Query('companyId') companyId: string,
+    @Query('month') month?: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+  ) {
+    return this.analytics.attendanceReport(companyId, month, startDate, endDate);
   }
 
   @Get('analytics/fees')
   @Roles('STAFF', 'ACCOUNTANT', 'ADMIN')
   @ApiQuery({ name: 'companyId', required: true })
-  getFeesAnalytics(@Query('companyId') companyId: string) {
-    return this.analytics.feesReport(companyId);
+  @ApiQuery({ name: 'startDate', required: false, description: 'Optional inclusive start date' })
+  @ApiQuery({ name: 'endDate', required: false, description: 'Optional inclusive end date' })
+  getFeesAnalytics(@Query('companyId') companyId: string, @Query('startDate') startDate?: string, @Query('endDate') endDate?: string) {
+    return this.analytics.feesReport(companyId, startDate, endDate);
   }
 
   @Get('analytics/academics')
   @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'TEACHER')
   @ApiQuery({ name: 'companyId', required: true })
   @ApiQuery({ name: 'examName', required: false })
-  getAcademicsAnalytics(@Query('companyId') companyId: string, @Query('examName') examName?: string) {
-    return this.analytics.academicsReport(companyId, examName);
+  @ApiQuery({ name: 'startDate', required: false, description: 'Optional inclusive start date' })
+  @ApiQuery({ name: 'endDate', required: false, description: 'Optional inclusive end date' })
+  getAcademicsAnalytics(
+    @Query('companyId') companyId: string,
+    @Query('examName') examName?: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+  ) {
+    return this.analytics.academicsReport(companyId, examName, startDate, endDate);
   }
 
   @Get('analytics/operations')
   @Roles('STAFF', 'ACCOUNTANT', 'ADMIN')
   @ApiQuery({ name: 'companyId', required: true })
-  getOperationsAnalytics(@Query('companyId') companyId: string) {
-    return this.analytics.operationsReport(companyId);
+  @ApiQuery({ name: 'startDate', required: false, description: 'Optional inclusive start date' })
+  @ApiQuery({ name: 'endDate', required: false, description: 'Optional inclusive end date' })
+  getOperationsAnalytics(@Query('companyId') companyId: string, @Query('startDate') startDate?: string, @Query('endDate') endDate?: string) {
+    return this.analytics.operationsReport(companyId, startDate, endDate);
   }
 
   // ── Academic Years ────────────────────────────────────────────────────────────
