@@ -285,16 +285,36 @@ export class SchoolService {
 
   // ── Subjects ─────────────────────────────────────────────────────────────────
 
-  async listSubjects(companyId: string) {
-    return this.prisma.subject.findMany({ where: { companyId }, orderBy: { name: 'asc' } });
+  async listSubjects(companyId: string, classId?: string) {
+    return this.prisma.subject.findMany({
+      where: {
+        companyId,
+        ...(classId ? { OR: [{ classes: { none: {} } }, { classes: { some: { classId } } }] } : {}),
+      },
+      include: { classes: { include: { class: true } } },
+      orderBy: { name: 'asc' },
+    });
   }
 
   async createSubject(body: any) {
-    return this.prisma.subject.create({ data: clean(body, ['companyId', 'name', 'code']) });
+    const { classIds } = body;
+    const data = clean(body, ['companyId', 'name', 'code', 'bookReference', 'chapters'], ['chapters']);
+    return this.prisma.subject.create({
+      data: { ...data, classes: classIds?.length ? { create: classIds.map((classId: string) => ({ classId })) } : undefined },
+      include: { classes: { include: { class: true } } },
+    });
   }
 
   async updateSubject(id: string, body: any) {
-    return this.prisma.subject.update({ where: { id }, data: clean(body, ['name', 'code']) });
+    const { classIds } = body;
+    const data = clean(body, ['name', 'code', 'bookReference', 'chapters'], ['chapters']);
+    return this.prisma.$transaction(async (tx) => {
+      if (classIds !== undefined) {
+        await tx.subjectClass.deleteMany({ where: { subjectId: id } });
+        if (classIds.length) await tx.subjectClass.createMany({ data: classIds.map((classId: string) => ({ subjectId: id, classId })) });
+      }
+      return tx.subject.update({ where: { id }, data, include: { classes: { include: { class: true } } } });
+    });
   }
 
   async deleteSubject(id: string, companyId: string) {
@@ -517,7 +537,7 @@ export class SchoolService {
         : {}),
     };
     const include = {
-      items: { include: { feeHead: { select: { name: true } } } },
+      items: { include: { feeHead: { select: { name: true } }, inventoryItem: { select: { itemName: true, unit: true } } } },
       payments: { orderBy: { paidAt: 'desc' as const } },
       student: { select: { name: true, rollNumber: true, class: { select: { name: true, section: true } } } },
     };
@@ -538,15 +558,50 @@ export class SchoolService {
   }
 
   async createFeeInvoice(body: any) {
-    const data = clean(body, ['companyId', 'studentId', 'month', 'description', 'totalAmount', 'paidAmount', 'discount', 'fine', 'dueDate', 'status', 'notes']);
-    return this.prisma.feeInvoice.create({
-      data: {
-        ...data,
-        // Manual invoices get a single line item so every invoice is itemized
-        items: {
-          create: [{ description: data.description || 'Fee', amount: data.totalAmount, feeHeadId: body.feeHeadId || null }],
-        },
-      },
+    const data = clean(body, ['companyId', 'studentId', 'month', 'description', 'paidAmount', 'discount', 'fine', 'dueDate', 'status', 'notes']);
+    const rows: Array<{ description: string; amount: number; feeHeadId?: string | null; inventoryItemId?: string | null; quantity?: number | null }> =
+      Array.isArray(body.items) && body.items.length
+        ? body.items.map((it: any) => ({
+            description: it.description || 'Fee',
+            amount: Number(it.amount),
+            feeHeadId: it.feeHeadId || null,
+            inventoryItemId: it.inventoryItemId || null,
+            quantity: it.quantity != null ? Number(it.quantity) : null,
+          }))
+        // Manual invoices with no items get a single line item so every invoice is itemized
+        : [{ description: data.description || 'Fee', amount: Number(body.totalAmount), feeHeadId: body.feeHeadId || null }];
+
+    const totalAmount = rows.reduce((sum, r) => sum + r.amount, 0);
+
+    return this.prisma.$transaction(async (tx) => {
+      for (const row of rows) {
+        if (!row.inventoryItemId) continue;
+        const qty = row.quantity ?? 0;
+        if (qty <= 0) throw new BadRequestException('Quantity is required for inventory items');
+        const item = await tx.inventoryItem.findFirst({ where: { id: row.inventoryItemId, companyId: data.companyId, deletedAt: null } });
+        if (!item) throw new NotFoundException('Inventory item not found');
+        const quantityBefore = Number(item.quantity);
+        const quantityAfter = quantityBefore - qty;
+        if (quantityAfter < 0) throw new BadRequestException(`Not enough stock for "${item.itemName}" — only ${quantityBefore} left`);
+        await tx.inventoryItem.update({ where: { id: item.id }, data: { quantity: quantityAfter } });
+        await tx.inventoryAdjustment.create({
+          data: {
+            companyId: data.companyId,
+            inventoryItemId: item.id,
+            adjustmentType: 'SUBTRACTION',
+            quantityBefore,
+            quantityChange: -qty,
+            quantityAfter,
+            reason: `Billed on fee invoice (${data.month || ''})`.trim(),
+            dateAd: new Date(),
+          },
+        });
+      }
+
+      return tx.feeInvoice.create({
+        data: { ...data, totalAmount, items: { create: rows } },
+        include: { items: { include: { feeHead: { select: { name: true } }, inventoryItem: { select: { itemName: true, unit: true } } } } },
+      });
     });
   }
 
@@ -600,7 +655,7 @@ export class SchoolService {
           include: { class: { select: { name: true, section: true } } },
         },
         company: { select: { name: true, address: true, phone: true, email: true } },
-        items: { include: { feeHead: { select: { name: true } } } },
+        items: { include: { feeHead: { select: { name: true } }, inventoryItem: { select: { itemName: true, unit: true } } } },
         payments: { orderBy: { paidAt: 'asc' } },
       },
     });

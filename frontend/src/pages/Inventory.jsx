@@ -38,6 +38,7 @@ const FIELDS = {
   FOOD_BEVERAGE:{ brand: false, modelNo: false, application: false, expiry: true,  aging: false, location: false },
   SERVICES:     { brand: false, modelNo: false, application: false, expiry: false, aging: false, location: false },
   MANUFACTURING:{ brand: true,  modelNo: true,  application: true,  expiry: false, aging: true,  location: true },
+  SCHOOL:       { brand: false, modelNo: false, application: false, expiry: false, aging: false, location: true },
   OTHER:        { brand: true,  modelNo: true,  application: true,  expiry: true,  aging: true,  location: true },
 };
 
@@ -57,6 +58,7 @@ const PLACEHOLDERS = {
   FOOD_BEVERAGE: { item_name: 'e.g. Masala Tea, Milk Tea, Coffee', description: 'e.g. Served hot, 250ml', brand: '', model_no: '', application: '', supplier_name: 'e.g. Nepal Tea Estate' },
   SERVICES:      { item_name: 'e.g. Consultation, Design Package', description: 'Scope of service', brand: '', model_no: '', application: 'e.g. IT Support, Accounting', supplier_name: 'e.g. TechVision Pvt. Ltd.' },
   MANUFACTURING: { item_name: 'e.g. Raw Steel, Cotton Yarn', description: 'Grade or specification', brand: 'e.g. SAIL, Birla', model_no: 'e.g. IS:2062 Grade A', application: 'e.g. Structural frames, Weaving', supplier_name: 'e.g. Industrial Supply Co.' },
+  SCHOOL:        { item_name: 'e.g. School Bag, PE Uniform, Notebook Set', description: 'e.g. Size, color, class', brand: '', model_no: '', application: '', supplier_name: 'e.g. Local Uniform Supplier' },
   OTHER:         { item_name: 'e.g. Item name', description: 'Additional details or notes', brand: 'e.g. Brand name', model_no: 'e.g. Model or part number', application: 'e.g. Usage or purpose', supplier_name: 'e.g. Supplier name' },
 };
 
@@ -305,7 +307,7 @@ export default function Inventory() {
   return (
     <div className="space-y-6 animate-fade-in">
       <PageHeader
-        title="Inventory"
+        title={company?.business_type?.toUpperCase() === 'SCHOOL' ? 'Supplies' : 'Inventory'}
         subtitle={`${items.length} items · ${lowStockCount} low stock alerts`}
         onAdd={() => { setShowExtraFields(false); setShowAdd(true); }}
         addLabel="Add Stock"
@@ -678,7 +680,7 @@ export default function Inventory() {
             {company?.business_type && (
               <p className="text-xs text-muted-foreground">
                 Fields shown for <span className="font-medium">
-                  {({ RETAIL: 'Retail', PHARMACY: 'Pharmacy', ELECTRONICS: 'Electronics', FOOD_BEVERAGE: 'Tea Shop / Bakery', SERVICES: 'Services', MANUFACTURING: 'Manufacturing', OTHER: 'Other' })[company.business_type] || company.business_type}
+                  {({ RETAIL: 'Retail', PHARMACY: 'Pharmacy', ELECTRONICS: 'Electronics', FOOD_BEVERAGE: 'Tea Shop / Bakery', SERVICES: 'Services', MANUFACTURING: 'Manufacturing', SCHOOL: 'School Supplies', OTHER: 'Other' })[company.business_type] || company.business_type}
                 </span> businesses.
                 Change in <a href="/settings" className="text-primary underline">Settings</a> to adjust.
               </p>

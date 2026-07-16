@@ -2,7 +2,7 @@ import { useState, useEffect, Fragment } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, Pencil, Trash2, DollarSign, CheckCircle, Printer, Users, Sparkles, ChevronDown, ChevronRight, ChevronLeft, Receipt, Search } from 'lucide-react';
-import { feesApi, classesApi, aiApi, schoolFinanceApi } from '@/api';
+import { feesApi, classesApi, aiApi, schoolFinanceApi, inventoryApi } from '@/api';
 import StudentFeeProfileTab from './fees/StudentFeeProfileTab';
 import FeeHeadsTab from './fees/FeeHeadsTab';
 import FeePackagesTab from './fees/FeePackagesTab';
@@ -273,17 +273,45 @@ function BillingRunDialog({ open, onClose, classes }) {
 
 // ── New Invoice Dialog ────────────────────────────────────────────────────────
 
+let rowSeq = 0;
+const newFeeRow = () => ({ key: ++rowSeq, kind: 'FEE', description: '', amount: '', feeHeadId: '' });
+const newItemRow = () => ({ key: ++rowSeq, kind: 'ITEM', inventoryItemId: '', quantity: '1', description: '' });
+
 function NewInvoiceDialog({ open, onClose, classes, companyId }) {
   const { t } = useTranslation();
   const qc = useQueryClient();
-  const [form, setForm] = useState({ studentId: '', month: '', totalAmount: '', description: '' });
-  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const [studentId, setStudentId] = useState('');
+  const [month, setMonth] = useState('');
+  const [rows, setRows] = useState([newFeeRow()]);
+
+  const { data: feeHeads = [] } = useQuery({
+    queryKey: ['fee-heads'],
+    queryFn: () => schoolFinanceApi.listFeeHeads().then(r => r.data),
+    enabled: open,
+  });
+
+  const { data: inventoryItems = [] } = useQuery({
+    queryKey: ['inventory-items', companyId],
+    queryFn: () => inventoryApi.list().then(r => r.data),
+    enabled: open,
+  });
+
+  const updateRow = (key, patch) => setRows(rs => rs.map(r => r.key === key ? { ...r, ...patch } : r));
+  const removeRow = (key) => setRows(rs => rs.length > 1 ? rs.filter(r => r.key !== key) : rs);
+
+  const rowAmount = (row) => {
+    if (row.kind === 'FEE') return parseFloat(row.amount) || 0;
+    const item = inventoryItems.find(i => i.id === row.inventoryItemId);
+    return item ? (parseFloat(row.quantity) || 0) * Number(item.unitSellingPrice || 0) : 0;
+  };
+  const total = rows.reduce((sum, r) => sum + rowAmount(r), 0);
 
   const save = useMutation({
     mutationFn: (data) => feesApi.createInvoice(data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['fee-invoices'] });
       qc.invalidateQueries({ queryKey: ['school-dashboard'] });
+      qc.invalidateQueries({ queryKey: ['inventory-items'] });
       toast.success(t('fees.invoiceCreated', { defaultValue: 'Invoice created' }));
       onClose();
     },
@@ -292,37 +320,95 @@ function NewInvoiceDialog({ open, onClose, classes, companyId }) {
 
   function handleSubmit(e) {
     e.preventDefault();
-    if (!form.studentId) { toast.error(t('fees.selectAStudent', { defaultValue: 'Select a student' })); return; }
-    if (!form.month.trim()) { toast.error(t('fees.monthRequired', { defaultValue: 'Month is required' })); return; }
-    if (!form.totalAmount || isNaN(form.totalAmount)) { toast.error(t('fees.validAmountRequired', { defaultValue: 'Valid amount required' })); return; }
-    save.mutate({ ...form, totalAmount: parseFloat(form.totalAmount), companyId });
+    if (!studentId) { toast.error(t('fees.selectAStudent', { defaultValue: 'Select a student' })); return; }
+    if (!month.trim()) { toast.error(t('fees.monthRequired', { defaultValue: 'Month is required' })); return; }
+    for (const r of rows) {
+      if (r.kind === 'ITEM' && !r.inventoryItemId) { toast.error(t('fees.selectAnItem', { defaultValue: 'Select an item for every item row' })); return; }
+      if (r.kind === 'FEE' && !r.description.trim()) { toast.error(t('fees.descriptionRequiredForFeeRow', { defaultValue: 'Description is required for every fee row' })); return; }
+    }
+    if (total <= 0) { toast.error(t('fees.validAmountRequired', { defaultValue: 'Valid amount required' })); return; }
+
+    const items = rows.map(r => {
+      if (r.kind === 'ITEM') {
+        const item = inventoryItems.find(i => i.id === r.inventoryItemId);
+        return {
+          inventoryItemId: r.inventoryItemId,
+          quantity: parseFloat(r.quantity) || 0,
+          description: r.description.trim() || item?.itemName || 'Item',
+          amount: rowAmount(r),
+        };
+      }
+      return { description: r.description.trim(), amount: parseFloat(r.amount) || 0, feeHeadId: r.feeHeadId || undefined };
+    });
+
+    save.mutate({ studentId, month, items, companyId });
   }
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-sm">
+      <DialogContent className="max-w-lg">
         <DialogHeader><DialogTitle>{t('fees.createFeeInvoice', { defaultValue: 'Create Fee Invoice' })}</DialogTitle></DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4 pt-2">
           <div className="space-y-1.5">
             <Label>{t('fees.studentRequiredLabel', { defaultValue: 'Student *' })}</Label>
             <StudentCombobox
-              value={form.studentId}
-              onChange={id => set('studentId', id)}
+              value={studentId}
+              onChange={setStudentId}
               placeholder={t('fees.selectStudent', { defaultValue: 'Select student…' })}
             />
           </div>
           <div className="space-y-1.5">
             <Label>{t('fees.monthPeriodLabel', { defaultValue: 'Month / Period *' })}</Label>
-            <Input placeholder={t('fees.monthPlaceholderLong', { defaultValue: 'e.g. 2081-Bhadra or Term 1 2081' })} value={form.month} onChange={e => set('month', e.target.value)} />
+            <Input placeholder={t('fees.monthPlaceholderLong', { defaultValue: 'e.g. 2081-Bhadra or Term 1 2081' })} value={month} onChange={e => setMonth(e.target.value)} />
           </div>
-          <div className="space-y-1.5">
-            <Label>{t('fees.totalAmountNprLabel', { defaultValue: 'Total Amount (NPR) *' })}</Label>
-            <Input type="number" placeholder="0.00" value={form.totalAmount} onChange={e => set('totalAmount', e.target.value)} />
+
+          <div className="space-y-2">
+            <Label>{t('fees.charges', { defaultValue: 'Charges' })}</Label>
+            <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+              {rows.map(row => (
+                <div key={row.key} className="flex items-start gap-2 border rounded-md p-2">
+                  {row.kind === 'FEE' ? (
+                    <div className="flex-1 grid grid-cols-2 gap-2">
+                      <Input placeholder={t('fees.descriptionPlaceholder', { defaultValue: 'e.g. Tuition fee' })} value={row.description} onChange={e => updateRow(row.key, { description: e.target.value })} className="col-span-2 h-8 text-sm" />
+                      <select className="h-8 text-sm border rounded-md px-2 bg-background" value={row.feeHeadId} onChange={e => updateRow(row.key, { feeHeadId: e.target.value })}>
+                        <option value="">{t('fees.noHead', { defaultValue: '— None —' })}</option>
+                        {feeHeads.filter(h => h.isActive).map(h => <option key={h.id} value={h.id}>{h.name}</option>)}
+                      </select>
+                      <Input type="number" placeholder="0.00" value={row.amount} onChange={e => updateRow(row.key, { amount: e.target.value })} className="h-8 text-sm" />
+                    </div>
+                  ) : (
+                    <div className="flex-1 grid grid-cols-3 gap-2">
+                      <select className="col-span-2 h-8 text-sm border rounded-md px-2 bg-background" value={row.inventoryItemId} onChange={e => updateRow(row.key, { inventoryItemId: e.target.value })}>
+                        <option value="">{t('fees.selectItemEllipsis', { defaultValue: 'Select item…' })}</option>
+                        {inventoryItems.map(i => <option key={i.id} value={i.id}>{i.itemName} (Rs. {Number(i.unitSellingPrice || 0).toLocaleString()}, {Number(i.quantity)} {i.unit} left)</option>)}
+                      </select>
+                      <Input type="number" min="1" placeholder={t('fees.qty', { defaultValue: 'Qty' })} value={row.quantity} onChange={e => updateRow(row.key, { quantity: e.target.value })} className="h-8 text-sm" />
+                      <div className="col-span-3 text-xs text-muted-foreground text-right">
+                        Rs. {rowAmount(row).toLocaleString('en-NP', { minimumFractionDigits: 2 })}
+                      </div>
+                    </div>
+                  )}
+                  <button type="button" onClick={() => removeRow(row.key)} className="p-1.5 mt-0.5 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600 shrink-0">
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              ))}
+            </div>
+            <div className="flex gap-2">
+              <Button type="button" variant="outline" size="sm" onClick={() => setRows(rs => [...rs, newFeeRow()])}>
+                <Plus className="w-3.5 h-3.5 mr-1" /> {t('fees.addFeeRow', { defaultValue: 'Add Fee' })}
+              </Button>
+              <Button type="button" variant="outline" size="sm" onClick={() => setRows(rs => [...rs, newItemRow()])}>
+                <Plus className="w-3.5 h-3.5 mr-1" /> {t('fees.addItemRow', { defaultValue: 'Add Item' })}
+              </Button>
+            </div>
           </div>
-          <div className="space-y-1.5">
-            <Label>{t('fees.description', { defaultValue: 'Description' })}</Label>
-            <Input placeholder={t('fees.descriptionPlaceholder', { defaultValue: 'Tuition + Exam fee, etc.' })} value={form.description} onChange={e => set('description', e.target.value)} />
+
+          <div className="flex items-center justify-between border-t pt-3 text-sm font-medium">
+            <span>{t('fees.total', { defaultValue: 'Total' })}</span>
+            <span className="tabular-nums">Rs. {total.toLocaleString('en-NP', { minimumFractionDigits: 2 })}</span>
           </div>
+
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose}>{t('fees.cancel', { defaultValue: 'Cancel' })}</Button>
             <Button type="submit" disabled={save.isPending}>{save.isPending ? t('fees.creating', { defaultValue: 'Creating…' }) : t('fees.createInvoice', { defaultValue: 'Create Invoice' })}</Button>
@@ -707,7 +793,11 @@ export default function Fees() {
                                     <div className="space-y-1">
                                       {inv.items.map(item => (
                                         <div key={item.id} className="flex justify-between text-sm">
-                                          <span>{item.description}{item.feeHead ? <span className="text-xs text-muted-foreground ml-1">· {item.feeHead.name}</span> : null}</span>
+                                          <span>
+                                            {item.description}
+                                            {item.feeHead ? <span className="text-xs text-muted-foreground ml-1">· {item.feeHead.name}</span> : null}
+                                            {item.inventoryItem ? <span className="text-xs text-muted-foreground ml-1">· {item.quantity} {item.inventoryItem.unit}</span> : null}
+                                          </span>
                                           <span className={`tabular-nums ${Number(item.amount) < 0 ? 'text-emerald-600' : ''}`}>
                                             {Number(item.amount) < 0 ? '− ' : ''}Rs. {Math.abs(Number(item.amount)).toLocaleString('en-NP', { minimumFractionDigits: 2 })}
                                           </span>

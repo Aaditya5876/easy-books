@@ -241,7 +241,7 @@ export const classesApi = {
 };
 
 export const subjectsApi = {
-  list: () => apiClient.get('/api/v1/school/subjects', { params: { companyId: companyId() } }),
+  list: (classId?: string) => apiClient.get('/api/v1/school/subjects', { params: { companyId: companyId(), classId: classId || undefined } }),
   create: (data: object) => apiClient.post('/api/v1/school/subjects', data),
   update: (id: string, data: object) => apiClient.put(`/api/v1/school/subjects/${id}`, data),
   remove: (id: string) => apiClient.delete(`/api/v1/school/subjects/${id}`, { params: { companyId: companyId() } }),

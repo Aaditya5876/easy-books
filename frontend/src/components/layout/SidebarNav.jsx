@@ -135,6 +135,7 @@ const schoolNavSections = [
     activeClass: 'bg-blue-600 text-white shadow-sm shadow-blue-900/30',
     items: [
       { icon: DollarSign, label: 'Fees', path: '/fees' },
+      { icon: Package, label: 'Inventory', path: '/inventory' },
       { icon: BookOpen, label: 'Ledger', path: '/ledger' },
       { icon: ArrowLeftRight, label: 'Transactions', path: '/transactions' },
     ]

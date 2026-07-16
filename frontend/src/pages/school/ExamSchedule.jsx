@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { examSchedulesApi, classesApi, subjectsApi } from '@/api';
+import { filterSubjectsByClass } from '@/lib/subjectFilter';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -89,7 +90,7 @@ function ScheduleDialog({ open, onClose, entry, classes, subjects }) {
               <Select value={form.subjectId} onValueChange={v => setForm(p => ({ ...p, subjectId: v }))}>
                 <SelectTrigger><SelectValue placeholder={t('examSchedule.selectSubject', { defaultValue: 'Select subject' })} /></SelectTrigger>
                 <SelectContent>
-                  {subjects.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+                  {filterSubjectsByClass(subjects, form.classId).map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>

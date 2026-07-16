@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { subjectsApi } from '@/api';
+import { subjectsApi, classesApi } from '@/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -16,6 +16,8 @@ import { toast } from 'sonner';
 import BulkImportDialog from '@/components/shared/BulkImportDialog';
 import { SUBJECT_FIELDS } from '@/components/shared/bulkImportFields';
 
+const classLabel = (c) => `${c.name}${c.section ? ` (${c.section})` : ''}`;
+
 function SubjectDialog({ open, onClose, subject }) {
   const { t } = useTranslation();
   const qc = useQueryClient();
@@ -23,10 +25,22 @@ function SubjectDialog({ open, onClose, subject }) {
   const [form, setForm] = useState({
     name: subject?.name || '',
     code: subject?.code || '',
-    standards: subject?.standards || '',
-    bookReference: subject?.bookReference || subject?.book_reference || '',
-    chapters: subject?.chapters || subject?.numberOfChapters || subject?.chapters || '',
+    classIds: subject?.classes?.map(sc => sc.classId) || [],
+    bookReference: subject?.bookReference || '',
+    chapters: subject?.chapters ?? '',
   });
+
+  const { data: classes = [] } = useQuery({
+    queryKey: ['school-classes'],
+    queryFn: () => classesApi.list().then(r => r.data),
+  });
+
+  const toggleClass = (classId) => {
+    setForm(p => ({
+      ...p,
+      classIds: p.classIds.includes(classId) ? p.classIds.filter(id => id !== classId) : [...p.classIds, classId],
+    }));
+  };
 
   const save = useMutation({
     mutationFn: (d) => isEdit ? subjectsApi.update(subject.id, d) : subjectsApi.create(d),
@@ -46,8 +60,8 @@ function SubjectDialog({ open, onClose, subject }) {
     const payload = {
       name: form.name,
       code: form.code,
-      standards: form.standards,
-      book_reference: form.bookReference,
+      classIds: form.classIds,
+      bookReference: form.bookReference,
       chapters: form.chapters ? parseInt(form.chapters, 10) : undefined,
     };
     save.mutate(isEdit ? payload : { ...payload, companyId });
@@ -69,8 +83,18 @@ function SubjectDialog({ open, onClose, subject }) {
             <Input value={form.code} onChange={e => setForm(p => ({ ...p, code: e.target.value }))} placeholder={t('subjects.subjectCodePlaceholder', { defaultValue: 'e.g. MATH-10' })} />
           </div>
           <div className="space-y-1">
-            <Label>Standards</Label>
-            <Input value={form.standards} onChange={e => setForm(p => ({ ...p, standards: e.target.value }))} placeholder="e.g. 5th - 7th" />
+            <Label>{t('subjects.standards', { defaultValue: 'Standards' })}</Label>
+            <div className="flex flex-wrap gap-x-3 gap-y-2 border rounded-md p-2 max-h-32 overflow-y-auto">
+              {classes.length === 0 ? (
+                <span className="text-xs text-muted-foreground">{t('subjects.noClassesYet', { defaultValue: 'No classes set up yet' })}</span>
+              ) : classes.map(c => (
+                <label key={c.id} className="flex items-center gap-1.5 text-sm cursor-pointer">
+                  <input type="checkbox" checked={form.classIds.includes(c.id)} onChange={() => toggleClass(c.id)} />
+                  {classLabel(c)}
+                </label>
+              ))}
+            </div>
+            <p className="text-xs text-muted-foreground">{t('subjects.standardsHint', { defaultValue: 'Leave all unchecked to make this subject available for every standard.' })}</p>
           </div>
           <div className="space-y-1">
             <Label>Books Reference</Label>
@@ -163,9 +187,9 @@ export default function Subjects() {
                 <TableCell className="text-muted-foreground">{i + 1}</TableCell>
                   <TableCell className="font-medium">{s.name}</TableCell>
                   <TableCell>{s.code || <span className="text-muted-foreground">—</span>}</TableCell>
-                  <TableCell>{s.standards || s.standard || <span className="text-muted-foreground">—</span>}</TableCell>
-                  <TableCell>{s.book_reference || s.bookReference || <span className="text-muted-foreground">—</span>}</TableCell>
-                  <TableCell>{s.chapters ?? s.numberOfChapters ?? <span className="text-muted-foreground">—</span>}</TableCell>
+                  <TableCell>{s.classes?.length ? s.classes.map(sc => classLabel(sc.class)).join(', ') : <span className="text-muted-foreground">{t('subjects.allStandards', { defaultValue: 'All' })}</span>}</TableCell>
+                  <TableCell>{s.bookReference || <span className="text-muted-foreground">—</span>}</TableCell>
+                  <TableCell>{s.chapters ?? <span className="text-muted-foreground">—</span>}</TableCell>
                   <TableCell>
                     <div className="flex gap-1">
                       <Button size="icon" variant="ghost" onClick={() => setDialog({ open: true, subject: s })}>

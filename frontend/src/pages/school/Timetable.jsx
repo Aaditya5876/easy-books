@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { timetableApi, classesApi, subjectsApi } from '@/api';
+import { filterSubjectsByClass } from '@/lib/subjectFilter';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
@@ -91,7 +92,7 @@ function PeriodDialog({ open, onClose, entry, classId }) {
               <SelectTrigger><SelectValue placeholder={t('timetable.selectSubject', { defaultValue: 'Select subject' })} /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="FREE">{t('timetable.freeBreak', { defaultValue: '— Free / Break —' })}</SelectItem>
-                {subjects.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+                {filterSubjectsByClass(subjects, classId).map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>

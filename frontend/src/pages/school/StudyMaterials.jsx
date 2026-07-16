@@ -4,6 +4,7 @@ import { Plus, Trash2, FileText, Download, BookOpen, Filter } from 'lucide-react
 import { useTranslation } from 'react-i18next';
 import { studyMaterialsApi, classesApi, subjectsApi, uploadApi } from '@/api';
 import { getActiveCompanyId } from '@/lib/companyContext';
+import { filterSubjectsByClass } from '@/lib/subjectFilter';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -76,7 +77,7 @@ function UploadDialog({ open, onClose, classes, subjects, companyId }) {
               <Label>{t('materials.subject', { defaultValue: 'Subject' })}</Label>
               <select className="w-full border rounded-md px-3 py-2 text-sm bg-background" value={form.subjectId} onChange={e => set('subjectId', e.target.value)}>
                 <option value="">{t('materials.allSubjects', { defaultValue: 'All Subjects' })}</option>
-                {subjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                {filterSubjectsByClass(subjects, form.classId).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
               </select>
             </div>
           </div>
@@ -160,7 +161,7 @@ export default function StudyMaterials() {
         </select>
         <select className="border rounded-md px-3 py-2 text-sm bg-background" value={filterSubject} onChange={e => setFilterSubject(e.target.value)}>
           <option value="">{t('materials.allSubjects', { defaultValue: 'All Subjects' })}</option>
-          {subjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+          {filterSubjectsByClass(subjects, filterClass).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
         </select>
       </div>
 

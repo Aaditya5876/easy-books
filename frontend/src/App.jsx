@@ -67,6 +67,7 @@ const schoolRoutes = [
   { path: '/classes', page: Classes, roles: ['TEACHER'] },
   { path: '/subjects', page: Subjects, roles: ['TEACHER'] },
   { path: '/fees', page: Fees },
+  { path: '/inventory', page: Inventory },
   { path: '/exams', page: Exams, roles: ['TEACHER'] },
   { path: '/student-attendance', page: StudentAttendance, roles: ['TEACHER'] },
   { path: '/calendar-events', page: CalendarEvents },

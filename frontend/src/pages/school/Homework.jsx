@@ -4,6 +4,7 @@ import { Plus, Pencil, Trash2, ClipboardList, AlertCircle, Sparkles } from 'luci
 import { useTranslation } from 'react-i18next';
 import { homeworkApi, classesApi, subjectsApi, aiApi } from '@/api';
 import { getActiveCompanyId } from '@/lib/companyContext';
+import { filterSubjectsByClass } from '@/lib/subjectFilter';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -87,7 +88,7 @@ function HomeworkDialog({ open, onClose, initial, classes, subjects, companyId }
               <Label>{t('homework.subject', { defaultValue: 'Subject' })}</Label>
               <select className="w-full border rounded-md px-3 py-2 text-sm bg-background" value={form.subjectId} onChange={e => set('subjectId', e.target.value)}>
                 <option value="">{t('homework.allSubjects', { defaultValue: 'All Subjects' })}</option>
-                {subjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                {filterSubjectsByClass(subjects, form.classId).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
               </select>
             </div>
           </div>

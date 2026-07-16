@@ -193,12 +193,13 @@ export class SchoolController {
   @Get('subjects')
   @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'TEACHER')
   @ApiQuery({ name: 'companyId', required: true })
-  listSubjects(@Query('companyId') companyId: string) {
-    return this.service.listSubjects(companyId);
+  @ApiQuery({ name: 'classId', required: false })
+  listSubjects(@Query('companyId') companyId: string, @Query('classId') classId?: string) {
+    return this.service.listSubjects(companyId, classId);
   }
 
   @Post('subjects')
-  createSubject(@Body() body: { companyId: string; name: string; code?: string }) {
+  createSubject(@Body() body: { companyId: string; name: string; code?: string; classIds?: string[]; bookReference?: string; chapters?: number }) {
     return this.service.createSubject(body);
   }
 
