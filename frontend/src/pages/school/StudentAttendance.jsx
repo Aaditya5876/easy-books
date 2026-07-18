@@ -1,5 +1,5 @@
-import { useState, useMemo } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useState, useMemo, useEffect } from 'react';
+import { useQuery, useMutation } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { studentAttendanceApi, classesApi, academicYearsApi } from '@/api';
 import { Button } from '@/components/ui/button';
@@ -55,12 +55,16 @@ export default function StudentAttendance() {
     queryKey: ['student-attendance', classId, date],
     queryFn: () => studentAttendanceApi.get(classId, date).then(r => r.data),
     enabled: !!classId && !!date,
-    onSuccess: (rows) => {
-      const map = {};
-      rows.forEach(r => { map[r.studentId] = r.status; });
-      setStatuses(map);
-    },
   });
+
+  // Re-sync local edits whenever the class/date changes and fresh rows arrive —
+  // `onSuccess` on useQuery was removed in TanStack Query v5, so without this
+  // `statuses` from a previously viewed date would silently leak into a new one.
+  useEffect(() => {
+    const map = {};
+    attendanceRows.forEach(r => { map[r.studentId] = r.status; });
+    setStatuses(map);
+  }, [attendanceRows]);
 
   // Initialize statuses from fetched data
   const rows = useMemo(() => {

@@ -2,7 +2,7 @@ import { useState, useEffect, Fragment } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, Pencil, Trash2, DollarSign, CheckCircle, Printer, Users, Sparkles, ChevronDown, ChevronRight, ChevronLeft, Receipt, Search } from 'lucide-react';
-import { feesApi, classesApi, aiApi, schoolFinanceApi, inventoryApi } from '@/api';
+import { feesApi, classesApi, aiApi, schoolFinanceApi, inventoryApi, bankAccountApi } from '@/api';
 import StudentFeeProfileTab from './fees/StudentFeeProfileTab';
 import FeeHeadsTab from './fees/FeeHeadsTab';
 import FeePackagesTab from './fees/FeePackagesTab';
@@ -14,6 +14,7 @@ import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
+import { printFeeReceipt } from '@/lib/printFeeReceipt';
 
 // ── Fee Structure Dialog ──────────────────────────────────────────────────────
 
@@ -124,6 +125,13 @@ function PaymentDialog({ open, onClose, invoice }) {
   const [amount, setAmount] = useState('');
   const [method, setMethod] = useState('CASH');
   const [notes, setNotes] = useState('');
+  const [bankAccountId, setBankAccountId] = useState('');
+
+  const { data: bankAccounts = [] } = useQuery({
+    queryKey: ['bank-accounts'],
+    queryFn: () => bankAccountApi.list().then(r => r.data),
+    enabled: open && method === 'BANK',
+  });
 
   const remaining = invoice ? Number(invoice.totalAmount) - Number(invoice.paidAmount) : 0;
 
@@ -132,6 +140,7 @@ function PaymentDialog({ open, onClose, invoice }) {
     onSuccess: (res) => {
       qc.invalidateQueries({ queryKey: ['fee-invoices'] });
       qc.invalidateQueries({ queryKey: ['school-dashboard'] });
+      qc.invalidateQueries({ queryKey: ['bank-accounts'] });
       const receiptNo = res?.data?.receiptNo;
       toast.success(receiptNo
         ? t('fees.paymentRecordedReceipt', { defaultValue: 'Payment recorded — Receipt {{receiptNo}}', receiptNo })
@@ -146,7 +155,8 @@ function PaymentDialog({ open, onClose, invoice }) {
     const amt = parseFloat(amount);
     if (!amt || amt <= 0) { toast.error(t('fees.enterValidPaymentAmount', { defaultValue: 'Enter a valid payment amount' })); return; }
     if (amt > remaining) { toast.error(t('fees.cannotExceedRemaining', { defaultValue: 'Cannot exceed remaining amount: Rs. {{amount}}', amount: remaining.toFixed(2) })); return; }
-    pay.mutate({ amount: amt, method, notes });
+    if (method === 'BANK' && !bankAccountId) { toast.error(t('fees.selectBankAccount', { defaultValue: 'Select which bank account received this payment' })); return; }
+    pay.mutate({ amount: amt, method, notes, bankAccountId: method === 'BANK' ? bankAccountId : undefined });
   }
 
   return (
@@ -176,13 +186,27 @@ function PaymentDialog({ open, onClose, invoice }) {
           </div>
           <div className="space-y-1.5">
             <Label>{t('fees.paymentMethod', { defaultValue: 'Payment Method' })}</Label>
-            <select className="w-full border rounded-md px-3 py-2 text-sm bg-background" value={method} onChange={e => setMethod(e.target.value)}>
+            <select className="w-full border rounded-md px-3 py-2 text-sm bg-background" value={method} onChange={e => { setMethod(e.target.value); setBankAccountId(''); }}>
               <option value="CASH">{t('fees.methodCash', { defaultValue: 'Cash' })}</option>
               <option value="BANK">{t('fees.methodBank', { defaultValue: 'Bank Transfer / Cheque' })}</option>
               <option value="ESEWA">eSewa</option>
               <option value="KHALTI">Khalti</option>
             </select>
           </div>
+          {method === 'BANK' && (
+            <div className="space-y-1.5">
+              <Label>{t('fees.bankAccount', { defaultValue: 'Bank Account *' })}</Label>
+              <select className="w-full border rounded-md px-3 py-2 text-sm bg-background" value={bankAccountId} onChange={e => setBankAccountId(e.target.value)}>
+                <option value="">{t('fees.chooseBankAccount', { defaultValue: 'Choose bank account…' })}</option>
+                {bankAccounts.map(b => (
+                  <option key={b.id} value={b.id}>{b.bankName || b.bank_name} — {b.accountNumber || b.account_number}</option>
+                ))}
+              </select>
+              {bankAccounts.length === 0 && (
+                <p className="text-xs text-muted-foreground">{t('fees.noBankAccountsHint', { defaultValue: 'No bank accounts yet — add one in Transactions → Bank tab.' })}</p>
+              )}
+            </div>
+          )}
           <div className="space-y-1.5">
             <Label>{t('fees.notes', { defaultValue: 'Notes' })}</Label>
             <Input placeholder={t('fees.notesPlaceholder', { defaultValue: 'Cheque no. / reference…' })} value={notes} onChange={e => setNotes(e.target.value)} />
@@ -500,58 +524,6 @@ function BulkInvoiceDialog({ open, onClose, classes, companyId }) {
   );
 }
 
-// ── Receipt Print ─────────────────────────────────────────────────────────────
-
-function printReceipt(inv) {
-  const w = window.open('', '_blank');
-  const fmt = (n) => Number(n).toLocaleString('en-NP', { minimumFractionDigits: 2 });
-  const className = inv.student?.class
-    ? `${inv.student.class.name}${inv.student.class.section ? ` (${inv.student.class.section})` : ''}`
-    : '—';
-
-  w.document.write(`
-    <html><head><title>Fee Receipt</title>
-    <style>
-      body{font-family:sans-serif;max-width:500px;margin:30px auto;padding:0 20px;font-size:13px}
-      h2{text-align:center;margin:0;font-size:18px}
-      .divider{border-top:1px dashed #999;margin:12px 0}
-      .row{display:flex;justify-content:space-between;margin:4px 0}
-      .label{color:#666}
-      .total{font-size:15px;font-weight:bold;margin-top:8px}
-      .stamp{margin-top:40px;text-align:right;font-size:12px}
-      @media print{button{display:none}}
-    </style></head>
-    <body>
-    <h2>${inv.company?.name || 'School'}</h2>
-    ${inv.company?.address ? `<p style="text-align:center;color:#666;margin:4px 0">${inv.company.address}</p>` : ''}
-    ${inv.company?.phone ? `<p style="text-align:center;color:#666;margin:4px 0">Phone: ${inv.company.phone}</p>` : ''}
-    <div class="divider"></div>
-    <div style="text-align:center;font-weight:bold;margin-bottom:8px">FEE RECEIPT</div>
-    <div class="row"><span class="label">Receipt No:</span> <span>${inv.id.slice(-8).toUpperCase()}</span></div>
-    <div class="row"><span class="label">Date:</span> <span>${format(new Date(), 'dd MMM yyyy')}</span></div>
-    <div class="divider"></div>
-    <div class="row"><span class="label">Student:</span> <span>${inv.student?.name || '—'}</span></div>
-    <div class="row"><span class="label">Roll No:</span> <span>${inv.student?.rollNumber || '—'}</span></div>
-    <div class="row"><span class="label">Class:</span> <span>${className}</span></div>
-    <div class="row"><span class="label">Month:</span> <span>${inv.month}</span></div>
-    ${inv.description ? `<div class="row"><span class="label">Description:</span> <span>${inv.description}</span></div>` : ''}
-    <div class="divider"></div>
-    <div class="row"><span class="label">Total Amount:</span> <span>Rs. ${fmt(inv.totalAmount)}</span></div>
-    ${Number(inv.discount) > 0 ? `<div class="row"><span class="label">Discount:</span> <span>- Rs. ${fmt(inv.discount)}</span></div>` : ''}
-    <div class="row total"><span>Amount Paid:</span> <span>Rs. ${fmt(inv.paidAmount)}</span></div>
-    ${Number(inv.totalAmount) - Number(inv.paidAmount) > 0 ? `<div class="row" style="color:#c00"><span>Balance Due:</span> <span>Rs. ${fmt(Number(inv.totalAmount) - Number(inv.paidAmount))}</span></div>` : ''}
-    <div class="divider"></div>
-    <div class="stamp">
-      <p>_______________________</p>
-      <p>Accountant / Cashier</p>
-    </div>
-    <br><button onclick="window.print()">Print Receipt</button>
-    </body></html>
-  `);
-  w.document.close();
-  setTimeout(() => w.print(), 300);
-}
-
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
 const STATUS_BADGE = {
@@ -772,7 +744,7 @@ export default function Fees() {
                                 </Button>
                               )}
                               <Button size="sm" variant="ghost" onClick={() => {
-                                feesApi.receipt(inv.id).then(r => printReceipt(r.data)).catch(() => toast.error(t('fees.couldNotLoadReceipt', { defaultValue: 'Could not load receipt' })));
+                                feesApi.receipt(inv.id).then(r => printFeeReceipt(r.data)).catch(() => toast.error(t('fees.couldNotLoadReceipt', { defaultValue: 'Could not load receipt' })));
                               }} title={t('fees.printReceipt', { defaultValue: 'Print Receipt' })}>
                                 <Printer className="w-3.5 h-3.5" />
                               </Button>

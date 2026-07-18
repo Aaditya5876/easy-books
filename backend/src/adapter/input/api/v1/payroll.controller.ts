@@ -52,6 +52,14 @@ export class PayrollController {
     return this.engine.setHold(companyId, id, body.isOnHold, body.holdReason);
   }
 
+  @Patch(':id/adjust')
+  @Roles('ACCOUNTANT', 'ADMIN')
+  @ApiOperation({ summary: 'Adjust other deductions on a payroll record and recompute net salary' })
+  @ApiQuery({ name: 'companyId', required: true })
+  adjust(@Param('id') id: string, @Query('companyId') companyId: string, @Body() body: { otherDeductions: number }) {
+    return this.engine.adjustPayroll(companyId, id, body.otherDeductions);
+  }
+
   @Get('gratuity')
   @Roles('ACCOUNTANT', 'ADMIN')
   @ApiOperation({ summary: 'Calculate gratuity entitlement for an employee (Nepal Labour Act 2074)' })

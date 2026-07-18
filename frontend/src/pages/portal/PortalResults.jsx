@@ -44,7 +44,7 @@ export default function PortalResults() {
   const examNames = [...new Set(results.map(r => r.examName))];
 
   return (
-    <motion.div variants={pageVariants} initial="initial" animate="animate" exit="exit" className="p-5 md:p-7 space-y-5 max-w-2xl">
+    <motion.div variants={pageVariants} initial="initial" animate="animate" exit="exit" className="p-5 md:p-7 space-y-5 max-w-7xl mx-auto">
       <h1 className="text-2xl font-bold text-slate-900">{t('portal.examResults', { defaultValue: 'Exam Results' })}</h1>
 
       {isLoading ? (
@@ -55,7 +55,7 @@ export default function PortalResults() {
           <p className="text-slate-400 text-sm">{t('portal.noExamResults', { defaultValue: 'No exam results yet' })}</p>
         </div>
       ) : (
-        <motion.div variants={containerVariants} initial="initial" animate="animate" className="space-y-5">
+        <motion.div variants={containerVariants} initial="initial" animate="animate" className="grid grid-cols-1 lg:grid-cols-2 gap-5">
           {examNames.map(examName => {
             const examResults    = results.filter(r => r.examName === examName);
             const totalObtained  = examResults.reduce((s, r) => s + Number(r.marksObtained), 0);

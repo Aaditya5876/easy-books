@@ -14,18 +14,17 @@ import {
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog';
-import { CalendarClock, Plus, Pencil, Trash2 } from 'lucide-react';
+import { CalendarClock, Plus, Pencil, Trash2, Minus } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 
-const companyId = () => localStorage.getItem('easybooks_active_company') || '';
-
 const classLabel = (c) => `${c.name}${c.section ? ` - ${c.section}` : ''}`;
 
-function ScheduleDialog({ open, onClose, entry, classes, subjects }) {
+// ── Edit a single already-scheduled paper ──────────────────────────────────────
+
+function EditScheduleDialog({ open, onClose, entry, classes, subjects }) {
   const { t } = useTranslation();
   const qc = useQueryClient();
-  const isEdit = !!entry;
   const [form, setForm] = useState({
     examName: entry?.examName || '',
     classId: entry?.classId || '',
@@ -38,13 +37,10 @@ function ScheduleDialog({ open, onClose, entry, classes, subjects }) {
   });
 
   const save = useMutation({
-    mutationFn: (d) =>
-      isEdit
-        ? examSchedulesApi.update(entry.id, d)
-        : examSchedulesApi.create({ ...d, companyId: companyId() }),
+    mutationFn: (d) => examSchedulesApi.update(entry.id, d),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['exam-schedules'] });
-      toast.success(isEdit ? t('examSchedule.scheduleUpdated', { defaultValue: 'Exam schedule updated' }) : t('examSchedule.examScheduled', { defaultValue: 'Exam scheduled' }));
+      toast.success(t('examSchedule.scheduleUpdated', { defaultValue: 'Exam schedule updated' }));
       onClose();
     },
     onError: (e) => toast.error(e.response?.data?.message || t('examSchedule.failedToSave', { defaultValue: 'Failed to save' })),
@@ -68,7 +64,7 @@ function ScheduleDialog({ open, onClose, entry, classes, subjects }) {
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>{isEdit ? t('examSchedule.editExamSchedule', { defaultValue: 'Edit Exam Schedule' }) : t('examSchedule.scheduleExam', { defaultValue: 'Schedule Exam' })}</DialogTitle>
+          <DialogTitle>{t('examSchedule.editExamSchedule', { defaultValue: 'Edit Exam Schedule' })}</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-1">
@@ -122,7 +118,138 @@ function ScheduleDialog({ open, onClose, entry, classes, subjects }) {
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose}>{t('examSchedule.cancel', { defaultValue: 'Cancel' })}</Button>
-            <Button type="submit" disabled={save.isPending}>{save.isPending ? t('examSchedule.saving', { defaultValue: 'Saving…' }) : isEdit ? t('examSchedule.update', { defaultValue: 'Update' }) : t('examSchedule.schedule', { defaultValue: 'Schedule' })}</Button>
+            <Button type="submit" disabled={save.isPending}>{save.isPending ? t('examSchedule.saving', { defaultValue: 'Saving…' }) : t('examSchedule.update', { defaultValue: 'Update' })}</Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ── Create a full date-sheet: one exam+class, many subject/date/time rows ──────
+
+let rowSeq = 0;
+const newSubjectRow = () => ({ key: ++rowSeq, subjectId: '', examDate: '', startTime: '', endTime: '' });
+
+function NewScheduleDialog({ open, onClose, classes, subjects }) {
+  const { t } = useTranslation();
+  const qc = useQueryClient();
+  const [examName, setExamName] = useState('');
+  const [classId, setClassId] = useState('');
+  const [rows, setRows] = useState([newSubjectRow()]);
+
+  const updateRow = (key, patch) => setRows(rs => rs.map(r => r.key === key ? { ...r, ...patch } : r));
+  const addRow = () => setRows(rs => [...rs, newSubjectRow()]);
+  const removeRow = (key) => setRows(rs => rs.length > 1 ? rs.filter(r => r.key !== key) : rs);
+
+  const classSubjects = filterSubjectsByClass(subjects, classId);
+  const subjectCode = (id) => classSubjects.find(s => s.id === id)?.code || '—';
+
+  const save = useMutation({
+    mutationFn: () => examSchedulesApi.createBulk({
+      classId,
+      examName: examName.trim(),
+      rows: rows.map(r => ({ subjectId: r.subjectId || undefined, examDate: r.examDate, startTime: r.startTime || undefined, endTime: r.endTime || undefined })),
+    }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['exam-schedules'] });
+      toast.success(t('examSchedule.examScheduled', { defaultValue: 'Exam scheduled' }));
+      onClose();
+    },
+    onError: (e) => toast.error(e.response?.data?.message || t('examSchedule.failedToSave', { defaultValue: 'Failed to save' })),
+  });
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (!examName.trim() || !classId) return toast.error(t('examSchedule.requiredFields', { defaultValue: 'Exam name, class and date are required' }));
+    if (rows.some(r => !r.examDate)) return toast.error(t('examSchedule.dateRequiredAllRows', { defaultValue: 'Enter a date for every subject row' }));
+    save.mutate();
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onClose}>
+      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>{t('examSchedule.scheduleExam', { defaultValue: 'Schedule Exam' })}</DialogTitle>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <Label>{t('examSchedule.examNameRequired', { defaultValue: 'Exam Name *' })}</Label>
+              <Input value={examName} onChange={e => setExamName(e.target.value)} placeholder={t('examSchedule.examNamePlaceholder', { defaultValue: 'e.g. First Terminal 2082' })} />
+            </div>
+            <div className="space-y-1">
+              <Label>{t('examSchedule.classRequired', { defaultValue: 'Class *' })}</Label>
+              <Select value={classId} onValueChange={setClassId}>
+                <SelectTrigger><SelectValue placeholder={t('examSchedule.selectClass', { defaultValue: 'Select class' })} /></SelectTrigger>
+                <SelectContent>
+                  {classes.map(c => <SelectItem key={c.id} value={c.id}>{classLabel(c)}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <Label>{t('examSchedule.subjectsTable', { defaultValue: 'Subjects' })}</Label>
+              <Button type="button" variant="outline" size="sm" onClick={addRow}>
+                <Plus className="h-3.5 w-3.5 mr-1" /> {t('examSchedule.addRow', { defaultValue: 'Add Row' })}
+              </Button>
+            </div>
+            <div className="overflow-x-auto rounded-lg border border-border">
+              <table className="min-w-full border-collapse text-sm">
+                <thead>
+                  <tr className="bg-muted/50">
+                    <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground uppercase">{t('examSchedule.date', { defaultValue: 'Date' })}</th>
+                    <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground uppercase">{t('examSchedule.subject', { defaultValue: 'Subject' })}</th>
+                    <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground uppercase">{t('examSchedule.subjectCode', { defaultValue: 'Subject Code' })}</th>
+                    <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground uppercase">{t('examSchedule.time', { defaultValue: 'Time' })}</th>
+                    <th className="w-10" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map(row => (
+                    <tr key={row.key} className="border-t border-border">
+                      <td className="px-2 py-1.5">
+                        <input type="date" value={row.examDate} onChange={e => updateRow(row.key, { examDate: e.target.value })}
+                          className="flex h-9 w-full rounded-md border border-input bg-transparent px-2 py-1 text-sm shadow-sm" />
+                      </td>
+                      <td className="px-2 py-1.5">
+                        <select
+                          className="w-full h-9 border rounded-md px-2 text-sm bg-background"
+                          value={row.subjectId}
+                          onChange={e => updateRow(row.key, { subjectId: e.target.value })}
+                          disabled={!classId}
+                        >
+                          <option value="">{t('examSchedule.selectSubject', { defaultValue: 'Select subject' })}</option>
+                          {classSubjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                        </select>
+                      </td>
+                      <td className="px-2 py-1.5 text-muted-foreground text-xs whitespace-nowrap">{subjectCode(row.subjectId)}</td>
+                      <td className="px-2 py-1.5">
+                        <div className="flex items-center gap-1">
+                          <input type="time" value={row.startTime} onChange={e => updateRow(row.key, { startTime: e.target.value })}
+                            className="flex h-9 w-full rounded-md border border-input bg-transparent px-2 py-1 text-sm shadow-sm" />
+                          <span className="text-muted-foreground text-xs">–</span>
+                          <input type="time" value={row.endTime} onChange={e => updateRow(row.key, { endTime: e.target.value })}
+                            className="flex h-9 w-full rounded-md border border-input bg-transparent px-2 py-1 text-sm shadow-sm" />
+                        </div>
+                      </td>
+                      <td className="px-1 py-1.5 text-center">
+                        <button type="button" onClick={() => removeRow(row.key)} className="p-1 text-muted-foreground hover:text-destructive">
+                          <Minus className="h-4 w-4" />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={onClose}>{t('examSchedule.cancel', { defaultValue: 'Cancel' })}</Button>
+            <Button type="submit" disabled={save.isPending}>{save.isPending ? t('examSchedule.saving', { defaultValue: 'Saving…' }) : t('examSchedule.schedule', { defaultValue: 'Schedule' })}</Button>
           </DialogFooter>
         </form>
       </DialogContent>
@@ -133,7 +260,8 @@ function ScheduleDialog({ open, onClose, entry, classes, subjects }) {
 export default function ExamSchedule() {
   const { t } = useTranslation();
   const qc = useQueryClient();
-  const [dialog, setDialog] = useState({ open: false, entry: null });
+  const [showNew, setShowNew] = useState(false);
+  const [editEntry, setEditEntry] = useState(null);
   const [classFilter, setClassFilter] = useState('ALL');
 
   const { data: classes = [] } = useQuery({
@@ -187,7 +315,7 @@ export default function ExamSchedule() {
               {classes.map(c => <SelectItem key={c.id} value={c.id}>{classLabel(c)}</SelectItem>)}
             </SelectContent>
           </Select>
-          <Button onClick={() => setDialog({ open: true, entry: null })}>
+          <Button onClick={() => setShowNew(true)}>
             <Plus className="h-4 w-4 mr-1" /> {t('examSchedule.scheduleExam', { defaultValue: 'Schedule Exam' })}
           </Button>
         </div>
@@ -212,9 +340,9 @@ export default function ExamSchedule() {
                   <th className="px-4 py-2">{t('examSchedule.date', { defaultValue: 'Date' })}</th>
                   <th className="px-4 py-2">{t('examSchedule.class', { defaultValue: 'Class' })}</th>
                   <th className="px-4 py-2">{t('examSchedule.subject', { defaultValue: 'Subject' })}</th>
+                  <th className="px-4 py-2">{t('examSchedule.subjectCode', { defaultValue: 'Subject Code' })}</th>
                   <th className="px-4 py-2">{t('examSchedule.time', { defaultValue: 'Time' })}</th>
                   <th className="px-4 py-2">{t('examSchedule.room', { defaultValue: 'Room' })}</th>
-                  <th className="px-4 py-2">{t('examSchedule.notes', { defaultValue: 'Notes' })}</th>
                   <th className="px-4 py-2 text-right">{t('examSchedule.actions', { defaultValue: 'Actions' })}</th>
                 </tr>
               </thead>
@@ -228,13 +356,13 @@ export default function ExamSchedule() {
                       {s.class ? classLabel(s.class) : '—'}
                     </td>
                     <td className="px-4 py-2">{s.subject?.name || '—'}</td>
+                    <td className="px-4 py-2 text-muted-foreground text-xs">{s.subject?.code || '—'}</td>
                     <td className="px-4 py-2 whitespace-nowrap">
                       {s.startTime ? `${s.startTime}${s.endTime ? ` – ${s.endTime}` : ''}` : '—'}
                     </td>
                     <td className="px-4 py-2">{s.roomNumber || '—'}</td>
-                    <td className="px-4 py-2 max-w-[200px] truncate">{s.notes || '—'}</td>
                     <td className="px-4 py-2 text-right whitespace-nowrap">
-                      <Button size="icon" variant="ghost" onClick={() => setDialog({ open: true, entry: s })}>
+                      <Button size="icon" variant="ghost" onClick={() => setEditEntry(s)}>
                         <Pencil className="h-4 w-4" />
                       </Button>
                       <Button size="icon" variant="ghost" onClick={() => { if (window.confirm(t('examSchedule.deleteThisSchedule', { defaultValue: 'Delete this exam schedule?' }))) remove.mutate(s.id); }}>
@@ -249,11 +377,20 @@ export default function ExamSchedule() {
         </div>
       ))}
 
-      {dialog.open && (
-        <ScheduleDialog
-          open={dialog.open}
-          onClose={() => setDialog({ open: false, entry: null })}
-          entry={dialog.entry}
+      {showNew && (
+        <NewScheduleDialog
+          open={showNew}
+          onClose={() => setShowNew(false)}
+          classes={classes}
+          subjects={subjects}
+        />
+      )}
+
+      {editEntry && (
+        <EditScheduleDialog
+          open={!!editEntry}
+          onClose={() => setEditEntry(null)}
+          entry={editEntry}
           classes={classes}
           subjects={subjects}
         />

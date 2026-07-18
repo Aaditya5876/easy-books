@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 export const TransactionTypeEnum = z.enum(['CASH', 'BANK', 'QR', 'CHEQUE']);
-export const TransactionCategoryEnum = z.enum(['INCOME', 'EXPENSE', 'TRANSFER']);
+export const TransactionCategoryEnum = z.enum(['INCOME', 'EXPENSE', 'TRANSFER', 'INVESTMENT', 'HAND_OUTS']);
 export const TransactionStatusEnum = z.enum(['PENDING', 'COMPLETED', 'CANCELLED']);
 
 export const CreateTransactionSchema = z.object({
@@ -14,6 +14,9 @@ export const CreateTransactionSchema = z.object({
   description: z.string().optional(),
   reference: z.string().optional(),
   status: TransactionStatusEnum.default('COMPLETED'),
+  // Every transaction is a balanced double-entry — see LedgerPostingService.postManualJournalEntryTx.
+  debitAccountId: z.string().uuid(),
+  creditAccountId: z.string().uuid(),
 });
 
 export const UpdateTransactionSchema = CreateTransactionSchema.omit({ companyId: true }).partial();

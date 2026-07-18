@@ -41,6 +41,12 @@ const PAY_METHODS = [
   { id: 'qr',     label: 'QR / UPI',      emoji: '📱' },
 ];
 
+// The backend's Prisma/Zod enums are SCREAMING_SNAKE_CASE (CASH, INCOME, HAND_OUTS…)
+// while the UI's internal state stays lowercase/hyphenated for the existing chip/tab
+// logic below — these two helpers are the only place the wire format is converted.
+const toApiEnum = (v) => (v || '').toUpperCase().replace(/-/g, '_');
+const fromApiEnum = (v) => (v || '').toLowerCase().replace(/_/g, '-');
+
 export default function Transactions() {
   const { canDelete } = useRole();
   const companyId = getActiveCompanyId();
@@ -56,8 +62,8 @@ export default function Transactions() {
   const setCol = (key, val) => setColFilters(f => ({ ...f, [key]: val }));
   const [showNew, setShowNew] = useState(false);
   const [payMethod, setPayMethod] = useState('cash');
-  const [addToLedger, setAddToLedger] = useState('none');
   const [selectedLedgerAccountId, setSelectedLedgerAccountId] = useState('');
+  const [cashLedgerAccountId, setCashLedgerAccountId] = useState('');
   const [activeBankId, setActiveBankId] = useState(null);
   const [showAddBank, setShowAddBank] = useState(false);
   const [browserAccount, setBrowserAccount] = useState(null);
@@ -80,11 +86,19 @@ export default function Transactions() {
 
   async function loadData() {
     setLoading(true);
-    const [txns, banks, ledgerAccountsData] = await Promise.all([
+    const [rawTxns, banks, ledgerAccountsData] = await Promise.all([
       api.Transaction.filter({ company_id: companyId }, '-created_date', 100),
       api.BankAccount.filter({ company_id: companyId }),
       api.LedgerAccount.filter({ company_id: companyId }),
     ]);
+    // Backend stores/returns type|category|status as uppercase enums — normalize to
+    // the lowercase/hyphenated form the rest of this page's filtering/display expects.
+    const txns = rawTxns.map(t => ({
+      ...t,
+      type: fromApiEnum(t.type),
+      category: fromApiEnum(t.category),
+      status: fromApiEnum(t.status),
+    }));
     setTransactions(txns);
     setBankAccounts(banks);
     setLedgerAccounts(ledgerAccountsData);
@@ -115,31 +129,25 @@ export default function Transactions() {
     const entryDate = form.date_ad || new Date().toISOString().split('T')[0];
     const bsDate = adToBs(new Date(entryDate));
     const type = activeTab === 'all' ? 'cash' : activeTab;
+    const amount = Number(form.amount || 0);
+    // Income: DR Cash/Bank, CR the selected income account. Everything else
+    // (expense/transfer/investment/hand-outs): DR the selected account, CR Cash/Bank.
+    const debitAccountId = form.category === 'income' ? cashLedgerAccountId : selectedLedgerAccountId;
+    const creditAccountId = form.category === 'income' ? selectedLedgerAccountId : cashLedgerAccountId;
     const payload = {
       ...form,
-      type,
+      type: toApiEnum(type),
+      category: toApiEnum(form.category),
+      status: toApiEnum(form.status),
       company_id: companyId,
       date_ad: entryDate,
       date_bs: bsDate.formatted,
+      debit_account_id: debitAccountId,
+      credit_account_id: creditAccountId,
+      amount,
     };
 
-    const createdTransaction = await api.Transaction.create(payload);
-
-    if (addToLedger === 'existing' && selectedLedgerAccountId) {
-      const amount = Number(form.amount || 0);
-      const ledgerEntryPayload = {
-        company_id: companyId,
-        account_id: selectedLedgerAccountId,
-        date_ad: entryDate,
-        date_bs: bsDate.formatted,
-        description: form.description || 'Transaction entry',
-        debit: form.category === 'income' ? 0 : amount,
-        credit: form.category === 'income' ? amount : 0,
-        reference_type: 'MANUAL',
-        reference_id: createdTransaction?.id,
-      };
-      await api.LedgerEntry.create(ledgerEntryPayload);
-    }
+    await api.Transaction.create(payload);
 
     setForm({
       category: 'income', amount: 0, description: '',
@@ -148,8 +156,8 @@ export default function Transactions() {
       date_ad: new Date().toISOString().split('T')[0], reference_number: '',
     });
     setPayMethod('cash');
-    setAddToLedger('none');
     setSelectedLedgerAccountId(ledgerAccounts[0]?.id || '');
+    setCashLedgerAccountId('');
     setShowNew(false);
     loadData();
   }
@@ -201,7 +209,7 @@ export default function Transactions() {
         value={row.status}
         onClick={e => e.stopPropagation()}
         onChange={async e => {
-          await api.Transaction.update(row.id, { status: e.target.value });
+          await api.Transaction.update(row.id, { status: toApiEnum(e.target.value) });
           loadData();
         }}
         className="text-xs border border-input rounded-md px-2 py-1 bg-background cursor-pointer"
@@ -625,36 +633,46 @@ export default function Transactions() {
                 </div>
               </div>
 
-              {/* Add to ledger */}
+              {/* Debit / Credit — every transaction posts a balanced double-entry pair */}
+              <div className="pt-1 border-t">
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground pt-2 pb-1">Debit &amp; Credit</p>
+                <p className="text-xs text-muted-foreground mb-2">
+                  {form.category === 'income'
+                    ? 'Cash/Bank Account is debited, Ledger Account is credited.'
+                    : 'Ledger Account is debited, Cash/Bank Account is credited.'}
+                </p>
+              </div>
               <div>
-                <Label className="text-xs font-medium">Add to Ledger</Label>
-                <Select value={addToLedger} onValueChange={setAddToLedger}>
-                  <SelectTrigger className="h-9 text-sm mt-1"><SelectValue placeholder="Choose option" /></SelectTrigger>
+                <Label className="text-xs font-medium">Ledger Account (income/expense category) *</Label>
+                <Select value={selectedLedgerAccountId} onValueChange={setSelectedLedgerAccountId}>
+                  <SelectTrigger className="h-9 text-sm mt-1"><SelectValue placeholder="Choose ledger account" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="none">Do not add to ledger</SelectItem>
-                    <SelectItem value="existing">Add to existing ledger account</SelectItem>
+                    {ledgerAccounts.length === 0 ? (
+                      <div className="px-3 py-2 text-sm text-muted-foreground">No ledger accounts available</div>
+                    ) : ledgerAccounts.map(account => (
+                      <SelectItem key={account.id} value={account.id}>
+                        {account.account_name || account.accountName || 'Unnamed account'}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
-
-              {addToLedger === 'existing' && (
-                <div>
-                  <Label className="text-xs font-medium">Ledger Account</Label>
-                  <Select value={selectedLedgerAccountId} onValueChange={setSelectedLedgerAccountId}>
-                    <SelectTrigger className="h-9 text-sm mt-1"><SelectValue placeholder="Choose ledger account" /></SelectTrigger>
-                    <SelectContent>
-                      {ledgerAccounts.length === 0 ? (
-                        <div className="px-3 py-2 text-sm text-muted-foreground">No ledger accounts available</div>
-                      ) : ledgerAccounts.map(account => (
-                        <SelectItem key={account.id} value={account.id}>
-                          {account.account_name || account.accountName || 'Unnamed account'}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <p className="text-xs text-muted-foreground mt-1">This will create a ledger entry in the selected account.</p>
-                </div>
-              )}
+              <div>
+                <Label className="text-xs font-medium">Cash / Bank Account (other side of entry) *</Label>
+                <Select value={cashLedgerAccountId} onValueChange={setCashLedgerAccountId}>
+                  <SelectTrigger className="h-9 text-sm mt-1"><SelectValue placeholder="Choose cash/bank account" /></SelectTrigger>
+                  <SelectContent>
+                    {ledgerAccounts.filter(a => a.id !== selectedLedgerAccountId).length === 0 ? (
+                      <div className="px-3 py-2 text-sm text-muted-foreground">No ledger accounts available</div>
+                    ) : ledgerAccounts.filter(a => a.id !== selectedLedgerAccountId).map(account => (
+                      <SelectItem key={account.id} value={account.id}>
+                        {account.account_name || account.accountName || 'Unnamed account'}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground mt-1">Double-entry bookkeeping requires both sides — this posts a balanced pair and updates both account balances.</p>
+              </div>
 
               {/* Date */}
               <div>
@@ -785,7 +803,7 @@ export default function Transactions() {
             <Button variant="outline" onClick={() => setShowNew(false)}>Cancel</Button>
             <Button
               onClick={createTransaction}
-              disabled={!form.amount || !form.description || (addToLedger === 'existing' && !selectedLedgerAccountId)}
+              disabled={!form.amount || !form.description || !selectedLedgerAccountId || !cashLedgerAccountId || selectedLedgerAccountId === cashLedgerAccountId}
             >
               Save
             </Button>

@@ -331,7 +331,7 @@ export class SchoolController {
   recordPayment(
     @Param('id') id: string,
     @Query('companyId') companyId: string,
-    @Body() body: { amount: number; method?: string; notes?: string },
+    @Body() body: { amount: number; method?: string; notes?: string; bankAccountId?: string },
   ) {
     return this.finance.recordPayment(companyId, id, body);
   }
@@ -439,18 +439,32 @@ export class SchoolController {
     return this.finance.billingRun(body.companyId, body.month, body.classId, body.dueDate);
   }
 
-  // ── School Ledger Setup ───────────────────────────────────────────────────────
-
-  @Post('setup-ledger')
-  @Roles('ADMIN')
-  setupSchoolLedger(@Body() body: { companyId: string }) {
-    return this.finance.setupSchoolLedger(body.companyId);
-  }
-
   @Get('fee-invoices/:id/receipt')
   @ApiQuery({ name: 'companyId', required: true })
   getFeeReceipt(@Param('id') id: string, @Query('companyId') companyId: string) {
-    return this.service.getFeeReceipt(id, companyId);
+    return this.finance.getFeeReceipt(companyId, id);
+  }
+
+  // ── Exams (tabs) ──────────────────────────────────────────────────────────────
+
+  @Get('exams')
+  @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'TEACHER')
+  @ApiQuery({ name: 'companyId', required: true })
+  listExams(@Query('companyId') companyId: string) {
+    return this.service.listExams(companyId);
+  }
+
+  @Post('exams')
+  @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'TEACHER')
+  createExam(@Body() body: { companyId: string; name: string; examDate?: string; notes?: string }) {
+    return this.service.createExam(body);
+  }
+
+  @Delete('exams/:id')
+  @Roles('ADMIN')
+  @ApiQuery({ name: 'companyId', required: true })
+  deleteExam(@Param('id') id: string, @Query('companyId') companyId: string) {
+    return this.service.deleteExam(id, companyId);
   }
 
   // ── Exam Results ──────────────────────────────────────────────────────────────
@@ -489,13 +503,16 @@ export class SchoolController {
 
   @Put('exam-results/:id')
   @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'TEACHER')
-  updateExamResult(@Param('id') id: string, @Body() body: any) {
-    return this.service.updateExamResult(id, body);
+  @ApiQuery({ name: 'companyId', required: true })
+  updateExamResult(@Param('id') id: string, @Query('companyId') companyId: string, @Body() body: any) {
+    return this.service.updateExamResult(id, companyId, body);
   }
 
   @Delete('exam-results/:id')
-  deleteExamResult(@Param('id') id: string) {
-    return this.service.deleteExamResult(id);
+  @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'TEACHER')
+  @ApiQuery({ name: 'companyId', required: true })
+  deleteExamResult(@Param('id') id: string, @Query('companyId') companyId: string) {
+    return this.service.deleteExamResult(id, companyId);
   }
 
   // ── Exam Schedules ────────────────────────────────────────────────────────────
@@ -514,17 +531,31 @@ export class SchoolController {
   }
 
   @Post('exam-schedules')
+  @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'TEACHER')
   createExamSchedule(@Body() body: any) {
     return this.service.createExamSchedule(body);
   }
 
+  @Post('exam-schedules/bulk')
+  @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'TEACHER')
+  createExamSchedulesBulk(@Body() body: {
+    companyId: string;
+    classId: string;
+    examName: string;
+    rows: Array<{ subjectId?: string; examDate: string; startTime?: string; endTime?: string; roomNumber?: string }>;
+  }) {
+    return this.service.createExamSchedulesBulk(body);
+  }
+
   @Put('exam-schedules/:id')
+  @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'TEACHER')
   @ApiQuery({ name: 'companyId', required: true })
   updateExamSchedule(@Param('id') id: string, @Query('companyId') companyId: string, @Body() body: any) {
     return this.service.updateExamSchedule(id, companyId, body);
   }
 
   @Delete('exam-schedules/:id')
+  @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'TEACHER')
   @ApiQuery({ name: 'companyId', required: true })
   deleteExamSchedule(@Param('id') id: string, @Query('companyId') companyId: string) {
     return this.service.deleteExamSchedule(id, companyId);

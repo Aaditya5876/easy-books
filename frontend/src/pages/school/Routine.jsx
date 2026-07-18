@@ -1,150 +1,279 @@
 import { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
+import { timetableApi, classesApi, subjectsApi } from '@/api';
+import { filterSubjectsByClass } from '@/lib/subjectFilter';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { Plus, Minus, LayoutGrid, Save } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select';
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+} from '@/components/ui/dialog';
+import { Clock, Plus, X } from 'lucide-react';
 import { toast } from 'sonner';
 
-const DEFAULT_DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
-const DEFAULT_COLUMNS = Array.from({ length: 10 }, (_, index) => (index === 0 ? '' : `Period ${index}`));
+const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+const DAY_KEYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+const WORK_DAYS = [0, 1, 2, 3, 4, 5]; // Sun–Fri for Nepal schools
+const PERIODS = [1, 2, 3, 4, 5, 6, 7, 8];
 
-function buildInitialTable() {
-  return [
-    [...DEFAULT_COLUMNS],
-    ...DEFAULT_DAYS.map(day => [day, ...Array(DEFAULT_COLUMNS.length - 1).fill('')]),
-  ];
-}
+const companyId = () => localStorage.getItem('easybooks_active_company') || '';
 
-export default function Routine() {
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [className, setClassName] = useState('');
-  const [section, setSection] = useState('');
-  const [table, setTable] = useState(buildInitialTable);
+function PeriodDialog({ open, onClose, entry, classId }) {
+  const { t } = useTranslation();
+  const qc = useQueryClient();
+  const [form, setForm] = useState({
+    dayOfWeek: entry?.dayOfWeek ?? 1,
+    periodNumber: entry?.periodNumber ?? 1,
+    subjectId: entry?.subjectId || '',
+    startTime: entry?.startTime || '09:00',
+    endTime: entry?.endTime || '09:45',
+    roomNumber: entry?.roomNumber || '',
+  });
 
-  const updateCell = (rowIndex, colIndex, value) => {
-    setTable(prev => {
-      const next = prev.map(r => [...r]);
-      next[rowIndex][colIndex] = value;
-      return next;
+  const { data: subjects = [] } = useQuery({
+    queryKey: ['school-subjects'],
+    queryFn: () => subjectsApi.list().then(r => r.data),
+  });
+
+  const save = useMutation({
+    mutationFn: (d) => timetableApi.upsert({ ...d, companyId: companyId(), classId }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['timetable', classId] });
+      toast.success(t('timetable.periodSaved', { defaultValue: 'Period saved' }));
+      onClose();
+    },
+    onError: (e) => toast.error(e.response?.data?.message || t('timetable.failedToSave', { defaultValue: 'Failed to save' })),
+  });
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    save.mutate({
+      ...form,
+      dayOfWeek: Number(form.dayOfWeek),
+      periodNumber: Number(form.periodNumber),
+      subjectId: form.subjectId && form.subjectId !== 'FREE' ? form.subjectId : undefined,
     });
-  };
-
-  const addRow = () => {
-    setTable(prev => {
-      const newRow = ['', ...Array(prev[0].length - 1).fill('')];
-      return [...prev, newRow];
-    });
-  };
-
-  const deleteRow = () => {
-    setTable(prev => (prev.length > 2 ? prev.slice(0, -1) : prev));
-  };
-
-  const addColumn = () => {
-    setTable(prev => prev.map((row, index) => [...row, index === 0 ? `Period ${row.length}` : '']));
-  };
-
-  const deleteColumn = () => {
-    setTable(prev => (prev[0].length > 2 ? prev.map(row => row.slice(0, -1)) : prev));
-  };
-
-  const resetForm = () => {
-    setClassName('');
-    setSection('');
-    setTable(buildInitialTable());
-  };
-
-  const handleSubmit = (event) => {
-    event.preventDefault();
-    toast.success('Routine saved successfully');
-    setIsDialogOpen(false);
-    resetForm();
   };
 
   return (
-    <div className="space-y-6 p-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold">Routine</h1>
-          <p className="text-sm text-muted-foreground">Create and edit class routines for your school.</p>
-        </div>
-        <Button onClick={() => setIsDialogOpen(true)}>
-          <Plus className="mr-2 h-4 w-4" /> Add Routine
-        </Button>
+    <Dialog open={open} onOpenChange={onClose}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>{t('timetable.setPeriod', { defaultValue: 'Set Period' })}</DialogTitle>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <Label>{t('timetable.day', { defaultValue: 'Day' })}</Label>
+              <Select value={String(form.dayOfWeek)} onValueChange={v => setForm(p => ({ ...p, dayOfWeek: Number(v) }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {WORK_DAYS.map(d => <SelectItem key={d} value={String(d)}>{t(`timetable.${DAY_KEYS[d]}`, { defaultValue: DAYS[d] })}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label>{t('timetable.periodNumber', { defaultValue: 'Period #' })}</Label>
+              <Select value={String(form.periodNumber)} onValueChange={v => setForm(p => ({ ...p, periodNumber: Number(v) }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {PERIODS.map(p => <SelectItem key={p} value={String(p)}>{t('timetable.periodOption', { number: p, defaultValue: 'Period {{number}}' })}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="space-y-1">
+            <Label>{t('timetable.subject', { defaultValue: 'Subject' })}</Label>
+            <Select value={form.subjectId || 'FREE'} onValueChange={v => setForm(p => ({ ...p, subjectId: v === 'FREE' ? '' : v }))}>
+              <SelectTrigger><SelectValue placeholder={t('timetable.selectSubject', { defaultValue: 'Select subject' })} /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="FREE">{t('timetable.freeBreak', { defaultValue: '— Free / Break —' })}</SelectItem>
+                {filterSubjectsByClass(subjects, classId).map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <Label>{t('timetable.startTime', { defaultValue: 'Start Time' })}</Label>
+              <Input type="time" value={form.startTime} onChange={e => setForm(p => ({ ...p, startTime: e.target.value }))} />
+            </div>
+            <div className="space-y-1">
+              <Label>{t('timetable.endTime', { defaultValue: 'End Time' })}</Label>
+              <Input type="time" value={form.endTime} onChange={e => setForm(p => ({ ...p, endTime: e.target.value }))} />
+            </div>
+          </div>
+          <div className="space-y-1">
+            <Label>{t('timetable.room', { defaultValue: 'Room' })}</Label>
+            <Input value={form.roomNumber} onChange={e => setForm(p => ({ ...p, roomNumber: e.target.value }))} placeholder={t('timetable.roomPlaceholder', { defaultValue: 'e.g. Room 201' })} />
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={onClose}>{t('timetable.cancel', { defaultValue: 'Cancel' })}</Button>
+            <Button type="submit" disabled={save.isPending}>{save.isPending ? t('timetable.saving', { defaultValue: 'Saving…' }) : t('timetable.save', { defaultValue: 'Save' })}</Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+export default function Routine() {
+  const { t } = useTranslation();
+  const qc = useQueryClient();
+  const [classId, setClassId] = useState('');
+  const [dialog, setDialog] = useState({ open: false, entry: null });
+  const [newClassName, setNewClassName] = useState('');
+  const [newClassSection, setNewClassSection] = useState('');
+
+  const { data: classes = [] } = useQuery({
+    queryKey: ['school-classes'],
+    queryFn: () => classesApi.list().then(r => r.data),
+  });
+
+  const addClass = useMutation({
+    mutationFn: () => classesApi.create({ name: newClassName.trim(), section: newClassSection.trim() || undefined, companyId: companyId() }),
+    onSuccess: (res) => {
+      qc.invalidateQueries({ queryKey: ['school-classes'] });
+      toast.success(t('timetable.classAdded', { defaultValue: 'Class added' }));
+      const created = res?.data?.data ?? res?.data;
+      if (created?.id) setClassId(created.id);
+      setNewClassName('');
+      setNewClassSection('');
+    },
+    onError: (e) => toast.error(e.response?.data?.message || t('timetable.failedToAddClass', { defaultValue: 'Failed to add class' })),
+  });
+
+  const handleAddClass = (e) => {
+    e.preventDefault();
+    if (!newClassName.trim()) return;
+    addClass.mutate();
+  };
+
+  const { data: entries = [], isLoading } = useQuery({
+    queryKey: ['timetable', classId],
+    queryFn: () => timetableApi.get(classId).then(r => r.data),
+    enabled: !!classId,
+  });
+
+  const remove = useMutation({
+    mutationFn: (id) => timetableApi.remove(id),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['timetable', classId] }); toast.success(t('timetable.periodCleared', { defaultValue: 'Period cleared' })); },
+    onError: (e) => toast.error(e.response?.data?.message || t('timetable.failedToClearPeriod', { defaultValue: 'Failed to clear period' })),
+  });
+
+  // Build grid: day → period → entry
+  const grid = {};
+  WORK_DAYS.forEach(d => { grid[d] = {}; });
+  entries.forEach(e => { grid[e.dayOfWeek] = { ...grid[e.dayOfWeek], [e.periodNumber]: e }; });
+
+  const selectedClass = classes.find(c => c.id === classId);
+
+  return (
+    <div className="p-6 space-y-6">
+      <div className="flex items-center gap-2">
+        <Clock className="h-6 w-6 text-primary" />
+        <h1 className="text-2xl font-bold">{t('timetable.title', { defaultValue: 'Routine' })}</h1>
       </div>
 
-      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Add Routine</DialogTitle>
-          </DialogHeader>
+      <div className="flex flex-wrap items-end gap-4 bg-card rounded-lg border p-4">
+        <div className="space-y-1 w-64">
+          <Label>{t('timetable.selectClass', { defaultValue: 'Select Class' })}</Label>
+          <Select value={classId} onValueChange={setClassId}>
+            <SelectTrigger><SelectValue placeholder={t('timetable.chooseAClass', { defaultValue: 'Choose a class…' })} /></SelectTrigger>
+            <SelectContent>
+              {classes.map(c => (
+                <SelectItem key={c.id} value={c.id}>
+                  {c.name}{c.section ? ` (${c.section})` : ''}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
 
-          <form onSubmit={handleSubmit} className="space-y-6 pt-2">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1">
-                <Label>Class</Label>
-                <Input value={className} onChange={e => setClassName(e.target.value)} placeholder="e.g. 5th Standard" />
-              </div>
-              <div className="space-y-1">
-                <Label>Section</Label>
-                <Input value={section} onChange={e => setSection(e.target.value)} placeholder="e.g. A" />
-              </div>
-            </div>
+        <form onSubmit={handleAddClass} className="flex items-end gap-2">
+          <div className="space-y-1">
+            <Label className="text-xs text-muted-foreground">{t('timetable.orAddNewClass', { defaultValue: 'Or add a new class' })}</Label>
+            <Input className="w-36" placeholder={t('timetable.className', { defaultValue: 'Class name' })} value={newClassName} onChange={e => setNewClassName(e.target.value)} />
+          </div>
+          <Input className="w-24" placeholder={t('timetable.section', { defaultValue: 'Section' })} value={newClassSection} onChange={e => setNewClassSection(e.target.value)} />
+          <Button type="submit" variant="outline" disabled={!newClassName.trim() || addClass.isPending}>
+            <Plus className="h-4 w-4 mr-1" /> {addClass.isPending ? t('timetable.adding', { defaultValue: 'Adding…' }) : t('timetable.addClass', { defaultValue: 'Add Class' })}
+          </Button>
+        </form>
 
-            <div className="space-y-3">
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                <div className="space-y-1">
-                  <p className="text-sm font-semibold">Routine Spreadsheet</p>
-                  <p className="text-sm text-muted-foreground">Edit time slots and subjects directly in the table.</p>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  <Button type="button" variant="outline" onClick={addRow}>
-                    <Plus className="mr-2 h-4 w-4" /> Add Row
-                  </Button>
-                  <Button type="button" variant="outline" onClick={deleteRow}>
-                    <Minus className="mr-2 h-4 w-4" /> Delete Row
-                  </Button>
-                  <Button type="button" variant="outline" onClick={addColumn}>
-                    <Plus className="mr-2 h-4 w-4" /> Add Column
-                  </Button>
-                  <Button type="button" variant="outline" onClick={deleteColumn}>
-                    <Minus className="mr-2 h-4 w-4" /> Delete Column
-                  </Button>
-                </div>
-              </div>
+        {classId && (
+          <Button className="ml-auto" onClick={() => setDialog({ open: true, entry: null })}>
+            <Plus className="h-4 w-4 mr-1" /> {t('timetable.addPeriod', { defaultValue: 'Add Period' })}
+          </Button>
+        )}
+      </div>
 
-              <div className="overflow-auto rounded-lg border border-border">
-                <table className="min-w-full border-collapse text-sm">
-                  <tbody>
-                    {table.map((row, rowIndex) => (
-                      <tr key={rowIndex} className={rowIndex === 0 ? 'bg-slate-50' : 'bg-white'}>
-                        {row.map((cell, colIndex) => (
-                          <td key={colIndex} className="border border-border p-0">
-                            <Input
-                              className={colIndex === 0 ? 'h-10 w-36 border-none bg-slate-100 text-sm' : 'h-10 min-w-[140px] border-none text-sm'}
-                              value={cell}
-                              onChange={e => updateCell(rowIndex, colIndex, e.target.value)}
-                              placeholder={rowIndex === 0 && colIndex > 0 ? 'From - To' : rowIndex > 0 && colIndex === 0 ? 'Day' : 'Subject'}
-                            />
-                          </td>
-                        ))}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+      {classId && (
+        <div className="overflow-x-auto">
+          <table className="w-full border-collapse text-sm">
+            <thead>
+              <tr>
+                <th className="border bg-muted px-3 py-2 text-left w-28">{t('timetable.day', { defaultValue: 'Day' })}</th>
+                {PERIODS.map(p => (
+                  <th key={p} className="border bg-muted px-3 py-2 text-center font-semibold">{t('timetable.periodAbbrev', { number: p, defaultValue: 'P{{number}}' })}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {WORK_DAYS.map(d => (
+                <tr key={d}>
+                  <td className="border bg-muted/50 px-3 py-2 font-medium">{t(`timetable.${DAY_KEYS[d]}`, { defaultValue: DAYS[d] })}</td>
+                  {PERIODS.map(p => {
+                    const e = grid[d]?.[p];
+                    return (
+                      <td key={p} className="border px-2 py-2 min-w-[120px] align-top">
+                        {e ? (
+                          <div className="bg-primary/10 rounded p-1.5 relative group">
+                            <div className="font-semibold text-primary text-xs">{e.subject?.name || t('timetable.free', { defaultValue: 'Free' })}</div>
+                            <div className="text-xs text-muted-foreground">{e.startTime}–{e.endTime}</div>
+                            {e.roomNumber && <div className="text-xs text-muted-foreground">{e.roomNumber}</div>}
+                            <button
+                              onClick={() => remove.mutate(e.id)}
+                              className="absolute top-0.5 right-0.5 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive"
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => setDialog({ open: true, entry: { dayOfWeek: d, periodNumber: p } })}
+                            className="w-full h-10 text-muted-foreground/40 hover:text-primary hover:bg-primary/5 rounded transition-colors text-xs"
+                          >
+                            {t('timetable.addCell', { defaultValue: '+ Add' })}
+                          </button>
+                        )}
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
-              <Button type="submit">
-                <Save className="mr-2 h-4 w-4" /> Save Routine
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+      {!classId && (
+        <div className="text-center py-20 text-muted-foreground">
+          {t('timetable.selectClassPrompt', { defaultValue: 'Select a class to view or edit its timetable' })}
+        </div>
+      )}
+
+      {dialog.open && (
+        <PeriodDialog
+          open={dialog.open}
+          onClose={() => setDialog({ open: false, entry: null })}
+          entry={dialog.entry}
+          classId={classId}
+        />
+      )}
     </div>
   );
 }

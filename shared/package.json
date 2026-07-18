@@ -9,6 +9,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "nepali-date-converter": "^3.4.0",
     "zod": "^3.24.2"
   },
   "devDependencies": {

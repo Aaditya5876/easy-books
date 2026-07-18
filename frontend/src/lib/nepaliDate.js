@@ -1,22 +1,8 @@
-// Nepali (BS) Calendar Utility
-// Mapping of BS year months (days in each month)
-const BS_CALENDAR_DATA = {
-  2080: [31, 32, 31, 32, 31, 30, 30, 30, 29, 30, 29, 31],
-  2081: [31, 31, 32, 31, 31, 31, 30, 29, 30, 29, 30, 30],
-  2082: [31, 31, 32, 32, 31, 30, 30, 29, 30, 29, 30, 30],
-  2083: [31, 32, 31, 32, 31, 30, 30, 30, 29, 29, 30, 31],
-  2084: [30, 32, 31, 32, 31, 30, 30, 30, 29, 30, 29, 31],
-  2085: [31, 31, 32, 31, 31, 31, 30, 29, 30, 29, 30, 30],
-  2086: [31, 31, 32, 32, 31, 30, 30, 29, 30, 29, 30, 30],
-  2087: [31, 32, 31, 32, 31, 30, 30, 30, 29, 29, 30, 31],
-  2088: [31, 31, 31, 32, 31, 31, 29, 30, 30, 29, 29, 31],
-  2089: [31, 31, 32, 31, 31, 31, 30, 29, 30, 29, 30, 30],
-  2090: [31, 31, 32, 32, 31, 30, 30, 29, 30, 29, 30, 30],
-};
-
-// Reference date: BS 2080-01-01 = AD 2023-04-14
-const BS_REF = { year: 2080, month: 1, day: 1 };
-const AD_REF = new Date(2023, 3, 14); // April 14, 2023
+// Nepali (BS) Calendar Utility — backed by the `nepali-date-converter` library
+// (same one used server-side in @easy-books/shared) so frontend and backend
+// agree on both the epoch and the calendar data instead of maintaining two
+// independent, short-lived hand-rolled tables.
+import NepaliDate from 'nepali-date-converter';
 
 const NEPALI_MONTHS = [
   'Baishakh', 'Jestha', 'Ashadh', 'Shrawan', 'Bhadra', 'Ashwin',
@@ -28,78 +14,19 @@ const ENGLISH_MONTHS = [
   'July', 'August', 'September', 'October', 'November', 'December'
 ];
 
-function getDaysInBsMonth(year, month) {
-  if (BS_CALENDAR_DATA[year]) {
-    return BS_CALENDAR_DATA[year][month - 1] || 30;
-  }
-  // Fallback approximation
-  const defaultDays = [31, 31, 32, 31, 31, 31, 30, 29, 30, 29, 30, 30];
-  return defaultDays[month - 1] || 30;
-}
-
-function getDaysInBsYear(year) {
-  let total = 0;
-  for (let m = 1; m <= 12; m++) {
-    total += getDaysInBsMonth(year, m);
-  }
-  return total;
-}
-
 // Convert AD date to BS
 export function adToBs(adDate) {
-  const date = new Date(adDate);
-  const diffDays = Math.floor((date - AD_REF) / (1000 * 60 * 60 * 24));
-  
-  let bsYear = BS_REF.year;
-  let bsMonth = BS_REF.month;
-  let bsDay = BS_REF.day;
-  
-  let remainingDays = diffDays;
-  
-  if (remainingDays >= 0) {
-    // Forward calculation
-    while (remainingDays > 0) {
-      const daysInMonth = getDaysInBsMonth(bsYear, bsMonth);
-      const daysLeftInMonth = daysInMonth - bsDay;
-      
-      if (remainingDays <= daysLeftInMonth) {
-        bsDay += remainingDays;
-        remainingDays = 0;
-      } else {
-        remainingDays -= (daysLeftInMonth + 1);
-        bsMonth++;
-        bsDay = 1;
-        if (bsMonth > 12) {
-          bsMonth = 1;
-          bsYear++;
-        }
-      }
-    }
-  } else {
-    // Backward calculation
-    remainingDays = Math.abs(remainingDays);
-    while (remainingDays > 0) {
-      if (remainingDays < bsDay) {
-        bsDay -= remainingDays;
-        remainingDays = 0;
-      } else {
-        remainingDays -= bsDay;
-        bsMonth--;
-        if (bsMonth < 1) {
-          bsMonth = 12;
-          bsYear--;
-        }
-        bsDay = getDaysInBsMonth(bsYear, bsMonth);
-      }
-    }
-  }
-  
+  const nd = new NepaliDate(new Date(adDate));
+  const year = nd.getYear();
+  const month = nd.getMonth() + 1; // NepaliDate months are 0-indexed
+  const day = nd.getDate();
+
   return {
-    year: bsYear,
-    month: bsMonth,
-    day: bsDay,
-    formatted: `${bsYear}-${String(bsMonth).padStart(2, '0')}-${String(bsDay).padStart(2, '0')}`,
-    monthName: NEPALI_MONTHS[bsMonth - 1]
+    year,
+    month,
+    day,
+    formatted: `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`,
+    monthName: NEPALI_MONTHS[month - 1],
   };
 }
 
@@ -110,45 +37,7 @@ export function getTodayBS() {
 
 // Convert BS date (year, month, day) to AD Date object
 export function bsToAd(bsYear, bsMonth, bsDay) {
-  // Calculate days difference from BS_REF to target BS date
-  let days = 0;
-  if (bsYear === BS_REF.year && bsMonth === BS_REF.month) {
-    days = bsDay - BS_REF.day;
-  } else {
-    // If target is after reference
-    let y = BS_REF.year;
-    let m = BS_REF.month;
-    let d = BS_REF.day;
-    // Move forward or backward to target
-    const forward = (bsYear > BS_REF.year) || (bsYear === BS_REF.year && (bsMonth > BS_REF.month || (bsMonth === BS_REF.month && bsDay > BS_REF.day)));
-    if (forward) {
-      while (y < bsYear || m < bsMonth || d < bsDay) {
-        d++;
-        const daysInMonth = getDaysInBsMonth(y, m);
-        if (d > daysInMonth) {
-          d = 1;
-          m++;
-          if (m > 12) { m = 1; y++; }
-        }
-        days++;
-      }
-    } else {
-      // backward
-      while (y > bsYear || m > bsMonth || d > bsDay) {
-        d--;
-        if (d < 1) {
-          m--;
-          if (m < 1) { m = 12; y--; }
-          d = getDaysInBsMonth(y, m);
-        }
-        days--;
-      }
-    }
-  }
-
-  const ad = new Date(AD_REF);
-  ad.setDate(ad.getDate() + days);
-  return ad;
+  return new NepaliDate(bsYear, bsMonth - 1, bsDay).toJsDate();
 }
 
 // Format BS date string

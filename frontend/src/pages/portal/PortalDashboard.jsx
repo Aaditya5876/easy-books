@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { animate } from 'framer-motion';
 import { portalApi } from '@/api';
-import { CalendarCheck, DollarSign, ClipboardList, AlertCircle, ChevronRight, Trophy } from 'lucide-react';
+import { CalendarCheck, DollarSign, ClipboardList, AlertCircle, ChevronRight, Trophy, Megaphone, Clock } from 'lucide-react';
 import { containerVariants, cardVariants, itemVariants } from '@/lib/portalAnimations';
 import { useTranslation } from 'react-i18next';
 
@@ -75,9 +75,40 @@ export default function PortalDashboard() {
     enabled: !!student?.classId,
   });
 
+  const { data: results = [] } = useQuery({
+    queryKey: ['portal-results'],
+    queryFn: () => portalApi.results().then(r => r.data),
+  });
+
+  const { data: notices = [] } = useQuery({
+    queryKey: ['portal-notices'],
+    queryFn: () => portalApi.notices().then(r => r.data),
+  });
+
+  const { data: routine = [] } = useQuery({
+    queryKey: ['portal-timetable', student?.classId],
+    queryFn: () => portalApi.timetable(student?.classId).then(r => r.data),
+    enabled: !!student?.classId,
+  });
+
   const pendingFees  = fees.filter(f => f.status === 'PENDING' || f.status === 'PARTIAL');
   const overdueHw    = homework.filter(h => new Date(h.dueDate) < new Date());
   const fmtAmt = (n) => `Rs. ${Number(n).toLocaleString('en-NP')}`;
+
+  const latestExam = results.reduce((latest, r) => (
+    !latest || new Date(r.examDate) > new Date(latest.examDate) ? r : latest
+  ), null);
+  const latestExamResults = latestExam ? results.filter(r => r.examName === latestExam.examName) : [];
+  const latestObtained = latestExamResults.reduce((s, r) => s + Number(r.marksObtained), 0);
+  const latestMax       = latestExamResults.reduce((s, r) => s + Number(r.totalMarks), 0);
+  const latestPct        = latestMax > 0 ? (latestObtained / latestMax) * 100 : 0;
+
+  const todayKey        = new Date().toLocaleDateString('en-US', { weekday: 'long' }).toUpperCase();
+  const todaysRoutine    = routine
+    .filter(e => e.dayOfWeek === todayKey)
+    .sort((a, b) => a.startTime.localeCompare(b.startTime));
+
+  const recentNotices   = notices.slice(0, 3);
 
   const statValues = {
     attendance: attendance?.summary?.percentage ?? 0,
@@ -94,7 +125,7 @@ export default function PortalDashboard() {
       : t('portal.goodEvening', { defaultValue: 'Good evening' });
 
   return (
-    <div className="p-5 md:p-7 space-y-6 max-w-2xl">
+    <div className="p-5 md:p-7 space-y-6 max-w-7xl mx-auto">
 
       {/* Greeting */}
       <motion.div initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
@@ -142,89 +173,185 @@ export default function PortalDashboard() {
         })}
       </motion.div>
 
-      {/* Pending fees */}
-      {pendingFees.length > 0 && (
-        <motion.div
-          variants={cardVariants}
-          initial="initial"
-          animate="animate"
-          className="bg-amber-50 border border-amber-200 rounded-2xl overflow-hidden"
-        >
-          <div className="px-5 py-3.5 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <AlertCircle className="w-4 h-4 text-amber-600" />
-              <h2 className="text-sm font-semibold text-amber-900">{t('portal.pendingFeeInvoices', { defaultValue: 'Pending Fee Invoices' })}</h2>
-            </div>
-            <Link to="/portal/fees" className="text-xs text-amber-700 font-medium flex items-center gap-0.5 hover:text-amber-900">
-              {t('portal.payNow', { defaultValue: 'Pay now' })} <ChevronRight className="w-3.5 h-3.5" />
-            </Link>
-          </div>
+      {/* Detail sections */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-start">
+
+        {/* Pending fees */}
+        {pendingFees.length > 0 && (
           <motion.div
-            className="divide-y divide-amber-100 bg-white/60"
-            variants={containerVariants}
+            variants={cardVariants}
             initial="initial"
             animate="animate"
+            className="bg-amber-50 border border-amber-200 rounded-2xl overflow-hidden"
           >
-            {pendingFees.slice(0, 4).map(f => (
-              <motion.div key={f.id} variants={itemVariants} className="px-5 py-3 flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-slate-800">{f.month}</p>
-                  {f.description && <p className="text-xs text-slate-400">{f.description}</p>}
-                </div>
-                <div className="text-right">
-                  <p className="text-sm font-bold text-amber-700">
-                    {fmtAmt(Number(f.totalAmount) - Number(f.paidAmount))}
-                  </p>
-                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${f.status === 'PARTIAL' ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'}`}>
-                    {f.status === 'PARTIAL'
-                      ? t('portal.partial', { defaultValue: 'Partial' })
-                      : t('portal.pending', { defaultValue: 'Pending' })}
-                  </span>
-                </div>
-              </motion.div>
-            ))}
-          </motion.div>
-        </motion.div>
-      )}
-
-      {/* Upcoming homework */}
-      {homework.length > 0 && (
-        <motion.div
-          variants={cardVariants}
-          initial="initial"
-          animate="animate"
-          className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm"
-        >
-          <div className="px-5 py-3.5 flex items-center justify-between border-b border-slate-100">
-            <div className="flex items-center gap-2">
-              <ClipboardList className="w-4 h-4 text-orange-500" />
-              <h2 className="text-sm font-semibold text-slate-900">{t('portal.upcomingHomework', { defaultValue: 'Upcoming Homework' })}</h2>
+            <div className="px-5 py-3.5 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-amber-600" />
+                <h2 className="text-sm font-semibold text-amber-900">{t('portal.pendingFeeInvoices', { defaultValue: 'Pending Fee Invoices' })}</h2>
+              </div>
+              <Link to="/portal/fees" className="text-xs text-amber-700 font-medium flex items-center gap-0.5 hover:text-amber-900">
+                {t('portal.payNow', { defaultValue: 'Pay now' })} <ChevronRight className="w-3.5 h-3.5" />
+              </Link>
             </div>
-            <Link to="/portal/homework" className="text-xs text-slate-500 flex items-center gap-0.5 hover:text-slate-700">
-              {t('portal.viewAll', { defaultValue: 'View all' })} <ChevronRight className="w-3.5 h-3.5" />
-            </Link>
-          </div>
-          <motion.div className="divide-y divide-slate-100" variants={containerVariants} initial="initial" animate="animate">
-            {homework.slice(0, 5).map(h => {
-              const overdue = new Date(h.dueDate) < new Date();
-              return (
-                <motion.div key={h.id} variants={itemVariants} className="px-5 py-3 flex items-start justify-between gap-4">
+            <motion.div
+              className="divide-y divide-amber-100 bg-white/60"
+              variants={containerVariants}
+              initial="initial"
+              animate="animate"
+            >
+              {pendingFees.slice(0, 4).map(f => (
+                <motion.div key={f.id} variants={itemVariants} className="px-5 py-3 flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-medium text-slate-800">{h.title}</p>
-                    {h.subject && <p className="text-xs text-orange-600 font-medium mt-0.5">{h.subject.name}</p>}
+                    <p className="text-sm font-medium text-slate-800">{f.month}</p>
+                    {f.description && <p className="text-xs text-slate-400">{f.description}</p>}
                   </div>
-                  <span className={`text-xs px-2.5 py-1 rounded-full shrink-0 font-medium ${overdue ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-600'}`}>
-                    {new Date(h.dueDate).toLocaleDateString('en-NP', { day: 'numeric', month: 'short' })}
+                  <div className="text-right">
+                    <p className="text-sm font-bold text-amber-700">
+                      {fmtAmt(Number(f.totalAmount) - Number(f.paidAmount))}
+                    </p>
+                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${f.status === 'PARTIAL' ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'}`}>
+                      {f.status === 'PARTIAL'
+                        ? t('portal.partial', { defaultValue: 'Partial' })
+                        : t('portal.pending', { defaultValue: 'Pending' })}
+                    </span>
+                  </div>
+                </motion.div>
+              ))}
+            </motion.div>
+          </motion.div>
+        )}
+
+        {/* Today's routine */}
+        {todaysRoutine.length > 0 && (
+          <motion.div
+            variants={cardVariants}
+            initial="initial"
+            animate="animate"
+            className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm"
+          >
+            <div className="px-5 py-3.5 flex items-center justify-between border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <Clock className="w-4 h-4 text-teal-500" />
+                <h2 className="text-sm font-semibold text-slate-900">{t('portal.todaysRoutine', { defaultValue: "Today's Routine" })}</h2>
+              </div>
+              <Link to="/portal/timetable" className="text-xs text-slate-500 flex items-center gap-0.5 hover:text-slate-700">
+                {t('portal.viewAll', { defaultValue: 'View all' })} <ChevronRight className="w-3.5 h-3.5" />
+              </Link>
+            </div>
+            <motion.div className="divide-y divide-slate-100" variants={containerVariants} initial="initial" animate="animate">
+              {todaysRoutine.map(e => (
+                <motion.div key={e.id} variants={itemVariants} className="px-5 py-3 flex items-center justify-between gap-4">
+                  <div>
+                    <p className="text-sm font-medium text-slate-800">{e.subject?.name || e.subjectName || '—'}</p>
+                    {e.teacherName && <p className="text-xs text-slate-400">{e.teacherName}</p>}
+                  </div>
+                  <span className="text-xs px-2.5 py-1 rounded-full shrink-0 font-medium bg-teal-50 text-teal-700 tabular-nums">
+                    {e.startTime} – {e.endTime}
                   </span>
                 </motion.div>
-              );
-            })}
+              ))}
+            </motion.div>
           </motion.div>
-        </motion.div>
-      )}
+        )}
+
+        {/* Upcoming homework */}
+        {homework.length > 0 && (
+          <motion.div
+            variants={cardVariants}
+            initial="initial"
+            animate="animate"
+            className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm"
+          >
+            <div className="px-5 py-3.5 flex items-center justify-between border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <ClipboardList className="w-4 h-4 text-orange-500" />
+                <h2 className="text-sm font-semibold text-slate-900">{t('portal.upcomingHomework', { defaultValue: 'Upcoming Homework' })}</h2>
+              </div>
+              <Link to="/portal/homework" className="text-xs text-slate-500 flex items-center gap-0.5 hover:text-slate-700">
+                {t('portal.viewAll', { defaultValue: 'View all' })} <ChevronRight className="w-3.5 h-3.5" />
+              </Link>
+            </div>
+            <motion.div className="divide-y divide-slate-100" variants={containerVariants} initial="initial" animate="animate">
+              {homework.slice(0, 5).map(h => {
+                const overdue = new Date(h.dueDate) < new Date();
+                return (
+                  <motion.div key={h.id} variants={itemVariants} className="px-5 py-3 flex items-start justify-between gap-4">
+                    <div>
+                      <p className="text-sm font-medium text-slate-800">{h.title}</p>
+                      {h.subject && <p className="text-xs text-orange-600 font-medium mt-0.5">{h.subject.name}</p>}
+                    </div>
+                    <span className={`text-xs px-2.5 py-1 rounded-full shrink-0 font-medium ${overdue ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-600'}`}>
+                      {new Date(h.dueDate).toLocaleDateString('en-NP', { day: 'numeric', month: 'short' })}
+                    </span>
+                  </motion.div>
+                );
+              })}
+            </motion.div>
+          </motion.div>
+        )}
+
+        {/* Latest exam result */}
+        {latestExam && (
+          <motion.div
+            variants={cardVariants}
+            initial="initial"
+            animate="animate"
+            className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm"
+          >
+            <div className="px-5 py-3.5 flex items-center justify-between border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <Trophy className="w-4 h-4 text-violet-500" />
+                <h2 className="text-sm font-semibold text-slate-900">{t('portal.latestResult', { defaultValue: 'Latest Result' })}</h2>
+              </div>
+              <Link to="/portal/results" className="text-xs text-slate-500 flex items-center gap-0.5 hover:text-slate-700">
+                {t('portal.viewAll', { defaultValue: 'View all' })} <ChevronRight className="w-3.5 h-3.5" />
+              </Link>
+            </div>
+            <div className="px-5 py-4 flex items-center justify-between">
+              <div>
+                <p className="text-sm font-semibold text-slate-800">{latestExam.examName}</p>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  {t('portal.marksOf', { defaultValue: '{{obtained}} / {{total}} marks', obtained: latestObtained, total: latestMax })}
+                </p>
+              </div>
+              <p className="text-2xl font-bold text-violet-600 tabular-nums">{latestPct.toFixed(0)}%</p>
+            </div>
+          </motion.div>
+        )}
+
+        {/* Recent notices */}
+        {recentNotices.length > 0 && (
+          <motion.div
+            variants={cardVariants}
+            initial="initial"
+            animate="animate"
+            className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm"
+          >
+            <div className="px-5 py-3.5 flex items-center justify-between border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <Megaphone className="w-4 h-4 text-rose-500" />
+                <h2 className="text-sm font-semibold text-slate-900">{t('portal.recentNotices', { defaultValue: 'Recent Notices' })}</h2>
+              </div>
+              <Link to="/portal/notices" className="text-xs text-slate-500 flex items-center gap-0.5 hover:text-slate-700">
+                {t('portal.viewAll', { defaultValue: 'View all' })} <ChevronRight className="w-3.5 h-3.5" />
+              </Link>
+            </div>
+            <motion.div className="divide-y divide-slate-100" variants={containerVariants} initial="initial" animate="animate">
+              {recentNotices.map(n => (
+                <motion.div key={n.id} variants={itemVariants} className="px-5 py-3">
+                  <p className="text-sm font-medium text-slate-800">{n.title}</p>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    {new Date(n.publishedAt || n.createdAt).toLocaleDateString('en-NP', { day: 'numeric', month: 'short' })}
+                  </p>
+                </motion.div>
+              ))}
+            </motion.div>
+          </motion.div>
+        )}
+      </div>
 
       {/* All clear */}
-      {pendingFees.length === 0 && homework.length === 0 && attendance && (
+      {pendingFees.length === 0 && homework.length === 0 && todaysRoutine.length === 0 && recentNotices.length === 0 && !latestExam && attendance && (
         <motion.div
           variants={cardVariants}
           initial="initial"

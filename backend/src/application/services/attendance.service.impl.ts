@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../../core/db/psql/prisma.client';
 import { CreateAttendanceDTO, UpdateAttendanceDTO } from '@easy-books/shared';
 
@@ -18,14 +18,23 @@ export class AttendanceServiceImpl {
   }
 
   async create(dto: CreateAttendanceDTO) {
-    return this.prisma.attendance.create({ data: dto as any });
+    const date = new Date(dto.date);
+    return this.prisma.attendance.upsert({
+      where: { employeeId_date: { employeeId: dto.employeeId, date } },
+      create: { ...dto, date } as any,
+      update: { ...dto, date } as any,
+    });
   }
 
   async update(id: string, companyId: string, dto: UpdateAttendanceDTO) {
+    const existing = await this.prisma.attendance.findFirst({ where: { id, companyId } });
+    if (!existing) throw new NotFoundException('Attendance record not found');
     return this.prisma.attendance.update({ where: { id }, data: dto as any });
   }
 
   async remove(id: string, companyId: string) {
+    const existing = await this.prisma.attendance.findFirst({ where: { id, companyId } });
+    if (!existing) throw new NotFoundException('Attendance record not found');
     return this.prisma.attendance.delete({ where: { id } });
   }
 }

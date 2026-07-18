@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Search, Pencil, Trash2, GraduationCap, X, ArrowRight, KeyRound, Upload, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Plus, Search, Pencil, Trash2, GraduationCap, X, ArrowRight, KeyRound, Upload, ChevronLeft, ChevronRight, Copy, Check } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import BulkImportDialog from '@/components/shared/BulkImportDialog';
 import { STUDENT_FIELDS } from '@/components/shared/bulkImportFields';
@@ -13,7 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { toast } from 'sonner';
 
 const EMPTY_FORM = {
-  name: '', rollNumber: '', section: '', classId: '', gender: '', dateOfBirth: '',
+  name: '', rollNumber: '', examRollNumber: '', section: '', classId: '', gender: '', dateOfBirth: '',
   address: '', guardianName: '', guardianPhone: '', guardianEmail: '',
 };
 
@@ -61,6 +61,11 @@ function StudentDialog({ open, onClose, initial, classes, companyId }) {
             <div className="space-y-1.5">
               <Label>{t('students.rollNumber', { defaultValue: 'Roll Number' })}</Label>
               <Input placeholder={t('students.rollNumberPlaceholder', { defaultValue: 'e.g. 101' })} value={form.rollNumber} onChange={e => set('rollNumber', e.target.value)} />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>{t('students.examRollNumber', { defaultValue: 'Exam Roll Number' })}</Label>
+              <Input placeholder={t('students.examRollNumberPlaceholder', { defaultValue: 'e.g. 20821234' })} value={form.examRollNumber} onChange={e => set('examRollNumber', e.target.value)} />
             </div>
 
             <div className="space-y-1.5">
@@ -142,7 +147,15 @@ function PortalPasswordDialog({ open, onClose, student, companyId }) {
   const { t } = useTranslation();
   const [form, setForm] = useState({ phone: student?.guardianPhone || '', password: '', type: 'PARENT' });
   const [loading, setLoading] = useState(false);
+  const [copied, setCopied] = useState(false);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const portalLink = `${window.location.origin}/portal/login?company=${companyId}`;
+
+  function copyPortalLink() {
+    navigator.clipboard.writeText(portalLink);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -169,6 +182,18 @@ function PortalPasswordDialog({ open, onClose, student, companyId }) {
         <p className="text-sm text-muted-foreground -mt-1">
           {t('students.setCredentialsPrefix', { defaultValue: 'Set login credentials for' })} <strong>{student?.name}</strong>{t('students.setCredentialsSuffix', { defaultValue: "'s portal access." })}
         </p>
+        <div className="space-y-1.5">
+          <Label>{t('students.portalLoginLink', { defaultValue: 'Portal Login Link' })}</Label>
+          <div className="flex gap-2">
+            <Input readOnly value={portalLink} className="text-xs" onFocus={e => e.target.select()} />
+            <Button type="button" variant="outline" size="icon" onClick={copyPortalLink} className="shrink-0">
+              {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+            </Button>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            {t('students.portalLoginLinkHint', { defaultValue: 'Share this link with the phone number and password below — it pre-fills the School ID so they only enter their credentials.' })}
+          </p>
+        </div>
         <form onSubmit={handleSubmit} className="space-y-4 pt-1">
           <div className="space-y-1.5">
             <Label>{t('students.accessType', { defaultValue: 'Access Type' })}</Label>

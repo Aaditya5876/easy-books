@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
+import { useOutlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   LayoutDashboard, CalendarCheck, DollarSign, Trophy,
@@ -15,7 +15,7 @@ const NAV = [
   { icon: Trophy,          label: 'Results',    labelKey: 'portal.results',    path: '/portal/results',    color: '#8B5CF6' },
   { icon: ClipboardList,   label: 'Homework',   labelKey: 'portal.homework',   path: '/portal/homework',   color: '#F97316' },
   { icon: Megaphone,       label: 'Notices',    labelKey: 'portal.notices',    path: '/portal/notices',    color: '#F43F5E' },
-  { icon: Clock,           label: 'Timetable',  labelKey: 'portal.timetable',  path: '/portal/timetable',  color: '#14B8A6' },
+  { icon: Clock,           label: 'Routine',    labelKey: 'portal.routine',    path: '/portal/timetable',  color: '#14B8A6' },
 ];
 
 function isActive(item, pathname) {
@@ -28,6 +28,7 @@ export default function PortalLayout() {
   const { t } = useTranslation();
   const navigate  = useNavigate();
   const location  = useLocation();
+  const outlet    = useOutlet();
   const [student, setStudent]     = useState(null);
   const [portalType, setPortalType] = useState('PARENT');
 
@@ -157,7 +158,7 @@ export default function PortalLayout() {
             exit={{ opacity: 0, y: -10 }}
             transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
           >
-            <Outlet />
+            {outlet}
           </motion.div>
         </AnimatePresence>
       </main>

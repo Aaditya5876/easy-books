@@ -6,8 +6,8 @@ import {
   FileSpreadsheet, CalendarCheck, Banknote,
   ChevronLeft, ChevronRight, Building2, ChevronDown, ClipboardList, BarChart2,
   Kanban, UserCircle, Settings, Shield,
-  GraduationCap, School, BookMarked, DollarSign, ClipboardCheck, Trophy,
-  Megaphone, CalendarDays, Clock, CalendarCheck2, CalendarClock,
+  GraduationCap, School, BookMarked, DollarSign, Trophy,
+  Megaphone, CalendarDays, CalendarCheck2,
   FolderOpen, Library, Home, Bus
 } from 'lucide-react';
 import { cn } from "@/lib/utils";
@@ -122,10 +122,9 @@ const schoolNavSections = [
     items: [
       { icon: GraduationCap, label: 'Students', path: '/students', roles: ['TEACHER', 'LIBRARIAN'] },
       { icon: CalendarCheck2, label: 'Attendance', path: '/student-attendance', roles: ['TEACHER'] },
-      { icon: Clock, label: 'Timetable', path: '/timetable', roles: ['TEACHER'] },
       { icon: CalendarDays, label: 'Routine', path: '/routine', roles: ['TEACHER'] },
       { icon: Trophy, label: 'Exam', path: '/exams', roles: ['TEACHER'] },
-      { icon: FolderOpen, label: 'Study Materials', path: '/study-materials', roles: ['TEACHER'] },
+      { icon: FolderOpen, label: 'Study Material', path: '/study-materials', roles: ['TEACHER'] },
       { icon: ClipboardList, label: 'Homework', path: '/homework', roles: ['TEACHER'] },
     ]
   },
@@ -135,7 +134,6 @@ const schoolNavSections = [
     activeClass: 'bg-blue-600 text-white shadow-sm shadow-blue-900/30',
     items: [
       { icon: DollarSign, label: 'Fees', path: '/fees' },
-      { icon: Package, label: 'Inventory', path: '/inventory' },
       { icon: BookOpen, label: 'Ledger', path: '/ledger' },
       { icon: ArrowLeftRight, label: 'Transactions', path: '/transactions' },
     ]

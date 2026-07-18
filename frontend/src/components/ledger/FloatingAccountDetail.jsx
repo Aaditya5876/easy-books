@@ -2,10 +2,11 @@ import { useState, useRef, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus, Printer, Share2, Save, X, Minus } from 'lucide-react';
 import DataTable from '../shared/DataTable';
 
-export default function FloatingAccountDetail({ account, entries, onClose, onNewEntry, showNewEntry, setShowNewEntry, newEntry, setNewEntry, createEntry }) {
+export default function FloatingAccountDetail({ account, entries, onClose, onNewEntry, showNewEntry, setShowNewEntry, newEntry, setNewEntry, createEntry, allAccounts = [] }) {
   const [pos, setPos] = useState({ x: window.innerWidth / 2 - 480, y: 60 });
   const [minimized, setMinimized] = useState(false);
   const dragging = useRef(false);
@@ -114,30 +115,44 @@ export default function FloatingAccountDetail({ account, entries, onClose, onNew
             {showNewEntry && (
               <div className="mt-4 p-4 border border-border rounded-lg bg-secondary/50">
                 <h4 className="text-sm font-semibold mb-3">New Entry</h4>
-                <div className="grid grid-cols-5 gap-3">
+                <p className="text-xs text-muted-foreground mb-3">
+                  Double-entry bookkeeping: pick the other account this amount moves to/from — the system posts both sides and keeps balances correct automatically.
+                </p>
+                <div className="grid grid-cols-3 gap-3">
                   <div>
                     <Label>Date *</Label>
                     <Input type="date" value={newEntry.date_ad} onChange={e => setNewEntry({ ...newEntry, date_ad: e.target.value })} />
                   </div>
-                  <div>
+                  <div className="col-span-2">
                     <Label>Description *</Label>
                     <Input value={newEntry.description} onChange={e => setNewEntry({ ...newEntry, description: e.target.value })} />
                   </div>
                   <div>
-                    <Label>Reference No.</Label>
-                    <Input value={newEntry.reference_id} onChange={e => setNewEntry({ ...newEntry, reference_id: e.target.value })} placeholder="e.g. INV-001" />
-                  </div>
-                  <div>
                     <Label>Debit (NPR)</Label>
-                    <Input type="number" value={newEntry.debit} onChange={e => setNewEntry({ ...newEntry, debit: parseFloat(e.target.value) || 0 })} />
+                    <Input type="number" value={newEntry.debit} onChange={e => setNewEntry({ ...newEntry, debit: parseFloat(e.target.value) || 0, credit: 0 })} />
                   </div>
                   <div>
                     <Label>Credit (NPR)</Label>
-                    <Input type="number" value={newEntry.credit} onChange={e => setNewEntry({ ...newEntry, credit: parseFloat(e.target.value) || 0 })} />
+                    <Input type="number" value={newEntry.credit} onChange={e => setNewEntry({ ...newEntry, credit: parseFloat(e.target.value) || 0, debit: 0 })} />
+                  </div>
+                  <div>
+                    <Label>Contra Account *</Label>
+                    <Select value={newEntry.contra_account_id} onValueChange={v => setNewEntry({ ...newEntry, contra_account_id: v })}>
+                      <SelectTrigger><SelectValue placeholder="Other side of entry…" /></SelectTrigger>
+                      <SelectContent>
+                        {allAccounts.filter(a => a.id !== account.id).map(a => (
+                          <SelectItem key={a.id} value={a.id}>{a.account_name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="col-span-3">
+                    <Label>Reference No. (optional)</Label>
+                    <Input value={newEntry.reference_id} onChange={e => setNewEntry({ ...newEntry, reference_id: e.target.value })} placeholder="e.g. INV-001" />
                   </div>
                 </div>
                 <div className="flex gap-2 mt-3">
-                  <Button size="sm" onClick={createEntry} disabled={!newEntry.description}>Save Entry</Button>
+                  <Button size="sm" onClick={createEntry} disabled={!newEntry.description || !newEntry.contra_account_id || (!newEntry.debit && !newEntry.credit)}>Save Entry</Button>
                   <Button size="sm" variant="outline" onClick={() => setShowNewEntry(false)}>Cancel</Button>
                 </div>
               </div>

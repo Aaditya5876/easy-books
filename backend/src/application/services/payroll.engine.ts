@@ -217,6 +217,30 @@ export class PayrollEngineService {
     return { month, payrolls, summary };
   }
 
+  // Recomputes netSalary after adjusting otherDeductions (the only manually-editable line item)
+  async adjustPayroll(companyId: string, payrollId: string, otherDeductions: number) {
+    const payroll = await this.prisma.payroll.findFirst({ where: { id: payrollId, companyId } });
+    if (!payroll) throw new Error('Payroll record not found');
+
+    const dashainBonus = payroll.isDashainBonus ? Number(payroll.basicSalary) : 0;
+    const netSalary = Number(
+      (
+        Number(payroll.grossSalary) -
+        Number(payroll.absentDeduction) -
+        Number(payroll.ssfEmployee) -
+        Number(payroll.pit) +
+        Number(payroll.overtimeAmount) +
+        dashainBonus -
+        otherDeductions
+      ).toFixed(2),
+    );
+
+    return this.prisma.payroll.update({
+      where: { id: payrollId },
+      data: { otherDeductions, netSalary },
+    });
+  }
+
   async setHold(companyId: string, payrollId: string, isOnHold: boolean, holdReason?: string) {
     return this.prisma.payroll.update({
       where: { id: payrollId },

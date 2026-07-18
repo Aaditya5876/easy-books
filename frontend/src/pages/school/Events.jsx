@@ -122,8 +122,12 @@ function EventDialog({ open, onClose, event, mode = 'AD', monthKey }) {
                     if (parts.length === 3) {
                       const [y, m, d] = parts.map(x => parseInt(x, 10));
                       if (!isNaN(y) && !isNaN(m) && !isNaN(d)) {
-                        const ad = bsToAd(y, m, d);
-                        setForm(p => ({ ...p, startDate: ad.toISOString().split('T')[0] }));
+                        try {
+                          const ad = bsToAd(y, m, d);
+                          setForm(p => ({ ...p, startDate: ad.toISOString().split('T')[0] }));
+                        } catch {
+                          // incomplete/invalid BS date while typing — ignore until it parses
+                        }
                       }
                     }
                   }} placeholder="YYYY-MM-DD" />
@@ -137,8 +141,12 @@ function EventDialog({ open, onClose, event, mode = 'AD', monthKey }) {
                     if (parts.length === 3) {
                       const [y, m, d] = parts.map(x => parseInt(x, 10));
                       if (!isNaN(y) && !isNaN(m) && !isNaN(d)) {
-                        const ad = bsToAd(y, m, d);
-                        setForm(p => ({ ...p, endDate: ad.toISOString().split('T')[0] }));
+                        try {
+                          const ad = bsToAd(y, m, d);
+                          setForm(p => ({ ...p, endDate: ad.toISOString().split('T')[0] }));
+                        } catch {
+                          // incomplete/invalid BS date while typing — ignore until it parses
+                        }
                       }
                     }
                   }} placeholder="YYYY-MM-DD" />

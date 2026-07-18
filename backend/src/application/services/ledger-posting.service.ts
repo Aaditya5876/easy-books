@@ -1,6 +1,10 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, BadRequestException } from '@nestjs/common';
+import { randomUUID } from 'crypto';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../core/db/psql/prisma.client';
 import { adToBs } from '@easy-books/shared';
+
+type Tx = Prisma.TransactionClient;
 
 const SYSTEM_ACCOUNTS = {
   SALES_REVENUE: 'Sales Revenue',
@@ -685,6 +689,100 @@ export class LedgerPostingService {
       this.prisma.ledgerAccount.update({ where: { id: assetAccount.id }, data: { currentBalance: { decrement: amount } } }),
       this.prisma.ledgerAccount.update({ where: { id: liabilityAccount.id }, data: { currentBalance: { decrement: amount } } }),
     ]);
+  }
+
+  // ─── Manual Journal Entry ─────────────────────────────────────────────────────
+  // User-entered postings from the Ledger "New Entry" / Transactions "Add to
+  // Ledger" UIs. Always creates a balanced debit+credit pair in one transaction —
+  // never a single-sided row — and updates both accounts' currentBalance
+  // correctly according to each account's normal-balance side (debit-normal for
+  // ASSET/EXPENSE, credit-normal for LIABILITY/EQUITY/INCOME).
+
+  // Standalone entry point (Ledger "New Entry" UI) — wraps its own transaction.
+  async postManualJournalEntry(
+    companyId: string,
+    params: { debitAccountId: string; creditAccountId: string; amount: number; dateAd: string; description?: string; referenceType?: string; referenceId?: string },
+  ) {
+    return this.prisma.$transaction((tx) => this.postManualJournalEntryTx(tx, companyId, params));
+  }
+
+  // Nested entry point — callers that need the posting to be part of a larger
+  // atomic transaction (e.g. TransactionServiceImpl.create) pass their own `tx`.
+  async postManualJournalEntryTx(
+    tx: Tx,
+    companyId: string,
+    params: { debitAccountId: string; creditAccountId: string; amount: number; dateAd: string; description?: string; referenceType?: string; referenceId?: string },
+  ) {
+    const { debitAccountId, creditAccountId, amount, dateAd, description } = params;
+    if (debitAccountId === creditAccountId) {
+      throw new BadRequestException('Debit and credit accounts must be different');
+    }
+    if (!(amount > 0)) {
+      throw new BadRequestException('Amount must be greater than zero');
+    }
+
+    const [debitAccount, creditAccount] = await Promise.all([
+      tx.ledgerAccount.findFirst({ where: { id: debitAccountId, companyId } }),
+      tx.ledgerAccount.findFirst({ where: { id: creditAccountId, companyId } }),
+    ]);
+    if (!debitAccount || !creditAccount) throw new BadRequestException('Account not found');
+
+    const date = new Date(dateAd);
+    const dateBs = adToBs(date);
+    const referenceType = params.referenceType ?? 'MANUAL_JOURNAL';
+    const referenceId = params.referenceId ?? randomUUID();
+    const debitDelta = this.ledgerDelta(debitAccount.accountType, amount, 0);
+    const creditDelta = this.ledgerDelta(creditAccount.accountType, 0, amount);
+
+    const debitEntry = await tx.ledgerEntry.create({
+      data: {
+        companyId, accountId: debitAccount.id, dateAd: date, dateBs, description,
+        debit: amount, credit: 0,
+        balance: Number(debitAccount.currentBalance) + debitDelta,
+        referenceType, referenceId, isAutoPosted: false,
+      },
+    });
+    await tx.ledgerEntry.create({
+      data: {
+        companyId, accountId: creditAccount.id, dateAd: date, dateBs, description,
+        debit: 0, credit: amount,
+        balance: Number(creditAccount.currentBalance) + creditDelta,
+        referenceType, referenceId, isAutoPosted: false,
+      },
+    });
+    await tx.ledgerAccount.update({ where: { id: debitAccount.id }, data: { currentBalance: { increment: debitDelta } } });
+    await tx.ledgerAccount.update({ where: { id: creditAccount.id }, data: { currentBalance: { increment: creditDelta } } });
+
+    return debitEntry;
+  }
+
+  // Deletes a manual journal entry and its paired leg together, reversing both
+  // accounts' balances — prevents the imbalance that deleting only one row would cause.
+  async reverseManualJournalEntry(companyId: string, entry: { id: string; accountId: string; referenceType: string | null; referenceId: string | null }) {
+    const siblings = entry.referenceType && entry.referenceId
+      ? await this.prisma.ledgerEntry.findMany({ where: { companyId, referenceType: entry.referenceType, referenceId: entry.referenceId } })
+      : [entry as any];
+
+    const accounts = await this.prisma.ledgerAccount.findMany({ where: { id: { in: siblings.map((s: any) => s.accountId) } } });
+    const accountById = new Map(accounts.map((a) => [a.id, a]));
+
+    return this.prisma.$transaction([
+      ...siblings.map((s: any) => this.prisma.ledgerEntry.delete({ where: { id: s.id } })),
+      ...siblings.map((s: any) => {
+        const acc = accountById.get(s.accountId);
+        const delta = acc ? this.ledgerDelta(acc.accountType, Number(s.debit), Number(s.credit)) : 0;
+        return this.prisma.ledgerAccount.update({ where: { id: s.accountId }, data: { currentBalance: { decrement: delta } } });
+      }),
+    ]);
+  }
+
+  private debitNormal(accountType: string): boolean {
+    return accountType === 'ASSET' || accountType === 'EXPENSE';
+  }
+
+  private ledgerDelta(accountType: string, debit: number, credit: number): number {
+    const net = debit - credit;
+    return this.debitNormal(accountType) ? net : -net;
   }
 
   // ─── Internal ────────────────────────────────────────────────────────────────

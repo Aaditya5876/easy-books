@@ -50,70 +50,72 @@ export default function PortalAttendance() {
   const fmtDate = (d) => new Date(d).toLocaleDateString('en-NP', { weekday: 'short', day: 'numeric', month: 'short' });
 
   return (
-    <motion.div variants={pageVariants} initial="initial" animate="animate" exit="exit" className="p-5 md:p-7 space-y-5 max-w-2xl">
+    <motion.div variants={pageVariants} initial="initial" animate="animate" exit="exit" className="p-5 md:p-7 space-y-5 max-w-7xl mx-auto">
       <h1 className="text-2xl font-bold text-slate-900">{t('portal.attendance', { defaultValue: 'Attendance' })}</h1>
 
-      {data?.summary && (
-        <motion.div
-          variants={containerVariants} initial="initial" animate="animate"
-          className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm"
-        >
-          <div className="flex flex-col sm:flex-row items-center gap-6">
-            <AttendanceRing percentage={data.summary.percentage} />
-            <div className="grid grid-cols-3 gap-3 flex-1 w-full">
-              {[
-                { label: t('portal.totalDays', { defaultValue: 'Total Days' }), value: data.summary.total,   color: '#64748B', bg: '#F8FAFC' },
-                { label: t('portal.present', { defaultValue: 'Present' }),      value: data.summary.present, color: '#10B981', bg: '#F0FDF4' },
-                { label: t('portal.absent', { defaultValue: 'Absent' }),        value: data.summary.absent,  color: '#F43F5E', bg: '#FFF1F2' },
-              ].map(s => (
-                <motion.div
-                  key={s.label}
-                  variants={cardVariants}
-                  className="rounded-xl p-3 text-center border"
-                  style={{ background: s.bg, borderColor: s.color + '30' }}
-                >
-                  <p className="text-2xl font-bold" style={{ color: s.color }}>{s.value}</p>
-                  <p className="text-xs text-slate-500 mt-0.5 font-medium">{s.label}</p>
-                </motion.div>
-              ))}
+      <div className="grid grid-cols-1 lg:grid-cols-[380px_1fr] gap-5 items-start">
+        {data?.summary && (
+          <motion.div
+            variants={containerVariants} initial="initial" animate="animate"
+            className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm"
+          >
+            <div className="flex flex-col items-center gap-6">
+              <AttendanceRing percentage={data.summary.percentage} />
+              <div className="grid grid-cols-3 gap-3 w-full">
+                {[
+                  { label: t('portal.totalDays', { defaultValue: 'Total Days' }), value: data.summary.total,   color: '#64748B', bg: '#F8FAFC' },
+                  { label: t('portal.present', { defaultValue: 'Present' }),      value: data.summary.present, color: '#10B981', bg: '#F0FDF4' },
+                  { label: t('portal.absent', { defaultValue: 'Absent' }),        value: data.summary.absent,  color: '#F43F5E', bg: '#FFF1F2' },
+                ].map(s => (
+                  <motion.div
+                    key={s.label}
+                    variants={cardVariants}
+                    className="rounded-xl p-3 text-center border"
+                    style={{ background: s.bg, borderColor: s.color + '30' }}
+                  >
+                    <p className="text-2xl font-bold" style={{ color: s.color }}>{s.value}</p>
+                    <p className="text-xs text-slate-500 mt-0.5 font-medium">{s.label}</p>
+                  </motion.div>
+                ))}
+              </div>
             </div>
-          </div>
-        </motion.div>
-      )}
-
-      <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
-        {isLoading ? (
-          <div className="p-12 text-center text-slate-400 text-sm">{t('portal.loading', { defaultValue: 'Loading…' })}</div>
-        ) : !data?.records?.length ? (
-          <div className="p-12 text-center">
-            <CalendarCheck className="w-10 h-10 text-slate-200 mx-auto mb-3" />
-            <p className="text-slate-400 text-sm">{t('portal.noAttendanceRecords', { defaultValue: 'No attendance records yet' })}</p>
-          </div>
-        ) : (
-          <motion.div variants={containerVariants} initial="initial" animate="animate">
-            {data.records.map(r => {
-              const cfg = STATUS_CONFIG[r.status] || { label: r.status, color: '#64748B', bg: '#F8FAFC' };
-              return (
-                <motion.div
-                  key={r.id}
-                  variants={itemVariants}
-                  className="flex items-center justify-between px-5 py-3.5 border-b border-slate-100 last:border-0"
-                >
-                  <p className="text-sm text-slate-700">{fmtDate(r.date)}</p>
-                  <div className="flex items-center gap-3">
-                    {r.notes && <p className="text-xs text-slate-400 hidden sm:block">{r.notes}</p>}
-                    <span
-                      className="inline-flex px-3 py-1 rounded-full text-xs font-semibold"
-                      style={{ background: cfg.bg, color: cfg.color }}
-                    >
-                      {cfg.labelKey ? t(cfg.labelKey, { defaultValue: cfg.label }) : cfg.label}
-                    </span>
-                  </div>
-                </motion.div>
-              );
-            })}
           </motion.div>
         )}
+
+        <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+          {isLoading ? (
+            <div className="p-12 text-center text-slate-400 text-sm">{t('portal.loading', { defaultValue: 'Loading…' })}</div>
+          ) : !data?.records?.length ? (
+            <div className="p-12 text-center">
+              <CalendarCheck className="w-10 h-10 text-slate-200 mx-auto mb-3" />
+              <p className="text-slate-400 text-sm">{t('portal.noAttendanceRecords', { defaultValue: 'No attendance records yet' })}</p>
+            </div>
+          ) : (
+            <motion.div variants={containerVariants} initial="initial" animate="animate">
+              {data.records.map(r => {
+                const cfg = STATUS_CONFIG[r.status] || { label: r.status, color: '#64748B', bg: '#F8FAFC' };
+                return (
+                  <motion.div
+                    key={r.id}
+                    variants={itemVariants}
+                    className="flex items-center justify-between px-5 py-3.5 border-b border-slate-100 last:border-0"
+                  >
+                    <p className="text-sm text-slate-700">{fmtDate(r.date)}</p>
+                    <div className="flex items-center gap-3">
+                      {r.notes && <p className="text-xs text-slate-400 hidden sm:block">{r.notes}</p>}
+                      <span
+                        className="inline-flex px-3 py-1 rounded-full text-xs font-semibold"
+                        style={{ background: cfg.bg, color: cfg.color }}
+                      >
+                        {cfg.labelKey ? t(cfg.labelKey, { defaultValue: cfg.label }) : cfg.label}
+                      </span>
+                    </div>
+                  </motion.div>
+                );
+              })}
+            </motion.div>
+          )}
+        </div>
       </div>
     </motion.div>
   );

@@ -21,7 +21,6 @@ import FloatingAccountDetail from '../components/ledger/FloatingAccountDetail';
 import EmptyState from '../components/EmptyState';
 import { useRole } from '@/lib/useRole';
 import { useAuth } from '@/lib/AuthContext';
-import { schoolFinanceApi } from '@/api';
 import { useToast } from '@/components/ui/use-toast';
 
 export default function Ledger() {
@@ -90,7 +89,8 @@ export default function Ledger() {
     account_name: '', contact_name: '', contact_phone: '',
     address: '', pan_vat: '', opening_balance: '', notes: '', ob_type: 'debit',
   });
-  const [newEntry, setNewEntry] = useState({ description: '', debit: 0, credit: 0, reference_id: '', date_ad: new Date().toISOString().split('T')[0] });
+  const [newEntry, setNewEntry] = useState({ description: '', debit: 0, credit: 0, reference_id: '', contra_account_id: '', date_ad: new Date().toISOString().split('T')[0] });
+  const [allAccounts, setAllAccounts] = useState([]);
 
   useEffect(() => {
     if (companyId) loadData();
@@ -98,12 +98,14 @@ export default function Ledger() {
 
   async function loadData() {
     setLoading(true);
-    const [accs, ents] = await Promise.all([
+    const [accs, ents, allAccs] = await Promise.all([
       api.LedgerAccount.filter({ company_id: companyId, account_type: activeTab }),
       api.LedgerEntry.filter({ company_id: companyId }, '-created_date', 50),
+      api.LedgerAccount.filter({ company_id: companyId }),
     ]);
     setAccounts(accs);
     setEntries(ents);
+    setAllAccounts(allAccs);
     setLoading(false);
   }
 
@@ -156,33 +158,35 @@ export default function Ledger() {
 
   async function createEntry() {
     if (!showAccountDetail) return;
-    const today = new Date().toISOString().split('T')[0];
-    const bsDate = adToBs(new Date());
 
-    const accountEntries = entries.filter(e => e.account_id === showAccountDetail.id);
-    const lastBalance = accountEntries.length > 0 ? accountEntries[0].balance || 0 : (showAccountDetail.opening_balance || 0);
-    const newBalance = lastBalance + (newEntry.debit || 0) - (newEntry.credit || 0);
+    const debitAmt = Number(newEntry.debit) || 0;
+    const creditAmt = Number(newEntry.credit) || 0;
 
-    const entryDate = newEntry.date_ad || today;
-    const entryBs = adToBs(new Date(entryDate));
-    await api.LedgerEntry.create({
-      company_id: companyId,
-      account_id: showAccountDetail.id,
-      date_ad: entryDate,
-      date_bs: entryBs.formatted,
-      description: newEntry.description,
-      debit: newEntry.debit || 0,
-      credit: newEntry.credit || 0,
-      balance: newBalance,
-      reference_type: activeTab,
-      reference_id: newEntry.reference_id || '',
-      is_locked: true,
-    });
+    if (!newEntry.contra_account_id) {
+      toast({ title: 'Select the contra account', description: 'Every entry needs an offsetting account for double-entry bookkeeping.', variant: 'destructive' });
+      return;
+    }
+    if ((debitAmt > 0) === (creditAmt > 0)) {
+      toast({ title: 'Enter either a debit or a credit amount, not both', variant: 'destructive' });
+      return;
+    }
 
-    await api.LedgerAccount.update(showAccountDetail.id, { current_balance: newBalance });
-    setNewEntry({ description: '', debit: 0, credit: 0, reference_id: '', date_ad: new Date().toISOString().split('T')[0] });
-    setShowNewEntry(false);
-    loadData();
+    const amount = debitAmt || creditAmt;
+    const debitAccountId = debitAmt > 0 ? showAccountDetail.id : newEntry.contra_account_id;
+    const creditAccountId = debitAmt > 0 ? newEntry.contra_account_id : showAccountDetail.id;
+    const entryDate = newEntry.date_ad || new Date().toISOString().split('T')[0];
+    const description = newEntry.reference_id
+      ? `${newEntry.description} (Ref: ${newEntry.reference_id})`
+      : newEntry.description;
+
+    try {
+      await ledgerApi.entries.createJournal({ debitAccountId, creditAccountId, amount, dateAd: entryDate, description });
+      setNewEntry({ description: '', debit: 0, credit: 0, reference_id: '', contra_account_id: '', date_ad: new Date().toISOString().split('T')[0] });
+      setShowNewEntry(false);
+      loadData();
+    } catch (e) {
+      toast({ title: 'Failed to save entry', description: e?.response?.data?.message || '', variant: 'destructive' });
+    }
   }
 
   const filteredAccounts = accounts.filter(a =>
@@ -247,25 +251,7 @@ export default function Ledger() {
         onSearchChange={setSearch}
         onAdd={() => setShowNewAccount(true)}
         addLabel="New Account"
-      >
-        {isSchool && (
-          <Button
-            variant="outline"
-            className="gap-2"
-            onClick={async () => {
-              try {
-                const res = await schoolFinanceApi.setupLedger();
-                toast({ title: `School accounts ready — ${res.data.created} new accounts created` });
-                loadData();
-              } catch (e) {
-                toast({ title: e?.response?.data?.message || 'Failed to set up accounts', variant: 'destructive' });
-              }
-            }}
-          >
-            <BookOpen className="w-4 h-4" /> School Accounts Setup
-          </Button>
-        )}
-      </PageHeader>
+      />
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="bg-secondary">
@@ -493,6 +479,7 @@ export default function Ledger() {
           newEntry={newEntry}
           setNewEntry={setNewEntry}
           createEntry={createEntry}
+          allAccounts={allAccounts}
         />
       )}
 

@@ -7,47 +7,52 @@ import DataTable from '../components/shared/DataTable';
 import PageLoader from '../components/PageLoader';
 import EmptyState from '../components/EmptyState';
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { SmartNumberInput } from "@/components/ui/smart-number-input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
-import { FileText, RefreshCw, Download, Calculator, Save, CalendarDays, Banknote } from 'lucide-react';
+import { FileText, RefreshCw, Download, Calculator, Save, CalendarDays, Banknote, PauseCircle, PlayCircle, CheckCircle2 } from 'lucide-react';
 import { useRole } from "@/lib/useRole";
 import { motion } from 'framer-motion';
 import { jsPDF } from 'jspdf';
+import { toast } from 'sonner';
+import NepaliDate from 'nepali-date-converter';
 
-const statusColors = { draft: 'bg-slate-100 text-slate-600', approved: 'bg-blue-100 text-blue-700', paid: 'bg-green-100 text-green-700' };
+const statusColors = {
+  PENDING: 'bg-slate-100 text-slate-600',
+  PROCESSED: 'bg-blue-100 text-blue-700',
+  PAID: 'bg-green-100 text-green-700',
+  ON_HOLD: 'bg-amber-100 text-amber-700',
+};
+const statusLabels = { PENDING: 'Pending', PROCESSED: 'Processed', PAID: 'Paid', ON_HOLD: 'On Hold' };
 
-function getMonthOptions() {
+const num = (v) => Number(v) || 0;
+const npr = (v) => `NPR ${num(v).toLocaleString()}`;
+
+// Payroll months are Bikram Sambat (the backend engine converts BS month -> AD attendance range)
+function getBsMonthOptions() {
   const months = [];
-  const now = new Date();
+  const today = new NepaliDate();
+  let y = today.getYear();
+  let m = today.getMonth() + 1; // NepaliDate months are 0-indexed
   for (let i = 0; i < 12; i++) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    months.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+    months.push(`${y}-${String(m).padStart(2, '0')}`);
+    m -= 1;
+    if (m < 1) { m = 12; y -= 1; }
   }
   return months;
-}
-
-function calcLateMinutes(checkIn, expectedIn = '09:00') {
-  if (!checkIn) return 0;
-  const [eh, em] = expectedIn.split(':').map(Number);
-  const [ah, am] = checkIn.split(':').map(Number);
-  const diff = (ah * 60 + am) - (eh * 60 + em);
-  return diff > 0 ? diff : 0;
 }
 
 export default function Payroll() {
   const { canEdit, canProcessPayroll } = useRole();
   const companyId = getActiveCompanyId();
   const [payrolls, setPayrolls] = useState([]);
+  const [summary, setSummary] = useState(null);
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
-  const [selectedMonth, setSelectedMonth] = useState(getMonthOptions()[0]);
+  const [selectedMonth, setSelectedMonth] = useState(getBsMonthOptions()[0]);
   const [showDetail, setShowDetail] = useState(null);
-  const [detailBonus, setDetailBonus] = useState(0);
   const [detailOtherDed, setDetailOtherDed] = useState(0);
   const [colFilters, setColFilters] = useState({ employee_name: '', status: '' });
   const setCol = (key, val) => setColFilters(f => ({ ...f, [key]: val }));
@@ -56,71 +61,43 @@ export default function Payroll() {
   const [gratuityResult, setGratuityResult] = useState(null);
   const [gratuityLoading, setGratuityLoading] = useState(false);
 
-  useEffect(() => { if (companyId) load(); }, [companyId]);
+  useEffect(() => { if (companyId) load(); }, [companyId, selectedMonth]);
 
   async function load() {
     setLoading(true);
-    const [pr, emp] = await Promise.all([
-      api.Payroll.filter({ company_id: companyId }, '-month', 200),
-      api.Employee.filter({ company_id: companyId }, 'name', 100),
-    ]);
-    setPayrolls(pr);
-    setEmployees(emp);
-    setLoading(false);
+    try {
+      const [prRes, emp] = await Promise.all([
+        payrollApi.summary(selectedMonth),
+        api.Employee.filter({ company_id: companyId }, 'name', 100),
+      ]);
+      const payload = prRes.data?.data ?? prRes.data;
+      setPayrolls(payload?.payrolls ?? []);
+      setSummary(payload?.summary ?? null);
+      setEmployees(emp);
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function generatePayroll() {
     setGenerating(true);
-    const [y, m] = selectedMonth.split('-').map(Number);
-    const startDate = `${selectedMonth}-01`;
-    const endDate = new Date(y, m, 0).toISOString().split('T')[0];
-
-    const attendance = await api.Attendance.filter({ company_id: companyId }, 'date', 500);
-    const monthAtt = attendance.filter(a => a.date >= startDate && a.date <= endDate);
-
-    const daysInMonth = new Date(y, m, 0).getDate();
-    const workingDays = Math.round(daysInMonth * 26 / 30); // approx working days
-
-    for (const emp of employees) {
-      const existing = payrolls.find(p => p.employee_id === emp.id && p.month === selectedMonth);
-      if (existing) continue;
-
-      const empAtt = monthAtt.filter(a => a.employee_id === emp.id);
-      const present = empAtt.filter(a => a.status === 'present').length;
-      const absent = empAtt.filter(a => a.status === 'absent').length;
-      const half = empAtt.filter(a => a.status === 'half_day').length;
-
-      const lateMinutes = empAtt.reduce((sum, a) => sum + calcLateMinutes(a.check_in), 0);
-
-      const baseSalary = emp.salary || 0;
-      const perDay = baseSalary / workingDays;
-      const perMinute = baseSalary / (workingDays * 8 * 60);
-
-      const absentDeduction = absent * perDay + half * perDay * 0.5;
-      const lateDeduction = lateMinutes * perMinute;
-      const netSalary = Math.max(0, baseSalary - absentDeduction - lateDeduction);
-
-      await api.Payroll.create({
-        company_id: companyId,
-        employee_id: emp.id,
-        employee_name: emp.name,
-        month: selectedMonth,
-        base_salary: baseSalary,
-        working_days: workingDays,
-        days_present: present,
-        days_absent: absent,
-        days_half: half,
-        late_minutes: Math.round(lateMinutes),
-        absent_deduction: Math.round(absentDeduction),
-        late_deduction: Math.round(lateDeduction),
-        other_deductions: 0,
-        bonus: 0,
-        net_salary: Math.round(netSalary),
-        status: 'draft',
-      });
+    try {
+      await payrollApi.process(selectedMonth);
+      // Processing runs async via BullMQ — poll briefly until rows show up
+      const activeCount = employees.filter(e => (e.status || 'ACTIVE') === 'ACTIVE').length;
+      for (let i = 0; i < 6; i++) {
+        await new Promise(r => setTimeout(r, 700));
+        const res = await payrollApi.summary(selectedMonth);
+        const payload = res.data?.data ?? res.data;
+        if ((payload?.payrolls?.length || 0) >= activeCount) break;
+      }
+      await load();
+      toast.success('Payroll generated');
+    } catch (e) {
+      toast.error(e?.response?.data?.message || 'Failed to generate payroll');
+    } finally {
+      setGenerating(false);
     }
-    setGenerating(false);
-    load();
   }
 
   async function calculateGratuity() {
@@ -137,32 +114,53 @@ export default function Payroll() {
     }
   }
 
+  const dashainBonusOf = (p) => (p.isDashainBonus ? num(p.basicSalary) : 0);
+
   const liveNet = showDetail ? Math.max(0,
-    (showDetail.base_salary || 0) + detailBonus
-    - (showDetail.absent_deduction || 0)
-    - (showDetail.late_deduction || 0)
+    num(showDetail.grossSalary)
+    - num(showDetail.absentDeduction)
+    - num(showDetail.ssfEmployee)
+    - num(showDetail.pit)
+    + num(showDetail.overtimeAmount)
+    + dashainBonusOf(showDetail)
     - detailOtherDed
   ) : 0;
 
   async function savePayrollAdjustments() {
     if (!showDetail) return;
-    await api.Payroll.update(showDetail.id, {
-      bonus: detailBonus,
-      other_deductions: detailOtherDed,
-      net_salary: liveNet,
-    });
-    setShowDetail(null);
-    load();
+    try {
+      await payrollApi.adjust(showDetail.id, detailOtherDed);
+      toast.success('Adjustments saved');
+      setShowDetail(null);
+      load();
+    } catch (e) {
+      toast.error(e?.response?.data?.message || 'Failed to save adjustments');
+    }
   }
 
-  async function updateStatus(id, status) {
-    await api.Payroll.update(id, { status });
-    load();
+  async function markPaid(id) {
+    try {
+      await payrollApi.markPaid(id);
+      toast.success('Marked as paid');
+      load();
+    } catch (e) {
+      toast.error(e?.response?.data?.message || 'Failed to mark as paid');
+    }
+  }
+
+  async function toggleHold(p) {
+    try {
+      await payrollApi.setHold(p.id, !p.isOnHold);
+      toast.success(p.isOnHold ? 'Hold released' : 'Payroll put on hold');
+      load();
+    } catch (e) {
+      toast.error(e?.response?.data?.message || 'Failed to update hold status');
+    }
   }
 
   function exportPDF(p) {
     const doc = new jsPDF();
-    const company = employees.find(e => e.id === p.employee_id);
+    const name = p.employee?.name || '—';
 
     doc.setFontSize(18);
     doc.setFont(undefined, 'bold');
@@ -170,8 +168,8 @@ export default function Payroll() {
 
     doc.setFontSize(11);
     doc.setFont(undefined, 'normal');
-    doc.text(`Month: ${p.month}`, 20, 35);
-    doc.text(`Employee: ${p.employee_name}`, 20, 43);
+    doc.text(`Month (BS): ${p.month}`, 20, 35);
+    doc.text(`Employee: ${name}`, 20, 43);
     doc.text(`Generated: ${new Date().toLocaleDateString()}`, 20, 51);
 
     doc.line(20, 57, 190, 57);
@@ -179,67 +177,79 @@ export default function Payroll() {
     doc.setFont(undefined, 'bold');
     doc.text('Earnings', 20, 66);
     doc.setFont(undefined, 'normal');
-    doc.text('Base Salary', 25, 74);
-    doc.text(`NPR ${p.base_salary?.toLocaleString()}`, 150, 74, { align: 'right' });
-    doc.text('Bonus', 25, 82);
-    doc.text(`NPR ${(p.bonus || 0).toLocaleString()}`, 150, 82, { align: 'right' });
+    doc.text('Basic Salary', 25, 74);
+    doc.text(npr(p.basicSalary), 150, 74, { align: 'right' });
+    doc.text('Allowances', 25, 82);
+    doc.text(npr(p.allowances), 150, 82, { align: 'right' });
+    if (p.isDashainBonus) {
+      doc.text('Dashain Bonus', 25, 90);
+      doc.text(npr(p.basicSalary), 150, 90, { align: 'right' });
+    }
+    doc.text('Overtime', 25, 98);
+    doc.text(npr(p.overtimeAmount), 150, 98, { align: 'right' });
 
-    doc.line(20, 88, 190, 88);
+    doc.line(20, 104, 190, 104);
 
     doc.setFont(undefined, 'bold');
-    doc.text('Deductions', 20, 97);
+    doc.text('Deductions', 20, 113);
     doc.setFont(undefined, 'normal');
-    doc.text(`Absent (${p.days_absent} days)`, 25, 105);
-    doc.text(`- NPR ${p.absent_deduction?.toLocaleString()}`, 150, 105, { align: 'right' });
-    doc.text(`Late (${p.late_minutes} mins)`, 25, 113);
-    doc.text(`- NPR ${p.late_deduction?.toLocaleString()}`, 150, 113, { align: 'right' });
-    doc.text('Other Deductions', 25, 121);
-    doc.text(`- NPR ${(p.other_deductions || 0).toLocaleString()}`, 150, 121, { align: 'right' });
+    doc.text(`Absent / Half Days (${p.absentDays}/${p.halfDays})`, 25, 121);
+    doc.text(`- ${npr(p.absentDeduction)}`, 150, 121, { align: 'right' });
+    doc.text('SSF (Employee)', 25, 129);
+    doc.text(`- ${npr(p.ssfEmployee)}`, 150, 129, { align: 'right' });
+    doc.text('Income Tax (PIT)', 25, 137);
+    doc.text(`- ${npr(p.pit)}`, 150, 137, { align: 'right' });
+    doc.text('Other Deductions', 25, 145);
+    doc.text(`- ${npr(p.otherDeductions)}`, 150, 145, { align: 'right' });
 
-    doc.line(20, 127, 190, 127);
+    doc.line(20, 151, 190, 151);
 
     doc.setFont(undefined, 'bold');
     doc.setFontSize(13);
-    doc.text('Net Salary', 20, 138);
-    doc.text(`NPR ${p.net_salary?.toLocaleString()}`, 150, 138, { align: 'right' });
+    doc.text('Net Salary', 20, 162);
+    doc.text(npr(p.netSalary), 150, 162, { align: 'right' });
 
-    doc.line(20, 143, 190, 143);
-
-    doc.setFontSize(10);
-    doc.setFont(undefined, 'normal');
-    doc.text(`Attendance: ${p.days_present} Present | ${p.days_absent} Absent | ${p.days_half} Half Days`, 20, 155);
-    doc.text(`Working Days: ${p.working_days}`, 20, 163);
-    if (p.notes) doc.text(`Notes: ${p.notes}`, 20, 171);
+    doc.line(20, 167, 190, 167);
 
     doc.setFontSize(9);
     doc.setTextColor(150);
     doc.text('This is a computer generated pay slip.', 105, 285, { align: 'center' });
 
-    doc.save(`payslip_${p.employee_name?.replace(/\s+/g, '_')}_${p.month}.pdf`);
+    doc.save(`payslip_${name.replace(/\s+/g, '_')}_${p.month}.pdf`);
   }
 
-  const monthPayrolls = payrolls.filter(p =>
-    p.month === selectedMonth &&
-    (!colFilters.employee_name || p.employee_name?.toLowerCase().includes(colFilters.employee_name.toLowerCase())) &&
-    (!colFilters.status || p.status?.includes(colFilters.status))
+  const filteredPayrolls = payrolls.filter(p =>
+    (!colFilters.employee_name || p.employee?.name?.toLowerCase().includes(colFilters.employee_name.toLowerCase())) &&
+    (!colFilters.status || p.status === colFilters.status)
   );
 
   const columns = [
-    { key: 'employee_name', label: 'Employee', filterValue: colFilters.employee_name, onFilterChange: v => setCol('employee_name', v), render: r => <span className="font-medium">{r.employee_name}</span> },
-    { key: 'base_salary', label: 'Base Salary', render: r => `NPR ${r.base_salary?.toLocaleString()}` },
-    { key: 'days_present', label: 'Present' },
-    { key: 'days_absent', label: 'Absent' },
-    { key: 'late_minutes', label: 'Late (min)' },
-    { key: 'absent_deduction', label: 'Absent Deduction', render: r => <span className="text-red-600">- NPR {r.absent_deduction?.toLocaleString()}</span> },
-    { key: 'late_deduction', label: 'Late Deduction', render: r => <span className="text-red-600">- NPR {r.late_deduction?.toLocaleString()}</span> },
-    { key: 'net_salary', label: 'Net Salary', render: r => <span className="font-semibold text-green-700">NPR {r.net_salary?.toLocaleString()}</span> },
+    { key: 'employee_name', label: 'Employee', filterValue: colFilters.employee_name, onFilterChange: v => setCol('employee_name', v), render: r => <span className="font-medium">{r.employee?.name || '—'}</span> },
+    { key: 'basicSalary', label: 'Basic Salary', render: r => npr(r.basicSalary) },
+    { key: 'grossSalary', label: 'Gross Salary', render: r => npr(r.grossSalary) },
+    { key: 'absentDays', label: 'Absent', render: r => r.absentDays },
+    { key: 'halfDays', label: 'Half Day', render: r => r.halfDays },
+    { key: 'ssfEmployee', label: 'SSF', render: r => npr(r.ssfEmployee) },
+    { key: 'pit', label: 'Tax (PIT)', render: r => npr(r.pit) },
+    { key: 'netSalary', label: 'Net Salary', render: r => <span className="font-semibold text-green-700">{npr(r.netSalary)}</span> },
     { key: 'status', label: 'Status', filterValue: colFilters.status, onFilterChange: v => setCol('status', v), render: r => (
-      <span className={`text-xs px-2 py-0.5 rounded-full font-medium capitalize ${statusColors[r.status] || ''}`}>{r.status}</span>
+      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${statusColors[r.status] || ''}`}>{statusLabels[r.status] || r.status}</span>
     )},
     { key: 'actions', label: 'Actions', render: r => (
       <div className="flex gap-2">
         {canEdit && (
-          <Button size="sm" variant="outline" onClick={e => { e.stopPropagation(); setShowDetail(r); setDetailBonus(r.bonus || 0); setDetailOtherDed(r.other_deductions || 0); }}>Details</Button>
+          <Button size="sm" variant="outline" onClick={e => { e.stopPropagation(); setShowDetail(r); setDetailOtherDed(num(r.otherDeductions)); }}>Details</Button>
+        )}
+        {canProcessPayroll && r.status === 'PROCESSED' && (
+          <Button size="sm" variant="outline" onClick={e => { e.stopPropagation(); markPaid(r.id); }}>
+            <CheckCircle2 className="w-3 h-3 mr-1" /> Mark Paid
+          </Button>
+        )}
+        {canProcessPayroll && r.status !== 'PAID' && (
+          <Button size="sm" variant="outline" onClick={e => { e.stopPropagation(); toggleHold(r); }}>
+            {r.isOnHold ? <PlayCircle className="w-3 h-3 mr-1" /> : <PauseCircle className="w-3 h-3 mr-1" />}
+            {r.isOnHold ? 'Release' : 'Hold'}
+          </Button>
         )}
         <Button size="sm" variant="outline" onClick={e => { e.stopPropagation(); exportPDF(r); }}>
           <Download className="w-3 h-3 mr-1" /> PDF
@@ -252,12 +262,12 @@ export default function Payroll() {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <PageHeader title="Payroll" subtitle="Monthly salary calculation and pay slips">
+      <PageHeader title="Payroll" subtitle="Monthly salary calculation and pay slips (BS month)">
         <div className="flex items-center gap-2">
           <Select value={selectedMonth} onValueChange={setSelectedMonth}>
             <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
             <SelectContent>
-              {getMonthOptions().map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}
+              {getBsMonthOptions().map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}
             </SelectContent>
           </Select>
           <Button variant="outline" onClick={() => { setShowGratuity(true); setGratuityResult(null); setGratuityEmpId(''); }} className="gap-2">
@@ -272,7 +282,28 @@ export default function Payroll() {
         </div>
       </PageHeader>
 
-      {monthPayrolls.length === 0 && (
+      {summary && payrolls.length > 0 && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div className="glass-card rounded-lg p-3">
+            <p className="text-xs text-muted-foreground">Employees</p>
+            <p className="text-lg font-semibold">{summary.count}</p>
+          </div>
+          <div className="glass-card rounded-lg p-3">
+            <p className="text-xs text-muted-foreground">Total Gross</p>
+            <p className="text-lg font-semibold">{npr(summary.totalGross)}</p>
+          </div>
+          <div className="glass-card rounded-lg p-3">
+            <p className="text-xs text-muted-foreground">Total Net Payable</p>
+            <p className="text-lg font-semibold text-green-700">{npr(summary.totalNetSalary)}</p>
+          </div>
+          <div className="glass-card rounded-lg p-3">
+            <p className="text-xs text-muted-foreground">On Hold</p>
+            <p className="text-lg font-semibold">{summary.onHoldCount}</p>
+          </div>
+        </div>
+      )}
+
+      {payrolls.length === 0 && (
         <EmptyState
           icon={FileText}
           title={`No payroll for ${selectedMonth}`}
@@ -286,8 +317,8 @@ export default function Payroll() {
         />
       )}
 
-      {monthPayrolls.length > 0 && (
-        <DataTable columns={columns} data={monthPayrolls} emptyMessage="No payroll records" />
+      {payrolls.length > 0 && (
+        <DataTable columns={columns} data={filteredPayrolls} emptyMessage="No payroll records" />
       )}
 
       {/* Gratuity Dialog */}
@@ -323,12 +354,12 @@ export default function Payroll() {
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Service</span>
-                    <span className="font-medium">{gratuityResult.monthsWorked ?? gratuityResult.months_worked ?? 0} months</span>
+                    <span className="font-medium">{gratuityResult.monthsWorked ?? 0} months</span>
                   </div>
                   <div className="flex justify-between border-t pt-2">
                     <span className="text-muted-foreground">Gratuity Amount</span>
                     <span className="font-bold text-lg text-green-700">
-                      NPR {(gratuityResult.gratuityAmount ?? gratuityResult.gratuity_amount ?? 0).toLocaleString()}
+                      {npr(gratuityResult.gratuityAmount ?? 0)}
                     </span>
                   </div>
                 </div>
@@ -351,7 +382,7 @@ export default function Payroll() {
             <div className="h-1 bg-gradient-to-r from-purple-400 to-violet-500 -mx-6 -mt-6 mb-4" />
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
-                <FileText className="w-5 h-5 text-primary" />Pay Slip — {showDetail.employee_name}
+                <FileText className="w-5 h-5 text-primary" />Pay Slip — {showDetail.employee?.name || '—'}
               </DialogTitle>
             </DialogHeader>
             <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.22, ease: 'easeOut' }}>
@@ -363,12 +394,10 @@ export default function Payroll() {
                   </h4>
                   <div className="grid grid-cols-2 gap-2">
                     {[
-                      { label: 'Month', value: showDetail.month, color: '' },
-                      { label: 'Working Days', value: showDetail.working_days, color: '' },
-                      { label: 'Present', value: showDetail.days_present, color: 'text-green-600 font-semibold' },
-                      { label: 'Absent', value: showDetail.days_absent, color: 'text-red-500 font-semibold' },
-                      { label: 'Half Days', value: showDetail.days_half, color: 'text-amber-600 font-semibold' },
-                      { label: 'Late (min)', value: showDetail.late_minutes, color: '' },
+                      { label: 'Month (BS)', value: showDetail.month, color: '' },
+                      { label: 'Absent Days', value: showDetail.absentDays, color: 'text-red-500 font-semibold' },
+                      { label: 'Half Days', value: showDetail.halfDays, color: 'text-amber-600 font-semibold' },
+                      { label: 'Dashain Bonus', value: showDetail.isDashainBonus ? 'Yes' : 'No', color: '' },
                     ].map(({ label, value, color }) => (
                       <div key={label} className="glass-card rounded-lg p-2.5">
                         <p className="text-xs text-muted-foreground">{label}</p>
@@ -376,14 +405,9 @@ export default function Payroll() {
                       </div>
                     ))}
                   </div>
-                  <Select value={showDetail.status} onValueChange={v => { updateStatus(showDetail.id, v); setShowDetail({ ...showDetail, status: v }); }}>
-                    <SelectTrigger className="w-full mt-1"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="draft">Draft</SelectItem>
-                      <SelectItem value="approved">Approved</SelectItem>
-                      <SelectItem value="paid">Paid</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <p className="text-xs px-1">
+                    Status: <span className={`px-2 py-0.5 rounded-full font-medium ${statusColors[showDetail.status] || ''}`}>{statusLabels[showDetail.status] || showDetail.status}</span>
+                  </p>
                 </div>
 
                 {/* RIGHT — Salary Breakdown */}
@@ -393,28 +417,38 @@ export default function Payroll() {
                   </h4>
                   <div className="bg-secondary/50 rounded-xl p-3 space-y-2.5 text-sm">
                     <div className="flex justify-between items-center">
-                      <span className="text-muted-foreground">Base Salary</span>
-                      <span className="font-semibold">NPR {showDetail.base_salary?.toLocaleString()}</span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span>Bonus</span>
-                      <SmartNumberInput value={detailBonus} onChange={e => setDetailBonus(parseFloat(e.target.value) || 0)} className="w-32 h-8 text-sm text-right" />
+                      <span className="text-muted-foreground">Gross Salary</span>
+                      <span className="font-semibold">{npr(showDetail.grossSalary)}</span>
                     </div>
                     <div className="flex justify-between items-center text-red-600">
                       <span>Absent Deduction</span>
-                      <span className="font-medium">− NPR {showDetail.absent_deduction?.toLocaleString()}</span>
+                      <span className="font-medium">− {npr(showDetail.absentDeduction)}</span>
                     </div>
                     <div className="flex justify-between items-center text-red-600">
-                      <span>Late Deduction</span>
-                      <span className="font-medium">− NPR {showDetail.late_deduction?.toLocaleString()}</span>
+                      <span>SSF (Employee)</span>
+                      <span className="font-medium">− {npr(showDetail.ssfEmployee)}</span>
                     </div>
+                    <div className="flex justify-between items-center text-red-600">
+                      <span>Income Tax (PIT)</span>
+                      <span className="font-medium">− {npr(showDetail.pit)}</span>
+                    </div>
+                    <div className="flex justify-between items-center text-green-700">
+                      <span>Overtime</span>
+                      <span className="font-medium">+ {npr(showDetail.overtimeAmount)}</span>
+                    </div>
+                    {showDetail.isDashainBonus && (
+                      <div className="flex justify-between items-center text-green-700">
+                        <span>Dashain Bonus</span>
+                        <span className="font-medium">+ {npr(showDetail.basicSalary)}</span>
+                      </div>
+                    )}
                     <div className="flex justify-between items-center">
                       <span>Other Deductions</span>
                       <SmartNumberInput value={detailOtherDed} onChange={e => setDetailOtherDed(parseFloat(e.target.value) || 0)} className="w-32 h-8 text-sm text-right" />
                     </div>
                     <div className="border-t pt-2.5 flex justify-between items-center">
                       <span className="font-bold text-base">Net Salary</span>
-                      <span className="font-bold text-xl text-green-700">NPR {liveNet.toLocaleString()}</span>
+                      <span className="font-bold text-xl text-green-700">{npr(liveNet)}</span>
                     </div>
                   </div>
                 </div>

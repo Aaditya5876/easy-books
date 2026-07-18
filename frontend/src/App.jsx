@@ -38,15 +38,14 @@ import Exams from './pages/school/Exams';
 import Subjects from './pages/school/Subjects';
 import StudentAttendance from './pages/school/StudentAttendance';
 import CalendarEvents from './pages/school/CalendarEvents';
-import Timetable from './pages/school/Timetable';
+import Routine from './pages/school/Routine';
 import Notices from './pages/school/Notices';
 import Events from './pages/school/Events';
-import StudyMaterials from './pages/school/StudyMaterials';
+import StudyMaterial from './pages/school/StudyMaterial';
 import Homework from './pages/school/Homework';
 import Library from './pages/school/Library';
 import Hostel from './pages/school/Hostel';
 import Transport from './pages/school/Transport';
-import Routine from './pages/school/Routine';
 import SchoolReports from './pages/school/SchoolReports';
 import PortalLogin from './pages/portal/PortalLogin';
 import PortalLayout from './components/layout/PortalLayout';
@@ -67,14 +66,12 @@ const schoolRoutes = [
   { path: '/classes', page: Classes, roles: ['TEACHER'] },
   { path: '/subjects', page: Subjects, roles: ['TEACHER'] },
   { path: '/fees', page: Fees },
-  { path: '/inventory', page: Inventory },
   { path: '/exams', page: Exams, roles: ['TEACHER'] },
   { path: '/student-attendance', page: StudentAttendance, roles: ['TEACHER'] },
   { path: '/calendar-events', page: CalendarEvents },
-  { path: '/timetable', page: Timetable, roles: ['TEACHER'] },
   { path: '/routine', page: Routine, roles: ['TEACHER'] },
   { path: '/notices', page: Notices, roles: ['TEACHER', 'LIBRARIAN'] },
-  { path: '/study-materials', page: StudyMaterials, roles: ['TEACHER'] },
+  { path: '/study-materials', page: StudyMaterial, roles: ['TEACHER'] },
   { path: '/homework', page: Homework, roles: ['TEACHER'] },
   { path: '/library', page: Library, roles: ['LIBRARIAN'] },
   { path: '/hostel', page: Hostel },

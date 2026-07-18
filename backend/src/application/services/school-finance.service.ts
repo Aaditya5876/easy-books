@@ -382,7 +382,7 @@ export class SchoolFinanceService {
     return `R-${bsYear}-${String(seq).padStart(4, '0')}`;
   }
 
-  async recordPayment(companyId: string, invoiceId: string, body: { amount: number; method?: string; notes?: string }) {
+  async recordPayment(companyId: string, invoiceId: string, body: { amount: number; method?: string; notes?: string; bankAccountId?: string }) {
     const invoice = await this.prisma.feeInvoice.findFirst({
       where: { id: invoiceId, companyId },
       include: { student: { select: { name: true } } },
@@ -395,19 +395,45 @@ export class SchoolFinanceService {
     if (amount > remaining) throw new BadRequestException(`Payment exceeds remaining amount: Rs. ${remaining}`);
 
     const method = ['CASH', 'BANK', 'ESEWA', 'KHALTI'].includes(body.method ?? '') ? body.method! : 'CASH';
+
+    let bankAccount: { id: string } | null = null;
+    if (method === 'BANK') {
+      if (!body.bankAccountId) throw new BadRequestException('Select which bank account received this payment');
+      bankAccount = await this.prisma.bankAccount.findFirst({ where: { id: body.bankAccountId, companyId }, select: { id: true } });
+      if (!bankAccount) throw new BadRequestException('Bank account not found');
+    }
+
     const receiptNo = await this.nextReceiptNo(companyId);
     const newPaid = round2(Number(invoice.paidAmount) + amount);
     const status = newPaid >= Number(invoice.totalAmount) ? 'PAID' : 'PARTIAL';
 
-    const [payment] = await this.prisma.$transaction([
-      this.prisma.feePayment.create({
-        data: { companyId, invoiceId, receiptNo, amount, method, notes: body.notes || null },
-      }),
-      this.prisma.feeInvoice.update({
+    const payment = await this.prisma.$transaction(async (tx) => {
+      const created = await tx.feePayment.create({
+        data: { companyId, invoiceId, receiptNo, amount, method, bankAccountId: bankAccount?.id, notes: body.notes || null },
+      });
+      await tx.feeInvoice.update({
         where: { id: invoiceId },
         data: { paidAmount: newPaid, status, paidDate: status === 'PAID' ? new Date() : undefined },
-      }),
-    ]);
+      });
+      if (bankAccount) {
+        await tx.bankAccount.update({ where: { id: bankAccount.id }, data: { currentBalance: { increment: amount } } });
+        await tx.transaction.create({
+          data: {
+            companyId,
+            bankAccountId: bankAccount.id,
+            dateAd: new Date(),
+            type: 'BANK' as any,
+            category: 'INCOME' as any,
+            amount,
+            description: `Fee payment — ${invoice.student?.name ?? 'Student'} (Invoice ${invoice.month})`,
+            referenceType: 'FEE_PAYMENT',
+            referenceId: created.id,
+            status: 'COMPLETED' as any,
+          },
+        });
+      }
+      return created;
+    });
 
     // Ledger posting is best-effort — a posting failure must never lose a receipt
     try {
@@ -425,6 +451,22 @@ export class SchoolFinanceService {
       where: { companyId, invoiceId },
       orderBy: { paidAt: 'desc' },
     });
+  }
+
+  async getFeeReceipt(companyId: string, invoiceId: string, studentId?: string) {
+    const invoice = await this.prisma.feeInvoice.findFirst({
+      where: { id: invoiceId, companyId, ...(studentId ? { studentId } : {}) },
+      include: {
+        student: {
+          include: { class: { select: { name: true, section: true } } },
+        },
+        company: { select: { name: true, address: true, phone: true, email: true } },
+        items: { include: { feeHead: { select: { name: true } }, inventoryItem: { select: { itemName: true, unit: true } } } },
+        payments: { orderBy: { paidAt: 'asc' } },
+      },
+    });
+    if (!invoice) throw new NotFoundException('Invoice not found');
+    return invoice;
   }
 
   // DR Cash/Bank · CR each head's income account, allocated across invoice items
@@ -511,42 +553,4 @@ export class SchoolFinanceService {
     });
   }
 
-  // ── School Chart of Accounts template ────────────────────────────────────────
-
-  async setupSchoolLedger(companyId: string) {
-    const template: Array<[string, string]> = [
-      ['Cash in Hand', 'ASSET'],
-      ['Bank Account', 'ASSET'],
-      ['Fees Receivable', 'ASSET'],
-      ['Tuition Fee Income', 'INCOME'],
-      ['Transport Fee Income', 'INCOME'],
-      ['Hostel Fee Income', 'INCOME'],
-      ['Exam Fee Income', 'INCOME'],
-      ['Admission Fee Income', 'INCOME'],
-      ['Library Fines Income', 'INCOME'],
-      ['Government Grants', 'INCOME'],
-      ['Donations', 'INCOME'],
-      ['Staff Salaries', 'EXPENSE'],
-      ['Rent', 'EXPENSE'],
-      ['Utilities (Electricity/Water/Internet)', 'EXPENSE'],
-      ['Stationery & Supplies', 'EXPENSE'],
-      ['Vehicle Fuel & Maintenance', 'EXPENSE'],
-      ['Building Maintenance', 'EXPENSE'],
-      ['Events & Programs', 'EXPENSE'],
-      ['Advance Fees', 'LIABILITY'],
-      ['Payables', 'LIABILITY'],
-    ];
-
-    let created = 0;
-    for (const [accountName, accountType] of template) {
-      const exists = await this.prisma.ledgerAccount.findFirst({ where: { companyId, accountName } });
-      if (!exists) {
-        await this.prisma.ledgerAccount.create({
-          data: { companyId, accountName, accountType: accountType as any, isSystem: true },
-        });
-        created++;
-      }
-    }
-    return { created, total: template.length };
-  }
 }

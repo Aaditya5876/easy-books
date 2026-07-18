@@ -1,9 +1,12 @@
 import { Controller, Post, Get, Body, Req, UseGuards, Query, Param } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
+import { PortalUserType } from '@prisma/client';
 import { Public } from '../../../../modules/decorators/public.decorator';
 import { PortalService } from '../../../../application/services/portal.service';
 import { PaymentService } from '../../../../application/services/payment.service';
 import { PortalGuard } from '../../../../modules/guards/portal.guard';
+import { PortalRoles } from '../../../../modules/decorators/portal-roles.decorator';
+import { Roles } from '../../../../modules/decorators/roles.decorator';
 
 @ApiTags('Portal')
 @Controller('api/v1/portal')
@@ -19,8 +22,14 @@ export class PortalController {
     return this.portalService.login(body.phone, body.password, body.companyId);
   }
 
+  // Not @Public() — requires a staff login. Explicitly role-gated: setting a
+  // parent/student portal password is an administrative action, not something
+  // every staff role (e.g. TEACHER, LIBRARIAN) should be able to do.
+  @Roles('ADMIN', 'ACCOUNTANT')
   @Post('set-password')
-  setPassword(@Body() body: { studentId: string; type: string; phone: string; password: string; companyId: string }) {
+  setPassword(
+    @Body() body: { studentId: string; type: PortalUserType; phone: string; password: string; companyId: string },
+  ) {
     return this.portalService.setPortalPassword(body.studentId, body.type, body.phone, body.password, body.companyId);
   }
 
@@ -43,6 +52,13 @@ export class PortalController {
   @Get('fees')
   fees(@Req() req: any) {
     return this.portalService.getFees(req.portalUser.studentId, req.portalUser.companyId);
+  }
+
+  @Public()
+  @UseGuards(PortalGuard)
+  @Get('fees/:invoiceId/receipt')
+  feeReceipt(@Param('invoiceId') invoiceId: string, @Req() req: any) {
+    return this.portalService.getFeeReceipt(invoiceId, req.portalUser.studentId, req.portalUser.companyId);
   }
 
   @Public()
@@ -77,6 +93,7 @@ export class PortalController {
 
   @Public()
   @UseGuards(PortalGuard)
+  @PortalRoles(PortalUserType.PARENT)
   @Post('pay/esewa/:invoiceId')
   initiateEsewa(
     @Param('invoiceId') invoiceId: string,
@@ -97,6 +114,7 @@ export class PortalController {
 
   @Public()
   @UseGuards(PortalGuard)
+  @PortalRoles(PortalUserType.PARENT)
   @Post('pay/khalti/:invoiceId')
   initiateKhalti(
     @Param('invoiceId') invoiceId: string,

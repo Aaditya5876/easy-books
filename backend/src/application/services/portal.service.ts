@@ -1,6 +1,8 @@
 import { Injectable, UnauthorizedException, NotFoundException, BadRequestException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import { PortalUserType } from '@prisma/client';
 import { PrismaService } from '../../../core/db/psql/prisma.client';
+import { SchoolFinanceService } from './school-finance.service';
 import * as bcrypt from 'bcrypt';
 
 @Injectable()
@@ -8,6 +10,7 @@ export class PortalService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
+    private readonly finance: SchoolFinanceService,
   ) {}
 
   async login(phone: string, password: string, companyId: string) {
@@ -31,7 +34,13 @@ export class PortalService {
     return { token, student: portalUser.student, portalType: portalUser.type };
   }
 
-  async setPortalPassword(studentId: string, type: string, phone: string, password: string, companyId: string) {
+  async setPortalPassword(
+    studentId: string,
+    type: PortalUserType,
+    phone: string,
+    password: string,
+    companyId: string,
+  ) {
     const student = await this.prisma.student.findFirst({ where: { id: studentId, companyId } });
     if (!student) throw new NotFoundException('Student not found');
     if (!phone || !password) throw new BadRequestException('Phone and password are required');
@@ -74,8 +83,13 @@ export class PortalService {
   async getFees(studentId: string, companyId: string) {
     return this.prisma.feeInvoice.findMany({
       where: { studentId, companyId },
+      include: { payments: { orderBy: { paidAt: 'desc' } } },
       orderBy: { createdAt: 'desc' },
     });
+  }
+
+  getFeeReceipt(invoiceId: string, studentId: string, companyId: string) {
+    return this.finance.getFeeReceipt(companyId, invoiceId, studentId);
   }
 
   async getResults(studentId: string, companyId: string) {

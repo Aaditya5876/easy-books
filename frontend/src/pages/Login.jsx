@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { Eye, EyeOff, Mail, Lock, User, Building2, Hash, ShieldCheck, KeyRound } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { authApi } from '@/api';
@@ -500,6 +501,13 @@ export default function Login() {
                   <Button type="submit" className="w-full" disabled={loading}>
                     {loading ? 'Signing in...' : 'Sign In'}
                   </Button>
+
+                  <p className="text-center text-xs text-muted-foreground">
+                    Parent or student?{' '}
+                    <Link to="/portal/login" className="text-primary hover:underline font-medium">
+                      Sign in to the Portal
+                    </Link>
+                  </p>
                 </form>
               )}
 

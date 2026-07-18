@@ -24,7 +24,7 @@ export default function PortalNotices() {
   const fmtDate = (d) => new Date(d).toLocaleDateString('en-NP', { day: 'numeric', month: 'long', year: 'numeric' });
 
   return (
-    <motion.div variants={pageVariants} initial="initial" animate="animate" exit="exit" className="p-5 md:p-7 space-y-4 max-w-2xl">
+    <motion.div variants={pageVariants} initial="initial" animate="animate" exit="exit" className="p-5 md:p-7 space-y-4 max-w-7xl mx-auto">
       <div className="flex items-center gap-3">
         <h1 className="text-2xl font-bold text-slate-900">{t('portal.schoolNotices', { defaultValue: 'School Notices' })}</h1>
         {notices.length > 0 && (
@@ -42,7 +42,7 @@ export default function PortalNotices() {
           <p className="text-slate-400 text-sm">{t('portal.noNotices', { defaultValue: 'No notices yet' })}</p>
         </div>
       ) : (
-        <motion.div variants={containerVariants} initial="initial" animate="animate" className="space-y-3">
+        <motion.div variants={containerVariants} initial="initial" animate="animate" className="grid grid-cols-1 lg:grid-cols-2 gap-3">
           {notices.map(n => {
             const cfg = PRIORITY_CONFIG[n.priority] || PRIORITY_CONFIG.LOW;
             return (

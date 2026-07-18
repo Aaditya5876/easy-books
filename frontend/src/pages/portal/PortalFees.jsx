@@ -2,8 +2,9 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import { portalApi } from '@/api';
-import { DollarSign, Loader2 } from 'lucide-react';
+import { DollarSign, Loader2, Printer, Receipt } from 'lucide-react';
 import { toast } from 'sonner';
+import { printFeeReceipt } from '@/lib/printFeeReceipt';
 import { pageVariants, containerVariants, cardVariants, itemVariants } from '@/lib/portalAnimations';
 import { useTranslation } from 'react-i18next';
 
@@ -32,6 +33,7 @@ function submitEsewaForm(paymentUrl, formFields) {
 export default function PortalFees() {
   const { t } = useTranslation();
   const [payingId, setPayingId] = useState(null);
+  const [printingId, setPrintingId] = useState(null);
 
   const { data: fees = [], isLoading } = useQuery({
     queryKey: ['portal-fees'],
@@ -63,12 +65,24 @@ export default function PortalFees() {
     }
   }
 
+  async function printReceipt(invoiceId) {
+    setPrintingId(invoiceId);
+    try {
+      const res = await portalApi.feeReceipt(invoiceId);
+      printFeeReceipt(res.data);
+    } catch (e) {
+      toast.error(e?.response?.data?.message || t('portal.couldNotLoadReceipt', { defaultValue: 'Could not load receipt' }));
+    } finally {
+      setPrintingId(null);
+    }
+  }
+
   return (
-    <motion.div variants={pageVariants} initial="initial" animate="animate" exit="exit" className="p-5 md:p-7 space-y-5 max-w-2xl">
+    <motion.div variants={pageVariants} initial="initial" animate="animate" exit="exit" className="p-5 md:p-7 space-y-5 max-w-7xl mx-auto">
       <h1 className="text-2xl font-bold text-slate-900">{t('portal.feeInvoices', { defaultValue: 'Fee Invoices' })}</h1>
 
       {fees.length > 0 && (
-        <motion.div variants={containerVariants} initial="initial" animate="animate" className="grid grid-cols-3 gap-3">
+        <motion.div variants={containerVariants} initial="initial" animate="animate" className="grid grid-cols-3 md:max-w-xl gap-3">
           {[
             { label: t('portal.totalInvoices', { defaultValue: 'Total Invoices' }), value: fees.length,                                  color: '#64748B', bg: '#F8FAFC' },
             { label: t('portal.paid', { defaultValue: 'Paid' }),                    value: fees.filter(f => f.status === 'PAID').length, color: '#10B981', bg: '#F0FDF4' },
@@ -91,7 +105,7 @@ export default function PortalFees() {
             <p className="text-slate-400 text-sm">{t('portal.noFeeInvoices', { defaultValue: 'No fee invoices yet' })}</p>
           </div>
         ) : (
-          <motion.div variants={containerVariants} initial="initial" animate="animate" className="space-y-3">
+          <motion.div variants={containerVariants} initial="initial" animate="animate" className="grid grid-cols-1 lg:grid-cols-2 gap-3">
             {fees.map(f => {
               const due     = Number(f.totalAmount) - Number(f.paidAmount);
               const payable = f.status === 'PENDING' || f.status === 'PARTIAL';
@@ -127,6 +141,24 @@ export default function PortalFees() {
                       )}
                     </div>
 
+                    {f.payments?.length > 0 && (
+                      <div className="border-t border-slate-100 pt-3 mb-3 space-y-1.5">
+                        <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">
+                          {t('portal.paymentHistory', { defaultValue: 'Payment history' })}
+                        </p>
+                        {f.payments.map(p => (
+                          <div key={p.id} className="flex items-center justify-between text-xs">
+                            <span className="inline-flex items-center gap-1.5 text-slate-500">
+                              <Receipt className="w-3 h-3 text-emerald-600" />
+                              <span className="font-mono">{p.receiptNo}</span>
+                              <span>· {p.method} · {new Date(p.paidAt).toLocaleDateString('en-NP', { day: 'numeric', month: 'short' })}</span>
+                            </span>
+                            <span className="tabular-nums text-emerald-700 font-medium">{fmtAmt(p.amount)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
                     {payable && (
                       <div className="flex gap-2 pt-3 border-t border-slate-100">
                         <motion.button
@@ -149,6 +181,19 @@ export default function PortalFees() {
                           {payingId === `${f.id}-khalti` && <Loader2 className="w-3 h-3 animate-spin" />}
                           {t('portal.payWithKhalti', { defaultValue: 'Pay with Khalti' })}
                         </motion.button>
+                      </div>
+                    )}
+
+                    {f.paidAmount > 0 && (
+                      <div className={payable ? 'pt-2' : 'pt-3 border-t border-slate-100'}>
+                        <button
+                          onClick={() => printReceipt(f.id)}
+                          disabled={printingId === f.id}
+                          className="w-full h-9 rounded-xl text-xs font-semibold text-slate-600 border border-slate-200 hover:bg-slate-50 transition-colors flex items-center justify-center gap-1.5 disabled:opacity-50"
+                        >
+                          {printingId === f.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Printer className="w-3 h-3" />}
+                          {t('portal.printReceipt', { defaultValue: 'Print Receipt' })}
+                        </button>
                       </div>
                     )}
                   </div>

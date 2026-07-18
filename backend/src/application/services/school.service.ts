@@ -242,13 +242,16 @@ export class SchoolService {
   }
 
   async getStudent(id: string, companyId: string) {
-    const student = await this.prisma.student.findFirst({ where: { id, companyId } });
+    const student = await this.prisma.student.findFirst({
+      where: { id, companyId },
+      include: { class: { select: { name: true, section: true } } },
+    });
     if (!student) throw new NotFoundException('Student not found');
     return student;
   }
 
   private static readonly STUDENT_FIELDS = [
-    'classId', 'name', 'rollNumber', 'dateOfBirth', 'gender', 'address',
+    'classId', 'name', 'rollNumber', 'examRollNumber', 'dateOfBirth', 'gender', 'address',
     'guardianName', 'guardianPhone', 'guardianEmail', 'admissionDate', 'status',
   ];
 
@@ -368,6 +371,14 @@ export class SchoolService {
 
   async saveAttendance(companyId: string, classId: string, date: string, academicYearId: string | undefined, entries: Array<{ studentId: string; status: string; notes?: string }>) {
     const targetDate = new Date(date);
+
+    // Snapshot prior status so re-saving an unchanged day doesn't re-notify guardians
+    const existing = await this.prisma.studentAttendance.findMany({
+      where: { companyId, date: targetDate, studentId: { in: entries.map(e => e.studentId) } },
+      select: { studentId: true, status: true },
+    });
+    const priorStatus = new Map(existing.map(r => [r.studentId, r.status]));
+
     const ops = entries.map(e =>
       this.prisma.studentAttendance.upsert({
         where: { studentId_date: { studentId: e.studentId, date: targetDate } },
@@ -377,8 +388,9 @@ export class SchoolService {
     );
     await this.prisma.$transaction(ops);
 
-    // Fire absent SMS alerts in the background (non-blocking)
-    const absentEntries = entries.filter(e => e.status === 'ABSENT');
+    // Fire absent SMS alerts in the background (non-blocking), only for students
+    // newly marked absent this save — avoids re-spamming guardians on resubmission.
+    const absentEntries = entries.filter(e => e.status === 'ABSENT' && priorStatus.get(e.studentId) !== 'ABSENT');
     if (absentEntries.length > 0) {
       const company = await this.prisma.company.findUnique({ where: { id: companyId }, select: { name: true } });
       const students = await this.prisma.student.findMany({
@@ -443,7 +455,7 @@ export class SchoolService {
     const where: any = { companyId, studentId };
     if (month) {
       const [year, m] = month.split('-').map(Number);
-      where.date = { gte: new Date(year, m - 1, 1), lt: new Date(year, m, 1) };
+      where.date = { gte: new Date(Date.UTC(year, m - 1, 1)), lt: new Date(Date.UTC(year, m, 1)) };
     }
     const records = await this.prisma.studentAttendance.groupBy({
       by: ['status'],
@@ -647,22 +659,6 @@ export class SchoolService {
     return { created: toCreate.length, skipped: existing.length };
   }
 
-  async getFeeReceipt(id: string, companyId: string) {
-    const invoice = await this.prisma.feeInvoice.findFirst({
-      where: { id, companyId },
-      include: {
-        student: {
-          include: { class: { select: { name: true, section: true } } },
-        },
-        company: { select: { name: true, address: true, phone: true, email: true } },
-        items: { include: { feeHead: { select: { name: true } }, inventoryItem: { select: { itemName: true, unit: true } } } },
-        payments: { orderBy: { paidAt: 'asc' } },
-      },
-    });
-    if (!invoice) throw new NotFoundException('Invoice not found');
-    return invoice;
-  }
-
   // ── Exam Results ──────────────────────────────────────────────────────────────
 
   async listExamResults(companyId: string, examName?: string, studentId?: string) {
@@ -705,24 +701,64 @@ export class SchoolService {
     return { student, results, company, examName, totalObtained, totalMax, percentage };
   }
 
+  // ── Exams (tabs: "First Terminal", "Second Terminal", "Final"…) ────────────────
+  // Exams are created independently of any result so a tab can exist before any
+  // marks are entered against it — see createExam.
+
+  async listExams(companyId: string) {
+    return this.prisma.exam.findMany({
+      where: { companyId },
+      orderBy: { createdAt: 'asc' },
+    });
+  }
+
+  async createExam(body: { companyId: string; name: string; examDate?: string; notes?: string }) {
+    if (!body.name?.trim()) throw new BadRequestException('Exam name is required');
+    return this.prisma.exam.create({
+      data: {
+        companyId: body.companyId,
+        name: body.name.trim(),
+        examDate: body.examDate ? new Date(body.examDate) : undefined,
+        notes: body.notes || undefined,
+      },
+    });
+  }
+
+  async deleteExam(id: string, companyId: string) {
+    const existing = await this.prisma.exam.findFirst({ where: { id, companyId } });
+    if (!existing) throw new NotFoundException('Exam not found');
+    return this.prisma.exam.delete({ where: { id } });
+  }
+
   private static readonly EXAM_RESULT_FIELDS = [
-    'studentId', 'subjectId', 'examName', 'marksObtained', 'totalMarks', 'grade', 'remarks', 'examDate',
+    'studentId', 'subjectId', 'examId', 'examName', 'marksObtained', 'totalMarks', 'grade', 'remarks', 'examDate',
   ];
 
   async createExamResult(body: any) {
-    return this.prisma.examResult.create({
-      data: clean(body, ['companyId', ...SchoolService.EXAM_RESULT_FIELDS]),
-    });
+    const data = clean(body, ['companyId', ...SchoolService.EXAM_RESULT_FIELDS]);
+    if (data.examId) {
+      const exam = await this.prisma.exam.findFirst({ where: { id: data.examId, companyId: data.companyId } });
+      if (!exam) throw new NotFoundException('Exam not found');
+      data.examName = exam.name;
+    }
+    return this.prisma.examResult.create({ data });
   }
 
-  async updateExamResult(id: string, body: any) {
-    return this.prisma.examResult.update({
-      where: { id },
-      data: clean(body, SchoolService.EXAM_RESULT_FIELDS),
-    });
+  async updateExamResult(id: string, companyId: string, body: any) {
+    const existing = await this.prisma.examResult.findFirst({ where: { id, companyId } });
+    if (!existing) throw new NotFoundException('Exam result not found');
+    const data = clean(body, SchoolService.EXAM_RESULT_FIELDS);
+    if (data.examId) {
+      const exam = await this.prisma.exam.findFirst({ where: { id: data.examId, companyId } });
+      if (!exam) throw new NotFoundException('Exam not found');
+      data.examName = exam.name;
+    }
+    return this.prisma.examResult.update({ where: { id }, data });
   }
 
-  async deleteExamResult(id: string) {
+  async deleteExamResult(id: string, companyId: string) {
+    const existing = await this.prisma.examResult.findFirst({ where: { id, companyId } });
+    if (!existing) throw new NotFoundException('Exam result not found');
     return this.prisma.examResult.delete({ where: { id } });
   }
 
@@ -738,7 +774,7 @@ export class SchoolService {
       orderBy: [{ examDate: 'asc' }, { startTime: 'asc' }],
       include: {
         class: { select: { name: true, section: true } },
-        subject: { select: { name: true } },
+        subject: { select: { name: true, code: true } },
       },
     });
   }
@@ -757,6 +793,34 @@ export class SchoolService {
     return this.prisma.examSchedule.create({
       data: { ...data, examDate: new Date(data.examDate) },
     });
+  }
+
+  // Creates one date-sheet in one go: a shared exam name/class plus a table of
+  // per-subject rows (date, subject, time) — replaces adding each subject one at a time.
+  async createExamSchedulesBulk(body: {
+    companyId: string;
+    classId: string;
+    examName: string;
+    rows: Array<{ subjectId?: string; examDate: string; startTime?: string; endTime?: string; roomNumber?: string }>;
+  }) {
+    if (!body.rows?.length) throw new BadRequestException('At least one subject row is required');
+    const created = await this.prisma.$transaction(
+      body.rows.map((row) =>
+        this.prisma.examSchedule.create({
+          data: {
+            companyId: body.companyId,
+            classId: body.classId,
+            examName: body.examName,
+            subjectId: row.subjectId || undefined,
+            examDate: new Date(row.examDate),
+            startTime: row.startTime || undefined,
+            endTime: row.endTime || undefined,
+            roomNumber: row.roomNumber || undefined,
+          },
+        }),
+      ),
+    );
+    return { created: created.length };
   }
 
   async updateExamSchedule(id: string, companyId: string, body: any) {

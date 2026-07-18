@@ -15,19 +15,25 @@ export const CreateLedgerAccountSchema = z.object({
 
 export const UpdateLedgerAccountSchema = CreateLedgerAccountSchema.omit({ companyId: true }).partial();
 
+// Manual ledger entries are always a balanced double-entry pair — the API
+// takes both legs (debit account + credit account) and a single amount, and
+// the backend creates both rows plus both balance updates atomically. There
+// is no single-sided entry creation; see LedgerPostingService.postManualJournalEntry.
 export const CreateLedgerEntrySchema = z.object({
   companyId: z.string().uuid(),
-  accountId: z.string().uuid(),
+  debitAccountId: z.string().uuid(),
+  creditAccountId: z.string().uuid(),
+  amount: z.number().positive(),
   dateAd: z.string(),
-  dateBs: z.string().optional(),
   description: z.string().optional(),
-  debit: z.number().nonnegative().default(0),
-  credit: z.number().nonnegative().default(0),
-  referenceType: z.string().optional(),
-  referenceId: z.string().optional(),
 });
 
-export const UpdateLedgerEntrySchema = CreateLedgerEntrySchema.omit({ companyId: true }).partial();
+// Amounts/accounts are immutable after creation (they're paired) — only
+// description and date can be edited; delete and re-create to change amounts.
+export const UpdateLedgerEntrySchema = z.object({
+  description: z.string().optional(),
+  dateAd: z.string().optional(),
+});
 
 export type CreateLedgerAccountDTO = z.infer<typeof CreateLedgerAccountSchema>;
 export type UpdateLedgerAccountDTO = z.infer<typeof UpdateLedgerAccountSchema>;

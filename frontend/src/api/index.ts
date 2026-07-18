@@ -84,11 +84,15 @@ export const attendanceApi = {
 
 // Payroll
 export const payrollApi = {
-  list: (month?: string) => apiClient.get('/api/v1/payroll', { params: { companyId: companyId(), month } }),
-  get: (id: string) => apiClient.get(`/api/v1/payroll/${id}`, { params: { companyId: companyId() } }),
-  create: (data: object) => apiClient.post('/api/v1/payroll', data),
-  update: (id: string, data: object) => apiClient.put(`/api/v1/payroll/${id}`, data, { params: { companyId: companyId() } }),
+  summary: (month: string) => apiClient.get('/api/v1/payroll/summary', { params: { companyId: companyId(), month } }),
+  calculate: (employeeId: string, month: string) =>
+    apiClient.post('/api/v1/payroll/calculate', { companyId: companyId(), employeeId, month }),
   process: (month: string) => apiClient.post('/api/v1/payroll/process', { companyId: companyId(), month }),
+  markPaid: (id: string) => apiClient.patch(`/api/v1/payroll/${id}/mark-paid`, {}, { params: { companyId: companyId() } }),
+  setHold: (id: string, isOnHold: boolean, holdReason?: string) =>
+    apiClient.patch(`/api/v1/payroll/${id}/hold`, { isOnHold, holdReason }, { params: { companyId: companyId() } }),
+  adjust: (id: string, otherDeductions: number) =>
+    apiClient.patch(`/api/v1/payroll/${id}/adjust`, { otherDeductions }, { params: { companyId: companyId() } }),
   gratuity: (employeeId: string) => apiClient.get('/api/v1/payroll/gratuity', { params: { companyId: companyId(), employeeId } }),
 };
 
@@ -110,7 +114,10 @@ export const ledgerApi = {
   entries: {
     list: (accountId?: string) => apiClient.get('/api/v1/ledger/entries', { params: { companyId: companyId(), accountId } }),
     get: (id: string) => apiClient.get(`/api/v1/ledger/entries/${id}`, { params: { companyId: companyId() } }),
-    create: (data: object) => apiClient.post('/api/v1/ledger/entries', data),
+    // Always a balanced double-entry pair — backend creates both the debit and credit rows atomically.
+    createJournal: (data: { debitAccountId: string; creditAccountId: string; amount: number; dateAd: string; description?: string }) =>
+      apiClient.post('/api/v1/ledger/entries', { ...data, companyId: companyId() }),
+    remove: (id: string) => apiClient.delete(`/api/v1/ledger/entries/${id}`, { params: { companyId: companyId() } }),
   },
 };
 
@@ -283,10 +290,18 @@ export const examResultsApi = {
     apiClient.get('/api/v1/school/exam-results/report-card', {
       params: { companyId: companyId(), studentId, examName },
     }),
-  create: (data: object) => apiClient.post('/api/v1/school/exam-results', data),
-  update: (id: string, data: object) => apiClient.put(`/api/v1/school/exam-results/${id}`, data),
+  create: (data: object) => apiClient.post('/api/v1/school/exam-results', { ...data, companyId: companyId() }),
+  update: (id: string, data: object) =>
+    apiClient.put(`/api/v1/school/exam-results/${id}`, data, { params: { companyId: companyId() } }),
   remove: (id: string) =>
     apiClient.delete(`/api/v1/school/exam-results/${id}`, { params: { companyId: companyId() } }),
+};
+
+export const examsApi = {
+  list: () => apiClient.get('/api/v1/school/exams', { params: { companyId: companyId() } }),
+  create: (data: { name: string; examDate?: string; notes?: string }) =>
+    apiClient.post('/api/v1/school/exams', { ...data, companyId: companyId() }),
+  remove: (id: string) => apiClient.delete(`/api/v1/school/exams/${id}`, { params: { companyId: companyId() } }),
 };
 
 export const schoolFinanceApi = {
@@ -319,8 +334,6 @@ export const schoolFinanceApi = {
 
   listInvoicePayments: (invoiceId: string) =>
     apiClient.get(`/api/v1/school/fee-invoices/${invoiceId}/payments`, { params: { companyId: companyId() } }),
-
-  setupLedger: () => apiClient.post('/api/v1/school/setup-ledger', { companyId: companyId() }),
 };
 
 export const schoolAnalyticsApi = {
@@ -343,6 +356,8 @@ export const examSchedulesApi = {
   list: (params?: object) =>
     apiClient.get('/api/v1/school/exam-schedules', { params: { companyId: companyId(), ...params } }),
   create: (data: object) => apiClient.post('/api/v1/school/exam-schedules', data),
+  createBulk: (data: { classId: string; examName: string; rows: object[] }) =>
+    apiClient.post('/api/v1/school/exam-schedules/bulk', { ...data, companyId: companyId() }),
   update: (id: string, data: object) =>
     apiClient.put(`/api/v1/school/exam-schedules/${id}`, data, { params: { companyId: companyId() } }),
   remove: (id: string) =>
@@ -457,6 +472,7 @@ export const portalApi = {
   me: () => apiClient.get('/api/v1/portal/me', { headers: portalHeaders() }),
   attendance: () => apiClient.get('/api/v1/portal/attendance', { headers: portalHeaders() }),
   fees: () => apiClient.get('/api/v1/portal/fees', { headers: portalHeaders() }),
+  feeReceipt: (invoiceId: string) => apiClient.get(`/api/v1/portal/fees/${invoiceId}/receipt`, { headers: portalHeaders() }),
   results: () => apiClient.get('/api/v1/portal/results', { headers: portalHeaders() }),
   homework: (classId?: string) => apiClient.get('/api/v1/portal/homework', { headers: portalHeaders(), params: { classId } }),
   notices: () => apiClient.get('/api/v1/portal/notices', { headers: portalHeaders() }),

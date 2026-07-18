@@ -13,10 +13,19 @@ import PageLoader from '../components/PageLoader';
 import { CalendarDays, Calendar, Clock, Users, MessageSquare } from 'lucide-react';
 
 const statusColors = {
-  present: 'bg-green-100 text-green-700',
-  absent: 'bg-red-100 text-red-700',
-  half_day: 'bg-amber-100 text-amber-700',
-  on_leave: 'bg-blue-100 text-blue-700',
+  PRESENT: 'bg-green-100 text-green-700',
+  ABSENT: 'bg-red-100 text-red-700',
+  HALF_DAY: 'bg-amber-100 text-amber-700',
+  LEAVE: 'bg-blue-100 text-blue-700',
+  HOLIDAY: 'bg-slate-100 text-slate-700',
+};
+
+const statusLabels = {
+  PRESENT: 'Present',
+  ABSENT: 'Absent',
+  HALF_DAY: 'Half Day',
+  LEAVE: 'On Leave',
+  HOLIDAY: 'Holiday',
 };
 
 export default function Attendance() {
@@ -31,9 +40,9 @@ export default function Attendance() {
     employee_id: '',
     employee_name: '',
     date: new Date().toISOString().split('T')[0],
-    check_in: '',
-    check_out: '',
-    status: 'present',
+    check_in_time: '',
+    check_out_time: '',
+    status: 'PRESENT',
     notes: '',
   });
 
@@ -56,9 +65,9 @@ export default function Attendance() {
       employee_id: '',
       employee_name: '',
       date: new Date().toISOString().split('T')[0],
-      check_in: '',
-      check_out: '',
-      status: 'present',
+      check_in_time: '',
+      check_out_time: '',
+      status: 'PRESENT',
       notes: '',
     });
     setShowForm(false);
@@ -85,16 +94,16 @@ export default function Attendance() {
       onFilterChange: v => setCol('employee_name', v),
       render: r => <span className="font-medium">{r.employee_name}</span>,
     },
-    { key: 'check_in', label: 'Check In' },
-    { key: 'check_out', label: 'Check Out' },
+    { key: 'check_in_time', label: 'Check In' },
+    { key: 'check_out_time', label: 'Check Out' },
     {
       key: 'status',
       label: 'Status',
       filterValue: colFilters.status,
       onFilterChange: v => setCol('status', v),
       render: r => (
-        <span className={`text-xs px-2 py-0.5 rounded-full font-medium capitalize ${statusColors[r.status] || ''}`}>
-          {r.status?.replace('_', ' ')}
+        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${statusColors[r.status] || ''}`}>
+          {statusLabels[r.status] || r.status}
         </span>
       ),
     },
@@ -175,8 +184,8 @@ export default function Attendance() {
                   <Input
                     type="time"
                     className="pl-8 h-9 text-sm"
-                    value={form.check_in}
-                    onChange={e => setForm({ ...form, check_in: e.target.value })}
+                    value={form.check_in_time}
+                    onChange={e => setForm({ ...form, check_in_time: e.target.value })}
                   />
                 </div>
               </div>
@@ -187,8 +196,8 @@ export default function Attendance() {
                   <Input
                     type="time"
                     className="pl-8 h-9 text-sm"
-                    value={form.check_out}
-                    onChange={e => setForm({ ...form, check_out: e.target.value })}
+                    value={form.check_out_time}
+                    onChange={e => setForm({ ...form, check_out_time: e.target.value })}
                   />
                 </div>
               </div>
@@ -199,10 +208,11 @@ export default function Attendance() {
               <Select value={form.status} onValueChange={v => setForm({ ...form, status: v })}>
                 <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="present">Present</SelectItem>
-                  <SelectItem value="absent">Absent</SelectItem>
-                  <SelectItem value="half_day">Half Day</SelectItem>
-                  <SelectItem value="on_leave">On Leave</SelectItem>
+                  <SelectItem value="PRESENT">Present</SelectItem>
+                  <SelectItem value="ABSENT">Absent</SelectItem>
+                  <SelectItem value="HALF_DAY">Half Day</SelectItem>
+                  <SelectItem value="LEAVE">On Leave</SelectItem>
+                  <SelectItem value="HOLIDAY">Holiday</SelectItem>
                 </SelectContent>
               </Select>
             </div>

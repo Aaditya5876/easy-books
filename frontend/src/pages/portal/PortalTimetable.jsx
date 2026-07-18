@@ -41,18 +41,18 @@ export default function PortalTimetable() {
   const activeDays = DAYS.filter(d => byDay[d].length > 0);
 
   return (
-    <motion.div variants={pageVariants} initial="initial" animate="animate" exit="exit" className="p-5 md:p-7 space-y-5 max-w-3xl">
-      <h1 className="text-2xl font-bold text-slate-900">{t('portal.timetable', { defaultValue: 'Timetable' })}</h1>
+    <motion.div variants={pageVariants} initial="initial" animate="animate" exit="exit" className="p-5 md:p-7 space-y-5 max-w-7xl mx-auto">
+      <h1 className="text-2xl font-bold text-slate-900">{t('portal.routine', { defaultValue: 'Routine' })}</h1>
 
       {isLoading ? (
         <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center text-slate-400 text-sm">{t('portal.loading', { defaultValue: 'Loading…' })}</div>
       ) : timetable.length === 0 ? (
         <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center">
           <Clock className="w-10 h-10 text-slate-200 mx-auto mb-3" />
-          <p className="text-slate-400 text-sm">{t('portal.noTimetable', { defaultValue: 'No timetable set for your class yet' })}</p>
+          <p className="text-slate-400 text-sm">{t('portal.noRoutine', { defaultValue: 'No routine set for your class yet' })}</p>
         </div>
       ) : (
-        <motion.div variants={containerVariants} initial="initial" animate="animate" className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <motion.div variants={containerVariants} initial="initial" animate="animate" className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {activeDays.map(day => {
             const isToday = day === today;
             return (
