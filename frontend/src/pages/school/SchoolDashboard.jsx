@@ -1,11 +1,11 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
-  LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend,
+  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend,
 } from 'recharts';
-import { GraduationCap, DollarSign, AlertCircle, Users, TrendingUp, CheckCircle, Sparkles, CalendarClock, CalendarDays, ClipboardList } from 'lucide-react';
+import { GraduationCap, DollarSign, AlertCircle, Users, TrendingUp, CheckCircle, Sparkles, CalendarClock, CalendarDays, ClipboardList, CreditCard } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { schoolDashboardApi, schoolAnalyticsApi, aiApi } from '@/api';
+import { schoolDashboardApi, schoolAnalyticsApi, aiApi, transactionApi, examSchedulesApi, schoolEventsApi } from '@/api';
 import { getActiveCompanyId } from '@/lib/companyContext';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -118,6 +118,66 @@ function WeekAhead({ weekAhead }) {
   );
 }
 
+// Unified reminders across pending Cheque/Credit transactions, upcoming exams and
+// upcoming events — unlike WeekAhead (which only covers the next 7 days), this pulls
+// from the full exam-schedule/event lists so nothing later-dated gets forgotten, and
+// pending transactions stay listed (highlighted) even once they're overdue.
+function Reminders({ transactions, examSchedules, schoolEvents }) {
+  const { t } = useTranslation();
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const txnItems = (transactions ?? [])
+    .filter(txn => txn.status === 'PENDING' && (txn.type === 'CHEQUE' || txn.type === 'CREDIT'))
+    .map(txn => ({
+      icon: CreditCard, color: 'text-emerald-600 bg-emerald-50', date: txn.dateAd,
+      text: `${txn.partyName ? `${txn.partyName} — ` : ''}${txn.description || 'Transaction'} · Rs. ${Number(txn.amount ?? 0).toLocaleString('en-NP')}`,
+      tag: txn.type === 'CREDIT' ? t('dashboard.tagCredit', { defaultValue: 'Credit' }) : t('dashboard.tagCheque', { defaultValue: 'Cheque' }),
+    }));
+
+  const examItems = (examSchedules ?? [])
+    .filter(e => e.examDate && new Date(e.examDate) >= today)
+    .map(e => ({
+      icon: CalendarClock, color: 'text-purple-600 bg-purple-50', date: e.examDate,
+      text: `${e.examName}${e.subject?.name ? ` · ${e.subject.name}` : ''} — ${e.class?.name ?? ''}${e.class?.section ? '-' + e.class.section : ''}`,
+      tag: t('dashboard.tagExam', { defaultValue: 'Exam' }),
+    }));
+
+  const eventItems = (schoolEvents ?? [])
+    .filter(e => e.startDate && new Date(e.startDate) >= today)
+    .map(e => ({
+      icon: CalendarDays, color: 'text-amber-600 bg-amber-50', date: e.startDate,
+      text: e.title, tag: e.eventType,
+    }));
+
+  const items = [...txnItems, ...examItems, ...eventItems].sort((a, b) => new Date(a.date) - new Date(b.date));
+
+  if (items.length === 0) {
+    return <div className="h-52 flex items-center justify-center text-sm text-muted-foreground">{t('dashboard.noReminders', { defaultValue: "Nothing pending — you're all caught up" })}</div>;
+  }
+
+  return (
+    <div className="space-y-2 max-h-52 overflow-y-auto pr-1">
+      {items.map((item, i) => {
+        const Icon = item.icon;
+        const overdue = new Date(item.date) < today;
+        return (
+          <div key={i} className="flex items-center gap-3 text-sm">
+            <div className={`p-1.5 rounded-md shrink-0 ${overdue ? 'text-red-600 bg-red-100' : item.color}`}><Icon className="w-3.5 h-3.5" /></div>
+            <div className="flex-1 min-w-0">
+              <p className="truncate">{item.text}</p>
+              <p className={`text-xs ${overdue ? 'text-red-500 font-medium' : 'text-muted-foreground'}`}>
+                {overdue && `${t('dashboard.overdue', { defaultValue: 'Overdue' })} · `}
+                {new Date(item.date).toLocaleDateString('en-NP', { weekday: 'short', day: 'numeric', month: 'short' })} · {item.tag}
+              </p>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 const fmtRs = (n) => `Rs. ${Number(n ?? 0).toLocaleString('en-NP')}`;
 
 export default function SchoolDashboard() {
@@ -130,6 +190,26 @@ export default function SchoolDashboard() {
   const { data, isLoading } = useQuery({
     queryKey: ['school-dashboard', companyId],
     queryFn: () => schoolDashboardApi.summary().then(r => r.data),
+    enabled: !!companyId,
+    staleTime: 60_000,
+  });
+
+  // Reminders widget data — fetched independently of weekAhead so it isn't capped to 7 days.
+  const { data: transactions } = useQuery({
+    queryKey: ['school-dashboard-transactions', companyId],
+    queryFn: () => transactionApi.list().then(r => r.data ?? []),
+    enabled: !!companyId,
+    staleTime: 60_000,
+  });
+  const { data: examSchedules } = useQuery({
+    queryKey: ['school-dashboard-exam-schedules', companyId],
+    queryFn: () => examSchedulesApi.list().then(r => r.data ?? []),
+    enabled: !!companyId,
+    staleTime: 60_000,
+  });
+  const { data: schoolEvents } = useQuery({
+    queryKey: ['school-dashboard-events', companyId],
+    queryFn: () => schoolEventsApi.list().then(r => r.data ?? []),
     enabled: !!companyId,
     staleTime: 60_000,
   });
@@ -243,22 +323,14 @@ export default function SchoolDashboard() {
         />
       </div>
 
-      {/* Analytics row 1 — attendance */}
+      {/* Analytics row 1 — reminders + today's attendance
+          (Attendance Trend moved to School Reports → Attendance tab) */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <ChartCard
-          title={t('dashboard.attendanceTrend', { defaultValue: 'Attendance Trend' })}
-          sub={t('dashboard.attendanceTrendSub', { defaultValue: 'Last 30 days — % of students present' })}
-          empty={!isLoading && !(data?.attendanceTrend?.length) ? t('dashboard.noAttendanceYet', { defaultValue: 'No attendance marked yet' }) : null}
+          title={t('dashboard.reminders', { defaultValue: 'Reminders' })}
+          sub={t('dashboard.remindersSub', { defaultValue: 'Pending cheque/credit transactions, upcoming exams and events' })}
         >
-          <ResponsiveContainer width="100%" height={210}>
-            <LineChart data={data?.attendanceTrend ?? []} margin={{ top: 5, right: 10, left: -20, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-              <XAxis dataKey="date" tick={{ fontSize: 11 }} tickFormatter={d => d.slice(5)} />
-              <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} unit="%" />
-              <Tooltip formatter={(v, name) => name === 'pct' ? [`${v}%`, 'Present'] : [v, name]} labelFormatter={d => d} />
-              <Line type="monotone" dataKey="pct" stroke="#10b981" strokeWidth={2} dot={false} name="pct" />
-            </LineChart>
-          </ResponsiveContainer>
+          <Reminders transactions={transactions} examSchedules={examSchedules} schoolEvents={schoolEvents} />
         </ChartCard>
 
         <ChartCard

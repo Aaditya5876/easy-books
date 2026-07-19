@@ -6,7 +6,7 @@ import {
   BarChart, Bar, LineChart, Line, ComposedChart, XAxis, YAxis, Tooltip,
   ResponsiveContainer, CartesianGrid, Legend,
 } from 'recharts';
-import { ledgerApi, schoolAnalyticsApi, transactionApi } from '@/api';
+import { ledgerApi, schoolAnalyticsApi, transactionApi, schoolDashboardApi } from '@/api';
 import { getActiveCompanyId } from '@/lib/companyContext';
 import { getCurrentFiscalYear } from '@/lib/nepaliDate';
 import { BarChart2, CalendarCheck2, DollarSign, Trophy, Boxes, Phone, ShieldCheck, Printer } from 'lucide-react';
@@ -145,6 +145,13 @@ function AttendanceTab({ auditStartDate, auditEndDate }) {
     queryFn: () => schoolAnalyticsApi.attendance(month, auditStartDate || undefined, auditEndDate || undefined).then(r => r.data),
   });
 
+  // Moved here from the School Dashboard — the dashboard now shows Reminders in this slot.
+  const { data: dashboardData, isLoading: trendLoading } = useQuery({
+    queryKey: ['school-dashboard-summary-for-trend'],
+    queryFn: () => schoolDashboardApi.summary().then(r => r.data),
+    staleTime: 60_000,
+  });
+
   return (
     <div className="space-y-4">
       <div className="flex justify-end">
@@ -153,6 +160,20 @@ function AttendanceTab({ auditStartDate, auditEndDate }) {
           className="h-9 rounded-md border border-input bg-transparent px-3 text-sm shadow-sm"
         />
       </div>
+
+      <Card title={t('dashboard.attendanceTrend', { defaultValue: 'Attendance Trend' })} sub={t('dashboard.attendanceTrendSub', { defaultValue: 'Last 30 days — % of students present' })}>
+        {!trendLoading && !(dashboardData?.attendanceTrend?.length) ? <Empty>{t('dashboard.noAttendanceYet', { defaultValue: 'No attendance marked yet' })}</Empty> : (
+          <ResponsiveContainer width="100%" height={210}>
+            <LineChart data={dashboardData?.attendanceTrend ?? []} margin={{ top: 5, right: 10, left: -20, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+              <XAxis dataKey="date" tick={{ fontSize: 11 }} tickFormatter={d => d.slice(5)} />
+              <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} unit="%" />
+              <Tooltip formatter={(v, name) => name === 'pct' ? [`${v}%`, 'Present'] : [v, name]} labelFormatter={d => d} />
+              <Line type="monotone" dataKey="pct" stroke="#10b981" strokeWidth={2} dot={false} name="pct" />
+            </LineChart>
+          </ResponsiveContainer>
+        )}
+      </Card>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <Card title={t('reports.monthlyAttendanceByClass', { defaultValue: 'Monthly Attendance by Class' })} sub={t('reports.monthlyAttendanceByClassSub', { defaultValue: '% present (late counts as present)' })}>

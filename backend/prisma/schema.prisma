@@ -57,6 +57,7 @@ enum TransactionType {
   BANK
   QR
   CHEQUE
+  CREDIT
 }
 
 enum TransactionCategory {
@@ -464,6 +465,7 @@ model Transaction {
   category        TransactionCategory
   amount          Decimal             @db.Decimal(14, 2)
   description     String?
+  partyName       String?
   reference       String?
   referenceType   String? // "SALES_ORDER" | "PURCHASE_ORDER" | "PAYROLL" | "MANUAL"
   referenceId     String?

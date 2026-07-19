@@ -18,7 +18,7 @@ import {
 import {
   Banknote, CreditCard, QrCode, FileCheck, Plus, X, Building2,
   Eye, EyeOff, ExternalLink, FileText, User, Calendar, Hash,
-  Landmark, Globe, Lock, ArrowLeftRight,
+  Landmark, Globe, Lock, ArrowLeftRight, Receipt,
 } from 'lucide-react';
 import { useRole } from "@/lib/useRole";
 import { motion } from 'framer-motion';
@@ -39,6 +39,7 @@ const PAY_METHODS = [
   { id: 'bank',   label: 'Bank Transfer', emoji: '🏦' },
   { id: 'cheque', label: 'Cheque',        emoji: '📋' },
   { id: 'qr',     label: 'QR / UPI',      emoji: '📱' },
+  { id: 'credit', label: 'Credit',        emoji: '🧾' },
 ];
 
 // The backend's Prisma/Zod enums are SCREAMING_SNAKE_CASE (CASH, INCOME, HAND_OUTS…)
@@ -46,6 +47,39 @@ const PAY_METHODS = [
 // logic below — these two helpers are the only place the wire format is converted.
 const toApiEnum = (v) => (v || '').toUpperCase().replace(/-/g, '_');
 const fromApiEnum = (v) => (v || '').toLowerCase().replace(/_/g, '-');
+
+// The "other side" of every manual transaction's double entry is resolved automatically
+// from the payment method instead of asking the user to pick a ledger account for it —
+// these are the same system account names LedgerPostingService auto-creates for Sales/
+// Purchase postings, so a Transactions-page entry lands on the exact same accounts.
+const SYSTEM_ACCOUNT_DEFS = {
+  cash:            { name: 'Cash in Hand',        type: 'ASSET' },
+  bank:            { name: 'Bank Account',        type: 'ASSET' },
+  payable:         { name: 'Accounts Payable',    type: 'LIABILITY' },
+  receivable:      { name: 'Accounts Receivable', type: 'ASSET' },
+  salesRevenue:    { name: 'Sales Revenue',       type: 'INCOME' },
+  purchaseExpense: { name: 'Purchase Expenses',   type: 'EXPENSE' },
+};
+
+function findSystemAccount(accounts, key) {
+  const name = SYSTEM_ACCOUNT_DEFS[key].name.toLowerCase();
+  return accounts.find(a => (a.account_name || a.accountName || '').toLowerCase() === name);
+}
+
+// cash/bank/qr/cheque settle through Cash or Bank; credit settles later through the
+// income/expense category itself (Sales Revenue / Purchase Expenses), since the debt
+// side is what the user picks in the Ledger Account field for a credit entry.
+function counterAccountKey(payMethod, category) {
+  if (payMethod === 'cash') return 'cash';
+  if (payMethod === 'credit') return category === 'income' ? 'salesRevenue' : 'purchaseExpense';
+  return 'bank'; // bank, qr, cheque
+}
+
+// Cheques and credit entries aren't settled yet when recorded — default them to
+// Pending so they don't move Cash/Bank balances until marked Completed later.
+function defaultStatusForMethod(payMethod) {
+  return (payMethod === 'cheque' || payMethod === 'credit') ? 'pending' : 'completed';
+}
 
 export default function Transactions() {
   const { canDelete } = useRole();
@@ -63,7 +97,6 @@ export default function Transactions() {
   const [showNew, setShowNew] = useState(false);
   const [payMethod, setPayMethod] = useState('cash');
   const [selectedLedgerAccountId, setSelectedLedgerAccountId] = useState('');
-  const [cashLedgerAccountId, setCashLedgerAccountId] = useState('');
   const [activeBankId, setActiveBankId] = useState(null);
   const [showAddBank, setShowAddBank] = useState(false);
   const [browserAccount, setBrowserAccount] = useState(null);
@@ -76,8 +109,8 @@ export default function Transactions() {
   const [form, setForm] = useState({
     category: 'income', amount: 0, description: '',
     bank_name: '', bank_account_number: '', cheque_number: '', cheque_date: '',
-    cheque_issue_date: '', party_name: '', status: 'completed',
-    date_ad: new Date().toISOString().split('T')[0], reference_number: '',
+    cheque_issue_date: '', party_name: '',
+    date_ad: new Date().toISOString().split('T')[0], reference_number: '', cash_bank_note: '',
   });
 
   useEffect(() => {
@@ -103,7 +136,10 @@ export default function Transactions() {
     setBankAccounts(banks);
     setLedgerAccounts(ledgerAccountsData);
     if (banks.length > 0 && !activeBankId) setActiveBankId(banks[0].id);
-    if (!selectedLedgerAccountId && ledgerAccountsData.length > 0) setSelectedLedgerAccountId(ledgerAccountsData[0].id);
+    if (!selectedLedgerAccountId) {
+      const receivable = findSystemAccount(ledgerAccountsData, 'receivable');
+      setSelectedLedgerAccountId(receivable?.id || ledgerAccountsData[0]?.id || '');
+    }
     setLoading(false);
   }
 
@@ -125,20 +161,53 @@ export default function Transactions() {
     loadData();
   }
 
+  // Lazily creates whichever system ledger accounts (Cash in Hand, Bank Account,
+  // Accounts Payable/Receivable, Sales Revenue, Purchase Expenses) don't exist yet for
+  // this company, so the auto-resolved "other side" of an entry always has somewhere to post.
+  async function ensureSystemAccounts(accounts) {
+    const missing = Object.values(SYSTEM_ACCOUNT_DEFS).filter(
+      def => !accounts.some(a => (a.account_name || a.accountName || '').toLowerCase() === def.name.toLowerCase())
+    );
+    if (missing.length === 0) return accounts;
+    await Promise.all(missing.map(def => api.LedgerAccount.create({
+      company_id: companyId, account_name: def.name, account_type: def.type, opening_balance: 0,
+    })));
+    const refreshed = await api.LedgerAccount.filter({ company_id: companyId });
+    setLedgerAccounts(refreshed);
+    return refreshed;
+  }
+
+  async function selectPayMethod(id) {
+    setPayMethod(id);
+    const accounts = await ensureSystemAccounts(ledgerAccounts);
+    const acct = findSystemAccount(accounts, form.category === 'income' ? 'receivable' : 'payable');
+    if (acct) setSelectedLedgerAccountId(acct.id);
+  }
+
+  function selectCategory(v) {
+    setForm(f => ({ ...f, category: v }));
+    const acct = findSystemAccount(ledgerAccounts, v === 'income' ? 'receivable' : 'payable');
+    if (acct) setSelectedLedgerAccountId(acct.id);
+  }
+
   async function createTransaction() {
     const entryDate = form.date_ad || new Date().toISOString().split('T')[0];
     const bsDate = adToBs(new Date(entryDate));
-    const type = activeTab === 'all' ? 'cash' : activeTab;
     const amount = Number(form.amount || 0);
-    // Income: DR Cash/Bank, CR the selected income account. Everything else
-    // (expense/transfer/investment/hand-outs): DR the selected account, CR Cash/Bank.
-    const debitAccountId = form.category === 'income' ? cashLedgerAccountId : selectedLedgerAccountId;
-    const creditAccountId = form.category === 'income' ? selectedLedgerAccountId : cashLedgerAccountId;
+
+    const accounts = await ensureSystemAccounts(ledgerAccounts);
+    const counterAccountId = findSystemAccount(accounts, counterAccountKey(payMethod, form.category))?.id || '';
+    // Income: DR Cash/Bank (or Sales Revenue, for credit), CR the selected Ledger Account.
+    // Everything else: DR the selected Ledger Account, CR Cash/Bank (or Purchase Expenses, for credit).
+    const debitAccountId = form.category === 'income' ? counterAccountId : selectedLedgerAccountId;
+    const creditAccountId = form.category === 'income' ? selectedLedgerAccountId : counterAccountId;
+    const description = form.cash_bank_note ? `${form.description} — ${form.cash_bank_note}` : form.description;
     const payload = {
       ...form,
-      type: toApiEnum(type),
+      description,
+      type: toApiEnum(payMethod),
       category: toApiEnum(form.category),
-      status: toApiEnum(form.status),
+      status: toApiEnum(defaultStatusForMethod(payMethod)),
       company_id: companyId,
       date_ad: entryDate,
       date_bs: bsDate.formatted,
@@ -146,18 +215,18 @@ export default function Transactions() {
       credit_account_id: creditAccountId,
       amount,
     };
+    delete payload.cash_bank_note;
 
     await api.Transaction.create(payload);
 
     setForm({
       category: 'income', amount: 0, description: '',
       bank_name: '', bank_account_number: '', cheque_number: '', cheque_date: '',
-      cheque_issue_date: '', party_name: '', status: 'completed',
-      date_ad: new Date().toISOString().split('T')[0], reference_number: '',
+      cheque_issue_date: '', party_name: '',
+      date_ad: new Date().toISOString().split('T')[0], reference_number: '', cash_bank_note: '',
     });
     setPayMethod('cash');
     setSelectedLedgerAccountId(ledgerAccounts[0]?.id || '');
-    setCashLedgerAccountId('');
     setShowNew(false);
     loadData();
   }
@@ -180,8 +249,16 @@ export default function Transactions() {
     .reduce((sum, t) => sum + (t.category === 'income' ? (t.amount || 0) : -(t.amount || 0)), 0);
   const bankTotal = bankAccounts.reduce((sum, b) => sum + (b.current_balance || 0), 0);
 
-  const typeIcons = { cash: Banknote, bank: CreditCard, qr: QrCode, cheque: FileCheck };
-  const categoryColors = { income: 'text-green-600', expense: 'text-red-600', transfer: 'text-blue-600' };
+  const typeIcons = { cash: Banknote, bank: CreditCard, qr: QrCode, cheque: FileCheck, credit: Receipt };
+
+  // The Ledger Account field is always just Payable/Receivable — not the full chart of
+  // accounts — regardless of payment method.
+  const ledgerAccountOptions = ledgerAccounts.filter(
+    a => ['accounts payable', 'accounts receivable'].includes((a.account_name || a.accountName || '').toLowerCase())
+  );
+  const counterLabel = payMethod === 'credit'
+    ? (form.category === 'income' ? 'Sales Revenue' : 'Purchase Expenses')
+    : 'Cash/Bank Account';
 
   const columns = [
     { key: 'date_ad', label: 'Date', render: (row) => (
@@ -199,10 +276,17 @@ export default function Transactions() {
     { key: 'cheque_date', label: 'Cheque Due Date', render: (row) => row.type === 'cheque' && row.cheque_date ? (
       <span className="text-xs font-mono">{row.cheque_date}</span>
     ) : <span className="text-muted-foreground text-xs">-</span> },
-    { key: 'amount', label: 'Amount', render: (row) => (
-      <span className={`font-semibold font-mono ${categoryColors[row.category] || ''}`}>
-        {row.category === 'expense' ? '-' : '+'}NPR {(row.amount || 0).toLocaleString()}
-      </span>
+    // Same inflow/outflow rule the old single Amount column used (only 'expense' is an
+    // outflow) — now split across two columns instead of a +/- prefix on one.
+    { key: 'debit', label: 'Debit', render: (row) => (
+      row.category === 'expense' ? (
+        <span className="font-semibold font-mono text-red-600">NPR {(row.amount || 0).toLocaleString()}</span>
+      ) : <span className="text-muted-foreground text-xs">—</span>
+    )},
+    { key: 'credit', label: 'Credit', render: (row) => (
+      row.category === 'expense' ? (
+        <span className="text-muted-foreground text-xs">—</span>
+      ) : <span className="font-semibold font-mono text-green-600">NPR {(row.amount || 0).toLocaleString()}</span>
     )},
     { key: 'status', label: 'Status', filterValue: colFilters.status, onFilterChange: v => setCol('status', v), filterPlaceholder: 'e.g. pending', render: (row) => (
       <select
@@ -227,14 +311,15 @@ export default function Transactions() {
     <div className="space-y-6 animate-fade-in">
       <PageHeader
         title="Transactions"
-        subtitle="Cash, Bank, QR & Cheque records"
+        subtitle="Cash, Bank, QR, Cheque & Credit records"
         searchValue={search}
         onSearchChange={setSearch}
         onAdd={() => {
-          setPayMethod(
+          selectPayMethod(
             activeTab === 'bank' ? 'bank' :
             activeTab === 'cheque' ? 'cheque' :
-            activeTab === 'qr' ? 'qr' : 'cash'
+            activeTab === 'qr' ? 'qr' :
+            activeTab === 'credit' ? 'credit' : 'cash'
           );
           setShowNew(true);
         }}
@@ -285,6 +370,7 @@ export default function Transactions() {
           <TabsTrigger value="bank">Bank</TabsTrigger>
           <TabsTrigger value="qr">QR</TabsTrigger>
           <TabsTrigger value="cheque">Cheque</TabsTrigger>
+          <TabsTrigger value="credit">Credit</TabsTrigger>
         </TabsList>
 
         {activeTab === 'bank' ? (
@@ -592,7 +678,7 @@ export default function Transactions() {
                     <button
                       key={c.v}
                       type="button"
-                      onClick={() => setForm({ ...form, category: c.v })}
+                      onClick={() => selectCategory(c.v)}
                       className={`sel-chip text-xs px-3 py-1.5 rounded-md ${
                         form.category === c.v
                           ? c.active + ' border-2'
@@ -633,23 +719,31 @@ export default function Transactions() {
                 </div>
               </div>
 
-              {/* Debit / Credit — every transaction posts a balanced double-entry pair */}
+              {/* Debit / Credit — every transaction posts a balanced double-entry pair.
+                  The "other side" (Cash/Bank, or Sales Revenue/Purchase Expenses for
+                  Credit) is resolved automatically from the Payment Method — see
+                  counterAccountKey() — so only the category/debt side needs picking here. */}
               <div className="pt-1 border-t">
                 <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground pt-2 pb-1">Debit &amp; Credit</p>
                 <p className="text-xs text-muted-foreground mb-2">
                   {form.category === 'income'
-                    ? 'Cash/Bank Account is debited, Ledger Account is credited.'
-                    : 'Ledger Account is debited, Cash/Bank Account is credited.'}
+                    ? `${counterLabel} is debited, Ledger Account is credited.`
+                    : `Ledger Account is debited, ${counterLabel} is credited.`}
                 </p>
+                {(payMethod === 'cheque' || payMethod === 'credit') && (
+                  <p className="text-xs text-amber-600 mb-2">
+                    Recorded as <strong>Pending</strong> — balances update once it's marked Completed (e.g. when the cheque clears or payment is received).
+                  </p>
+                )}
               </div>
               <div>
-                <Label className="text-xs font-medium">Ledger Account (income/expense category) *</Label>
+                <Label className="text-xs font-medium">Ledger Account (Payable / Receivable) *</Label>
                 <Select value={selectedLedgerAccountId} onValueChange={setSelectedLedgerAccountId}>
                   <SelectTrigger className="h-9 text-sm mt-1"><SelectValue placeholder="Choose ledger account" /></SelectTrigger>
                   <SelectContent>
-                    {ledgerAccounts.length === 0 ? (
+                    {ledgerAccountOptions.length === 0 ? (
                       <div className="px-3 py-2 text-sm text-muted-foreground">No ledger accounts available</div>
-                    ) : ledgerAccounts.map(account => (
+                    ) : ledgerAccountOptions.map(account => (
                       <SelectItem key={account.id} value={account.id}>
                         {account.account_name || account.accountName || 'Unnamed account'}
                       </SelectItem>
@@ -658,20 +752,14 @@ export default function Transactions() {
                 </Select>
               </div>
               <div>
-                <Label className="text-xs font-medium">Cash / Bank Account (other side of entry) *</Label>
-                <Select value={cashLedgerAccountId} onValueChange={setCashLedgerAccountId}>
-                  <SelectTrigger className="h-9 text-sm mt-1"><SelectValue placeholder="Choose cash/bank account" /></SelectTrigger>
-                  <SelectContent>
-                    {ledgerAccounts.filter(a => a.id !== selectedLedgerAccountId).length === 0 ? (
-                      <div className="px-3 py-2 text-sm text-muted-foreground">No ledger accounts available</div>
-                    ) : ledgerAccounts.filter(a => a.id !== selectedLedgerAccountId).map(account => (
-                      <SelectItem key={account.id} value={account.id}>
-                        {account.account_name || account.accountName || 'Unnamed account'}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-muted-foreground mt-1">Double-entry bookkeeping requires both sides — this posts a balanced pair and updates both account balances.</p>
+                <Label className="text-xs font-medium">Note (optional)</Label>
+                <Input
+                  className="h-9 text-sm mt-1"
+                  placeholder={payMethod === 'credit' ? 'e.g. terms / party detail' : 'e.g. which bank or cash drawer'}
+                  value={form.cash_bank_note}
+                  onChange={e => setForm({ ...form, cash_bank_note: e.target.value })}
+                />
+                <p className="text-xs text-muted-foreground mt-1">The other side of the entry ({counterLabel}) is resolved automatically — this is just appended to the description.</p>
               </div>
 
               {/* Date */}
@@ -720,7 +808,7 @@ export default function Transactions() {
                   <button
                     key={m.id}
                     type="button"
-                    onClick={() => setPayMethod(m.id)}
+                    onClick={() => selectPayMethod(m.id)}
                     className={`pay-card flex flex-col items-center gap-1 py-3 rounded-lg border transition-all ${
                       payMethod === m.id
                         ? 'border-primary bg-primary/10 text-primary shadow-sm'
@@ -795,7 +883,7 @@ export default function Transactions() {
                 </div>
               )}
 
-              {/* cash: nothing extra */}
+              {/* cash / credit: nothing extra */}
             </motion.div>
           </div>
 
@@ -803,7 +891,7 @@ export default function Transactions() {
             <Button variant="outline" onClick={() => setShowNew(false)}>Cancel</Button>
             <Button
               onClick={createTransaction}
-              disabled={!form.amount || !form.description || !selectedLedgerAccountId || !cashLedgerAccountId || selectedLedgerAccountId === cashLedgerAccountId}
+              disabled={!form.amount || !form.description || !selectedLedgerAccountId}
             >
               Save
             </Button>

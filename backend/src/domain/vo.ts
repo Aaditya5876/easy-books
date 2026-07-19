@@ -39,6 +39,7 @@ export enum TransactionType {
   BANK = 'BANK',
   QR = 'QR',
   CHEQUE = 'CHEQUE',
+  CREDIT = 'CREDIT',
 }
 
 export enum TransactionCategory {

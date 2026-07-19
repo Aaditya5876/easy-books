@@ -230,9 +230,19 @@ export default function Dashboard() {
   });
   const flowChart = Object.values(monthlyFlow).sort((a, b) => a.month.localeCompare(b.month)).slice(-6);
 
-  const cheques           = transactions.filter(t => t.payment_method === 'cheque');
-  const chequesReceivable = cheques.filter(t => t.type === 'income');
-  const chequesPayable    = cheques.filter(t => t.type === 'expense');
+  // Cheque/Credit transactions are recorded as PENDING until they actually clear (see
+  // TransactionServiceImpl) — surfaced here, sorted soonest-first, so they aren't
+  // forgotten before their date arrives (or after it's overdue).
+  const pendingReminders  = transactions.filter(t => t.status === 'PENDING' && (t.type === 'CHEQUE' || t.type === 'CREDIT'));
+  const sortByDate        = (a, b) => new Date(a.dateAd) - new Date(b.dateAd);
+  const remindersReceivable = pendingReminders.filter(t => t.category === 'INCOME').sort(sortByDate);
+  const remindersPayable    = pendingReminders.filter(t => t.category !== 'INCOME').sort(sortByDate);
+
+  async function markReminderCompleted(id) {
+    await transactionApi.update(id, { status: 'COMPLETED' });
+    const res = await transactionApi.list().catch(() => ({ data: [] }));
+    setTransactions(unwrapArr(res));
+  }
 
   // ── Widget 10: Financial Health ────────────────────────────────────────────
   const netPnL       = fySales - fyPurchases - fyExpenses;
@@ -630,18 +640,18 @@ export default function Dashboard() {
               <div className="flex items-center justify-center h-[200px] text-xs text-muted-foreground">No data yet</div>
             )}
 
-            {/* Cheque Reminders */}
+            {/* Pending Reminders — Cheque & Credit transactions awaiting clearance */}
             <div className="mt-5">
               <div className="flex items-center gap-2 mb-3">
                 <AlertCircle className="w-3.5 h-3.5 text-amber-500" />
-                <p className="text-xs font-semibold text-foreground">Cheque Reminders</p>
+                <p className="text-xs font-semibold text-foreground">Pending Reminders (Cheque &amp; Credit)</p>
               </div>
 
               {/* Tabs */}
               <div className="flex gap-1 mb-3 bg-muted/30 rounded-lg p-1 w-fit">
                 {[
-                  { key: 'receivable', label: `Receivable (${chequesReceivable.length})` },
-                  { key: 'payable',    label: `Payable (${chequesPayable.length})` },
+                  { key: 'receivable', label: `Receivable (${remindersReceivable.length})` },
+                  { key: 'payable',    label: `Payable (${remindersPayable.length})` },
                 ].map(tab => (
                   <button
                     key={tab.key}
@@ -657,40 +667,45 @@ export default function Dashboard() {
                 ))}
               </div>
 
-              {/* Cheque list */}
+              {/* Reminder list */}
               {(() => {
-                const list = chequeTab === 'receivable' ? chequesReceivable : chequesPayable;
+                const list = chequeTab === 'receivable' ? remindersReceivable : remindersPayable;
                 if (list.length === 0) {
-                  return <p className="text-xs text-muted-foreground italic">No {chequeTab} cheques</p>;
+                  return <p className="text-xs text-muted-foreground italic">No pending {chequeTab} reminders</p>;
                 }
                 return (
-                  <div className="space-y-1.5 max-h-48 overflow-y-auto">
-                    {list.map((ch, i) => {
-                      const dueDate  = ch.due_date || ch.dueDate || ch.date;
-                      const pastDue  = dueDate && new Date(dueDate) < todayDate;
+                  <div className="space-y-1.5 max-h-64 overflow-y-auto">
+                    {list.map((t, i) => {
+                      const pastDue = t.dateAd && new Date(t.dateAd) < todayDate;
                       return (
                         <div
-                          key={ch.id || i}
-                          className={`rounded-lg border px-3 py-2 flex items-center gap-3 ${pastDue ? 'bg-red-50 border-red-200' : 'bg-muted/20 border-border'}`}
+                          key={t.id || i}
+                          className={`rounded-lg border px-3 py-2 flex items-center gap-3 ${pastDue ? 'bg-red-50 border-red-200' : 'bg-amber-50/60 border-amber-200'}`}
                         >
                           <div className="flex-1 min-w-0">
-                            <p className={`text-xs font-medium truncate ${pastDue ? 'text-red-700' : 'text-foreground'}`}>
-                              {ch.party_name || ch.partyName || ch.name || 'Unknown'}
-                            </p>
-                            {ch.description && (
-                              <p className="text-[10px] text-muted-foreground truncate">{ch.description}</p>
-                            )}
-                          </div>
-                          <div className="text-right shrink-0">
-                            <p className={`text-xs font-mono font-semibold ${pastDue ? 'text-red-600' : 'text-foreground'}`}>
-                              {fmtNPR(ch.amount)}
-                            </p>
-                            {dueDate && (
-                              <p className={`text-[10px] ${pastDue ? 'text-red-500' : 'text-muted-foreground'}`}>
-                                {pastDue && 'Overdue · '}
-                                {new Date(dueDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' })}
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{t.type}</span>
+                              <p className={`text-xs font-medium truncate ${pastDue ? 'text-red-700' : 'text-foreground'}`}>
+                                {t.partyName ? `${t.partyName} — ` : ''}{t.description || 'Untitled'}
+                              </p>
+                            </div>
+                            {t.dateAd && (
+                              <p className={`text-[10px] mt-0.5 ${pastDue ? 'text-red-500' : 'text-muted-foreground'}`}>
+                                {pastDue ? 'Overdue · ' : 'Due '}
+                                {new Date(t.dateAd).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' })}
                               </p>
                             )}
+                          </div>
+                          <div className="text-right shrink-0 flex items-center gap-2">
+                            <p className={`text-xs font-mono font-semibold ${pastDue ? 'text-red-600' : 'text-foreground'}`}>
+                              {fmtNPR(t.amount)}
+                            </p>
+                            <button
+                              onClick={() => markReminderCompleted(t.id)}
+                              className="text-[10px] font-medium px-2 py-1 rounded-md border border-border bg-card hover:bg-muted transition-colors"
+                            >
+                              Mark Completed
+                            </button>
                           </div>
                         </div>
                       );
