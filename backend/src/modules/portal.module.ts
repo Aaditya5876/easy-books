@@ -7,9 +7,10 @@ import { PaymentService } from '../application/services/payment.service';
 import { SchoolFinanceService } from '../application/services/school-finance.service';
 import { LedgerPostingService } from '../application/services/ledger-posting.service';
 import { PortalGuard } from './guards/portal.guard';
+import { NotificationModule } from './notification.module';
 
 @Module({
-  imports: [JwtModule.register({})],
+  imports: [JwtModule.register({}), NotificationModule],
   controllers: [PortalController],
   providers: [PrismaService, PortalService, PaymentService, SchoolFinanceService, LedgerPostingService, PortalGuard],
 })

@@ -7,8 +7,10 @@ import { SchoolFinanceService } from '../application/services/school-finance.ser
 import { LedgerPostingService } from '../application/services/ledger-posting.service';
 import { SmsService } from '../application/services/sms.service';
 import { AiService } from '../application/services/ai.service';
+import { NotificationModule } from './notification.module';
 
 @Module({
+  imports: [NotificationModule],
   controllers: [SchoolController],
   providers: [PrismaService, SchoolService, SchoolAnalyticsService, SchoolFinanceService, LedgerPostingService, SmsService, AiService],
 })

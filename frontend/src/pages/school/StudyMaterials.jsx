@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, Trash2, FileText, Download, BookOpen, Filter } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { studyMaterialsApi, classesApi, subjectsApi, uploadApi } from '@/api';
+import apiClient from '@/api/client';
 import { getActiveCompanyId } from '@/lib/companyContext';
 import { filterSubjectsByClass } from '@/lib/subjectFilter';
 import { Button } from '@/components/ui/button';
@@ -12,6 +13,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { toast } from 'sonner';
 
 const FILE_TYPE_ICONS = { pdf: '📄', doc: '📝', docx: '📝', image: '🖼️', other: '📎' };
+
+function resolveFileUrl(url = '') {
+  return url.startsWith('http') ? url : `${apiClient.defaults.baseURL}${url}`;
+}
 
 function getFileType(url = '') {
   const ext = url.split('.').pop()?.toLowerCase();
@@ -190,7 +195,7 @@ export default function StudyMaterials() {
               </div>
               {mat.uploadedBy && <p className="text-xs text-muted-foreground">{t('materials.byUploader', { defaultValue: 'By: {{name}}', name: mat.uploadedBy })}</p>}
               <div className="flex gap-2 mt-auto pt-2 border-t border-border">
-                <a href={mat.fileUrl} target="_blank" rel="noopener noreferrer" className="flex-1">
+                <a href={resolveFileUrl(mat.fileUrl)} target="_blank" rel="noopener noreferrer" className="flex-1">
                   <Button variant="outline" size="sm" className="w-full">
                     <Download className="w-3.5 h-3.5 mr-1.5" /> {t('materials.download', { defaultValue: 'Download' })}
                   </Button>

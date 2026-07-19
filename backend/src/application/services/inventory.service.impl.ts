@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../../../core/db/psql/prisma.client';
 import { CreateInventoryItemDTO, UpdateInventoryItemDTO, adToBs } from '@easy-books/shared';
+import { NotificationServiceImpl } from './notification.service.impl';
 
 interface AdjustInventoryInput {
   adjustmentType: 'ADDITION' | 'SUBTRACTION' | 'RECOUNT';
@@ -11,7 +12,36 @@ interface AdjustInventoryInput {
 
 @Injectable()
 export class InventoryServiceImpl {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notifications: NotificationServiceImpl,
+  ) {}
+
+  private async maybeNotifyLowStock(
+    companyId: string,
+    item: { id: string; itemName: string | null; partNumber: string | null; lowStockThreshold: any },
+    quantityBefore: number,
+    quantityAfter: number,
+  ) {
+    const threshold = Number(item.lowStockThreshold);
+    const wasLow = quantityBefore <= threshold;
+    const isLow = quantityAfter <= threshold;
+    if (!isLow || wasLow) return;
+
+    const label = item.itemName || item.partNumber || 'Item';
+    try {
+      await this.notifications.notifyRole(companyId, ['ADMIN', 'ACCOUNTANT'], {
+        type: 'LOW_STOCK',
+        title: 'Low stock alert',
+        message: `${label} has crossed its low-stock threshold (qty: ${quantityAfter})`,
+        link: '/inventory',
+        referenceType: 'INVENTORY_ITEM',
+        referenceId: item.id,
+      });
+    } catch (err) {
+      console.error('Notification dispatch failed:', (err as Error).message);
+    }
+  }
 
   async findAll(companyId: string) {
     return this.prisma.inventoryItem.findMany({
@@ -29,7 +59,12 @@ export class InventoryServiceImpl {
   }
 
   async update(id: string, companyId: string, dto: UpdateInventoryItemDTO) {
-    return this.prisma.inventoryItem.update({ where: { id }, data: dto as any });
+    const before = await this.prisma.inventoryItem.findFirst({ where: { id, companyId } });
+    const updated = await this.prisma.inventoryItem.update({ where: { id }, data: dto as any });
+    if (before && (dto as any).quantity !== undefined) {
+      await this.maybeNotifyLowStock(companyId, updated, Number(before.quantity), Number(updated.quantity));
+    }
+    return updated;
   }
 
   async remove(id: string, companyId: string) {
@@ -58,8 +93,8 @@ export class InventoryServiceImpl {
     const quantityChange = quantityAfter - quantityBefore;
     const now = new Date();
 
-    return this.prisma.$transaction(async (tx) => {
-      const adjustment = await tx.inventoryAdjustment.create({
+    const adjustment = await this.prisma.$transaction(async (tx) => {
+      const created = await tx.inventoryAdjustment.create({
         data: {
           companyId,
           inventoryItemId: id,
@@ -79,8 +114,12 @@ export class InventoryServiceImpl {
         data: { quantity: quantityAfter },
       });
 
-      return adjustment;
+      return created;
     });
+
+    await this.maybeNotifyLowStock(companyId, item, quantityBefore, quantityAfter);
+
+    return adjustment;
   }
 
   async getAdjustments(id: string, companyId: string) {

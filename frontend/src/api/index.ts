@@ -22,7 +22,7 @@ export const inventoryApi = {
   create: (data: object) => apiClient.post('/api/v1/inventory', data),
   update: (id: string, data: object) => apiClient.put(`/api/v1/inventory/${id}`, data, { params: { companyId: companyId() } }),
   remove: (id: string) => apiClient.delete(`/api/v1/inventory/${id}`, { params: { companyId: companyId() } }),
-  adjust: (id: string, data: { adjustmentType: string; quantity: number; reason: string }) =>
+  adjust: (id: string, data: { adjustmentType: string; quantityChange: number; reason: string }) =>
     apiClient.patch(`/api/v1/inventory/${id}/adjust`, data, { params: { companyId: companyId() } }),
   getAdjustments: (id: string) =>
     apiClient.get(`/api/v1/inventory/${id}/adjustments`, { params: { companyId: companyId() } }),
@@ -174,6 +174,16 @@ export const dashboardApi = {
   hrSummary: (cid: string) => apiClient.get('/api/v1/dashboard/hr-summary', { params: { companyId: cid } }),
   recentActivity: (cid: string) => apiClient.get('/api/v1/dashboard/recent-activity', { params: { companyId: cid } }),
   vatSummary: (cid: string) => apiClient.get('/api/v1/dashboard/vat-summary', { params: { companyId: cid } }),
+};
+
+// Notifications — user-scoped (resolved from the JWT server-side), unlike most
+// resources above there is deliberately no companyId param here.
+export const notificationsApi = {
+  list: (params: { page?: number; pageSize?: number; unreadOnly?: boolean } = {}) =>
+    apiClient.get('/api/v1/notifications', { params }),
+  unreadCount: () => apiClient.get('/api/v1/notifications/unread-count'),
+  markRead: (id: string) => apiClient.patch(`/api/v1/notifications/${id}/read`),
+  markAllRead: () => apiClient.patch('/api/v1/notifications/mark-all-read'),
 };
 
 // Companies

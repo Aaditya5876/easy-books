@@ -2,12 +2,11 @@ import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from 'next-themes';
 import { api, apiAuth } from '@/api/adapter';
-import { dashboardApi } from '@/api';
+import { notificationsApi } from '@/api';
 import {
   Search, Bell, Settings, LogOut, Building2, ChevronDown, Plus, Menu,
   Wrench, Calculator, RefreshCw, CalendarDays, UserCircle, CalendarCheck,
-  UsersRound, Banknote, Sun, Moon, X, Package, Users, UserCheck,
-  AlertTriangle, FileText, ArrowLeftRight, Globe,
+  UsersRound, Banknote, Sun, Moon, X, Package, Users, UserCheck, Globe,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { toggleLanguage } from '@/i18n';
@@ -36,8 +35,9 @@ export default function TopBar({ onMobileMenuToggle, onToolOpen }) {
   const [searchData, setSearchData] = useState({ clients: [], vendors: [], inventory: [] });
 
   // Notifications
-  const [alerts, setAlerts] = useState(null);
-  const [alertsLoading, setAlertsLoading] = useState(false);
+  const [notifications, setNotifications] = useState([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [notifLoading, setNotifLoading] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -60,25 +60,44 @@ export default function TopBar({ onMobileMenuToggle, onToolOpen }) {
       ]).then(([cls, vens, inv]) => {
         setSearchData({ clients: cls, vendors: vens, inventory: inv });
       }).catch(() => {});
-      // Pre-load alerts for badge
-      dashboardApi.alerts(activeId)
-        .then(res => setAlerts(res?.data?.data ?? res?.data ?? null))
-        .catch(() => {});
     } else if (companyList.length > 0) {
       setActiveCompany(companyList[0]);
       setActiveCompanyId(companyList[0].id);
     }
+    // Pre-load unread count so the badge is right before the dropdown ever opens
+    notificationsApi.unreadCount()
+      .then(res => setUnreadCount(res?.data ?? 0))
+      .catch(() => {});
   }
 
-  async function loadAlerts() {
-    const activeId = getActiveCompanyId();
-    if (!activeId) return;
-    setAlertsLoading(true);
+  async function loadNotifications() {
+    setNotifLoading(true);
     try {
-      const res = await dashboardApi.alerts(activeId);
-      setAlerts(res?.data?.data ?? res?.data ?? null);
+      const [listRes, countRes] = await Promise.all([
+        notificationsApi.list({ pageSize: 10 }),
+        notificationsApi.unreadCount(),
+      ]);
+      setNotifications(listRes?.data?.items ?? []);
+      setUnreadCount(countRes?.data ?? 0);
     } catch (_) {}
-    setAlertsLoading(false);
+    setNotifLoading(false);
+  }
+
+  async function markNotificationRead(id) {
+    setNotifications(ns => ns.map(n => n.id === id ? { ...n, isRead: true } : n));
+    setUnreadCount(c => Math.max(0, c - 1));
+    try { await notificationsApi.markRead(id); } catch (_) {}
+  }
+
+  async function markAllNotificationsRead() {
+    setNotifications(ns => ns.map(n => ({ ...n, isRead: true })));
+    setUnreadCount(0);
+    try { await notificationsApi.markAllRead(); } catch (_) {}
+  }
+
+  function handleNotificationClick(n) {
+    if (!n.isRead) markNotificationRead(n.id);
+    if (n.link) navigate(n.link);
   }
 
   function switchCompany(company) {
@@ -112,10 +131,22 @@ export default function TopBar({ onMobileMenuToggle, onToolOpen }) {
     return results.slice(0, 8);
   }, [searchQuery, searchData]);
 
-  const alertCount =
-    (alerts?.lowStockCount || 0) +
-    (alerts?.staleChequesCount || 0) +
-    (alerts?.bgExpiringSoon || 0);
+  const NOTIFICATION_ICONS = {
+    LOW_STOCK: { Icon: Package, bg: 'bg-amber-50', color: 'text-amber-500' },
+    FEE_PAYMENT: { Icon: Banknote, bg: 'bg-green-50', color: 'text-green-500' },
+    LEAVE_REQUEST: { Icon: CalendarCheck, bg: 'bg-blue-50', color: 'text-blue-500' },
+    PAYROLL_PAID: { Icon: Banknote, bg: 'bg-green-50', color: 'text-green-500' },
+  };
+
+  function timeAgo(iso) {
+    const diffMs = Date.now() - new Date(iso).getTime();
+    const mins = Math.floor(diffMs / 60000);
+    if (mins < 1) return 'just now';
+    if (mins < 60) return `${mins}m ago`;
+    const hours = Math.floor(mins / 60);
+    if (hours < 24) return `${hours}h ago`;
+    return `${Math.floor(hours / 24)}d ago`;
+  }
 
   const todayBS = getTodayBS();
 
@@ -299,79 +330,62 @@ export default function TopBar({ onMobileMenuToggle, onToolOpen }) {
         </Button>
 
         {/* ── Notifications Bell ── */}
-        <DropdownMenu onOpenChange={open => { if (open) loadAlerts(); }}>
+        <DropdownMenu onOpenChange={open => { if (open) loadNotifications(); }}>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground relative">
               <Bell className="w-4 h-4" />
-              {alertCount > 0 && (
-                <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full" />
+              {unreadCount > 0 && (
+                <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 flex items-center justify-center bg-red-500 text-white text-[10px] font-semibold rounded-full">
+                  {unreadCount > 9 ? '9+' : unreadCount}
+                </span>
               )}
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-72">
+          <DropdownMenuContent align="end" className="w-80">
             <div className="px-3 py-2.5 border-b border-border flex items-center justify-between">
               <p className="text-sm font-semibold">Notifications</p>
-              {alertCount > 0 && (
-                <span className="text-xs bg-red-100 text-red-600 font-semibold px-2 py-0.5 rounded-full">
-                  {alertCount} alert{alertCount > 1 ? 's' : ''}
-                </span>
+              {unreadCount > 0 && (
+                <button
+                  onClick={markAllNotificationsRead}
+                  className="text-xs text-primary hover:underline font-medium"
+                >
+                  Mark all read
+                </button>
               )}
             </div>
 
-            {alertsLoading ? (
-              <div className="px-4 py-5 text-center text-sm text-muted-foreground">Checking alerts…</div>
-            ) : alertCount === 0 ? (
+            {notifLoading ? (
+              <div className="px-4 py-5 text-center text-sm text-muted-foreground">Loading…</div>
+            ) : notifications.length === 0 ? (
               <div className="px-4 py-6 text-center">
                 <div className="w-10 h-10 rounded-full bg-green-50 flex items-center justify-center mx-auto mb-2">
                   <Bell className="w-5 h-5 text-green-500" />
                 </div>
                 <p className="text-sm font-medium text-foreground">All clear!</p>
-                <p className="text-xs text-muted-foreground mt-0.5">No alerts at the moment.</p>
+                <p className="text-xs text-muted-foreground mt-0.5">No notifications yet.</p>
               </div>
             ) : (
-              <div className="py-1">
-                {(alerts?.lowStockCount || 0) > 0 && (
-                  <DropdownMenuItem
-                    onClick={() => navigate('/inventory')}
-                    className="flex items-start gap-3 px-3 py-3 cursor-pointer"
-                  >
-                    <div className="w-8 h-8 rounded-lg bg-amber-50 flex items-center justify-center shrink-0 mt-0.5">
-                      <Package className="w-4 h-4 text-amber-500" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium">{alerts.lowStockCount} items low on stock</p>
-                      <p className="text-xs text-muted-foreground">Check inventory levels</p>
-                    </div>
-                  </DropdownMenuItem>
-                )}
-                {(alerts?.staleChequesCount || 0) > 0 && (
-                  <DropdownMenuItem
-                    onClick={() => navigate('/transactions')}
-                    className="flex items-start gap-3 px-3 py-3 cursor-pointer"
-                  >
-                    <div className="w-8 h-8 rounded-lg bg-red-50 flex items-center justify-center shrink-0 mt-0.5">
-                      <ArrowLeftRight className="w-4 h-4 text-red-500" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium">{alerts.staleChequesCount} stale cheques</p>
-                      <p className="text-xs text-muted-foreground">Deposited but not cleared (7+ days)</p>
-                    </div>
-                  </DropdownMenuItem>
-                )}
-                {(alerts?.bgExpiringSoon || 0) > 0 && (
-                  <DropdownMenuItem
-                    onClick={() => navigate('/transactions')}
-                    className="flex items-start gap-3 px-3 py-3 cursor-pointer"
-                  >
-                    <div className="w-8 h-8 rounded-lg bg-orange-50 flex items-center justify-center shrink-0 mt-0.5">
-                      <AlertTriangle className="w-4 h-4 text-orange-500" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium">{alerts.bgExpiringSoon} bank guarantee{alerts.bgExpiringSoon > 1 ? 's' : ''} expiring</p>
-                      <p className="text-xs text-muted-foreground">Within the next 30 days</p>
-                    </div>
-                  </DropdownMenuItem>
-                )}
+              <div className="py-1 max-h-96 overflow-y-auto">
+                {notifications.map(n => {
+                  const { Icon, bg, color } = NOTIFICATION_ICONS[n.type] || { Icon: Bell, bg: 'bg-secondary', color: 'text-muted-foreground' };
+                  return (
+                    <DropdownMenuItem
+                      key={n.id}
+                      onClick={() => handleNotificationClick(n)}
+                      className={`flex items-start gap-3 px-3 py-3 cursor-pointer ${!n.isRead ? 'bg-primary/5' : ''}`}
+                    >
+                      <div className={`w-8 h-8 rounded-lg ${bg} flex items-center justify-center shrink-0 mt-0.5`}>
+                        <Icon className={`w-4 h-4 ${color}`} />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium truncate">{n.title}</p>
+                        <p className="text-xs text-muted-foreground truncate">{n.message}</p>
+                        <p className="text-[11px] text-muted-foreground/70 mt-0.5">{timeAgo(n.createdAt)}</p>
+                      </div>
+                      {!n.isRead && <span className="w-2 h-2 rounded-full bg-primary shrink-0 mt-1.5" />}
+                    </DropdownMenuItem>
+                  );
+                })}
               </div>
             )}
           </DropdownMenuContent>

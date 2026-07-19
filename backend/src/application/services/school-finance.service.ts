@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../../core/db/psql/prisma.client';
 import { LedgerPostingService } from './ledger-posting.service';
+import { NotificationServiceImpl } from './notification.service.impl';
 import { adToBs } from '@easy-books/shared';
 
 const DEFAULT_FEE_HEADS = [
@@ -29,6 +30,7 @@ export class SchoolFinanceService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly posting: LedgerPostingService,
+    private readonly notifications: NotificationServiceImpl,
   ) {}
 
   // ── Fee Heads ────────────────────────────────────────────────────────────────
@@ -441,6 +443,19 @@ export class SchoolFinanceService {
     } catch (err) {
       // eslint-disable-next-line no-console
       console.error('Fee payment ledger posting failed:', (err as Error).message);
+    }
+
+    try {
+      await this.notifications.notifyRole(companyId, ['ADMIN', 'ACCOUNTANT'], {
+        type: 'FEE_PAYMENT',
+        title: 'Fee payment recorded',
+        message: `Rs. ${amount} received from ${invoice.student?.name ?? 'Student'} (Receipt ${payment.receiptNo})`,
+        link: '/fees',
+        referenceType: 'FEE_INVOICE',
+        referenceId: invoiceId,
+      });
+    } catch (err) {
+      console.error('Notification dispatch failed:', (err as Error).message);
     }
 
     return { ...payment, invoiceStatus: status };

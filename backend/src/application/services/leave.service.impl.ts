@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../../core/db/psql/prisma.client';
+import { NotificationServiceImpl } from './notification.service.impl';
 import { adToBs } from '@easy-books/shared';
 
 // Count working days between two dates, skipping Saturdays (Nepal weekly holiday)
@@ -27,7 +28,10 @@ function getFiscalYear(adDate: Date): string {
 
 @Injectable()
 export class LeaveServiceImpl {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notifications: NotificationServiceImpl,
+  ) {}
 
   // ─── Leave Types ─────────────────────────────────────────────────────────────
 
@@ -181,7 +185,7 @@ export class LeaveServiceImpl {
     });
     if (overlap) throw new BadRequestException('Leave request overlaps with an existing request');
 
-    return this.prisma.leaveRequest.create({
+    const created = await this.prisma.leaveRequest.create({
       data: {
         companyId,
         employeeId: data.employeeId,
@@ -193,6 +197,21 @@ export class LeaveServiceImpl {
         status: 'PENDING',
       },
     });
+
+    try {
+      const employee = await this.prisma.employee.findUnique({ where: { id: data.employeeId }, select: { name: true } });
+      await this.notifications.notifyRole(companyId, ['ADMIN', 'ACCOUNTANT'], {
+        type: 'LEAVE_REQUEST',
+        title: 'New leave request',
+        message: `${employee?.name ?? 'An employee'} requested ${totalDays} day(s) leave (${data.startDate} to ${data.endDate})`,
+        referenceType: 'LEAVE_REQUEST',
+        referenceId: created.id,
+      });
+    } catch (err) {
+      console.error('Notification dispatch failed:', (err as Error).message);
+    }
+
+    return created;
   }
 
   async approveRequest(id: string, companyId: string, approvedBy: string) {

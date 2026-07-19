@@ -151,6 +151,13 @@ enum CreditNoteStatus {
   CLOSED
 }
 
+enum NotificationType {
+  LOW_STOCK
+  FEE_PAYMENT
+  LEAVE_REQUEST
+  PAYROLL_PAID
+}
+
 // ─── Models ──────────────────────────────────────────────────────────────────
 
 model User {
@@ -168,6 +175,7 @@ model User {
   updatedAt          DateTime  @updatedAt
 
   userCompanies UserCompany[]
+  notifications Notification[]
 
   @@map("users")
 }
@@ -252,6 +260,7 @@ model Company {
   feePayments          FeePayment[]
   studentScholarships  StudentScholarship[]
   feePackages          FeePackage[]
+  notifications        Notification[]
 
   @@map("companies")
 }
@@ -1501,4 +1510,25 @@ model PortalUser {
 
   @@unique([studentId, type])
   @@map("portal_users")
+}
+
+model Notification {
+  id            String           @id @default(uuid())
+  companyId     String
+  company       Company          @relation(fields: [companyId], references: [id])
+  userId        String
+  user          User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type          NotificationType
+  title         String
+  message       String
+  link          String?
+  referenceType String?
+  referenceId   String?
+  isRead        Boolean          @default(false)
+  readAt        DateTime?
+  createdAt     DateTime         @default(now())
+
+  @@index([userId, isRead])
+  @@index([companyId])
+  @@map("notifications")
 }

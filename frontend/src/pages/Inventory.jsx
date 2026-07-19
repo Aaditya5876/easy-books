@@ -103,6 +103,7 @@ export default function Inventory() {
   const [showExtraFields, setShowExtraFields] = useState(false);
 
   const isOtherType = company?.business_type?.toUpperCase() === 'OTHER';
+  const isSchoolType = company?.business_type?.toUpperCase() === 'SCHOOL';
   const f = isOtherType && !showExtraFields
     ? { brand: false, modelNo: false, application: false, expiry: false, aging: false, location: false }
     : getFields(company?.business_type);
@@ -213,7 +214,7 @@ export default function Inventory() {
     try {
       await inventoryApi.adjust(selectedItem.id, {
         adjustmentType: adjForm.type,
-        quantity: parseFloat(adjForm.quantity),
+        quantityChange: parseFloat(adjForm.quantity),
         reason: adjForm.reason.trim(),
       });
       setShowAdjustDialog(false);
@@ -364,7 +365,7 @@ export default function Inventory() {
         data={filtered}
         onRowClick={setSelectedItem}
         selectedId={selectedItem?.id}
-        filterRow={<>
+        filterRow={isSchoolType ? null : <>
           {f.brand && <td className="px-2 py-1"><Input placeholder="Brand" value={filters.brand} onChange={e => setFilter('brand', e.target.value)} className="h-7 text-xs w-full" /></td>}
           {f.modelNo && <td className="px-2 py-1"><Input placeholder="Model No." value={filters.model_no} onChange={e => setFilter('model_no', e.target.value)} className="h-7 text-xs w-full" /></td>}
           <td className="px-2 py-1"><Input placeholder="Description" value={filters.description} onChange={e => setFilter('description', e.target.value)} className="h-7 text-xs w-full" /></td>

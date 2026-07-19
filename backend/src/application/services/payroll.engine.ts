@@ -5,6 +5,7 @@ import { Queue } from 'bull';
 import { QUEUE_NAMES } from '../../../core/queue/bull.client';
 import { adToBs, bsToAd } from '@easy-books/shared';
 import { LedgerPostingService } from './ledger-posting.service';
+import { NotificationServiceImpl } from './notification.service.impl';
 import { PIT_SLABS_MARRIED, PIT_SLABS_UNMARRIED } from '../../domain/vo';
 
 export interface PayrollResult {
@@ -70,6 +71,7 @@ export class PayrollEngineService {
     private readonly prisma: PrismaService,
     @InjectQueue(QUEUE_NAMES.PAYROLL) private readonly payrollQueue: Queue,
     private readonly ledgerPosting: LedgerPostingService,
+    private readonly notifications: NotificationServiceImpl,
   ) {}
 
   async processMonthlyPayroll(companyId: string, month: string): Promise<{ queued: number }> {
@@ -256,6 +258,20 @@ export class PayrollEngineService {
 
     // Post to GL after marking paid — outside the update so a ledger failure doesn't prevent status change
     await this.ledgerPosting.postPayroll(companyId, payrollId);
+
+    try {
+      const employee = await this.prisma.employee.findUnique({ where: { id: payroll.employeeId }, select: { name: true } });
+      await this.notifications.notifyRole(companyId, ['ADMIN', 'ACCOUNTANT'], {
+        type: 'PAYROLL_PAID',
+        title: 'Payroll paid',
+        message: `Payroll for ${employee?.name ?? 'employee'} (${payroll.month}) marked as paid — Rs. ${payroll.netSalary}`,
+        link: '/payroll',
+        referenceType: 'PAYROLL',
+        referenceId: payrollId,
+      });
+    } catch (err) {
+      console.error('Notification dispatch failed:', (err as Error).message);
+    }
 
     return payroll;
   }

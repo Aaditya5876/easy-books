@@ -28,6 +28,7 @@ import { MemoModule } from './memo.module';
 import { TaskModule } from './task.module';
 import { UserModule } from './user.module';
 import { DashboardModule } from './dashboard.module';
+import { NotificationModule } from './notification.module';
 import { UploadModule } from './upload.module';
 import { RecycleBinModule } from './recycle-bin.module';
 import { SchoolModule } from './school.module';
@@ -66,6 +67,7 @@ import { RolesGuard } from './guards/roles.guard';
     TaskModule,
     UserModule,
     DashboardModule,
+    NotificationModule,
     UploadModule,
     RecycleBinModule,
     SchoolModule,
