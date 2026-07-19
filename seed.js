@@ -56,6 +56,46 @@ async function run(label, fn) {
   }
 }
 
+// ─── Ledger account helpers (Transactions require a real debit/credit account pair) ──
+
+// Mirrors the six system accounts the Transactions page auto-creates/resolves:
+// Cash/Bank settle cash-type entries, Payable/Receivable carry credit-type debt,
+// Sales Revenue/Purchase Expenses are the credit-type counter-account.
+const SYSTEM_ACCOUNT_DEFS = {
+  cash:            { accountName: 'Cash in Hand',        accountType: 'ASSET' },
+  bank:            { accountName: 'Bank Account',        accountType: 'ASSET' },
+  payable:         { accountName: 'Accounts Payable',    accountType: 'LIABILITY' },
+  receivable:      { accountName: 'Accounts Receivable', accountType: 'ASSET' },
+  salesRevenue:    { accountName: 'Sales Revenue',       accountType: 'INCOME' },
+  purchaseExpense: { accountName: 'Purchase Expenses',   accountType: 'EXPENSE' },
+};
+
+async function ensureSystemAccounts(companyId) {
+  const existing = await get(`/api/v1/ledger/accounts?companyId=${companyId}`);
+  const byName = new Map(existing.map(a => [a.accountName.toLowerCase(), a.id]));
+  const accounts = {};
+  for (const [key, def] of Object.entries(SYSTEM_ACCOUNT_DEFS)) {
+    const found = byName.get(def.accountName.toLowerCase());
+    accounts[key] = found || (await post('/api/v1/ledger/accounts', { companyId, ...def, openingBalance: 0 })).id;
+  }
+  return accounts;
+}
+
+// Same debit/credit resolution the Transactions page uses: income debits the
+// counter account (Cash/Bank, or Sales Revenue for credit) and credits Accounts
+// Receivable; everything else debits Accounts Payable and credits the counter
+// account (Cash/Bank, or Purchase Expenses for credit).
+function resolveTransactionAccounts(accounts, type, category) {
+  const counterKey = type === 'CASH' ? 'cash'
+    : type === 'CREDIT' ? (category === 'INCOME' ? 'salesRevenue' : 'purchaseExpense')
+    : 'bank'; // BANK, QR, CHEQUE
+  const counterAccountId = accounts[counterKey];
+  const ledgerAccountId = category === 'INCOME' ? accounts.receivable : accounts.payable;
+  return category === 'INCOME'
+    ? { debitAccountId: counterAccountId, creditAccountId: ledgerAccountId }
+    : { debitAccountId: ledgerAccountId, creditAccountId: counterAccountId };
+}
+
 // ─── 1. Auth ──────────────────────────────────────────────────────────────────
 
 async function seedAuth() {
@@ -176,19 +216,25 @@ async function seedTeaHouse() {
   for (const s of teaSales) await run(`Sale: ${s.clientName} (${s.dateAd})`, () => post('/api/v1/sales', s));
 
   console.log('\n🍵 Tea House — Transactions');
+  const teaAccounts = await ensureSystemAccounts(teaId);
   const teaTx = [
-    { companyId: teaId, type: 'BANK',  category: 'INCOME',   dateAd: '2025-01-20', amount: 6780,  description: 'Payment from Sunrise Hotel INV-001' },
-    { companyId: teaId, type: 'CASH',  category: 'INCOME',   dateAd: '2025-02-05', amount: 2700,  description: 'TU Canteen cash payment INV-002' },
-    { companyId: teaId, type: 'CASH',  category: 'EXPENSE',  dateAd: '2025-01-10', amount: 16000, description: 'Ilam Tea purchase PO-001' },
-    { companyId: teaId, type: 'CASH',  category: 'EXPENSE',  dateAd: '2025-01-15', amount: 4500,  description: 'Milk purchase PO-002' },
-    { companyId: teaId, type: 'BANK',  category: 'EXPENSE',  dateAd: '2025-01-31', amount: 56000, description: 'January staff salaries' },
-    { companyId: teaId, type: 'CASH',  category: 'EXPENSE',  dateAd: '2025-02-01', amount: 15000, description: 'Thamel shop rent - February' },
-    { companyId: teaId, type: 'CHEQUE',category: 'INCOME',   dateAd: '2025-02-15', amount: 14600, description: 'Mount View Resort payment INV-003' },
-    { companyId: teaId, type: 'CASH',  category: 'EXPENSE',  dateAd: '2025-03-01', amount: 5000,  description: 'Electricity bill March' },
-    { companyId: teaId, type: 'CASH',  category: 'INCOME',   dateAd: '2025-03-10', amount: 4000,  description: 'Pokhara Tea Garden INV-004' },
-    { companyId: teaId, type: 'CHEQUE',category: 'EXPENSE',  dateAd: '2025-02-01', amount: 2250,  description: 'Sugar purchase PO-003' },
+    { type: 'BANK',   category: 'INCOME',  dateAd: '2025-01-20', amount: 6780,  description: 'Payment from Sunrise Hotel INV-001', partyName: 'Sunrise Hotel' },
+    { type: 'CASH',   category: 'INCOME',  dateAd: '2025-02-05', amount: 2700,  description: 'TU Canteen cash payment INV-002', partyName: 'TU Students Canteen' },
+    { type: 'CASH',   category: 'EXPENSE', dateAd: '2025-01-10', amount: 16000, description: 'Ilam Tea purchase PO-001', partyName: 'Ilam Tea Suppliers' },
+    { type: 'CASH',   category: 'EXPENSE', dateAd: '2025-01-15', amount: 4500,  description: 'Milk purchase PO-002', partyName: 'Dairy Fresh Pvt Ltd' },
+    { type: 'BANK',   category: 'EXPENSE', dateAd: '2025-01-31', amount: 56000, description: 'January staff salaries' },
+    { type: 'CASH',   category: 'EXPENSE', dateAd: '2025-02-01', amount: 15000, description: 'Thamel shop rent - February' },
+    { type: 'CHEQUE', category: 'INCOME',  dateAd: '2025-02-15', amount: 14600, description: 'Mount View Resort payment INV-003', partyName: 'Mount View Resort' },
+    { type: 'CASH',   category: 'EXPENSE', dateAd: '2025-03-01', amount: 5000,  description: 'Electricity bill March' },
+    { type: 'QR',     category: 'INCOME',  dateAd: '2025-03-10', amount: 4000,  description: 'Pokhara Tea Garden INV-004', partyName: 'Pokhara Tea Garden' },
+    { type: 'CHEQUE', category: 'EXPENSE', dateAd: '2025-02-01', amount: 2250,  description: 'Sugar purchase PO-003', partyName: 'Himalayan Sugar Mills' },
+    { type: 'CREDIT', category: 'INCOME',  dateAd: '2025-03-20', amount: 8500,  description: 'Credit sale INV-005 — collection pending', partyName: 'Boudha Coffee & Tea', status: 'PENDING' },
+    { type: 'CREDIT', category: 'EXPENSE', dateAd: '2025-03-15', amount: 9000,  description: 'Credit purchase PO-004 — payment pending', partyName: 'Everest Snacks Co', status: 'PENDING' },
   ];
-  for (const t of teaTx) await run(`Transaction: ${t.description.substring(0, 40)}`, () => post('/api/v1/transactions', t));
+  for (const t of teaTx) {
+    const { debitAccountId, creditAccountId } = resolveTransactionAccounts(teaAccounts, t.type, t.category);
+    await run(`Transaction: ${t.description.substring(0, 40)}`, () => post('/api/v1/transactions', { ...t, companyId: teaId, debitAccountId, creditAccountId }));
+  }
 
   console.log('\n🍵 Tea House — Quotations');
   const teaQuotations = [
@@ -283,17 +329,24 @@ async function seedPharmacy() {
   for (const s of pharmSales) await run(`Sale: ${s.clientName} (${s.dateAd})`, () => post('/api/v1/sales', s));
 
   console.log('\n💊 Pharmacy — Transactions');
+  const pharmAccounts = await ensureSystemAccounts(pharmId);
   const pharmTx = [
-    { companyId: pharmId, type: 'BANK',  category: 'INCOME',  dateAd: '2025-01-15', amount: 1921,  description: 'Dr. Suresh Clinic PINV-001' },
-    { companyId: pharmId, type: 'BANK',  category: 'EXPENSE', dateAd: '2025-01-05', amount: 5537,  description: 'Shangrila Pharma PPO-001' },
-    { companyId: pharmId, type: 'BANK',  category: 'EXPENSE', dateAd: '2025-01-31', amount: 73000, description: 'January staff salaries' },
-    { companyId: pharmId, type: 'CASH',  category: 'EXPENSE', dateAd: '2025-02-01', amount: 25000, description: 'Baneshwor shop rent' },
-    { companyId: pharmId, type: 'CHEQUE',category: 'INCOME',  dateAd: '2025-02-01', amount: 7910,  description: 'Patan Hospital PINV-002' },
-    { companyId: pharmId, type: 'CASH',  category: 'INCOME',  dateAd: '2025-02-20', amount: 3450,  description: 'Gramin Swastha PINV-003' },
-    { companyId: pharmId, type: 'CHEQUE',category: 'EXPENSE', dateAd: '2025-02-10', amount: 2900,  description: 'Himalayan Herbals PPO-003' },
-    { companyId: pharmId, type: 'CASH',  category: 'EXPENSE', dateAd: '2025-03-01', amount: 8000,  description: 'Electricity + water bills' },
+    { type: 'BANK',   category: 'INCOME',  dateAd: '2025-01-15', amount: 1921,  description: 'Dr. Suresh Clinic PINV-001', partyName: 'Dr. Suresh Clinic' },
+    { type: 'BANK',   category: 'EXPENSE', dateAd: '2025-01-05', amount: 5537,  description: 'Shangrila Pharma PPO-001', partyName: 'Shangrila Pharma Distributors' },
+    { type: 'BANK',   category: 'EXPENSE', dateAd: '2025-01-31', amount: 73000, description: 'January staff salaries' },
+    { type: 'CASH',   category: 'EXPENSE', dateAd: '2025-02-01', amount: 25000, description: 'Baneshwor shop rent' },
+    { type: 'CHEQUE', category: 'INCOME',  dateAd: '2025-02-01', amount: 7910,  description: 'Patan Hospital PINV-002', partyName: 'Patan Hospital Pharmacy' },
+    { type: 'CASH',   category: 'INCOME',  dateAd: '2025-02-20', amount: 3450,  description: 'Gramin Swastha PINV-003', partyName: 'Gramin Swastha Kendra' },
+    { type: 'CHEQUE', category: 'EXPENSE', dateAd: '2025-02-10', amount: 2900,  description: 'Himalayan Herbals PPO-003', partyName: 'Himalayan Herbals Pvt Ltd' },
+    { type: 'CASH',   category: 'EXPENSE', dateAd: '2025-03-01', amount: 8000,  description: 'Electricity + water bills' },
+    { type: 'QR',     category: 'INCOME',  dateAd: '2025-03-15', amount: 5200,  description: 'Kathmandu Nursing Home PINV-004', partyName: 'Kathmandu Nursing Home' },
+    { type: 'CREDIT', category: 'INCOME',  dateAd: '2025-04-05', amount: 6300,  description: 'Credit sale PINV-005 — collection pending', partyName: 'Dr. Suresh Clinic', status: 'PENDING' },
+    { type: 'CREDIT', category: 'EXPENSE', dateAd: '2025-03-25', amount: 4800,  description: 'Credit purchase PPO-004 — payment pending', partyName: 'MediCare Imports', status: 'PENDING' },
   ];
-  for (const t of pharmTx) await run(`Transaction: ${t.description.substring(0, 40)}`, () => post('/api/v1/transactions', t));
+  for (const t of pharmTx) {
+    const { debitAccountId, creditAccountId } = resolveTransactionAccounts(pharmAccounts, t.type, t.category);
+    await run(`Transaction: ${t.description.substring(0, 40)}`, () => post('/api/v1/transactions', { ...t, companyId: pharmId, debitAccountId, creditAccountId }));
+  }
 
   console.log('\n💊 Pharmacy — Quotations');
   const pharmQuotations = [
@@ -322,7 +375,7 @@ async function verify() {
     { label: 'Tea House — Employees',    path: `/api/v1/employees?companyId=${teaId}`,      expected: 5 },
     { label: 'Tea House — Purchases',    path: `/api/v1/purchases?companyId=${teaId}`,      expected: 6 },
     { label: 'Tea House — Sales',        path: `/api/v1/sales?companyId=${teaId}`,          expected: 8 },
-    { label: 'Tea House — Transactions', path: `/api/v1/transactions?companyId=${teaId}`,   expected: 10 },
+    { label: 'Tea House — Transactions', path: `/api/v1/transactions?companyId=${teaId}`,   expected: 12 },
     { label: 'Tea House — Quotations',   path: `/api/v1/quotations?companyId=${teaId}`,     expected: 3 },
     { label: 'Tea House — Tasks',        path: `/api/v1/tasks?companyId=${teaId}`,          expected: 4 },
     { label: 'Pharmacy — Vendors',       path: `/api/v1/vendors?companyId=${pharmId}`,      expected: 4 },
@@ -331,7 +384,7 @@ async function verify() {
     { label: 'Pharmacy — Employees',     path: `/api/v1/employees?companyId=${pharmId}`,    expected: 5 },
     { label: 'Pharmacy — Purchases',     path: `/api/v1/purchases?companyId=${pharmId}`,    expected: 5 },
     { label: 'Pharmacy — Sales',         path: `/api/v1/sales?companyId=${pharmId}`,        expected: 6 },
-    { label: 'Pharmacy — Transactions',  path: `/api/v1/transactions?companyId=${pharmId}`, expected: 8 },
+    { label: 'Pharmacy — Transactions',  path: `/api/v1/transactions?companyId=${pharmId}`, expected: 10 },
     { label: 'Pharmacy — Quotations',    path: `/api/v1/quotations?companyId=${pharmId}`,   expected: 2 },
     { label: 'Pharmacy — Tasks',         path: `/api/v1/tasks?companyId=${pharmId}`,        expected: 3 },
   ];
