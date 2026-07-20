@@ -65,9 +65,11 @@ export default function TopBar({ onMobileMenuToggle, onToolOpen }) {
       setActiveCompanyId(companyList[0].id);
     }
     // Pre-load unread count so the badge is right before the dropdown ever opens
-    notificationsApi.unreadCount()
-      .then(res => setUnreadCount(res?.data ?? 0))
-      .catch(() => {});
+    if (import.meta.env.VITE_ENABLE_NOTIFICATIONS === 'true') {
+      notificationsApi.unreadCount()
+        .then(res => setUnreadCount(res?.data ?? 0))
+        .catch(() => {});
+    }
   }
 
   async function loadNotifications() {
@@ -330,6 +332,7 @@ export default function TopBar({ onMobileMenuToggle, onToolOpen }) {
         </Button>
 
         {/* ── Notifications Bell ── */}
+        {import.meta.env.VITE_ENABLE_NOTIFICATIONS === 'true' && (
         <DropdownMenu onOpenChange={open => { if (open) loadNotifications(); }}>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground relative">
@@ -390,6 +393,7 @@ export default function TopBar({ onMobileMenuToggle, onToolOpen }) {
             )}
           </DropdownMenuContent>
         </DropdownMenu>
+        )}
 
         {/* User Menu */}
         <DropdownMenu>
