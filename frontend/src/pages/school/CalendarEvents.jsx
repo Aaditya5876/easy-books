@@ -13,7 +13,7 @@ export default function CalendarEvents() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold">Calendar and Events</h1>
-          <p className="text-sm text-muted-foreground">Manage academic years, events and view AD/BS calendars together.</p>
+          <p className="text-sm text-muted-foreground">Manage academic years, events and browse the school calendar in AD or BS.</p>
         </div>
         <div className="flex gap-2">
           <Button variant={view==='calendar'? 'default':'ghost'} onClick={() => setView('calendar')}>Calendar</Button>
@@ -24,15 +24,8 @@ export default function CalendarEvents() {
       </div>
 
       {view === 'calendar' && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="rounded-lg border p-4">
-            <h3 className="font-medium mb-2">{calendarMode} Calendar</h3>
-            <CalendarPage mode={calendarMode} />
-          </div>
-          <div className="rounded-lg border p-4">
-            <h3 className="font-medium mb-2">Alternate Calendar ({calendarMode === 'AD' ? 'BS' : 'AD'})</h3>
-            <CalendarPage mode={calendarMode === 'AD' ? 'BS' : 'AD'} />
-          </div>
+        <div className="rounded-lg border p-4">
+          <CalendarPage mode={calendarMode} />
         </div>
       )}
 

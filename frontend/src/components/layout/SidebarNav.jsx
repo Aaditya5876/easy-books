@@ -4,7 +4,7 @@ import {
   LayoutDashboard, BookOpen, ArrowLeftRight, Users, UserCheck,
   Package, ShoppingCart, Receipt, FileText, MessageSquare,
   FileSpreadsheet, CalendarCheck, Banknote,
-  ChevronLeft, ChevronRight, Building2, ChevronDown, ClipboardList, BarChart2,
+  ChevronLeft, ChevronRight, ChevronDown, ClipboardList, BarChart2,
   Kanban, UserCircle, Settings, Shield,
   GraduationCap, School, BookMarked, DollarSign, Trophy,
   Megaphone, CalendarDays, CalendarCheck2,
@@ -233,15 +233,13 @@ export default function SidebarNav({ collapsed, onToggle }) {
     >
       {/* Logo */}
       <div className={cn(
-        "flex items-center gap-3 px-4 h-16 border-b shrink-0",
+        "flex items-center gap-3 px-4 h-20 border-b shrink-0",
         hasBgColor ? "border-white/10" : "border-sidebar-border"
       )}>
         {prefs.companyLogoUrl ? (
-          <img src={prefs.companyLogoUrl} alt="Company" className="w-8 h-8 rounded-lg object-cover shrink-0 ring-1 ring-white/20" />
+          <img src={prefs.companyLogoUrl} alt="Company" className="w-16 h-16 rounded-lg object-cover shrink-0 ring-1 ring-white/20" />
         ) : (
-          <div className="w-8 h-8 rounded-lg bg-sidebar-primary flex items-center justify-center shrink-0">
-            <Building2 className="w-4 h-4 text-sidebar-primary-foreground" />
-          </div>
+          <img src="/logo-icon.png" alt="EasyBooks" className="w-16 h-16 object-contain shrink-0" />
         )}
         {!collapsed && (
           <div className="animate-fade-in">

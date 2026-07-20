@@ -4,7 +4,7 @@
 // Make sure backend is running on http://localhost:3000
 
 const BASE = 'http://localhost:3000';
-const ADMIN_EMAIL    = process.argv[2] || 'aadityajoshi5876@gmail.com';
+const ADMIN_EMAIL    = process.argv[2] || 'geoinfosys.np@gmail.com';
 const ADMIN_PASSWORD = process.argv[3] || 'Test@123';
 
 let cookies = '';

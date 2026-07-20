@@ -40,6 +40,17 @@ export function bsToAd(bsYear, bsMonth, bsDay) {
   return new NepaliDate(bsYear, bsMonth - 1, bsDay).toJsDate();
 }
 
+// Number of days in a given BS month (29-32, varies by year) — derived from the
+// real calendar table via the AD gap between this month's start and the next,
+// rather than guessed, since BS month lengths aren't a fixed pattern.
+export function daysInBsMonth(bsYear, bsMonth) {
+  const thisStart = bsToAd(bsYear, bsMonth, 1);
+  const nextYear = bsMonth === 12 ? bsYear + 1 : bsYear;
+  const nextMonth = bsMonth === 12 ? 1 : bsMonth + 1;
+  const nextStart = bsToAd(nextYear, nextMonth, 1);
+  return Math.round((nextStart - thisStart) / 86400000);
+}
+
 // Format BS date string
 export function formatBsDate(bsDateStr) {
   if (!bsDateStr) return '';

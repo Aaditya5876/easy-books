@@ -268,12 +268,7 @@ export default function Login() {
         <div className="h-1 bg-gradient-to-r from-primary via-blue-500 to-indigo-400" />
 
         <CardHeader className="text-center pb-2">
-          <div
-            className="w-12 h-12 rounded-2xl flex items-center justify-center mx-auto mb-3 shadow-lg"
-            style={{ background: 'linear-gradient(135deg, hsl(217 71% 28%), hsl(217 71% 45%))' }}
-          >
-            <span className="text-white font-bold text-xl drop-shadow">E</span>
-          </div>
+          <img src="/logo-icon.png" alt="Easy Books" className="w-12 h-12 object-contain mx-auto mb-3 drop-shadow-lg" />
           <CardTitle className="text-xl">Easy Books</CardTitle>
           <p className="text-sm text-muted-foreground">Nepal Accounting Software</p>
         </CardHeader>
