@@ -19,14 +19,19 @@ async function bootstrap() {
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   });
 
+  const isProduction = process.env.NODE_ENV === 'production';
+  const envLabel = isProduction ? 'Production' : 'Development';
+
   const swaggerConfig = new DocumentBuilder()
-    .setTitle('Easy Books API')
+    .setTitle(`Easy Books API (${envLabel})`)
     .setDescription('Accounting & Inventory Management API — Nepal')
     .setVersion('1.0')
     .addBearerAuth()
     .addCookieAuth('accessToken')
     .addTag('Auth')
+    .addTag('Users')
     .addTag('Companies')
+    .addTag('Dashboard')
     .addTag('Inventory')
     .addTag('Sales')
     .addTag('Purchases')
@@ -35,20 +40,26 @@ async function bootstrap() {
     .addTag('Debit Notes')
     .addTag('Clients')
     .addTag('Vendors')
+    .addTag('Quotations')
+    .addTag('Memos')
+    .addTag('Tasks')
     .addTag('Employees')
     .addTag('Attendance')
     .addTag('Leave')
     .addTag('Payroll')
-    .addTag('Ledger')
+    .addTag('Ledger Accounts')
+    .addTag('Ledger Entries')
     .addTag('Transactions')
     .addTag('Bank Accounts')
     .addTag('Cheques')
     .addTag('Bank Guarantees')
     .addTag('Petty Cash')
-    .addTag('Quotations')
+    .addTag('School')
+    .addTag('Notifications')
+    .addTag('Portal')
+    .addTag('AI')
+    .addTag('Bulk Import')
     .addTag('Upload')
-    .addTag('Memos')
-    .addTag('Tasks')
     .build();
 
   const document = SwaggerModule.createDocument(app, swaggerConfig);
@@ -58,7 +69,7 @@ async function bootstrap() {
 
   const port = process.env.PORT || 3000;
   await app.listen(port);
-  console.log(`Easy Books API running on http://localhost:${port}`);
+  console.log(`Easy Books API (${envLabel}) running on http://localhost:${port}`);
   console.log(`Swagger docs at http://localhost:${port}/docs`);
 }
 
