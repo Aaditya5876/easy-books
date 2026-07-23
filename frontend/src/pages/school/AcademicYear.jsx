@@ -30,6 +30,8 @@ function AcademicYearDialog({ open, onClose, year }) {
     isCurrent: year?.isCurrent || false,
   });
 
+  const [errors, setErrors] = useState({});
+
   const save = useMutation({
     mutationFn: (d) =>
       isEdit
@@ -45,9 +47,15 @@ function AcademicYearDialog({ open, onClose, year }) {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (!form.name.trim() || !form.startDate || !form.endDate) {
+    const errs = {};
+    if (!form.name.trim()) errs.name = t('years.nameRequired', { defaultValue: 'Year name is required' });
+    if (!form.startDate) errs.startDate = t('years.startDateRequired', { defaultValue: 'Start date is required' });
+    if (!form.endDate) errs.endDate = t('years.endDateRequired', { defaultValue: 'End date is required' });
+    if (Object.keys(errs).length) {
+      setErrors(errs);
       return toast.error(t('years.fieldsRequired', { defaultValue: 'Name, start date and end date are required' }));
     }
+    setErrors({});
     save.mutate(form);
   };
 
@@ -62,9 +70,10 @@ function AcademicYearDialog({ open, onClose, year }) {
             <Label>{t('years.yearName', { defaultValue: 'Year Name *' })}</Label>
             <Input
               value={form.name}
-              onChange={e => setForm(p => ({ ...p, name: e.target.value }))}
+              onChange={e => { setForm(p => ({ ...p, name: e.target.value })); if (errors.name) setErrors(er => ({ ...er, name: undefined })); }}
               placeholder={t('years.yearNamePlaceholder', { defaultValue: 'e.g. 2081-82' })}
             />
+            {errors.name && <p className="text-xs text-red-600">{errors.name}</p>}
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
@@ -72,16 +81,18 @@ function AcademicYearDialog({ open, onClose, year }) {
               <Input
                 type="date"
                 value={form.startDate}
-                onChange={e => setForm(p => ({ ...p, startDate: e.target.value }))}
+                onChange={e => { setForm(p => ({ ...p, startDate: e.target.value })); if (errors.startDate) setErrors(er => ({ ...er, startDate: undefined })); }}
               />
+              {errors.startDate && <p className="text-xs text-red-600">{errors.startDate}</p>}
             </div>
             <div className="space-y-1">
               <Label>{t('years.endDate', { defaultValue: 'End Date *' })}</Label>
               <Input
                 type="date"
                 value={form.endDate}
-                onChange={e => setForm(p => ({ ...p, endDate: e.target.value }))}
+                onChange={e => { setForm(p => ({ ...p, endDate: e.target.value })); if (errors.endDate) setErrors(er => ({ ...er, endDate: undefined })); }}
               />
+              {errors.endDate && <p className="text-xs text-red-600">{errors.endDate}</p>}
             </div>
           </div>
           <div className="flex items-center gap-3">

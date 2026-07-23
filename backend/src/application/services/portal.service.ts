@@ -123,4 +123,30 @@ export class PortalService {
       orderBy: [{ dayOfWeek: 'asc' }, { periodNumber: 'asc' }],
     });
   }
+
+  async getStudyMaterials(classId: string, companyId: string, subjectId?: string) {
+    return this.prisma.studyMaterial.findMany({
+      // classId null on a material means "all classes" — include those alongside
+      // materials targeted specifically at the student's own class.
+      where: { companyId, OR: [{ classId }, { classId: null }], ...(subjectId ? { subjectId } : {}) },
+      include: { subject: true, class: { select: { name: true, section: true } } },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async getExamSchedule(classId: string, companyId: string) {
+    return this.prisma.examSchedule.findMany({
+      where: { classId, companyId },
+      include: { subject: true },
+      orderBy: { examDate: 'asc' },
+    });
+  }
+
+  async getEvents(companyId: string) {
+    return this.prisma.schoolEvent.findMany({
+      where: { companyId },
+      orderBy: { startDate: 'asc' },
+      take: 50,
+    });
+  }
 }

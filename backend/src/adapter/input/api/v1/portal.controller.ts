@@ -89,6 +89,27 @@ export class PortalController {
     return this.portalService.getTimetable(classId || req.portalUser.classId, req.portalUser.companyId);
   }
 
+  @Public()
+  @UseGuards(PortalGuard)
+  @Get('study-materials')
+  studyMaterials(@Req() req: any, @Query('classId') classId?: string, @Query('subjectId') subjectId?: string) {
+    return this.portalService.getStudyMaterials(classId || req.portalUser.classId, req.portalUser.companyId, subjectId);
+  }
+
+  @Public()
+  @UseGuards(PortalGuard)
+  @Get('exam-schedule')
+  examSchedule(@Req() req: any, @Query('classId') classId?: string) {
+    return this.portalService.getExamSchedule(classId || req.portalUser.classId, req.portalUser.companyId);
+  }
+
+  @Public()
+  @UseGuards(PortalGuard)
+  @Get('events')
+  events(@Req() req: any) {
+    return this.portalService.getEvents(req.portalUser.companyId);
+  }
+
   // ── Payment — eSewa ────────────────────────────────────────────────────────
 
   @Public()

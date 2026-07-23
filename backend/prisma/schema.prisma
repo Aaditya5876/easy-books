@@ -868,18 +868,38 @@ model Quotation {
 }
 
 model MemoDocument {
-  id           String    @id @default(uuid())
-  companyId    String
-  company      Company   @relation(fields: [companyId], references: [id])
-  title        String
-  content      String?
-  dateAd       DateTime
-  dateBs       String?
-  documentType String?
-  attachments  Json?
-  deletedAt    DateTime?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  id              String    @id @default(uuid())
+  companyId       String
+  company         Company   @relation(fields: [companyId], references: [id])
+  category        String? // quotation | purchase_bill | sales_bill | job_card | order_slip | extra_work | supporting_doc
+  title           String?
+  content         String?
+  dateAd          DateTime
+  dateBs          String?
+  documentType    String?
+  attachments     Json?
+  referenceId     String?
+  clientName      String?
+  clientContact   String?
+  clientAddress   String?
+  vendorName      String?
+  vendorContact   String?
+  vendorPan       String?
+  assignedTo      String?
+  startDate       DateTime?
+  endDate         DateTime?
+  deliveryDate    DateTime?
+  dueDate         DateTime?
+  validUntil      DateTime?
+  docType         String?
+  linkedReference String?
+  description     String?
+  amount          Decimal?  @db.Decimal(12, 2)
+  documentUrl     String?
+  status          String?
+  deletedAt       DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
   @@map("memo_documents")
 }

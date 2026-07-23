@@ -28,6 +28,7 @@ function FeeStructureDialog({ open, onClose, initial, classes, companyId }) {
       : { name: '', amount: '', frequency: 'MONTHLY', classId: '', feeHeadId: '' }
   );
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const [errors, setErrors] = useState({});
 
   const { data: feeHeads = [] } = useQuery({
     queryKey: ['fee-heads'],
@@ -47,8 +48,15 @@ function FeeStructureDialog({ open, onClose, initial, classes, companyId }) {
 
   function handleSubmit(e) {
     e.preventDefault();
-    if (!form.name.trim()) { toast.error(t('fees.feeNameRequired', { defaultValue: 'Fee name is required' })); return; }
-    if (!form.amount || isNaN(form.amount)) { toast.error(t('fees.validAmountRequired', { defaultValue: 'Valid amount required' })); return; }
+    const errs = {};
+    if (!form.name.trim()) errs.name = t('fees.feeNameRequired', { defaultValue: 'Fee name is required' });
+    if (!form.amount || isNaN(form.amount)) errs.amount = t('fees.validAmountRequired', { defaultValue: 'Valid amount required' });
+    if (Object.keys(errs).length) {
+      setErrors(errs);
+      toast.error(Object.values(errs)[0]);
+      return;
+    }
+    setErrors({});
     save.mutate({ ...form, amount: parseFloat(form.amount), companyId });
   }
 
@@ -61,7 +69,8 @@ function FeeStructureDialog({ open, onClose, initial, classes, companyId }) {
         <form onSubmit={handleSubmit} className="space-y-4 pt-2">
           <div className="space-y-1.5">
             <Label>{t('fees.feeNameRequiredLabel', { defaultValue: 'Fee Name *' })}</Label>
-            <Input placeholder={t('fees.feeNamePlaceholder', { defaultValue: 'e.g. Tuition Fee, Exam Fee, Bus Fee' })} value={form.name} onChange={e => set('name', e.target.value)} />
+            <Input placeholder={t('fees.feeNamePlaceholder', { defaultValue: 'e.g. Tuition Fee, Exam Fee, Bus Fee' })} value={form.name} onChange={e => { set('name', e.target.value); if (errors.name) setErrors(er => ({ ...er, name: undefined })); }} />
+            {errors.name && <p className="text-xs text-red-600">{errors.name}</p>}
           </div>
           <div className="space-y-1.5">
             <Label>{t('fees.feeHead', { defaultValue: 'Fee Head' })} <span className="text-muted-foreground">{t('fees.forReporting', { defaultValue: '(groups income reports)' })}</span></Label>
@@ -78,7 +87,8 @@ function FeeStructureDialog({ open, onClose, initial, classes, companyId }) {
           </div>
           <div className="space-y-1.5">
             <Label>{t('fees.amountNprLabel', { defaultValue: 'Amount (NPR) *' })}</Label>
-            <Input type="number" placeholder="0.00" value={form.amount} onChange={e => set('amount', e.target.value)} />
+            <Input type="number" placeholder="0.00" value={form.amount} onChange={e => { set('amount', e.target.value); if (errors.amount) setErrors(er => ({ ...er, amount: undefined })); }} />
+            {errors.amount && <p className="text-xs text-red-600">{errors.amount}</p>}
           </div>
           <div className="space-y-1.5">
             <Label>{t('fees.frequency', { defaultValue: 'Frequency' })}</Label>
@@ -126,6 +136,7 @@ function PaymentDialog({ open, onClose, invoice }) {
   const [method, setMethod] = useState('CASH');
   const [notes, setNotes] = useState('');
   const [bankAccountId, setBankAccountId] = useState('');
+  const [errors, setErrors] = useState({});
 
   const { data: bankAccounts = [] } = useQuery({
     queryKey: ['bank-accounts'],
@@ -153,9 +164,16 @@ function PaymentDialog({ open, onClose, invoice }) {
   function handleSubmit(e) {
     e.preventDefault();
     const amt = parseFloat(amount);
-    if (!amt || amt <= 0) { toast.error(t('fees.enterValidPaymentAmount', { defaultValue: 'Enter a valid payment amount' })); return; }
-    if (amt > remaining) { toast.error(t('fees.cannotExceedRemaining', { defaultValue: 'Cannot exceed remaining amount: Rs. {{amount}}', amount: remaining.toFixed(2) })); return; }
-    if (method === 'BANK' && !bankAccountId) { toast.error(t('fees.selectBankAccount', { defaultValue: 'Select which bank account received this payment' })); return; }
+    const errs = {};
+    if (!amt || amt <= 0) errs.amount = t('fees.enterValidPaymentAmount', { defaultValue: 'Enter a valid payment amount' });
+    else if (amt > remaining) errs.amount = t('fees.cannotExceedRemaining', { defaultValue: 'Cannot exceed remaining amount: Rs. {{amount}}', amount: remaining.toFixed(2) });
+    if (method === 'BANK' && !bankAccountId) errs.bankAccountId = t('fees.selectBankAccount', { defaultValue: 'Select which bank account received this payment' });
+    if (Object.keys(errs).length) {
+      setErrors(errs);
+      toast.error(Object.values(errs)[0]);
+      return;
+    }
+    setErrors({});
     pay.mutate({ amount: amt, method, notes, bankAccountId: method === 'BANK' ? bankAccountId : undefined });
   }
 
@@ -181,8 +199,9 @@ function PaymentDialog({ open, onClose, invoice }) {
               type="number"
               placeholder={t('fees.maxPlaceholder', { defaultValue: 'Max: {{amount}}', amount: remaining.toFixed(2) })}
               value={amount}
-              onChange={e => setAmount(e.target.value)}
+              onChange={e => { setAmount(e.target.value); if (errors.amount) setErrors(er => ({ ...er, amount: undefined })); }}
             />
+            {errors.amount && <p className="text-xs text-red-600">{errors.amount}</p>}
           </div>
           <div className="space-y-1.5">
             <Label>{t('fees.paymentMethod', { defaultValue: 'Payment Method' })}</Label>
@@ -196,12 +215,13 @@ function PaymentDialog({ open, onClose, invoice }) {
           {method === 'BANK' && (
             <div className="space-y-1.5">
               <Label>{t('fees.bankAccount', { defaultValue: 'Bank Account *' })}</Label>
-              <select className="w-full border rounded-md px-3 py-2 text-sm bg-background" value={bankAccountId} onChange={e => setBankAccountId(e.target.value)}>
+              <select className="w-full border rounded-md px-3 py-2 text-sm bg-background" value={bankAccountId} onChange={e => { setBankAccountId(e.target.value); if (errors.bankAccountId) setErrors(er => ({ ...er, bankAccountId: undefined })); }}>
                 <option value="">{t('fees.chooseBankAccount', { defaultValue: 'Choose bank account…' })}</option>
                 {bankAccounts.map(b => (
                   <option key={b.id} value={b.id}>{b.bankName || b.bank_name} — {b.accountNumber || b.account_number}</option>
                 ))}
               </select>
+              {errors.bankAccountId && <p className="text-xs text-red-600">{errors.bankAccountId}</p>}
               {bankAccounts.length === 0 && (
                 <p className="text-xs text-muted-foreground">{t('fees.noBankAccountsHint', { defaultValue: 'No bank accounts yet — add one in Transactions → Bank tab.' })}</p>
               )}
@@ -231,6 +251,7 @@ function BillingRunDialog({ open, onClose, classes }) {
   const { t } = useTranslation();
   const qc = useQueryClient();
   const [form, setForm] = useState({ month: '', classId: '', dueDate: '' });
+  const [errors, setErrors] = useState({});
 
   const run = useMutation({
     mutationFn: () => schoolFinanceApi.billingRun({
@@ -253,7 +274,12 @@ function BillingRunDialog({ open, onClose, classes }) {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (!form.month.trim()) return toast.error(t('fees.monthRequired', { defaultValue: 'Month is required' }));
+    if (!form.month.trim()) {
+      const msg = t('fees.monthRequired', { defaultValue: 'Month is required' });
+      setErrors({ month: msg });
+      return toast.error(msg);
+    }
+    setErrors({});
     run.mutate();
   };
 
@@ -269,7 +295,8 @@ function BillingRunDialog({ open, onClose, classes }) {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-1.5">
             <Label>{t('fees.monthPeriodLabel', { defaultValue: 'Month / Period *' })}</Label>
-            <Input placeholder={t('fees.monthPlaceholder', { defaultValue: 'e.g. 2081-Bhadra' })} value={form.month} onChange={e => setForm(f => ({ ...f, month: e.target.value }))} />
+            <Input placeholder={t('fees.monthPlaceholder', { defaultValue: 'e.g. 2081-Bhadra' })} value={form.month} onChange={e => { setForm(f => ({ ...f, month: e.target.value })); if (errors.month) setErrors({}); }} />
+            {errors.month && <p className="text-xs text-red-600">{errors.month}</p>}
           </div>
           <div className="space-y-1.5">
             <Label>{t('fees.classOptional', { defaultValue: 'Class (optional — blank = whole school)' })}</Label>
@@ -307,6 +334,7 @@ function NewInvoiceDialog({ open, onClose, classes, companyId }) {
   const [studentId, setStudentId] = useState('');
   const [month, setMonth] = useState('');
   const [rows, setRows] = useState([newFeeRow()]);
+  const [errors, setErrors] = useState({});
 
   const { data: feeHeads = [] } = useQuery({
     queryKey: ['fee-heads'],
@@ -344,8 +372,15 @@ function NewInvoiceDialog({ open, onClose, classes, companyId }) {
 
   function handleSubmit(e) {
     e.preventDefault();
-    if (!studentId) { toast.error(t('fees.selectAStudent', { defaultValue: 'Select a student' })); return; }
-    if (!month.trim()) { toast.error(t('fees.monthRequired', { defaultValue: 'Month is required' })); return; }
+    const errs = {};
+    if (!studentId) errs.studentId = t('fees.selectAStudent', { defaultValue: 'Select a student' });
+    if (!month.trim()) errs.month = t('fees.monthRequired', { defaultValue: 'Month is required' });
+    if (Object.keys(errs).length) {
+      setErrors(errs);
+      toast.error(Object.values(errs)[0]);
+      return;
+    }
+    setErrors({});
     for (const r of rows) {
       if (r.kind === 'ITEM' && !r.inventoryItemId) { toast.error(t('fees.selectAnItem', { defaultValue: 'Select an item for every item row' })); return; }
       if (r.kind === 'FEE' && !r.description.trim()) { toast.error(t('fees.descriptionRequiredForFeeRow', { defaultValue: 'Description is required for every fee row' })); return; }
@@ -377,13 +412,15 @@ function NewInvoiceDialog({ open, onClose, classes, companyId }) {
             <Label>{t('fees.studentRequiredLabel', { defaultValue: 'Student *' })}</Label>
             <StudentCombobox
               value={studentId}
-              onChange={setStudentId}
+              onChange={v => { setStudentId(v); if (errors.studentId) setErrors(er => ({ ...er, studentId: undefined })); }}
               placeholder={t('fees.selectStudent', { defaultValue: 'Select student…' })}
             />
+            {errors.studentId && <p className="text-xs text-red-600">{errors.studentId}</p>}
           </div>
           <div className="space-y-1.5">
             <Label>{t('fees.monthPeriodLabel', { defaultValue: 'Month / Period *' })}</Label>
-            <Input placeholder={t('fees.monthPlaceholderLong', { defaultValue: 'e.g. 2081-Bhadra or Term 1 2081' })} value={month} onChange={e => setMonth(e.target.value)} />
+            <Input placeholder={t('fees.monthPlaceholderLong', { defaultValue: 'e.g. 2081-Bhadra or Term 1 2081' })} value={month} onChange={e => { setMonth(e.target.value); if (errors.month) setErrors(er => ({ ...er, month: undefined })); }} />
+            {errors.month && <p className="text-xs text-red-600">{errors.month}</p>}
           </div>
 
           <div className="space-y-2">

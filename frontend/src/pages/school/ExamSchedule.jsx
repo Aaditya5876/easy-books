@@ -35,6 +35,7 @@ function EditScheduleDialog({ open, onClose, entry, classes, subjects }) {
     roomNumber: entry?.roomNumber || '',
     notes: entry?.notes || '',
   });
+  const [errors, setErrors] = useState({});
 
   const save = useMutation({
     mutationFn: (d) => examSchedulesApi.update(entry.id, d),
@@ -48,8 +49,15 @@ function EditScheduleDialog({ open, onClose, entry, classes, subjects }) {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (!form.examName.trim() || !form.classId || !form.examDate)
+    const errs = {};
+    if (!form.examName.trim()) errs.examName = t('examSchedule.examNameRequiredMsg', { defaultValue: 'Exam name is required' });
+    if (!form.classId) errs.classId = t('examSchedule.classRequiredMsg', { defaultValue: 'Class is required' });
+    if (!form.examDate) errs.examDate = t('examSchedule.dateRequiredMsg', { defaultValue: 'Exam date is required' });
+    if (Object.keys(errs).length) {
+      setErrors(errs);
       return toast.error(t('examSchedule.requiredFields', { defaultValue: 'Exam name, class and date are required' }));
+    }
+    setErrors({});
     save.mutate({
       ...form,
       subjectId: form.subjectId || undefined,
@@ -69,17 +77,19 @@ function EditScheduleDialog({ open, onClose, entry, classes, subjects }) {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-1">
             <Label>{t('examSchedule.examNameRequired', { defaultValue: 'Exam Name *' })}</Label>
-            <Input value={form.examName} onChange={e => setForm(p => ({ ...p, examName: e.target.value }))} placeholder={t('examSchedule.examNamePlaceholder', { defaultValue: 'e.g. First Terminal 2082' })} />
+            <Input value={form.examName} onChange={e => { setForm(p => ({ ...p, examName: e.target.value })); if (errors.examName) setErrors(er => ({ ...er, examName: undefined })); }} placeholder={t('examSchedule.examNamePlaceholder', { defaultValue: 'e.g. First Terminal 2082' })} />
+            {errors.examName && <p className="text-xs text-red-600">{errors.examName}</p>}
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
               <Label>{t('examSchedule.classRequired', { defaultValue: 'Class *' })}</Label>
-              <Select value={form.classId} onValueChange={v => setForm(p => ({ ...p, classId: v }))}>
+              <Select value={form.classId} onValueChange={v => { setForm(p => ({ ...p, classId: v })); if (errors.classId) setErrors(er => ({ ...er, classId: undefined })); }}>
                 <SelectTrigger><SelectValue placeholder={t('examSchedule.selectClass', { defaultValue: 'Select class' })} /></SelectTrigger>
                 <SelectContent>
                   {classes.map(c => <SelectItem key={c.id} value={c.id}>{classLabel(c)}</SelectItem>)}
                 </SelectContent>
               </Select>
+              {errors.classId && <p className="text-xs text-red-600">{errors.classId}</p>}
             </div>
             <div className="space-y-1">
               <Label>{t('examSchedule.subject', { defaultValue: 'Subject' })}</Label>
@@ -93,8 +103,9 @@ function EditScheduleDialog({ open, onClose, entry, classes, subjects }) {
           </div>
           <div className="space-y-1">
             <Label>{t('examSchedule.examDateRequired', { defaultValue: 'Exam Date *' })}</Label>
-            <input type="date" value={form.examDate} onChange={e => setForm(p => ({ ...p, examDate: e.target.value }))}
+            <input type="date" value={form.examDate} onChange={e => { setForm(p => ({ ...p, examDate: e.target.value })); if (errors.examDate) setErrors(er => ({ ...er, examDate: undefined })); }}
               className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm" />
+            {errors.examDate && <p className="text-xs text-red-600">{errors.examDate}</p>}
           </div>
           <div className="grid grid-cols-3 gap-3">
             <div className="space-y-1">
@@ -137,6 +148,7 @@ function NewScheduleDialog({ open, onClose, classes, subjects }) {
   const [examName, setExamName] = useState('');
   const [classId, setClassId] = useState('');
   const [rows, setRows] = useState([newSubjectRow()]);
+  const [errors, setErrors] = useState({});
 
   const updateRow = (key, patch) => setRows(rs => rs.map(r => r.key === key ? { ...r, ...patch } : r));
   const addRow = () => setRows(rs => [...rs, newSubjectRow()]);
@@ -161,7 +173,14 @@ function NewScheduleDialog({ open, onClose, classes, subjects }) {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (!examName.trim() || !classId) return toast.error(t('examSchedule.requiredFields', { defaultValue: 'Exam name, class and date are required' }));
+    const errs = {};
+    if (!examName.trim()) errs.examName = t('examSchedule.examNameRequiredMsg', { defaultValue: 'Exam name is required' });
+    if (!classId) errs.classId = t('examSchedule.classRequiredMsg', { defaultValue: 'Class is required' });
+    if (Object.keys(errs).length) {
+      setErrors(errs);
+      return toast.error(t('examSchedule.requiredFields', { defaultValue: 'Exam name, class and date are required' }));
+    }
+    setErrors({});
     if (rows.some(r => !r.examDate)) return toast.error(t('examSchedule.dateRequiredAllRows', { defaultValue: 'Enter a date for every subject row' }));
     save.mutate();
   };
@@ -176,16 +195,18 @@ function NewScheduleDialog({ open, onClose, classes, subjects }) {
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
               <Label>{t('examSchedule.examNameRequired', { defaultValue: 'Exam Name *' })}</Label>
-              <Input value={examName} onChange={e => setExamName(e.target.value)} placeholder={t('examSchedule.examNamePlaceholder', { defaultValue: 'e.g. First Terminal 2082' })} />
+              <Input value={examName} onChange={e => { setExamName(e.target.value); if (errors.examName) setErrors(er => ({ ...er, examName: undefined })); }} placeholder={t('examSchedule.examNamePlaceholder', { defaultValue: 'e.g. First Terminal 2082' })} />
+              {errors.examName && <p className="text-xs text-red-600">{errors.examName}</p>}
             </div>
             <div className="space-y-1">
               <Label>{t('examSchedule.classRequired', { defaultValue: 'Class *' })}</Label>
-              <Select value={classId} onValueChange={setClassId}>
+              <Select value={classId} onValueChange={v => { setClassId(v); if (errors.classId) setErrors(er => ({ ...er, classId: undefined })); }}>
                 <SelectTrigger><SelectValue placeholder={t('examSchedule.selectClass', { defaultValue: 'Select class' })} /></SelectTrigger>
                 <SelectContent>
                   {classes.map(c => <SelectItem key={c.id} value={c.id}>{classLabel(c)}</SelectItem>)}
                 </SelectContent>
               </Select>
+              {errors.classId && <p className="text-xs text-red-600">{errors.classId}</p>}
             </div>
           </div>
 

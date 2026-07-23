@@ -4,18 +4,22 @@ import { AnimatePresence, motion } from 'framer-motion';
 import {
   LayoutDashboard, CalendarCheck, DollarSign, Trophy,
   ClipboardList, Megaphone, Clock, LogOut, BookOpen,
+  FolderOpen, GraduationCap, CalendarDays,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useTranslation } from 'react-i18next';
 
 const NAV = [
-  { icon: LayoutDashboard, label: 'Home',       labelKey: 'portal.home',       path: '/portal',            color: '#3B82F6' },
-  { icon: CalendarCheck,   label: 'Attendance', labelKey: 'portal.attendance', path: '/portal/attendance', color: '#10B981' },
-  { icon: DollarSign,      label: 'Fees',       labelKey: 'portal.fees',       path: '/portal/fees',       color: '#F59E0B' },
-  { icon: Trophy,          label: 'Results',    labelKey: 'portal.results',    path: '/portal/results',    color: '#8B5CF6' },
-  { icon: ClipboardList,   label: 'Homework',   labelKey: 'portal.homework',   path: '/portal/homework',   color: '#F97316' },
-  { icon: Megaphone,       label: 'Notices',    labelKey: 'portal.notices',    path: '/portal/notices',    color: '#F43F5E' },
-  { icon: Clock,           label: 'Routine',    labelKey: 'portal.routine',    path: '/portal/timetable',  color: '#14B8A6' },
+  { icon: LayoutDashboard, label: 'Home',           labelKey: 'portal.home',          path: '/portal',                 color: '#3B82F6' },
+  { icon: CalendarCheck,   label: 'Attendance',     labelKey: 'portal.attendance',    path: '/portal/attendance',      color: '#10B981' },
+  { icon: DollarSign,      label: 'Fees',           labelKey: 'portal.fees',          path: '/portal/fees',            color: '#F59E0B' },
+  { icon: Trophy,          label: 'Results',        labelKey: 'portal.results',       path: '/portal/results',         color: '#8B5CF6' },
+  { icon: GraduationCap,   label: 'Exam Schedule',  labelKey: 'portal.examSchedule',  path: '/portal/exam-schedule',   color: '#8B5CF6' },
+  { icon: ClipboardList,   label: 'Homework',       labelKey: 'portal.homework',      path: '/portal/homework',        color: '#F97316' },
+  { icon: FolderOpen,      label: 'Study Materials',labelKey: 'portal.studyMaterials',path: '/portal/study-materials', color: '#3B82F6' },
+  { icon: Megaphone,       label: 'Notices',        labelKey: 'portal.notices',       path: '/portal/notices',         color: '#F43F5E' },
+  { icon: CalendarDays,    label: 'Events',         labelKey: 'portal.schoolEvents',  path: '/portal/events',          color: '#F43F5E' },
+  { icon: Clock,           label: 'Routine',        labelKey: 'portal.routine',       path: '/portal/timetable',       color: '#14B8A6' },
 ];
 
 function isActive(item, pathname) {
@@ -163,9 +167,9 @@ export default function PortalLayout() {
         </AnimatePresence>
       </main>
 
-      {/* ── Mobile bottom nav ── */}
+      {/* ── Mobile bottom nav (horizontally scrollable — too many sections to fit one screen width) ── */}
       <nav className="fixed bottom-0 left-0 right-0 z-40 md:hidden bg-white border-t border-gray-100 shadow-xl">
-        <div className="flex items-stretch">
+        <div className="flex items-stretch overflow-x-auto">
           {NAV.map(item => {
             const Icon   = item.icon;
             const active = isActive(item, location.pathname);
@@ -173,7 +177,7 @@ export default function PortalLayout() {
               <Link
                 key={item.path}
                 to={item.path}
-                className="flex-1 flex flex-col items-center justify-center py-2 gap-0.5 relative"
+                className="shrink-0 basis-[19%] min-w-[64px] flex flex-col items-center justify-center py-2 gap-0.5 relative"
               >
                 {active && (
                   <motion.div

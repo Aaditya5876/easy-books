@@ -10,7 +10,8 @@
       "Bash(npx tsc *)",
       "Read(//d/geoinfosys/**)",
       "Bash(node \"C:/Users/AADITY~1/AppData/Local/Temp/claude/d--geoinfosys-easy-books/0b06fba7-6246-4569-923a-5b4b3abd2928/scratchpad/test-gemini.js\")",
-      "Bash(npm install *)"
+      "Bash(npm install *)",
+      "Bash(railway *)"
     ]
   }
 }

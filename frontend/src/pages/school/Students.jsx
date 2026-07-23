@@ -13,7 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { toast } from 'sonner';
 
 const EMPTY_FORM = {
-  name: '', rollNumber: '', examRollNumber: '', section: '', classId: '', gender: '', dateOfBirth: '',
+  name: '', rollNumber: '', examRollNumber: '', classId: '', gender: '', dateOfBirth: '',
   address: '', guardianName: '', guardianPhone: '', guardianEmail: '',
 };
 
@@ -27,6 +27,7 @@ function StudentDialog({ open, onClose, initial, classes, companyId }) {
       : EMPTY_FORM,
   );
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const [errors, setErrors] = useState({});
 
   const save = useMutation({
     mutationFn: (data) =>
@@ -42,7 +43,12 @@ function StudentDialog({ open, onClose, initial, classes, companyId }) {
 
   function handleSubmit(e) {
     e.preventDefault();
-    if (!form.name.trim()) { toast.error(t('students.nameRequired', { defaultValue: 'Student name is required' })); return; }
+    if (!form.name.trim()) {
+      setErrors({ name: t('students.nameRequired', { defaultValue: 'Student name is required' }) });
+      toast.error(t('students.nameRequired', { defaultValue: 'Student name is required' }));
+      return;
+    }
+    setErrors({});
     save.mutate({ ...form, companyId });
   }
 
@@ -56,7 +62,8 @@ function StudentDialog({ open, onClose, initial, classes, companyId }) {
           <div className="grid grid-cols-2 gap-3">
             <div className="col-span-2 space-y-1.5">
               <Label>{t('students.fullName', { defaultValue: 'Full Name *' })}</Label>
-              <Input placeholder={t('students.fullNamePlaceholder', { defaultValue: 'Student full name' })} value={form.name} onChange={e => set('name', e.target.value)} />
+              <Input placeholder={t('students.fullNamePlaceholder', { defaultValue: 'Student full name' })} value={form.name} onChange={e => { set('name', e.target.value); if (errors.name) setErrors({}); }} />
+              {errors.name && <p className="text-xs text-red-600">{errors.name}</p>}
             </div>
             <div className="space-y-1.5">
               <Label>{t('students.rollNumber', { defaultValue: 'Roll Number' })}</Label>
@@ -66,11 +73,6 @@ function StudentDialog({ open, onClose, initial, classes, companyId }) {
             <div className="space-y-1.5">
               <Label>{t('students.examRollNumber', { defaultValue: 'Exam Roll Number' })}</Label>
               <Input placeholder={t('students.examRollNumberPlaceholder', { defaultValue: 'e.g. 20821234' })} value={form.examRollNumber} onChange={e => set('examRollNumber', e.target.value)} />
-            </div>
-
-            <div className="space-y-1.5">
-              <Label>Section</Label>
-              <Input placeholder="e.g. A" value={form.section} onChange={e => set('section', e.target.value)} />
             </div>
 
             <div className="space-y-1.5">
@@ -148,6 +150,7 @@ function PortalPasswordDialog({ open, onClose, student, companyId }) {
   const [form, setForm] = useState({ phone: student?.guardianPhone || '', password: '', type: 'PARENT' });
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [errors, setErrors] = useState({});
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
   const portalLink = `${window.location.origin}/portal/login?company=${companyId}`;
 
@@ -159,8 +162,15 @@ function PortalPasswordDialog({ open, onClose, student, companyId }) {
 
   async function handleSubmit(e) {
     e.preventDefault();
-    if (!form.phone.trim()) { toast.error(t('students.phoneRequired', { defaultValue: 'Phone number is required' })); return; }
-    if (form.password.length < 6) { toast.error(t('students.passwordMinLength', { defaultValue: 'Password must be at least 6 characters' })); return; }
+    const errs = {};
+    if (!form.phone.trim()) errs.phone = t('students.phoneRequired', { defaultValue: 'Phone number is required' });
+    if (form.password.length < 6) errs.password = t('students.passwordMinLength', { defaultValue: 'Password must be at least 6 characters' });
+    if (Object.keys(errs).length) {
+      setErrors(errs);
+      toast.error(errs.phone || errs.password);
+      return;
+    }
+    setErrors({});
     setLoading(true);
     try {
       await portalApi.setPassword({ studentId: student.id, ...form, companyId });
@@ -204,12 +214,14 @@ function PortalPasswordDialog({ open, onClose, student, companyId }) {
           </div>
           <div className="space-y-1.5">
             <Label>{t('students.phoneNumber', { defaultValue: 'Phone Number *' })}</Label>
-            <Input placeholder={t('students.phonePlaceholder', { defaultValue: '98XXXXXXXX' })} value={form.phone} onChange={e => set('phone', e.target.value)} />
+            <Input placeholder={t('students.phonePlaceholder', { defaultValue: '98XXXXXXXX' })} value={form.phone} onChange={e => { set('phone', e.target.value); if (errors.phone) setErrors(er => ({ ...er, phone: undefined })); }} />
+            {errors.phone && <p className="text-xs text-red-600">{errors.phone}</p>}
             <p className="text-xs text-muted-foreground">{t('students.loginUsernameHint', { defaultValue: 'This will be the login username' })}</p>
           </div>
           <div className="space-y-1.5">
             <Label>{t('students.password', { defaultValue: 'Password *' })}</Label>
-            <Input type="password" placeholder={t('students.passwordPlaceholder', { defaultValue: 'Min 6 characters' })} value={form.password} onChange={e => set('password', e.target.value)} />
+            <Input type="password" placeholder={t('students.passwordPlaceholder', { defaultValue: 'Min 6 characters' })} value={form.password} onChange={e => { set('password', e.target.value); if (errors.password) setErrors(er => ({ ...er, password: undefined })); }} />
+            {errors.password && <p className="text-xs text-red-600">{errors.password}</p>}
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose}>{t('students.cancel', { defaultValue: 'Cancel' })}</Button>

@@ -35,6 +35,8 @@ function SubjectDialog({ open, onClose, subject }) {
     queryFn: () => classesApi.list().then(r => r.data),
   });
 
+  const [errors, setErrors] = useState({});
+
   const toggleClass = (classId) => {
     setForm(p => ({
       ...p,
@@ -56,7 +58,12 @@ function SubjectDialog({ open, onClose, subject }) {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (!form.name.trim()) return toast.error(t('subjects.subjectNameRequired', { defaultValue: 'Subject name is required' }));
+    if (!form.name.trim()) {
+      const msg = t('subjects.subjectNameRequired', { defaultValue: 'Subject name is required' });
+      setErrors({ name: msg });
+      return toast.error(msg);
+    }
+    setErrors({});
     const payload = {
       name: form.name,
       code: form.code,
@@ -76,7 +83,8 @@ function SubjectDialog({ open, onClose, subject }) {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-1">
             <Label>{t('subjects.subjectName', { defaultValue: 'Subject Name *' })}</Label>
-            <Input value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} placeholder={t('subjects.subjectNamePlaceholder', { defaultValue: 'e.g. Mathematics' })} />
+            <Input value={form.name} onChange={e => { setForm(p => ({ ...p, name: e.target.value })); if (errors.name) setErrors({}); }} placeholder={t('subjects.subjectNamePlaceholder', { defaultValue: 'e.g. Mathematics' })} />
+            {errors.name && <p className="text-xs text-red-600">{errors.name}</p>}
           </div>
           <div className="space-y-1">
             <Label>{t('subjects.subjectCode', { defaultValue: 'Subject Code' })}</Label>

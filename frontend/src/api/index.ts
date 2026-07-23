@@ -487,6 +487,11 @@ export const portalApi = {
   homework: (classId?: string) => apiClient.get('/api/v1/portal/homework', { headers: portalHeaders(), params: { classId } }),
   notices: () => apiClient.get('/api/v1/portal/notices', { headers: portalHeaders() }),
   timetable: (classId?: string) => apiClient.get('/api/v1/portal/timetable', { headers: portalHeaders(), params: { classId } }),
+  studyMaterials: (classId?: string, subjectId?: string) =>
+    apiClient.get('/api/v1/portal/study-materials', { headers: portalHeaders(), params: { classId, subjectId } }),
+  examSchedule: (classId?: string) =>
+    apiClient.get('/api/v1/portal/exam-schedule', { headers: portalHeaders(), params: { classId } }),
+  events: () => apiClient.get('/api/v1/portal/events', { headers: portalHeaders() }),
   initiateEsewa: (invoiceId: string) =>
     apiClient.post(`/api/v1/portal/pay/esewa/${invoiceId}`, {}, { headers: portalHeaders() }),
   verifyEsewa: (data: { data: string; invoiceId: string; companyId: string }) =>

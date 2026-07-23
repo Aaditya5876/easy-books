@@ -56,6 +56,9 @@ import PortalResults from './pages/portal/PortalResults';
 import PortalHomework from './pages/portal/PortalHomework';
 import PortalNotices from './pages/portal/PortalNotices';
 import PortalTimetable from './pages/portal/PortalTimetable';
+import PortalStudyMaterials from './pages/portal/PortalStudyMaterials';
+import PortalExamSchedule from './pages/portal/PortalExamSchedule';
+import PortalEvents from './pages/portal/PortalEvents';
 import PaymentReturn from './pages/portal/PaymentReturn';
 
 // `roles` = also available to these restricted roles (TEACHER / LIBRARIAN).
@@ -169,6 +172,9 @@ function App() {
                 <Route path="homework" element={<PortalHomework />} />
                 <Route path="notices" element={<PortalNotices />} />
                 <Route path="timetable" element={<PortalTimetable />} />
+                <Route path="study-materials" element={<PortalStudyMaterials />} />
+                <Route path="exam-schedule" element={<PortalExamSchedule />} />
+                <Route path="events" element={<PortalEvents />} />
               </Route>
               <Route path="/portal/payment/return" element={<PaymentReturn />} />
               <Route path="*" element={<AuthenticatedApp />} />

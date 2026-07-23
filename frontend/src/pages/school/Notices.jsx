@@ -34,6 +34,7 @@ function NoticeDialog({ open, onClose, notice }) {
     expiresAt: notice?.expiresAt ? notice.expiresAt.split('T')[0] : '',
   });
   const [aiLoading, setAiLoading] = useState(false);
+  const [errors, setErrors] = useState({});
 
   const save = useMutation({
     mutationFn: (d) =>
@@ -50,7 +51,14 @@ function NoticeDialog({ open, onClose, notice }) {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (!form.title.trim() || !form.content.trim()) return toast.error(t('notices.titleContentRequired', { defaultValue: 'Title and content are required' }));
+    const errs = {};
+    if (!form.title.trim()) errs.title = t('notices.titleRequired', { defaultValue: 'Title is required' });
+    if (!form.content.trim()) errs.content = t('notices.contentRequired', { defaultValue: 'Content is required' });
+    if (Object.keys(errs).length) {
+      setErrors(errs);
+      return toast.error(t('notices.titleContentRequired', { defaultValue: 'Title and content are required' }));
+    }
+    setErrors({});
     save.mutate({ ...form, expiresAt: form.expiresAt || undefined });
   };
 
@@ -92,16 +100,18 @@ function NoticeDialog({ open, onClose, notice }) {
                 {aiLoading ? t('notices.generating', { defaultValue: 'Generating…' }) : t('notices.generateWithAI', { defaultValue: 'Generate with AI' })}
               </button>
             </div>
-            <Input value={form.title} onChange={e => setForm(p => ({ ...p, title: e.target.value }))} placeholder={t('notices.titlePlaceholder', { defaultValue: 'e.g. Annual Sports Day 2081' })} />
+            <Input value={form.title} onChange={e => { setForm(p => ({ ...p, title: e.target.value })); if (errors.title) setErrors(er => ({ ...er, title: undefined })); }} placeholder={t('notices.titlePlaceholder', { defaultValue: 'e.g. Annual Sports Day 2081' })} />
+            {errors.title && <p className="text-xs text-red-600">{errors.title}</p>}
           </div>
           <div className="space-y-1">
             <Label>{t('notices.content', { defaultValue: 'Content *' })}</Label>
             <Textarea
               value={form.content}
-              onChange={e => setForm(p => ({ ...p, content: e.target.value }))}
+              onChange={e => { setForm(p => ({ ...p, content: e.target.value })); if (errors.content) setErrors(er => ({ ...er, content: undefined })); }}
               placeholder={t('notices.contentPlaceholder', { defaultValue: 'Write your notice here…' })}
               rows={6}
             />
+            {errors.content && <p className="text-xs text-red-600">{errors.content}</p>}
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">

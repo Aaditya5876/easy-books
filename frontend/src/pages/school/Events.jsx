@@ -70,9 +70,18 @@ function EventDialog({ open, onClose, event, mode = 'AD', monthKey }) {
     onError: (e) => toast.error(e.response?.data?.message || t('events.failedToSave', { defaultValue: 'Failed to save' })),
   });
 
+  const [errors, setErrors] = useState({});
+
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (!form.title.trim() || !form.startDate) return toast.error(t('events.titleStartDateRequired', { defaultValue: 'Title and start date are required' }));
+    const errs = {};
+    if (!form.title.trim()) errs.title = t('events.titleRequired', { defaultValue: 'Event title is required' });
+    if (!form.startDate) errs.startDate = t('events.startDateRequired', { defaultValue: 'Start date is required' });
+    if (Object.keys(errs).length) {
+      setErrors(errs);
+      return toast.error(t('events.titleStartDateRequired', { defaultValue: 'Title and start date are required' }));
+    }
+    setErrors({});
     save.mutate({ ...form, endDate: form.endDate || undefined });
   };
 
@@ -85,7 +94,8 @@ function EventDialog({ open, onClose, event, mode = 'AD', monthKey }) {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-1">
             <Label>{t('events.eventTitle', { defaultValue: 'Event Title *' })}</Label>
-            <Input value={form.title} onChange={e => setForm(p => ({ ...p, title: e.target.value }))} placeholder={t('events.titlePlaceholder', { defaultValue: 'e.g. Annual Day Celebration' })} />
+            <Input value={form.title} onChange={e => { setForm(p => ({ ...p, title: e.target.value })); if (errors.title) setErrors(er => ({ ...er, title: undefined })); }} placeholder={t('events.titlePlaceholder', { defaultValue: 'e.g. Annual Day Celebration' })} />
+            {errors.title && <p className="text-xs text-red-600">{errors.title}</p>}
           </div>
           <div className="space-y-1">
             <Label>{t('events.type', { defaultValue: 'Type' })}</Label>
@@ -101,8 +111,9 @@ function EventDialog({ open, onClose, event, mode = 'AD', monthKey }) {
               <>
                 <div className="space-y-1">
                   <Label>{t('events.startDate', { defaultValue: 'Start Date *' })}</Label>
-                  <input type="date" value={form.startDate} onChange={e => setForm(p => ({ ...p, startDate: e.target.value }))}
+                  <input type="date" value={form.startDate} onChange={e => { setForm(p => ({ ...p, startDate: e.target.value })); if (errors.startDate) setErrors(er => ({ ...er, startDate: undefined })); }}
                     className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm" />
+                  {errors.startDate && <p className="text-xs text-red-600">{errors.startDate}</p>}
                 </div>
                 <div className="space-y-1">
                   <Label>{t('events.endDate', { defaultValue: 'End Date' })}</Label>
@@ -117,6 +128,7 @@ function EventDialog({ open, onClose, event, mode = 'AD', monthKey }) {
                   <Input value={form.bsStart} onChange={e => {
                     const v = e.target.value;
                     setForm(p => ({ ...p, bsStart: v }));
+                    if (errors.startDate) setErrors(er => ({ ...er, startDate: undefined }));
                     // try convert format YYYY-MM-DD
                     const parts = v.split('-');
                     if (parts.length === 3) {
@@ -131,6 +143,7 @@ function EventDialog({ open, onClose, event, mode = 'AD', monthKey }) {
                       }
                     }
                   }} placeholder="YYYY-MM-DD" />
+                  {errors.startDate && <p className="text-xs text-red-600">{errors.startDate}</p>}
                 </div>
                 <div className="space-y-1">
                   <Label>{t('events.endDate', { defaultValue: 'End Date' })} (BS)</Label>

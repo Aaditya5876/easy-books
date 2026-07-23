@@ -17,6 +17,7 @@ function ClassDialog({ open, onClose, initial, employees, companyId }) {
   const qc = useQueryClient();
   const isEdit = !!initial?.id;
   const [form, setForm] = useState(initial ? { name: initial.name, section: initial.section || '', classTeacherId: initial.classTeacherId || '' } : EMPTY_FORM);
+  const [errors, setErrors] = useState({});
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   const save = useMutation({
@@ -32,7 +33,13 @@ function ClassDialog({ open, onClose, initial, employees, companyId }) {
 
   function handleSubmit(e) {
     e.preventDefault();
-    if (!form.name.trim()) { toast.error(t('classes.classNameRequired', { defaultValue: 'Class name is required' })); return; }
+    if (!form.name.trim()) {
+      const msg = t('classes.classNameRequired', { defaultValue: 'Class name is required' });
+      setErrors({ name: msg });
+      toast.error(msg);
+      return;
+    }
+    setErrors({});
     save.mutate({ ...form, companyId });
   }
 
@@ -45,7 +52,8 @@ function ClassDialog({ open, onClose, initial, employees, companyId }) {
         <form onSubmit={handleSubmit} className="space-y-4 pt-2">
           <div className="space-y-1.5">
             <Label>{t('classes.className', { defaultValue: 'Class Name *' })}</Label>
-            <Input placeholder={t('classes.classNamePlaceholder', { defaultValue: 'e.g. Grade 5, Class 10' })} value={form.name} onChange={e => set('name', e.target.value)} />
+            <Input placeholder={t('classes.classNamePlaceholder', { defaultValue: 'e.g. Grade 5, Class 10' })} value={form.name} onChange={e => { set('name', e.target.value); if (errors.name) setErrors({}); }} />
+            {errors.name && <p className="text-xs text-red-600">{errors.name}</p>}
           </div>
           <div className="space-y-1.5">
             <Label>{t('classes.section', { defaultValue: 'Section' })} <span className="text-muted-foreground">{t('classes.optional', { defaultValue: '(Optional)' })}</span></Label>

@@ -22,6 +22,8 @@ function PackageDialog({ open, onClose, initial, feeHeads }) {
     feeHeadIds: initial?.heads?.map(h => h.feeHead.id) || [],
   });
 
+  const [errors, setErrors] = useState({});
+
   const toggleHead = (id) => setForm(f => ({
     ...f,
     feeHeadIds: f.feeHeadIds.includes(id) ? f.feeHeadIds.filter(x => x !== id) : [...f.feeHeadIds, id],
@@ -41,8 +43,15 @@ function PackageDialog({ open, onClose, initial, feeHeads }) {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (!form.name.trim()) return toast.error(t('packages.nameRequired', { defaultValue: 'Package name is required' }));
-    if (form.feeHeadIds.length === 0) return toast.error(t('packages.headsRequired', { defaultValue: 'Select at least one fee head' }));
+    const errs = {};
+    if (!form.name.trim()) errs.name = t('packages.nameRequired', { defaultValue: 'Package name is required' });
+    if (form.feeHeadIds.length === 0) errs.feeHeadIds = t('packages.headsRequired', { defaultValue: 'Select at least one fee head' });
+    if (Object.keys(errs).length) {
+      setErrors(errs);
+      toast.error(Object.values(errs)[0]);
+      return;
+    }
+    setErrors({});
     save.mutate();
   };
 
@@ -53,19 +62,21 @@ function PackageDialog({ open, onClose, initial, feeHeads }) {
         <form onSubmit={handleSubmit} className="space-y-4 pt-2">
           <div className="space-y-1.5">
             <Label>{t('packages.name', { defaultValue: 'Package Name *' })}</Label>
-            <Input placeholder={t('packages.namePlaceholder', { defaultValue: 'e.g. Full Boarder, Day Scholar + Bus' })} value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
+            <Input placeholder={t('packages.namePlaceholder', { defaultValue: 'e.g. Full Boarder, Day Scholar + Bus' })} value={form.name} onChange={e => { setForm(f => ({ ...f, name: e.target.value })); if (errors.name) setErrors(er => ({ ...er, name: undefined })); }} />
+            {errors.name && <p className="text-xs text-red-600">{errors.name}</p>}
           </div>
           <div className="space-y-1.5">
             <Label>{t('packages.includedHeads', { defaultValue: 'Included Fee Heads *' })}</Label>
             <div className="border rounded-md divide-y max-h-48 overflow-y-auto">
               {feeHeads.map(h => (
                 <label key={h.id} className="flex items-center gap-2 px-3 py-2 text-sm cursor-pointer hover:bg-muted/40">
-                  <input type="checkbox" checked={form.feeHeadIds.includes(h.id)} onChange={() => toggleHead(h.id)} />
+                  <input type="checkbox" checked={form.feeHeadIds.includes(h.id)} onChange={() => { toggleHead(h.id); if (errors.feeHeadIds) setErrors(er => ({ ...er, feeHeadIds: undefined })); }} />
                   <span className="flex-1">{h.name}</span>
                   {h.type !== 'GENERAL' && <span className="text-xs text-muted-foreground">{h.type === 'TRANSPORT' ? t('packages.autoRoute', { defaultValue: 'auto: route' }) : t('packages.autoRoom', { defaultValue: 'auto: room' })}</span>}
                 </label>
               ))}
             </div>
+            {errors.feeHeadIds && <p className="text-xs text-red-600">{errors.feeHeadIds}</p>}
           </div>
           <div className="space-y-1.5">
             <Label>{t('packages.bundlePrice', { defaultValue: 'Bundle Price (Rs.)' })}</Label>

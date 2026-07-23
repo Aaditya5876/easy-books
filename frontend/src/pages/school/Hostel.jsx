@@ -22,6 +22,7 @@ function RoomDialog({ open, onClose, initial, companyId }) {
     roomNumber: initial.roomNumber, floor: initial.floor || '', capacity: initial.capacity,
     monthlyFee: initial.monthlyFee, facilities: initial.facilities || '',
   } : EMPTY_ROOM);
+  const [errors, setErrors] = useState({});
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   const save = useMutation({
@@ -32,7 +33,13 @@ function RoomDialog({ open, onClose, initial, companyId }) {
 
   function handleSubmit(e) {
     e.preventDefault();
-    if (!form.roomNumber.trim()) { toast.error(t('hostel.roomNumberRequired', { defaultValue: 'Room number is required' })); return; }
+    if (!form.roomNumber.trim()) {
+      const msg = t('hostel.roomNumberRequired', { defaultValue: 'Room number is required' });
+      setErrors({ roomNumber: msg });
+      toast.error(msg);
+      return;
+    }
+    setErrors({});
     save.mutate({ ...form, companyId, capacity: Number(form.capacity), monthlyFee: Number(form.monthlyFee) });
   }
 
@@ -44,7 +51,8 @@ function RoomDialog({ open, onClose, initial, companyId }) {
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label>{t('hostel.roomNumber', { defaultValue: 'Room Number *' })}</Label>
-              <Input placeholder={t('hostel.roomNumberPlaceholder', { defaultValue: 'e.g. 101, A-12' })} value={form.roomNumber} onChange={e => set('roomNumber', e.target.value)} />
+              <Input placeholder={t('hostel.roomNumberPlaceholder', { defaultValue: 'e.g. 101, A-12' })} value={form.roomNumber} onChange={e => { set('roomNumber', e.target.value); if (errors.roomNumber) setErrors({}); }} />
+              {errors.roomNumber && <p className="text-xs text-red-600">{errors.roomNumber}</p>}
             </div>
             <div className="space-y-1.5">
               <Label>{t('hostel.floor', { defaultValue: 'Floor' })}</Label>
@@ -79,6 +87,7 @@ function AllocateDialog({ open, onClose, rooms, companyId }) {
   const { t } = useTranslation();
   const qc = useQueryClient();
   const [form, setForm] = useState({ roomId: '', studentId: '' });
+  const [errors, setErrors] = useState({});
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   const allocate = useMutation({
@@ -94,8 +103,15 @@ function AllocateDialog({ open, onClose, rooms, companyId }) {
 
   function handleSubmit(e) {
     e.preventDefault();
-    if (!form.roomId) { toast.error(t('hostel.selectARoom', { defaultValue: 'Select a room' })); return; }
-    if (!form.studentId) { toast.error(t('hostel.selectAStudent', { defaultValue: 'Select a student' })); return; }
+    const errs = {};
+    if (!form.roomId) errs.roomId = t('hostel.selectARoom', { defaultValue: 'Select a room' });
+    if (!form.studentId) errs.studentId = t('hostel.selectAStudent', { defaultValue: 'Select a student' });
+    if (Object.keys(errs).length) {
+      setErrors(errs);
+      toast.error(Object.values(errs)[0]);
+      return;
+    }
+    setErrors({});
     allocate.mutate({ companyId, roomId: form.roomId, studentId: form.studentId });
   }
 
@@ -108,7 +124,7 @@ function AllocateDialog({ open, onClose, rooms, companyId }) {
         <form onSubmit={handleSubmit} className="space-y-4 pt-2">
           <div className="space-y-1.5">
             <Label>{t('hostel.roomLabel', { defaultValue: 'Room *' })}</Label>
-            <select className="w-full border rounded-md px-3 py-2 text-sm bg-background" value={form.roomId} onChange={e => set('roomId', e.target.value)}>
+            <select className="w-full border rounded-md px-3 py-2 text-sm bg-background" value={form.roomId} onChange={e => { set('roomId', e.target.value); if (errors.roomId) setErrors(er => ({ ...er, roomId: undefined })); }}>
               <option value="">{t('hostel.selectRoom', { defaultValue: 'Select room…' })}</option>
               {availableRooms.map(r => (
                 <option key={r.id} value={r.id}>
@@ -121,14 +137,16 @@ function AllocateDialog({ open, onClose, rooms, companyId }) {
                 </option>
               ))}
             </select>
+            {errors.roomId && <p className="text-xs text-red-600">{errors.roomId}</p>}
           </div>
           <div className="space-y-1.5">
             <Label>{t('hostel.studentLabel', { defaultValue: 'Student *' })}</Label>
             <StudentCombobox
               value={form.studentId}
-              onChange={id => set('studentId', id)}
+              onChange={id => { set('studentId', id); if (errors.studentId) setErrors(er => ({ ...er, studentId: undefined })); }}
               placeholder={t('hostel.selectStudent', { defaultValue: 'Select student…' })}
             />
+            {errors.studentId && <p className="text-xs text-red-600">{errors.studentId}</p>}
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose}>{t('hostel.cancel', { defaultValue: 'Cancel' })}</Button>

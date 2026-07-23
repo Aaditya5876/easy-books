@@ -27,6 +27,7 @@ function HomeworkDialog({ open, onClose, initial, classes, subjects, companyId }
   } : EMPTY);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
   const [aiLoading, setAiLoading] = useState(false);
+  const [errors, setErrors] = useState({});
 
   async function generateDescription() {
     if (!form.title.trim()) { toast.error(t('homework.enterTitleFirst', { defaultValue: 'Enter a title first' })); return; }
@@ -61,9 +62,16 @@ function HomeworkDialog({ open, onClose, initial, classes, subjects, companyId }
 
   function handleSubmit(e) {
     e.preventDefault();
-    if (!form.title.trim()) { toast.error(t('homework.titleRequired', { defaultValue: 'Title is required' })); return; }
-    if (!form.classId) { toast.error(t('homework.classRequired', { defaultValue: 'Class is required' })); return; }
-    if (!form.dueDate) { toast.error(t('homework.dueDateRequired', { defaultValue: 'Due date is required' })); return; }
+    const errs = {};
+    if (!form.title.trim()) errs.title = t('homework.titleRequired', { defaultValue: 'Title is required' });
+    if (!form.classId) errs.classId = t('homework.classRequired', { defaultValue: 'Class is required' });
+    if (!form.dueDate) errs.dueDate = t('homework.dueDateRequired', { defaultValue: 'Due date is required' });
+    if (Object.keys(errs).length) {
+      setErrors(errs);
+      toast.error(Object.values(errs)[0]);
+      return;
+    }
+    setErrors({});
     save.mutate({ ...form, companyId, dueDate: new Date(form.dueDate) });
   }
 
@@ -74,15 +82,17 @@ function HomeworkDialog({ open, onClose, initial, classes, subjects, companyId }
         <form onSubmit={handleSubmit} className="space-y-4 pt-2">
           <div className="space-y-1.5">
             <Label>{t('homework.title', { defaultValue: 'Title *' })}</Label>
-            <Input placeholder={t('homework.titlePlaceholder', { defaultValue: 'e.g. Chapter 5 Exercise' })} value={form.title} onChange={e => set('title', e.target.value)} />
+            <Input placeholder={t('homework.titlePlaceholder', { defaultValue: 'e.g. Chapter 5 Exercise' })} value={form.title} onChange={e => { set('title', e.target.value); if (errors.title) setErrors(er => ({ ...er, title: undefined })); }} />
+            {errors.title && <p className="text-xs text-red-600">{errors.title}</p>}
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label>{t('homework.class', { defaultValue: 'Class *' })}</Label>
-              <select className="w-full border rounded-md px-3 py-2 text-sm bg-background" value={form.classId} onChange={e => set('classId', e.target.value)}>
+              <select className="w-full border rounded-md px-3 py-2 text-sm bg-background" value={form.classId} onChange={e => { set('classId', e.target.value); if (errors.classId) setErrors(er => ({ ...er, classId: undefined })); }}>
                 <option value="">{t('homework.selectClass', { defaultValue: 'Select class' })}</option>
                 {classes.map(c => <option key={c.id} value={c.id}>{c.name}{c.section ? ` (${c.section})` : ''}</option>)}
               </select>
+              {errors.classId && <p className="text-xs text-red-600">{errors.classId}</p>}
             </div>
             <div className="space-y-1.5">
               <Label>{t('homework.subject', { defaultValue: 'Subject' })}</Label>
@@ -94,7 +104,8 @@ function HomeworkDialog({ open, onClose, initial, classes, subjects, companyId }
           </div>
           <div className="space-y-1.5">
             <Label>{t('homework.dueDate', { defaultValue: 'Due Date *' })}</Label>
-            <Input type="date" value={form.dueDate} onChange={e => set('dueDate', e.target.value)} />
+            <Input type="date" value={form.dueDate} onChange={e => { set('dueDate', e.target.value); if (errors.dueDate) setErrors(er => ({ ...er, dueDate: undefined })); }} />
+            {errors.dueDate && <p className="text-xs text-red-600">{errors.dueDate}</p>}
           </div>
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">

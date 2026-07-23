@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { api } from '@/api/adapter';
 import {
   salesApi, purchaseApi, transactionApi, taskApi,
@@ -89,6 +90,7 @@ function StatChip({ label, value, colorClass }) {
 
 // ── Main Component ─────────────────────────────────────────────────────────────
 export default function Dashboard() {
+  const { t } = useTranslation();
   const companyId = getActiveCompanyId();
 
   const [loading, setLoading]           = useState(true);
@@ -253,15 +255,15 @@ export default function Dashboard() {
     <div className="space-y-5">
       {/* Page Header */}
       <div>
-        <h1 className="text-2xl font-bold text-foreground tracking-tight">Dashboard</h1>
-        <p className="text-sm text-muted-foreground mt-1">Business overview · Your Company</p>
+        <h1 className="text-2xl font-bold text-foreground tracking-tight">{t('bizDashboard.title', { defaultValue: 'Dashboard' })}</h1>
+        <p className="text-sm text-muted-foreground mt-1">{t('bizDashboard.subtitle', { defaultValue: 'Business overview · Your Company' })}</p>
       </div>
 
       {/* ══════════════════════════════════════════════════════════════════════ */}
       {/* SECTION 1 — Financial Overview                                        */}
       {/* ══════════════════════════════════════════════════════════════════════ */}
       <Section
-        title="Financial Overview"
+        title={t('bizDashboard.financialOverview', { defaultValue: 'Financial Overview' })}
         icon={BarChart2}
         iconClass="text-blue-600"
         open={finOpen}
@@ -275,7 +277,7 @@ export default function Dashboard() {
             </div>
             <div>
               <p className="text-2xl font-bold text-green-700">{fmtNPR(fySales)}</p>
-              <p className="text-xs text-green-600 mt-0.5">Total Sales (FY)</p>
+              <p className="text-xs text-green-600 mt-0.5">{t('bizDashboard.totalSalesFY', { defaultValue: 'Total Sales (FY)' })}</p>
             </div>
           </div>
 
@@ -285,7 +287,7 @@ export default function Dashboard() {
             </div>
             <div>
               <p className="text-2xl font-bold text-blue-700">{fmtNPR(fyPurchases)}</p>
-              <p className="text-xs text-blue-600 mt-0.5">Total Purchase (FY)</p>
+              <p className="text-xs text-blue-600 mt-0.5">{t('bizDashboard.totalPurchaseFY', { defaultValue: 'Total Purchase (FY)' })}</p>
             </div>
           </div>
 
@@ -295,7 +297,7 @@ export default function Dashboard() {
             </div>
             <div>
               <p className="text-2xl font-bold text-red-700">{fmtNPR(fyExpenses)}</p>
-              <p className="text-xs text-red-600 mt-0.5">Total Expenses (FY)</p>
+              <p className="text-xs text-red-600 mt-0.5">{t('bizDashboard.totalExpensesFY', { defaultValue: 'Total Expenses (FY)' })}</p>
             </div>
           </div>
         </div>
@@ -306,16 +308,16 @@ export default function Dashboard() {
           <div className="bg-card border border-border rounded-xl p-5">
             <div className="flex items-center gap-2 mb-3">
               <Wallet className="w-4 h-4 text-amber-500" />
-              <h3 className="text-sm font-semibold text-foreground">Cash In Hand</h3>
+              <h3 className="text-sm font-semibold text-foreground">{t('bizDashboard.cashInHand', { defaultValue: 'Cash In Hand' })}</h3>
             </div>
             <p className={`text-3xl font-bold ${cashInHand >= 0 ? 'text-green-600' : 'text-red-600'}`}>
               {fmtNPR(Math.abs(cashInHand))}
-              {cashInHand < 0 && <span className="text-base ml-1">(negative)</span>}
+              {cashInHand < 0 && <span className="text-base ml-1">{t('bizDashboard.negativeParens', { defaultValue: '(negative)' })}</span>}
             </p>
-            <p className="text-xs text-muted-foreground mt-2">Excludes bank balance</p>
+            <p className="text-xs text-muted-foreground mt-2">{t('bizDashboard.excludesBankBalance', { defaultValue: 'Excludes bank balance' })}</p>
             <div className="flex gap-4 mt-3 text-xs">
-              <span className="text-green-600">Cash in: {fmtNPR(cashIn)}</span>
-              <span className="text-red-500">Cash out: {fmtNPR(cashOut)}</span>
+              <span className="text-green-600">{t('bizDashboard.cashIn', { defaultValue: 'Cash in' })}: {fmtNPR(cashIn)}</span>
+              <span className="text-red-500">{t('bizDashboard.cashOut', { defaultValue: 'Cash out' })}: {fmtNPR(cashOut)}</span>
             </div>
           </div>
 
@@ -323,12 +325,12 @@ export default function Dashboard() {
           <div className="bg-card border border-border rounded-xl p-5">
             <div className="flex items-center gap-2 mb-3">
               <Building2 className="w-4 h-4 text-blue-500" />
-              <h3 className="text-sm font-semibold text-foreground">Bank Balance</h3>
+              <h3 className="text-sm font-semibold text-foreground">{t('bizDashboard.bankBalance', { defaultValue: 'Bank Balance' })}</h3>
             </div>
             <p className="text-3xl font-bold text-blue-700">{fmtNPR(totalBank)}</p>
-            <p className="text-xs text-muted-foreground mt-2 mb-3">Combined across all accounts</p>
+            <p className="text-xs text-muted-foreground mt-2 mb-3">{t('bizDashboard.combinedAcrossAccounts', { defaultValue: 'Combined across all accounts' })}</p>
             {banks.length === 0 ? (
-              <p className="text-xs text-muted-foreground italic">No data yet</p>
+              <p className="text-xs text-muted-foreground italic">{t('bizDashboard.noDataYet', { defaultValue: 'No data yet' })}</p>
             ) : (
               <div className="space-y-1.5 max-h-32 overflow-y-auto">
                 {banks.map((bank, i) => {
@@ -336,7 +338,7 @@ export default function Dashboard() {
                   return (
                     <div key={bank.id || i} className="flex items-center justify-between text-xs">
                       <span className="text-foreground font-medium truncate max-w-[140px]">
-                        {bank.bank_name || bank.bankName || bank.name || 'Account'}
+                        {bank.bank_name || bank.bankName || bank.name || t('bizDashboard.account', { defaultValue: 'Account' })}
                         {acct && <span className="text-muted-foreground ml-1">···{acct.slice(-4)}</span>}
                       </span>
                       <span className="font-mono text-blue-600 shrink-0">{fmtNPR(bank.current_balance || 0)}</span>
@@ -352,31 +354,31 @@ export default function Dashboard() {
         <div className="bg-card border border-border rounded-xl p-5">
           <div className="flex items-center gap-2 mb-4">
             <Activity className="w-4 h-4 text-purple-500" />
-            <h3 className="text-sm font-semibold text-foreground">Financial Health</h3>
+            <h3 className="text-sm font-semibold text-foreground">{t('bizDashboard.financialHealth', { defaultValue: 'Financial Health' })}</h3>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="text-center">
-              <p className="text-xs text-muted-foreground mb-1">Net P&amp;L (FY)</p>
+              <p className="text-xs text-muted-foreground mb-1">{t('bizDashboard.netPnLFY', { defaultValue: 'Net P&L (FY)' })}</p>
               <p className={`text-2xl font-bold ${pnlPositive ? 'text-green-600' : 'text-red-600'}`}>
                 {fmtNPR(Math.abs(netPnL))}
               </p>
               <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${pnlPositive ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                {pnlPositive ? 'Profit' : 'Loss'}
+                {pnlPositive ? t('bizDashboard.profit', { defaultValue: 'Profit' }) : t('bizDashboard.loss', { defaultValue: 'Loss' })}
               </span>
             </div>
             <div className="text-center">
-              <p className="text-xs text-muted-foreground mb-1">Gross Margin</p>
+              <p className="text-xs text-muted-foreground mb-1">{t('bizDashboard.grossMargin', { defaultValue: 'Gross Margin' })}</p>
               <p className={`text-2xl font-bold ${grossMargin >= 0 ? 'text-blue-600' : 'text-red-600'}`}>
                 {grossMargin.toFixed(1)}%
               </p>
-              <p className="text-xs text-muted-foreground">(Sales − Purchase) / Sales</p>
+              <p className="text-xs text-muted-foreground">{t('bizDashboard.salesMinusPurchaseOverSales', { defaultValue: '(Sales − Purchase) / Sales' })}</p>
             </div>
             <div className="text-center">
-              <p className="text-xs text-muted-foreground mb-1">Expense Ratio</p>
+              <p className="text-xs text-muted-foreground mb-1">{t('bizDashboard.expenseRatio', { defaultValue: 'Expense Ratio' })}</p>
               <p className="text-2xl font-bold text-orange-600">
                 {fySales > 0 ? ((fyExpenses / fySales) * 100).toFixed(1) : '0.0'}%
               </p>
-              <p className="text-xs text-muted-foreground">Expenses / Sales</p>
+              <p className="text-xs text-muted-foreground">{t('bizDashboard.expensesOverSales', { defaultValue: 'Expenses / Sales' })}</p>
             </div>
           </div>
         </div>
@@ -386,7 +388,7 @@ export default function Dashboard() {
       {/* SECTION 2 — Operations                                                */}
       {/* ══════════════════════════════════════════════════════════════════════ */}
       <Section
-        title="Operations"
+        title={t('bizDashboard.operations', { defaultValue: 'Operations' })}
         icon={ClipboardList}
         iconClass="text-emerald-600"
         open={opsOpen}
@@ -398,49 +400,49 @@ export default function Dashboard() {
           <div className="bg-card border border-border rounded-xl p-5 xl:col-span-2">
             <div className="flex items-center gap-2 mb-4">
               <Package className="w-4 h-4 text-emerald-500" />
-              <h3 className="text-sm font-semibold text-foreground">Inventory Overview</h3>
+              <h3 className="text-sm font-semibold text-foreground">{t('bizDashboard.inventoryOverview', { defaultValue: 'Inventory Overview' })}</h3>
             </div>
 
             {/* Stats row */}
             <div className="grid grid-cols-3 gap-3 mb-4">
-              <StatChip label="Total Items"   value={inventory.length}  colorClass="bg-blue-50 border-blue-200 text-blue-700" />
-              <StatChip label="Low Stock"     value={lowStock.length}   colorClass="bg-amber-50 border-amber-200 text-amber-700" />
-              <StatChip label="Out of Stock"  value={outOfStock.length} colorClass="bg-red-50 border-red-200 text-red-700" />
+              <StatChip label={t('bizDashboard.totalItems', { defaultValue: 'Total Items' })}   value={inventory.length}  colorClass="bg-blue-50 border-blue-200 text-blue-700" />
+              <StatChip label={t('bizDashboard.lowStock', { defaultValue: 'Low Stock' })}     value={lowStock.length}   colorClass="bg-amber-50 border-amber-200 text-amber-700" />
+              <StatChip label={t('bizDashboard.outOfStock', { defaultValue: 'Out of Stock' })}  value={outOfStock.length} colorClass="bg-red-50 border-red-200 text-red-700" />
             </div>
 
             {/* Stock value */}
             <p className="text-xs text-muted-foreground mb-3">
-              Total Stock Value: <span className="font-semibold text-foreground">{fmtNPR(stockValue)}</span>
+              {t('bizDashboard.totalStockValue', { defaultValue: 'Total Stock Value' })}: <span className="font-semibold text-foreground">{fmtNPR(stockValue)}</span>
             </p>
 
             {/* Top 5 selling items chart */}
             {top5.length > 0 ? (
               <>
-                <p className="text-xs font-medium text-muted-foreground mb-2">Top 5 Items by Qty Sold</p>
+                <p className="text-xs font-medium text-muted-foreground mb-2">{t('bizDashboard.top5ItemsByQtySold', { defaultValue: 'Top 5 Items by Qty Sold' })}</p>
                 <ResponsiveContainer width="100%" height={200}>
                   <BarChart data={top5} margin={{ top: 0, right: 0, left: -10, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                     <XAxis dataKey="name" tick={{ fontSize: 9 }} interval={0} angle={-20} textAnchor="end" height={40} />
                     <YAxis tick={{ fontSize: 10 }} allowDecimals={false} />
-                    <Tooltip formatter={(v) => [`${v} units`, 'Qty Sold']} />
-                    <Bar dataKey="qty" name="Qty Sold" fill="#10b981" radius={[3, 3, 0, 0]} />
+                    <Tooltip formatter={(v) => [`${v} ${t('bizDashboard.units', { defaultValue: 'units' })}`, t('bizDashboard.qtySold', { defaultValue: 'Qty Sold' })]} />
+                    <Bar dataKey="qty" name={t('bizDashboard.qtySold', { defaultValue: 'Qty Sold' })} fill="#10b981" radius={[3, 3, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </>
             ) : (
-              <div className="flex items-center justify-center h-[200px] text-xs text-muted-foreground">No data yet</div>
+              <div className="flex items-center justify-center h-[200px] text-xs text-muted-foreground">{t('bizDashboard.noDataYet', { defaultValue: 'No data yet' })}</div>
             )}
 
             {/* Top 10 list */}
             {topItems.length > 0 && (
               <div className="mt-4">
-                <p className="text-xs font-medium text-muted-foreground mb-2">Top 10 Selling Items</p>
+                <p className="text-xs font-medium text-muted-foreground mb-2">{t('bizDashboard.top10SellingItems', { defaultValue: 'Top 10 Selling Items' })}</p>
                 <div className="space-y-1">
                   {topItems.map((item, i) => (
                     <div key={item.name} className="flex items-center gap-2 text-xs">
                       <span className="text-muted-foreground w-4 text-right">{i + 1}.</span>
                       <span className="flex-1 truncate text-foreground">{item.name}</span>
-                      <span className="font-mono text-emerald-600 shrink-0">{item.qty} units</span>
+                      <span className="font-mono text-emerald-600 shrink-0">{item.qty} {t('bizDashboard.units', { defaultValue: 'units' })}</span>
                     </div>
                   ))}
                 </div>
@@ -452,22 +454,22 @@ export default function Dashboard() {
           <div className="bg-card border border-border rounded-xl p-5">
             <div className="flex items-center gap-2 mb-4">
               <FileText className="w-4 h-4 text-violet-500" />
-              <h3 className="text-sm font-semibold text-foreground">Quotation Reports</h3>
+              <h3 className="text-sm font-semibold text-foreground">{t('bizDashboard.quotationReports', { defaultValue: 'Quotation Reports' })}</h3>
             </div>
             <p className="text-xs text-muted-foreground mb-3">
-              Total: <span className="font-semibold text-foreground">{quotations.length}</span> quotations
+              {t('bizDashboard.total', { defaultValue: 'Total' })}: <span className="font-semibold text-foreground">{quotations.length}</span> {t('bizDashboard.quotations', { defaultValue: 'quotations' })}
             </p>
 
             {quotations.length === 0 ? (
-              <p className="text-xs text-muted-foreground italic">No data yet</p>
+              <p className="text-xs text-muted-foreground italic">{t('bizDashboard.noDataYet', { defaultValue: 'No data yet' })}</p>
             ) : (
               <div className="space-y-2">
                 {[
-                  { key: 'pending',   label: 'Pending',   color: 'bg-amber-50 border-amber-200 text-amber-700' },
-                  { key: 'accepted',  label: 'Accepted',  color: 'bg-green-50 border-green-200 text-green-700' },
-                  { key: 'cancelled', label: 'Cancelled', color: 'bg-red-50 border-red-200 text-red-700' },
-                  { key: 'revised',   label: 'Revised',   color: 'bg-purple-50 border-purple-200 text-purple-700' },
-                  { key: 'billed',    label: 'Billed',    color: 'bg-blue-50 border-blue-200 text-blue-700' },
+                  { key: 'pending',   label: t('bizDashboard.quotPending', { defaultValue: 'Pending' }),   color: 'bg-amber-50 border-amber-200 text-amber-700' },
+                  { key: 'accepted',  label: t('bizDashboard.quotAccepted', { defaultValue: 'Accepted' }),  color: 'bg-green-50 border-green-200 text-green-700' },
+                  { key: 'cancelled', label: t('bizDashboard.quotCancelled', { defaultValue: 'Cancelled' }), color: 'bg-red-50 border-red-200 text-red-700' },
+                  { key: 'revised',   label: t('bizDashboard.quotRevised', { defaultValue: 'Revised' }),   color: 'bg-purple-50 border-purple-200 text-purple-700' },
+                  { key: 'billed',    label: t('bizDashboard.quotBilled', { defaultValue: 'Billed' }),    color: 'bg-blue-50 border-blue-200 text-blue-700' },
                 ].map(({ key, label, color }) => {
                   const arr = quotStats[key];
                   return (
@@ -490,11 +492,11 @@ export default function Dashboard() {
         <div className="bg-card border border-border rounded-xl p-5 mt-5">
           <div className="flex items-center gap-2 mb-4">
             <BarChart2 className="w-4 h-4 text-blue-500" />
-            <h3 className="text-sm font-semibold text-foreground">Ledger Summary</h3>
+            <h3 className="text-sm font-semibold text-foreground">{t('bizDashboard.ledgerSummary', { defaultValue: 'Ledger Summary' })}</h3>
           </div>
 
           {ledgerAccts.length === 0 ? (
-            <p className="text-xs text-muted-foreground italic">No data yet</p>
+            <p className="text-xs text-muted-foreground italic">{t('bizDashboard.noDataYet', { defaultValue: 'No data yet' })}</p>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <ResponsiveContainer width="100%" height={200}>
@@ -503,20 +505,20 @@ export default function Dashboard() {
                   <XAxis dataKey="name" tick={{ fontSize: 9 }} />
                   <YAxis tick={{ fontSize: 10 }} tickFormatter={v => `${(v / 1000).toFixed(0)}k`} />
                   <Tooltip formatter={v => fmtNPR(v)} />
-                  <Bar dataKey="amount" name="Balance" fill="#3b82f6" radius={[3, 3, 0, 0]} />
+                  <Bar dataKey="amount" name={t('bizDashboard.balance', { defaultValue: 'Balance' })} fill="#3b82f6" radius={[3, 3, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
 
               <div className="space-y-3">
                 <div className="rounded-lg bg-green-50 border border-green-200 px-4 py-3">
-                  <p className="text-xs text-green-600 font-medium">Total Receivable</p>
+                  <p className="text-xs text-green-600 font-medium">{t('bizDashboard.totalReceivable', { defaultValue: 'Total Receivable' })}</p>
                   <p className="text-xl font-bold text-green-700 mt-1">{fmtNPR(totalReceivable)}</p>
-                  <p className="text-[10px] text-green-500 mt-0.5">Sum of sales/receivable account balances</p>
+                  <p className="text-[10px] text-green-500 mt-0.5">{t('bizDashboard.sumOfReceivableBalances', { defaultValue: 'Sum of sales/receivable account balances' })}</p>
                 </div>
                 <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-3">
-                  <p className="text-xs text-red-600 font-medium">Total Payable</p>
+                  <p className="text-xs text-red-600 font-medium">{t('bizDashboard.totalPayable', { defaultValue: 'Total Payable' })}</p>
                   <p className="text-xl font-bold text-red-700 mt-1">{fmtNPR(totalPayable)}</p>
-                  <p className="text-[10px] text-red-400 mt-0.5">Sum of purchase/payable account balances</p>
+                  <p className="text-[10px] text-red-400 mt-0.5">{t('bizDashboard.sumOfPayableBalances', { defaultValue: 'Sum of purchase/payable account balances' })}</p>
                 </div>
               </div>
             </div>
@@ -528,7 +530,7 @@ export default function Dashboard() {
       {/* SECTION 3 — Activity                                                  */}
       {/* ══════════════════════════════════════════════════════════════════════ */}
       <Section
-        title="Activity"
+        title={t('bizDashboard.activity', { defaultValue: 'Activity' })}
         icon={Activity}
         iconClass="text-orange-600"
         open={actOpen}
@@ -540,21 +542,21 @@ export default function Dashboard() {
           <div className="bg-card border border-border rounded-xl p-5 xl:col-span-1">
             <div className="flex items-center gap-2 mb-4">
               <CheckCircle2 className="w-4 h-4 text-teal-500" />
-              <h3 className="text-sm font-semibold text-foreground">Task Reports</h3>
+              <h3 className="text-sm font-semibold text-foreground">{t('bizDashboard.taskReports', { defaultValue: 'Task Reports' })}</h3>
             </div>
 
             {/* Task counts */}
             <div className="grid grid-cols-2 gap-2 mb-4">
-              <StatChip label="Completed"   value={taskCompleted.length}  colorClass="bg-green-50 border-green-200 text-green-700" />
-              <StatChip label="In Progress" value={taskInProgress.length} colorClass="bg-blue-50 border-blue-200 text-blue-700" />
-              <StatChip label="Pending"     value={taskPending.length}    colorClass="bg-amber-50 border-amber-200 text-amber-700" />
-              <StatChip label="Total"       value={tasks.length}          colorClass="bg-gray-50 border-gray-200 text-gray-700" />
+              <StatChip label={t('bizDashboard.completed', { defaultValue: 'Completed' })}   value={taskCompleted.length}  colorClass="bg-green-50 border-green-200 text-green-700" />
+              <StatChip label={t('bizDashboard.inProgress', { defaultValue: 'In Progress' })} value={taskInProgress.length} colorClass="bg-blue-50 border-blue-200 text-blue-700" />
+              <StatChip label={t('bizDashboard.pending', { defaultValue: 'Pending' })}     value={taskPending.length}    colorClass="bg-amber-50 border-amber-200 text-amber-700" />
+              <StatChip label={t('bizDashboard.total', { defaultValue: 'Total' })}       value={tasks.length}          colorClass="bg-gray-50 border-gray-200 text-gray-700" />
             </div>
 
             {/* Active tasks list */}
-            <p className="text-xs font-medium text-muted-foreground mb-2">Active Tasks</p>
+            <p className="text-xs font-medium text-muted-foreground mb-2">{t('bizDashboard.activeTasks', { defaultValue: 'Active Tasks' })}</p>
             {activeTasks.length === 0 ? (
-              <p className="text-xs text-muted-foreground italic">No active tasks</p>
+              <p className="text-xs text-muted-foreground italic">{t('bizDashboard.noActiveTasks', { defaultValue: 'No active tasks' })}</p>
             ) : (
               <div className="space-y-1.5 max-h-64 overflow-y-auto">
                 {activeTasks.map((task, i) => {
@@ -568,11 +570,11 @@ export default function Dashboard() {
                     >
                       <div className="flex items-start justify-between gap-2">
                         <p className={`text-xs font-medium truncate flex-1 ${overdue ? 'text-red-700' : 'text-foreground'}`}>
-                          {task.title || task.name || 'Untitled'}
+                          {task.title || task.name || t('bizDashboard.untitled', { defaultValue: 'Untitled' })}
                         </p>
                         {overdue && (
                           <span className="text-[10px] font-semibold bg-red-100 text-red-600 px-1.5 py-0.5 rounded-full shrink-0">
-                            Overdue
+                            {t('bizDashboard.overdue', { defaultValue: 'Overdue' })}
                           </span>
                         )}
                       </div>
@@ -580,7 +582,7 @@ export default function Dashboard() {
                         {assignee && <span className="text-[10px] text-muted-foreground truncate">{assignee}</span>}
                         {dueDate && (
                           <span className={`text-[10px] shrink-0 ml-auto ${overdue ? 'text-red-500' : 'text-muted-foreground'}`}>
-                            Due: {new Date(dueDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                            {t('bizDashboard.due', { defaultValue: 'Due' })}: {new Date(dueDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                           </span>
                         )}
                       </div>
@@ -595,17 +597,17 @@ export default function Dashboard() {
           <div className="bg-card border border-border rounded-xl p-5 xl:col-span-2">
             <div className="flex items-center gap-2 mb-4">
               <CreditCard className="w-4 h-4 text-indigo-500" />
-              <h3 className="text-sm font-semibold text-foreground">Transactions &amp; Cheque Reminders</h3>
+              <h3 className="text-sm font-semibold text-foreground">{t('bizDashboard.transactionsAndChequeReminders', { defaultValue: 'Transactions & Cheque Reminders' })}</h3>
             </div>
 
             {/* Cash flow KPIs */}
             <div className="grid grid-cols-2 gap-3 mb-4">
               <div className="bg-green-50 border border-green-200 rounded-lg px-4 py-3">
-                <p className="text-xs text-green-600 font-medium">Total Inflow (FY)</p>
+                <p className="text-xs text-green-600 font-medium">{t('bizDashboard.totalInflowFY', { defaultValue: 'Total Inflow (FY)' })}</p>
                 <p className="text-xl font-bold text-green-700 mt-0.5">{fmtNPR(fyInflow)}</p>
               </div>
               <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3">
-                <p className="text-xs text-red-500 font-medium">Total Outflow (FY)</p>
+                <p className="text-xs text-red-500 font-medium">{t('bizDashboard.totalOutflowFY', { defaultValue: 'Total Outflow (FY)' })}</p>
                 <p className="text-xl font-bold text-red-600 mt-0.5">{fmtNPR(fyOutflow)}</p>
               </div>
             </div>
@@ -613,7 +615,7 @@ export default function Dashboard() {
             {/* Area chart */}
             {flowChart.length > 0 ? (
               <>
-                <p className="text-xs font-medium text-muted-foreground mb-2">Monthly Cash Flow</p>
+                <p className="text-xs font-medium text-muted-foreground mb-2">{t('bizDashboard.monthlyCashFlow', { defaultValue: 'Monthly Cash Flow' })}</p>
                 <ResponsiveContainer width="100%" height={200}>
                   <AreaChart data={flowChart} margin={{ top: 0, right: 0, left: -10, bottom: 0 }}>
                     <defs>
@@ -631,27 +633,27 @@ export default function Dashboard() {
                     <YAxis tick={{ fontSize: 10 }} tickFormatter={v => `${(v / 1000).toFixed(0)}k`} />
                     <Tooltip formatter={v => fmtNPR(v)} />
                     <Legend iconSize={8} wrapperStyle={{ fontSize: 10 }} />
-                    <Area type="monotone" dataKey="inflow"  name="Inflow"  stroke="#10b981" fill="url(#inflowGrad)"  strokeWidth={2} />
-                    <Area type="monotone" dataKey="outflow" name="Outflow" stroke="#ef4444" fill="url(#outflowGrad)" strokeWidth={2} />
+                    <Area type="monotone" dataKey="inflow"  name={t('bizDashboard.inflow', { defaultValue: 'Inflow' })}  stroke="#10b981" fill="url(#inflowGrad)"  strokeWidth={2} />
+                    <Area type="monotone" dataKey="outflow" name={t('bizDashboard.outflow', { defaultValue: 'Outflow' })} stroke="#ef4444" fill="url(#outflowGrad)" strokeWidth={2} />
                   </AreaChart>
                 </ResponsiveContainer>
               </>
             ) : (
-              <div className="flex items-center justify-center h-[200px] text-xs text-muted-foreground">No data yet</div>
+              <div className="flex items-center justify-center h-[200px] text-xs text-muted-foreground">{t('bizDashboard.noDataYet', { defaultValue: 'No data yet' })}</div>
             )}
 
             {/* Pending Reminders — Cheque & Credit transactions awaiting clearance */}
             <div className="mt-5">
               <div className="flex items-center gap-2 mb-3">
                 <AlertCircle className="w-3.5 h-3.5 text-amber-500" />
-                <p className="text-xs font-semibold text-foreground">Pending Reminders (Cheque &amp; Credit)</p>
+                <p className="text-xs font-semibold text-foreground">{t('bizDashboard.pendingRemindersChequeCredit', { defaultValue: 'Pending Reminders (Cheque & Credit)' })}</p>
               </div>
 
               {/* Tabs */}
               <div className="flex gap-1 mb-3 bg-muted/30 rounded-lg p-1 w-fit">
                 {[
-                  { key: 'receivable', label: `Receivable (${remindersReceivable.length})` },
-                  { key: 'payable',    label: `Payable (${remindersPayable.length})` },
+                  { key: 'receivable', label: t('bizDashboard.receivableCount', { defaultValue: `Receivable (${remindersReceivable.length})`, count: remindersReceivable.length }) },
+                  { key: 'payable',    label: t('bizDashboard.payableCount', { defaultValue: `Payable (${remindersPayable.length})`, count: remindersPayable.length }) },
                 ].map(tab => (
                   <button
                     key={tab.key}
@@ -670,41 +672,44 @@ export default function Dashboard() {
               {/* Reminder list */}
               {(() => {
                 const list = chequeTab === 'receivable' ? remindersReceivable : remindersPayable;
+                const chequeTabLabel = chequeTab === 'receivable'
+                  ? t('bizDashboard.receivable', { defaultValue: 'receivable' })
+                  : t('bizDashboard.payable', { defaultValue: 'payable' });
                 if (list.length === 0) {
-                  return <p className="text-xs text-muted-foreground italic">No pending {chequeTab} reminders</p>;
+                  return <p className="text-xs text-muted-foreground italic">{t('bizDashboard.noPendingReminders', { defaultValue: `No pending ${chequeTabLabel} reminders`, type: chequeTabLabel })}</p>;
                 }
                 return (
                   <div className="space-y-1.5 max-h-64 overflow-y-auto">
-                    {list.map((t, i) => {
-                      const pastDue = t.dateAd && new Date(t.dateAd) < todayDate;
+                    {list.map((txn, i) => {
+                      const pastDue = txn.dateAd && new Date(txn.dateAd) < todayDate;
                       return (
                         <div
-                          key={t.id || i}
+                          key={txn.id || i}
                           className={`rounded-lg border px-3 py-2 flex items-center gap-3 ${pastDue ? 'bg-red-50 border-red-200' : 'bg-amber-50/60 border-amber-200'}`}
                         >
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-1.5">
-                              <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{t.type}</span>
+                              <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{txn.type}</span>
                               <p className={`text-xs font-medium truncate ${pastDue ? 'text-red-700' : 'text-foreground'}`}>
-                                {t.partyName ? `${t.partyName} — ` : ''}{t.description || 'Untitled'}
+                                {txn.partyName ? `${txn.partyName} — ` : ''}{txn.description || t('bizDashboard.untitled', { defaultValue: 'Untitled' })}
                               </p>
                             </div>
-                            {t.dateAd && (
+                            {txn.dateAd && (
                               <p className={`text-[10px] mt-0.5 ${pastDue ? 'text-red-500' : 'text-muted-foreground'}`}>
-                                {pastDue ? 'Overdue · ' : 'Due '}
-                                {new Date(t.dateAd).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' })}
+                                {pastDue ? t('bizDashboard.overdueDot', { defaultValue: 'Overdue · ' }) : t('bizDashboard.dueSpace', { defaultValue: 'Due ' })}
+                                {new Date(txn.dateAd).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' })}
                               </p>
                             )}
                           </div>
                           <div className="text-right shrink-0 flex items-center gap-2">
                             <p className={`text-xs font-mono font-semibold ${pastDue ? 'text-red-600' : 'text-foreground'}`}>
-                              {fmtNPR(t.amount)}
+                              {fmtNPR(txn.amount)}
                             </p>
                             <button
-                              onClick={() => markReminderCompleted(t.id)}
+                              onClick={() => markReminderCompleted(txn.id)}
                               className="text-[10px] font-medium px-2 py-1 rounded-md border border-border bg-card hover:bg-muted transition-colors"
                             >
-                              Mark Completed
+                              {t('bizDashboard.markCompleted', { defaultValue: 'Mark Completed' })}
                             </button>
                           </div>
                         </div>
@@ -724,6 +729,7 @@ export default function Dashboard() {
 
 // ── No Company State ───────────────────────────────────────────────────────────
 function NoCompanyState() {
+  const { t } = useTranslation();
   const [name, setName]       = useState('');
   const [creating, setCreating] = useState(false);
 
@@ -745,16 +751,16 @@ function NoCompanyState() {
       <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mb-6">
         <Building2 className="w-8 h-8 text-primary" />
       </div>
-      <h2 className="text-xl font-bold text-foreground mb-2">Welcome to EasyBooks</h2>
+      <h2 className="text-xl font-bold text-foreground mb-2">{t('bizDashboard.welcomeToEasyBooks', { defaultValue: 'Welcome to EasyBooks' })}</h2>
       <p className="text-sm text-muted-foreground mb-8 text-center max-w-md">
-        Get started by creating your first company. You can manage multiple companies from this app.
+        {t('bizDashboard.getStartedHint', { defaultValue: 'Get started by creating your first company. You can manage multiple companies from this app.' })}
       </p>
       <div className="flex gap-2 w-full max-w-sm">
         <input
           type="text"
           value={name}
           onChange={e => setName(e.target.value)}
-          placeholder="Company name"
+          placeholder={t('bizDashboard.companyNamePlaceholder', { defaultValue: 'Company name' })}
           className="flex-1 px-4 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary"
           onKeyDown={e => e.key === 'Enter' && handleCreate()}
         />
@@ -763,7 +769,7 @@ function NoCompanyState() {
           disabled={creating || !name.trim()}
           className="px-6 py-2.5 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
         >
-          {creating ? 'Creating...' : 'Create'}
+          {creating ? t('bizDashboard.creatingEllipsis', { defaultValue: 'Creating...' }) : t('bizDashboard.create', { defaultValue: 'Create' })}
         </button>
       </div>
     </div>

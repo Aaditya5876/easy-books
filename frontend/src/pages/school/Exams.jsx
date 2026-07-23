@@ -20,6 +20,7 @@ function AddExamDialog({ open, onClose, companyId }) {
   const { t } = useTranslation();
   const qc = useQueryClient();
   const [form, setForm] = useState({ name: '', examDate: '', notes: '' });
+  const [errors, setErrors] = useState({});
 
   const save = useMutation({
     mutationFn: () => examsApi.create({ name: form.name.trim(), examDate: form.examDate || undefined, notes: form.notes || undefined }),
@@ -33,7 +34,13 @@ function AddExamDialog({ open, onClose, companyId }) {
 
   function handleSubmit(e) {
     e.preventDefault();
-    if (!form.name.trim()) { toast.error(t('exams.examNameRequired', { defaultValue: 'Exam name is required' })); return; }
+    if (!form.name.trim()) {
+      const msg = t('exams.examNameRequired', { defaultValue: 'Exam name is required' });
+      setErrors({ name: msg });
+      toast.error(msg);
+      return;
+    }
+    setErrors({});
     save.mutate();
   }
 
@@ -47,7 +54,8 @@ function AddExamDialog({ open, onClose, companyId }) {
         <form onSubmit={handleSubmit} className="space-y-3 pt-2">
           <div className="space-y-1.5">
             <Label>{t('exams.examNameRequiredLabel', { defaultValue: 'Exam Name *' })}</Label>
-            <Input placeholder={t('exams.examNamePlaceholder', { defaultValue: 'e.g. First Terminal 2081' })} value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
+            <Input placeholder={t('exams.examNamePlaceholder', { defaultValue: 'e.g. First Terminal 2081' })} value={form.name} onChange={e => { setForm(f => ({ ...f, name: e.target.value })); if (errors.name) setErrors({}); }} />
+            {errors.name && <p className="text-xs text-red-600">{errors.name}</p>}
           </div>
           <div className="space-y-1.5">
             <Label>{t('exams.examDate', { defaultValue: 'Exam Date' })}</Label>
@@ -84,6 +92,7 @@ function ReportCardEntryDialog({ open, onClose, initial, exams, companyId }) {
     examDate: initial?.examDate ? initial.examDate.split('T')[0] : '',
   });
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const [errors, setErrors] = useState({});
 
   const { data: student } = useQuery({
     queryKey: ['student-by-id', studentId],
@@ -109,10 +118,18 @@ function ReportCardEntryDialog({ open, onClose, initial, exams, companyId }) {
 
   function handleSubmit(e) {
     e.preventDefault();
-    if (!studentId) { toast.error(t('exams.selectAStudent', { defaultValue: 'Select a student' })); return; }
-    if (!form.examId) { toast.error(t('exams.selectAnExam', { defaultValue: 'Select an exam' })); return; }
-    if (!form.subjectId) { toast.error(t('exams.selectASubject', { defaultValue: 'Select a subject' })); return; }
-    if (!form.marksObtained || !form.totalMarks) { toast.error(t('exams.enterMarks', { defaultValue: 'Enter marks' })); return; }
+    const errs = {};
+    if (!studentId) errs.studentId = t('exams.selectAStudent', { defaultValue: 'Select a student' });
+    if (!form.examId) errs.examId = t('exams.selectAnExam', { defaultValue: 'Select an exam' });
+    if (!form.subjectId) errs.subjectId = t('exams.selectASubject', { defaultValue: 'Select a subject' });
+    if (!form.marksObtained) errs.marksObtained = t('exams.enterMarks', { defaultValue: 'Enter marks' });
+    if (!form.totalMarks) errs.totalMarks = t('exams.enterMarks', { defaultValue: 'Enter marks' });
+    if (Object.keys(errs).length) {
+      setErrors(errs);
+      toast.error(Object.values(errs)[0]);
+      return;
+    }
+    setErrors({});
     save.mutate({
       studentId,
       examId: form.examId,
@@ -136,11 +153,12 @@ function ReportCardEntryDialog({ open, onClose, initial, exams, companyId }) {
             <Label>{t('exams.studentRequired', { defaultValue: 'Student *' })}</Label>
             <StudentCombobox
               value={studentId}
-              onChange={setStudentId}
+              onChange={v => { setStudentId(v); if (errors.studentId) setErrors(er => ({ ...er, studentId: undefined })); }}
               status=""
               placeholder={t('exams.selectStudent', { defaultValue: 'Search by name or roll number…' })}
               disabled={isEdit}
             />
+            {errors.studentId && <p className="text-xs text-red-600">{errors.studentId}</p>}
             <p className="text-xs text-muted-foreground">{t('exams.sameNameHint', { defaultValue: 'If more than one student shares a name, keep typing their roll number to narrow it down.' })}</p>
           </div>
 
@@ -155,28 +173,32 @@ function ReportCardEntryDialog({ open, onClose, initial, exams, companyId }) {
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label>{t('exams.examRequired', { defaultValue: 'Exam *' })}</Label>
-              <select className="w-full border rounded-md px-3 py-2 text-sm bg-background" value={form.examId} onChange={e => set('examId', e.target.value)}>
+              <select className="w-full border rounded-md px-3 py-2 text-sm bg-background" value={form.examId} onChange={e => { set('examId', e.target.value); if (errors.examId) setErrors(er => ({ ...er, examId: undefined })); }}>
                 <option value="">{t('exams.selectExam', { defaultValue: 'Select exam…' })}</option>
                 {exams.map(ex => <option key={ex.id} value={ex.id}>{ex.name}</option>)}
               </select>
+              {errors.examId && <p className="text-xs text-red-600">{errors.examId}</p>}
             </div>
             <div className="space-y-1.5">
               <Label>{t('exams.subjectRequired', { defaultValue: 'Subject *' })}</Label>
-              <select className="w-full border rounded-md px-3 py-2 text-sm bg-background" value={form.subjectId} onChange={e => set('subjectId', e.target.value)} disabled={!studentId}>
+              <select className="w-full border rounded-md px-3 py-2 text-sm bg-background" value={form.subjectId} onChange={e => { set('subjectId', e.target.value); if (errors.subjectId) setErrors(er => ({ ...er, subjectId: undefined })); }} disabled={!studentId}>
                 <option value="">{t('exams.selectSubject', { defaultValue: 'Select subject…' })}</option>
                 {filterSubjectsByClass(subjects, student?.classId).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
               </select>
+              {errors.subjectId && <p className="text-xs text-red-600">{errors.subjectId}</p>}
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label>{t('exams.marksObtainedRequired', { defaultValue: 'Marks Obtained *' })}</Label>
-              <Input type="number" placeholder="75" value={form.marksObtained} onChange={e => set('marksObtained', e.target.value)} />
+              <Input type="number" placeholder="75" value={form.marksObtained} onChange={e => { set('marksObtained', e.target.value); if (errors.marksObtained) setErrors(er => ({ ...er, marksObtained: undefined })); }} />
+              {errors.marksObtained && <p className="text-xs text-red-600">{errors.marksObtained}</p>}
             </div>
             <div className="space-y-1.5">
               <Label>{t('exams.totalMarksRequired', { defaultValue: 'Total Marks *' })}</Label>
-              <Input type="number" placeholder="100" value={form.totalMarks} onChange={e => set('totalMarks', e.target.value)} />
+              <Input type="number" placeholder="100" value={form.totalMarks} onChange={e => { set('totalMarks', e.target.value); if (errors.totalMarks) setErrors(er => ({ ...er, totalMarks: undefined })); }} />
+              {errors.totalMarks && <p className="text-xs text-red-600">{errors.totalMarks}</p>}
             </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
@@ -205,7 +227,7 @@ function ReportCardEntryDialog({ open, onClose, initial, exams, companyId }) {
 
 // ── View Report Card (read-only, aggregates all subjects for one student+exam) ─
 
-function printReportCard(data) {
+function printReportCard(data, aiRemark) {
   const { student, results, company, examName, totalObtained, totalMax, percentage } = data;
   const className = student.class ? `${student.class.name}${student.class.section ? ` (${student.class.section})` : ''}` : '—';
   const rows = results.map(r => `
@@ -230,6 +252,7 @@ function printReportCard(data) {
       table{width:100%;border-collapse:collapse;font-size:13px;margin-top:16px}
       th{background:#f0f0f0;border:1px solid #ddd;padding:8px;text-align:left}
       .total{font-weight:bold;background:#f8f8f8}
+      .remark{margin-top:20px;font-size:13px;line-height:1.6}
       .footer{margin-top:50px;display:flex;justify-content:space-between;font-size:13px}
       @media print{button{display:none}}
     </style></head>
@@ -263,6 +286,7 @@ function printReportCard(data) {
         </tr>
       </tbody>
     </table>
+    ${aiRemark ? `<div class="remark"><strong>Remark:</strong> ${aiRemark}</div>` : ''}
     <div class="footer">
       <div>Class Teacher: _______________</div>
       <div>Principal: _______________</div>
@@ -339,7 +363,7 @@ function ViewReportCardDialog({ open, onClose, studentId, examName }) {
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>{t('exams.close', { defaultValue: 'Close' })}</Button>
           {cardData && (
-            <Button onClick={() => printReportCard(cardData)}>
+            <Button onClick={() => printReportCard(cardData, aiComment)}>
               {t('exams.print', { defaultValue: 'Print' })}
             </Button>
           )}

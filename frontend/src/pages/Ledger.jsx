@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { api } from '@/api/adapter';
 import { ledgerApi } from '@/api';
 import { getActiveCompanyId } from '@/lib/companyContext';
@@ -24,6 +25,7 @@ import { useAuth } from '@/lib/AuthContext';
 import { useToast } from '@/components/ui/use-toast';
 
 export default function Ledger() {
+  const { t } = useTranslation();
   const companyId = getActiveCompanyId();
   const { isAdmin } = useRole();
   const { user } = useAuth();
@@ -115,7 +117,7 @@ export default function Ledger() {
     try {
       if (pwDialog.mode === 'hide') {
         await ledgerApi.accounts.toggleHidden(pwDialog.account.id, pwInput);
-        toast({ title: pwDialog.account.isHidden ? 'Account unhidden' : 'Account hidden', description: pwDialog.account.account_name });
+        toast({ title: pwDialog.account.isHidden ? t('ledger.accountUnhidden', { defaultValue: 'Account unhidden' }) : t('ledger.accountHidden', { defaultValue: 'Account hidden' }), description: pwDialog.account.account_name });
         setShowAccountDetail(null);
         loadData();
       } else if (pwDialog.mode === 'search') {
@@ -123,14 +125,14 @@ export default function Ledger() {
         setShowAccountDetail(res.data);
       } else if (pwDialog.mode === 'deleteHidden') {
         await ledgerApi.accounts.removeHidden(pwDialog.account.id, pwInput);
-        toast({ title: 'Hidden account deleted', description: pwDialog.account.account_name });
+        toast({ title: t('ledger.hiddenAccountDeleted', { defaultValue: 'Hidden account deleted' }), description: pwDialog.account.account_name });
         setShowAccountDetail(null);
         loadData();
       }
       setPwDialog(null);
       setPwInput('');
     } catch (err) {
-      toast({ title: 'Error', description: err?.response?.data?.message || 'Incorrect password or account not found.', variant: 'destructive' });
+      toast({ title: t('ledger.error', { defaultValue: 'Error' }), description: err?.response?.data?.message || t('ledger.incorrectPasswordOrNotFound', { defaultValue: 'Incorrect password or account not found.' }), variant: 'destructive' });
     } finally {
       setPwLoading(false);
     }
@@ -163,11 +165,11 @@ export default function Ledger() {
     const creditAmt = Number(newEntry.credit) || 0;
 
     if (!newEntry.contra_account_id) {
-      toast({ title: 'Select the contra account', description: 'Every entry needs an offsetting account for double-entry bookkeeping.', variant: 'destructive' });
+      toast({ title: t('ledger.selectContraAccount', { defaultValue: 'Select the contra account' }), description: t('ledger.contraAccountHint', { defaultValue: 'Every entry needs an offsetting account for double-entry bookkeeping.' }), variant: 'destructive' });
       return;
     }
     if ((debitAmt > 0) === (creditAmt > 0)) {
-      toast({ title: 'Enter either a debit or a credit amount, not both', variant: 'destructive' });
+      toast({ title: t('ledger.enterDebitOrCredit', { defaultValue: 'Enter either a debit or a credit amount, not both' }), variant: 'destructive' });
       return;
     }
 
@@ -185,7 +187,7 @@ export default function Ledger() {
       setShowNewEntry(false);
       loadData();
     } catch (e) {
-      toast({ title: 'Failed to save entry', description: e?.response?.data?.message || '', variant: 'destructive' });
+      toast({ title: t('ledger.failedToSaveEntry', { defaultValue: 'Failed to save entry' }), description: e?.response?.data?.message || '', variant: 'destructive' });
     }
   }
 
@@ -205,37 +207,37 @@ export default function Ledger() {
     : [];
 
   const accountColumns = [
-    { key: 'account_name', label: 'Account Name', filterValue: colFilters.account_name, onFilterChange: v => setCol('account_name', v), render: (row) => (
+    { key: 'account_name', label: t('ledger.accountName', { defaultValue: 'Account Name' }), filterValue: colFilters.account_name, onFilterChange: v => setCol('account_name', v), render: (row) => (
       <span className="font-medium text-foreground">{row.account_name}</span>
     )},
-    { key: 'contact_name', label: 'Contact', filterValue: colFilters.contact_name, onFilterChange: v => setCol('contact_name', v) },
-    { key: 'contact_phone', label: 'Phone' },
-    { key: 'current_balance', label: 'Balance', render: (row) => (
+    { key: 'contact_name', label: t('ledger.contact', { defaultValue: 'Contact' }), filterValue: colFilters.contact_name, onFilterChange: v => setCol('contact_name', v) },
+    { key: 'contact_phone', label: t('ledger.phone', { defaultValue: 'Phone' }) },
+    { key: 'current_balance', label: t('ledger.balance', { defaultValue: 'Balance' }), render: (row) => (
       <span className={row.current_balance >= 0 ? 'text-green-600 font-semibold' : 'text-red-600 font-semibold'}>
         NPR {(row.current_balance || 0).toLocaleString()}
       </span>
     )},
-    { key: 'is_active', label: 'Status', filterValue: colFilters.status, onFilterChange: v => setCol('status', v), filterPlaceholder: 'active/inactive', render: (row) => (
+    { key: 'is_active', label: t('ledger.status', { defaultValue: 'Status' }), filterValue: colFilters.status, onFilterChange: v => setCol('status', v), filterPlaceholder: 'active/inactive', render: (row) => (
       <Badge variant={row.is_active ? 'default' : 'secondary'}>
-        {row.is_active ? 'Active' : 'Inactive'}
+        {row.is_active ? t('ledger.active', { defaultValue: 'Active' }) : t('ledger.inactive', { defaultValue: 'Inactive' })}
       </Badge>
     )},
   ];
 
   const entryColumns = [
-    { key: 'date_ad', label: 'Date (AD)', render: (row) => row.date_ad || '-' },
-    { key: 'date_bs', label: 'Date (BS)', render: (row) => row.date_bs || '-' },
-    { key: 'description', label: 'Description' },
-    { key: 'reference_id', label: 'Reference No.', render: (row) => (
+    { key: 'date_ad', label: t('ledger.dateAD', { defaultValue: 'Date (AD)' }), render: (row) => row.date_ad || '-' },
+    { key: 'date_bs', label: t('ledger.dateBS', { defaultValue: 'Date (BS)' }), render: (row) => row.date_bs || '-' },
+    { key: 'description', label: t('ledger.description', { defaultValue: 'Description' }) },
+    { key: 'reference_id', label: t('ledger.referenceNo', { defaultValue: 'Reference No.' }), render: (row) => (
       row.reference_id ? <span className="text-xs text-muted-foreground font-mono">{row.reference_id}</span> : null
     )},
-    { key: 'debit', label: 'Debit', render: (row) => (
+    { key: 'debit', label: t('ledger.debit', { defaultValue: 'Debit' }), render: (row) => (
       row.debit ? <span className="text-red-600 font-mono">NPR {row.debit.toLocaleString()}</span> : null
     )},
-    { key: 'credit', label: 'Credit', render: (row) => (
+    { key: 'credit', label: t('ledger.credit', { defaultValue: 'Credit' }), render: (row) => (
       row.credit ? <span className="text-green-600 font-mono">NPR {row.credit.toLocaleString()}</span> : null
     )},
-    { key: 'balance', label: 'Balance', render: (row) => (
+    { key: 'balance', label: t('ledger.balance', { defaultValue: 'Balance' }), render: (row) => (
       <span className="font-mono font-medium">NPR {Math.abs(row.balance || 0).toLocaleString()}</span>
     )},
   ];
@@ -245,44 +247,44 @@ export default function Ledger() {
   return (
     <div className="space-y-6 animate-fade-in">
       <PageHeader
-        title="Ledger"
-        subtitle={isSchool ? 'School income & expense accounts' : 'Purchase, Sales & Expense Accounts'}
+        title={t('ledger.title', { defaultValue: 'Ledger' })}
+        subtitle={isSchool ? t('ledger.subtitleSchool', { defaultValue: 'School income & expense accounts' }) : t('ledger.subtitleBusiness', { defaultValue: 'Purchase, Sales & Expense Accounts' })}
         searchValue={search}
         onSearchChange={setSearch}
         onAdd={() => setShowNewAccount(true)}
-        addLabel="New Account"
+        addLabel={t('ledger.newAccount', { defaultValue: 'New Account' })}
       />
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="bg-secondary">
-          <TabsTrigger value="purchase">Purchase Account</TabsTrigger>
-          <TabsTrigger value="sales">Sales Account</TabsTrigger>
-          <TabsTrigger value="expense">Expenses Account</TabsTrigger>
+          <TabsTrigger value="purchase">{t('ledger.purchaseAccount', { defaultValue: 'Purchase Account' })}</TabsTrigger>
+          <TabsTrigger value="sales">{t('ledger.salesAccount', { defaultValue: 'Sales Account' })}</TabsTrigger>
+          <TabsTrigger value="expense">{t('ledger.expensesAccount', { defaultValue: 'Expenses Account' })}</TabsTrigger>
         </TabsList>
 
         <TabsContent value={activeTab} className="mt-4">
           {filteredAccounts.length === 0 && !searchIsEmpty ? (
             <EmptyState
               icon={BookOpen}
-              title="No accounts yet"
-              description="Add your first ledger account to start tracking balances."
+              title={t('ledger.noAccountsYet', { defaultValue: 'No accounts yet' })}
+              description={t('ledger.noAccountsYetHint', { defaultValue: 'Add your first ledger account to start tracking balances.' })}
               action={
                 <Button onClick={() => setShowNewAccount(true)}>
-                  <Plus className="w-4 h-4 mr-2" />Add First Record
+                  <Plus className="w-4 h-4 mr-2" />{t('ledger.addFirstRecord', { defaultValue: 'Add First Record' })}
                 </Button>
               }
             />
           ) : searchIsEmpty && isAdmin ? (
             <div className="bg-card rounded-xl border border-border p-10 text-center space-y-3">
               <EyeOff className="w-8 h-8 mx-auto text-muted-foreground" />
-              <p className="text-sm font-medium">No visible accounts match "{search}"</p>
-              <p className="text-xs text-muted-foreground">This account may be hidden. Enter the exact name to search hidden accounts.</p>
+              <p className="text-sm font-medium">{t('ledger.noVisibleAccountsMatch', { defaultValue: `No visible accounts match "${search}"`, search })}</p>
+              <p className="text-xs text-muted-foreground">{t('ledger.mayBeHiddenHint', { defaultValue: 'This account may be hidden. Enter the exact name to search hidden accounts.' })}</p>
               <Button variant="outline" size="sm" className="gap-2" onClick={() => {
                 setHiddenSearchName(search);
                 setPwDialog({ mode: 'search' });
                 setPwInput('');
               }}>
-                <Lock className="w-3.5 h-3.5" /> Search Hidden Accounts
+                <Lock className="w-3.5 h-3.5" /> {t('ledger.searchHiddenAccounts', { defaultValue: 'Search Hidden Accounts' })}
               </Button>
             </div>
           ) : (
@@ -293,7 +295,7 @@ export default function Ledger() {
               onRowClick={(row) => setSelectedAccount(row)}
               onRowDoubleClick={(row) => setShowAccountDetail(row)}
               onRowContextMenu={isAdmin ? (row, e) => setContextMenu({ x: e.clientX, y: e.clientY, account: row }) : undefined}
-              emptyMessage={`No ${activeTab} accounts yet. Click "New Account" to create one.`}
+              emptyMessage={t('ledger.noAccountsYetType', { defaultValue: `No ${activeTab} accounts yet. Click "New Account" to create one.`, type: activeTab })}
             />
           )}
         </TabsContent>
@@ -306,7 +308,7 @@ export default function Ledger() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <BookOpen className="w-5 h-5 text-primary" />
-              New {activeTab.charAt(0).toUpperCase() + activeTab.slice(1)} Account
+              {t('ledger.newTypeAccount', { defaultValue: `New ${activeTab.charAt(0).toUpperCase() + activeTab.slice(1)} Account`, type: activeTab.charAt(0).toUpperCase() + activeTab.slice(1) })}
             </DialogTitle>
           </DialogHeader>
 
@@ -319,17 +321,17 @@ export default function Ledger() {
               className="space-y-3"
             >
               <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1.5">
-                <BookOpen className="w-3.5 h-3.5" /> Account Info
+                <BookOpen className="w-3.5 h-3.5" /> {t('ledger.accountInfo', { defaultValue: 'Account Info' })}
               </p>
 
               {/* Account Name */}
               <div>
-                <Label className="text-xs font-medium">Account Name *</Label>
+                <Label className="text-xs font-medium">{t('ledger.accountNameRequired', { defaultValue: 'Account Name *' })}</Label>
                 <div className="relative mt-1">
                   <BookOpen className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
                   <Input
                     className="pl-8 h-9 text-sm"
-                    placeholder="Party or account name"
+                    placeholder={t('ledger.partyOrAccountName', { defaultValue: 'Party or account name' })}
                     value={newAccount.account_name}
                     onChange={e => setNewAccount({ ...newAccount, account_name: e.target.value })}
                   />
@@ -338,12 +340,12 @@ export default function Ledger() {
 
               {/* Contact Person */}
               <div>
-                <Label className="text-xs font-medium">Contact Person</Label>
+                <Label className="text-xs font-medium">{t('ledger.contactPerson', { defaultValue: 'Contact Person' })}</Label>
                 <div className="relative mt-1">
                   <User className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
                   <Input
                     className="pl-8 h-9 text-sm"
-                    placeholder="Contact name (optional)"
+                    placeholder={t('ledger.contactNameOptional', { defaultValue: 'Contact name (optional)' })}
                     value={newAccount.contact_name}
                     onChange={e => setNewAccount({ ...newAccount, contact_name: e.target.value })}
                   />
@@ -352,12 +354,12 @@ export default function Ledger() {
 
               {/* Phone */}
               <div>
-                <Label className="text-xs font-medium">Phone</Label>
+                <Label className="text-xs font-medium">{t('ledger.phone', { defaultValue: 'Phone' })}</Label>
                 <div className="relative mt-1">
                   <Phone className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
                   <Input
                     className="pl-8 h-9 text-sm"
-                    placeholder="Phone number (optional)"
+                    placeholder={t('ledger.phoneNumberOptional', { defaultValue: 'Phone number (optional)' })}
                     value={newAccount.contact_phone}
                     onChange={e => setNewAccount({ ...newAccount, contact_phone: e.target.value })}
                   />
@@ -373,18 +375,18 @@ export default function Ledger() {
               className="space-y-3"
             >
               <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1.5">
-                <Wallet className="w-3.5 h-3.5" /> Financial Details
+                <Wallet className="w-3.5 h-3.5" /> {t('ledger.financialDetails', { defaultValue: 'Financial Details' })}
               </p>
 
               {/* PAN/VAT — business companies only; schools don't deal in VAT-registered parties */}
               {!isSchool && (
                 <div>
-                  <Label className="text-xs font-medium">PAN / VAT No.</Label>
+                  <Label className="text-xs font-medium">{t('ledger.panVatNo', { defaultValue: 'PAN / VAT No.' })}</Label>
                   <div className="relative mt-1">
                     <Hash className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
                     <Input
                       className="pl-8 h-9 text-sm"
-                      placeholder="e.g. 123456789 (optional)"
+                      placeholder={t('ledger.panVatPlaceholder', { defaultValue: 'e.g. 123456789 (optional)' })}
                       value={newAccount.pan_vat}
                       onChange={e => setNewAccount({ ...newAccount, pan_vat: e.target.value })}
                     />
@@ -394,12 +396,12 @@ export default function Ledger() {
 
               {/* Address */}
               <div>
-                <Label className="text-xs font-medium">Address</Label>
+                <Label className="text-xs font-medium">{t('ledger.address', { defaultValue: 'Address' })}</Label>
                 <div className="relative mt-1">
                   <MapPin className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
                   <Input
                     className="pl-8 h-9 text-sm"
-                    placeholder="Address (optional)"
+                    placeholder={t('ledger.addressOptional', { defaultValue: 'Address (optional)' })}
                     value={newAccount.address}
                     onChange={e => setNewAccount({ ...newAccount, address: e.target.value })}
                   />
@@ -408,7 +410,7 @@ export default function Ledger() {
 
               {/* Opening Balance */}
               <div>
-                <Label className="text-xs font-medium">Opening Balance</Label>
+                <Label className="text-xs font-medium">{t('ledger.openingBalance', { defaultValue: 'Opening Balance' })}</Label>
                 <div className="flex gap-2 mt-1 mb-2">
                   <label className="flex items-center gap-1.5 text-xs cursor-pointer">
                     <input
@@ -419,7 +421,7 @@ export default function Ledger() {
                       onChange={() => setNewAccount({ ...newAccount, ob_type: 'debit' })}
                       className="accent-primary"
                     />
-                    <span>Debit (you owe them)</span>
+                    <span>{t('ledger.debitYouOweThem', { defaultValue: 'Debit (you owe them)' })}</span>
                   </label>
                   <label className="flex items-center gap-1.5 text-xs cursor-pointer">
                     <input
@@ -430,7 +432,7 @@ export default function Ledger() {
                       onChange={() => setNewAccount({ ...newAccount, ob_type: 'credit' })}
                       className="accent-primary"
                     />
-                    <span>Credit (they owe you)</span>
+                    <span>{t('ledger.creditTheyOweYou', { defaultValue: 'Credit (they owe you)' })}</span>
                   </label>
                 </div>
                 <div className="flex items-stretch">
@@ -448,11 +450,11 @@ export default function Ledger() {
               {/* Notes */}
               <div>
                 <Label className="text-xs font-medium flex items-center gap-1.5">
-                  <FileText className="w-3.5 h-3.5" /> Notes
+                  <FileText className="w-3.5 h-3.5" /> {t('ledger.notes', { defaultValue: 'Notes' })}
                 </Label>
                 <Textarea
                   className="mt-1 text-sm"
-                  placeholder="Optional notes..."
+                  placeholder={t('ledger.optionalNotesEllipsis', { defaultValue: 'Optional notes...' })}
                   value={newAccount.notes}
                   onChange={e => setNewAccount({ ...newAccount, notes: e.target.value })}
                   rows={2}
@@ -462,8 +464,8 @@ export default function Ledger() {
           </div>
 
           <DialogFooter className="mt-4">
-            <Button variant="outline" onClick={() => setShowNewAccount(false)}>Cancel</Button>
-            <Button onClick={createAccount} disabled={!newAccount.account_name}>Create Account</Button>
+            <Button variant="outline" onClick={() => setShowNewAccount(false)}>{t('ledger.cancel', { defaultValue: 'Cancel' })}</Button>
+            <Button onClick={createAccount} disabled={!newAccount.account_name}>{t('ledger.createAccount', { defaultValue: 'Create Account' })}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -497,7 +499,7 @@ export default function Ledger() {
               setContextMenu(null);
             }}
           >
-            <Eye className="w-3.5 h-3.5 text-muted-foreground" /> Open Account
+            <Eye className="w-3.5 h-3.5 text-muted-foreground" /> {t('ledger.openAccount', { defaultValue: 'Open Account' })}
           </button>
           <div className="border-t border-border my-1" />
           <button
@@ -509,7 +511,7 @@ export default function Ledger() {
             }}
           >
             <EyeOff className="w-3.5 h-3.5" />
-            {contextMenu.account?.isHidden ? 'Unhide Account' : 'Hide Account'}
+            {contextMenu.account?.isHidden ? t('ledger.unhideAccount', { defaultValue: 'Unhide Account' }) : t('ledger.hideAccount', { defaultValue: 'Hide Account' })}
           </button>
         </div>
       )}
@@ -520,48 +522,48 @@ export default function Ledger() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Lock className="w-4 h-4 text-amber-500" />
-              {pwDialog?.mode === 'hide' && (pwDialog?.account?.isHidden ? 'Unhide Account' : 'Hide Account')}
-              {pwDialog?.mode === 'search' && 'Access Hidden Account'}
-              {pwDialog?.mode === 'deleteHidden' && 'Delete Hidden Account'}
+              {pwDialog?.mode === 'hide' && (pwDialog?.account?.isHidden ? t('ledger.unhideAccount', { defaultValue: 'Unhide Account' }) : t('ledger.hideAccount', { defaultValue: 'Hide Account' }))}
+              {pwDialog?.mode === 'search' && t('ledger.accessHiddenAccount', { defaultValue: 'Access Hidden Account' })}
+              {pwDialog?.mode === 'deleteHidden' && t('ledger.deleteHiddenAccount', { defaultValue: 'Delete Hidden Account' })}
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
             {pwDialog?.mode === 'search' && (
               <div className="space-y-1.5">
-                <Label className="text-xs">Account Name</Label>
+                <Label className="text-xs">{t('ledger.accountName', { defaultValue: 'Account Name' })}</Label>
                 <Input
                   value={hiddenSearchName}
                   onChange={e => setHiddenSearchName(e.target.value)}
-                  placeholder="Exact account name..."
+                  placeholder={t('ledger.exactAccountNameEllipsis', { defaultValue: 'Exact account name...' })}
                   className="h-9 text-sm"
                 />
               </div>
             )}
             {pwDialog?.mode === 'deleteHidden' && (
               <p className="text-sm text-destructive font-medium">
-                This will permanently delete "{pwDialog?.account?.account_name}". This cannot be undone.
+                {t('ledger.permanentlyDeleteConfirm', { defaultValue: `This will permanently delete "${pwDialog?.account?.account_name}". This cannot be undone.`, name: pwDialog?.account?.account_name })}
               </p>
             )}
             <div className="space-y-1.5">
-              <Label className="text-xs">Admin Password</Label>
+              <Label className="text-xs">{t('ledger.adminPassword', { defaultValue: 'Admin Password' })}</Label>
               <Input
                 type="password"
                 value={pwInput}
                 onChange={e => setPwInput(e.target.value)}
-                placeholder="Enter your password..."
+                placeholder={t('ledger.enterYourPasswordEllipsis', { defaultValue: 'Enter your password...' })}
                 className="h-9 text-sm"
                 onKeyDown={e => e.key === 'Enter' && handlePasswordSubmit()}
               />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => { setPwDialog(null); setPwInput(''); }}>Cancel</Button>
+            <Button variant="outline" onClick={() => { setPwDialog(null); setPwInput(''); }}>{t('ledger.cancel', { defaultValue: 'Cancel' })}</Button>
             <Button
               onClick={handlePasswordSubmit}
               disabled={!pwInput.trim() || pwLoading}
               variant={pwDialog?.mode === 'deleteHidden' ? 'destructive' : 'default'}
             >
-              {pwLoading ? 'Verifying…' : 'Confirm'}
+              {pwLoading ? t('ledger.verifyingEllipsis', { defaultValue: 'Verifying…' }) : t('ledger.confirm', { defaultValue: 'Confirm' })}
             </Button>
           </DialogFooter>
         </DialogContent>

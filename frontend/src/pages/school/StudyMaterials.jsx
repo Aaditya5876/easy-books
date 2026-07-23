@@ -32,6 +32,7 @@ function UploadDialog({ open, onClose, classes, subjects, companyId }) {
   const [form, setForm] = useState({ title: '', classId: '', subjectId: '', description: '', uploadedBy: '' });
   const [file, setFile] = useState(null);
   const [uploading, setUploading] = useState(false);
+  const [errors, setErrors] = useState({});
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   const save = useMutation({
@@ -46,8 +47,15 @@ function UploadDialog({ open, onClose, classes, subjects, companyId }) {
 
   async function handleSubmit(e) {
     e.preventDefault();
-    if (!form.title.trim()) { toast.error(t('materials.titleRequired', { defaultValue: 'Title is required' })); return; }
-    if (!file) { toast.error(t('materials.selectFile', { defaultValue: 'Please select a file' })); return; }
+    const errs = {};
+    if (!form.title.trim()) errs.title = t('materials.titleRequired', { defaultValue: 'Title is required' });
+    if (!file) errs.file = t('materials.selectFile', { defaultValue: 'Please select a file' });
+    if (Object.keys(errs).length) {
+      setErrors(errs);
+      toast.error(Object.values(errs)[0]);
+      return;
+    }
+    setErrors({});
     setUploading(true);
     try {
       const res = await uploadApi.upload(file);
@@ -68,7 +76,8 @@ function UploadDialog({ open, onClose, classes, subjects, companyId }) {
         <form onSubmit={handleSubmit} className="space-y-4 pt-2">
           <div className="space-y-1.5">
             <Label>{t('materials.title', { defaultValue: 'Title *' })}</Label>
-            <Input placeholder={t('materials.titlePlaceholder', { defaultValue: 'e.g. Chapter 3 Notes' })} value={form.title} onChange={e => set('title', e.target.value)} />
+            <Input placeholder={t('materials.titlePlaceholder', { defaultValue: 'e.g. Chapter 3 Notes' })} value={form.title} onChange={e => { set('title', e.target.value); if (errors.title) setErrors(er => ({ ...er, title: undefined })); }} />
+            {errors.title && <p className="text-xs text-red-600">{errors.title}</p>}
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
@@ -96,7 +105,8 @@ function UploadDialog({ open, onClose, classes, subjects, companyId }) {
           </div>
           <div className="space-y-1.5">
             <Label>{t('materials.file', { defaultValue: 'File *' })}</Label>
-            <input type="file" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" onChange={e => setFile(e.target.files[0])} className="w-full text-sm border rounded-md px-3 py-2 cursor-pointer" />
+            <input type="file" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" onChange={e => { setFile(e.target.files[0]); if (errors.file) setErrors(er => ({ ...er, file: undefined })); }} className="w-full text-sm border rounded-md px-3 py-2 cursor-pointer" />
+            {errors.file && <p className="text-xs text-red-600">{errors.file}</p>}
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose}>{t('materials.cancel', { defaultValue: 'Cancel' })}</Button>

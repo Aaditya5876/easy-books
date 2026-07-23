@@ -22,6 +22,7 @@ function RouteDialog({ open, onClose, initial, companyId }) {
     stops: initial.stops || '', monthlyFee: initial.monthlyFee,
     driverName: initial.driverName || '', vehicleNumber: initial.vehicleNumber || '',
   } : EMPTY_ROUTE);
+  const [errors, setErrors] = useState({});
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   const save = useMutation({
@@ -32,7 +33,13 @@ function RouteDialog({ open, onClose, initial, companyId }) {
 
   function handleSubmit(e) {
     e.preventDefault();
-    if (!form.routeName.trim()) { toast.error(t('transport.routeNameRequired', { defaultValue: 'Route name is required' })); return; }
+    if (!form.routeName.trim()) {
+      const msg = t('transport.routeNameRequired', { defaultValue: 'Route name is required' });
+      setErrors({ routeName: msg });
+      toast.error(msg);
+      return;
+    }
+    setErrors({});
     save.mutate({ ...form, companyId, monthlyFee: Number(form.monthlyFee) });
   }
 
@@ -43,7 +50,8 @@ function RouteDialog({ open, onClose, initial, companyId }) {
         <form onSubmit={handleSubmit} className="space-y-4 pt-2">
           <div className="space-y-1.5">
             <Label>{t('transport.routeNameLabel', { defaultValue: 'Route Name *' })}</Label>
-            <Input placeholder={t('transport.routeNamePlaceholder', { defaultValue: 'e.g. Kathmandu - Lalitpur' })} value={form.routeName} onChange={e => set('routeName', e.target.value)} />
+            <Input placeholder={t('transport.routeNamePlaceholder', { defaultValue: 'e.g. Kathmandu - Lalitpur' })} value={form.routeName} onChange={e => { set('routeName', e.target.value); if (errors.routeName) setErrors({}); }} />
+            {errors.routeName && <p className="text-xs text-red-600">{errors.routeName}</p>}
           </div>
           <div className="space-y-1.5">
             <Label>{t('transport.stops', { defaultValue: 'Stops' })}</Label>
@@ -78,6 +86,7 @@ function AssignDialog({ open, onClose, routes, companyId }) {
   const { t } = useTranslation();
   const qc = useQueryClient();
   const [form, setForm] = useState({ routeId: '', studentId: '', pickupStop: '' });
+  const [errors, setErrors] = useState({});
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   const assign = useMutation({
@@ -92,8 +101,15 @@ function AssignDialog({ open, onClose, routes, companyId }) {
 
   function handleSubmit(e) {
     e.preventDefault();
-    if (!form.routeId) { toast.error(t('transport.selectARoute', { defaultValue: 'Select a route' })); return; }
-    if (!form.studentId) { toast.error(t('transport.selectAStudent', { defaultValue: 'Select a student' })); return; }
+    const errs = {};
+    if (!form.routeId) errs.routeId = t('transport.selectARoute', { defaultValue: 'Select a route' });
+    if (!form.studentId) errs.studentId = t('transport.selectAStudent', { defaultValue: 'Select a student' });
+    if (Object.keys(errs).length) {
+      setErrors(errs);
+      toast.error(Object.values(errs)[0]);
+      return;
+    }
+    setErrors({});
     assign.mutate({ companyId, routeId: form.routeId, studentId: form.studentId, pickupStop: form.pickupStop || undefined });
   }
 
@@ -104,18 +120,20 @@ function AssignDialog({ open, onClose, routes, companyId }) {
         <form onSubmit={handleSubmit} className="space-y-4 pt-2">
           <div className="space-y-1.5">
             <Label>{t('transport.routeLabel', { defaultValue: 'Route *' })}</Label>
-            <select className="w-full border rounded-md px-3 py-2 text-sm bg-background" value={form.routeId} onChange={e => set('routeId', e.target.value)}>
+            <select className="w-full border rounded-md px-3 py-2 text-sm bg-background" value={form.routeId} onChange={e => { set('routeId', e.target.value); if (errors.routeId) setErrors(er => ({ ...er, routeId: undefined })); }}>
               <option value="">{t('transport.selectRoute', { defaultValue: 'Select route…' })}</option>
               {routes.map(r => <option key={r.id} value={r.id}>{r.routeName}</option>)}
             </select>
+            {errors.routeId && <p className="text-xs text-red-600">{errors.routeId}</p>}
           </div>
           <div className="space-y-1.5">
             <Label>{t('transport.studentLabel', { defaultValue: 'Student *' })}</Label>
             <StudentCombobox
               value={form.studentId}
-              onChange={id => set('studentId', id)}
+              onChange={id => { set('studentId', id); if (errors.studentId) setErrors(er => ({ ...er, studentId: undefined })); }}
               placeholder={t('transport.selectStudent', { defaultValue: 'Select student…' })}
             />
+            {errors.studentId && <p className="text-xs text-red-600">{errors.studentId}</p>}
           </div>
           <div className="space-y-1.5">
             <Label>{t('transport.pickupStop', { defaultValue: 'Pickup Stop' })}</Label>

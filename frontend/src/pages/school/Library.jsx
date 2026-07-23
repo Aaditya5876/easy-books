@@ -23,6 +23,7 @@ function BookDialog({ open, onClose, initial, companyId }) {
     category: initial.category || '', totalCopies: initial.totalCopies,
     availableCopies: initial.availableCopies, shelfLocation: initial.shelfLocation || '',
   } : EMPTY_BOOK);
+  const [errors, setErrors] = useState({});
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   const save = useMutation({
@@ -33,7 +34,13 @@ function BookDialog({ open, onClose, initial, companyId }) {
 
   function handleSubmit(e) {
     e.preventDefault();
-    if (!form.title.trim()) { toast.error(t('library.titleRequired', { defaultValue: 'Title is required' })); return; }
+    if (!form.title.trim()) {
+      const msg = t('library.titleRequired', { defaultValue: 'Title is required' });
+      setErrors({ title: msg });
+      toast.error(msg);
+      return;
+    }
+    setErrors({});
     save.mutate({ ...form, companyId, totalCopies: Number(form.totalCopies), availableCopies: Number(form.availableCopies) });
   }
 
@@ -44,7 +51,8 @@ function BookDialog({ open, onClose, initial, companyId }) {
         <form onSubmit={handleSubmit} className="space-y-4 pt-2">
           <div className="space-y-1.5">
             <Label>{t('library.titleLabel', { defaultValue: 'Title *' })}</Label>
-            <Input placeholder={t('library.titlePlaceholder', { defaultValue: 'Book title' })} value={form.title} onChange={e => set('title', e.target.value)} />
+            <Input placeholder={t('library.titlePlaceholder', { defaultValue: 'Book title' })} value={form.title} onChange={e => { set('title', e.target.value); if (errors.title) setErrors({}); }} />
+            {errors.title && <p className="text-xs text-red-600">{errors.title}</p>}
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
@@ -90,6 +98,7 @@ function IssueDialog({ open, onClose, books, companyId }) {
   const { t } = useTranslation();
   const qc = useQueryClient();
   const [form, setForm] = useState({ bookId: '', memberName: '', dueDate: '' });
+  const [errors, setErrors] = useState({});
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   const issue = useMutation({
@@ -105,9 +114,16 @@ function IssueDialog({ open, onClose, books, companyId }) {
 
   function handleSubmit(e) {
     e.preventDefault();
-    if (!form.bookId) { toast.error(t('library.selectABook', { defaultValue: 'Select a book' })); return; }
-    if (!form.memberName.trim()) { toast.error(t('library.memberNameRequired', { defaultValue: 'Member name is required' })); return; }
-    if (!form.dueDate) { toast.error(t('library.dueDateRequired', { defaultValue: 'Due date is required' })); return; }
+    const errs = {};
+    if (!form.bookId) errs.bookId = t('library.selectABook', { defaultValue: 'Select a book' });
+    if (!form.memberName.trim()) errs.memberName = t('library.memberNameRequired', { defaultValue: 'Member name is required' });
+    if (!form.dueDate) errs.dueDate = t('library.dueDateRequired', { defaultValue: 'Due date is required' });
+    if (Object.keys(errs).length) {
+      setErrors(errs);
+      toast.error(Object.values(errs)[0]);
+      return;
+    }
+    setErrors({});
     issue.mutate({ companyId, bookId: form.bookId, memberName: form.memberName, dueDate: new Date(form.dueDate) });
   }
 
@@ -118,20 +134,23 @@ function IssueDialog({ open, onClose, books, companyId }) {
         <form onSubmit={handleSubmit} className="space-y-4 pt-2">
           <div className="space-y-1.5">
             <Label>{t('library.bookLabel', { defaultValue: 'Book *' })}</Label>
-            <select className="w-full border rounded-md px-3 py-2 text-sm bg-background" value={form.bookId} onChange={e => set('bookId', e.target.value)}>
+            <select className="w-full border rounded-md px-3 py-2 text-sm bg-background" value={form.bookId} onChange={e => { set('bookId', e.target.value); if (errors.bookId) setErrors(er => ({ ...er, bookId: undefined })); }}>
               <option value="">{t('library.selectBook', { defaultValue: 'Select book…' })}</option>
               {books.filter(b => b.availableCopies > 0).map(b => (
                 <option key={b.id} value={b.id}>{t('library.bookOption', { defaultValue: '{{title}} ({{count}} available)', title: b.title, count: b.availableCopies })}</option>
               ))}
             </select>
+            {errors.bookId && <p className="text-xs text-red-600">{errors.bookId}</p>}
           </div>
           <div className="space-y-1.5">
             <Label>{t('library.issuedToLabel', { defaultValue: 'Issued To *' })}</Label>
-            <Input placeholder={t('library.issuedToPlaceholder', { defaultValue: 'Student or staff name' })} value={form.memberName} onChange={e => set('memberName', e.target.value)} />
+            <Input placeholder={t('library.issuedToPlaceholder', { defaultValue: 'Student or staff name' })} value={form.memberName} onChange={e => { set('memberName', e.target.value); if (errors.memberName) setErrors(er => ({ ...er, memberName: undefined })); }} />
+            {errors.memberName && <p className="text-xs text-red-600">{errors.memberName}</p>}
           </div>
           <div className="space-y-1.5">
             <Label>{t('library.dueDateLabel', { defaultValue: 'Due Date *' })}</Label>
-            <Input type="date" value={form.dueDate} onChange={e => set('dueDate', e.target.value)} />
+            <Input type="date" value={form.dueDate} onChange={e => { set('dueDate', e.target.value); if (errors.dueDate) setErrors(er => ({ ...er, dueDate: undefined })); }} />
+            {errors.dueDate && <p className="text-xs text-red-600">{errors.dueDate}</p>}
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose}>{t('library.cancel', { defaultValue: 'Cancel' })}</Button>

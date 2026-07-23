@@ -19,6 +19,7 @@ function HeadDialog({ open, onClose, initial }) {
     code: initial?.code || '',
     type: initial?.type || 'GENERAL',
   });
+  const [errors, setErrors] = useState({});
 
   const save = useMutation({
     mutationFn: () => isEdit
@@ -34,7 +35,12 @@ function HeadDialog({ open, onClose, initial }) {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (!form.name.trim()) return toast.error(t('feeHeads.nameRequired', { defaultValue: 'Name is required' }));
+    if (!form.name.trim()) {
+      const msg = t('feeHeads.nameRequired', { defaultValue: 'Name is required' });
+      setErrors({ name: msg });
+      return toast.error(msg);
+    }
+    setErrors({});
     save.mutate();
   };
 
@@ -45,7 +51,8 @@ function HeadDialog({ open, onClose, initial }) {
         <form onSubmit={handleSubmit} className="space-y-4 pt-2">
           <div className="space-y-1.5">
             <Label>{t('feeHeads.name', { defaultValue: 'Name *' })}</Label>
-            <Input placeholder={t('feeHeads.namePlaceholder', { defaultValue: 'e.g. Tuition Fee, Lab Fee' })} value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
+            <Input placeholder={t('feeHeads.namePlaceholder', { defaultValue: 'e.g. Tuition Fee, Lab Fee' })} value={form.name} onChange={e => { setForm(f => ({ ...f, name: e.target.value })); if (errors.name) setErrors({}); }} />
+            {errors.name && <p className="text-xs text-red-600">{errors.name}</p>}
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">

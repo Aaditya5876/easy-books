@@ -24,6 +24,7 @@ const SOURCE_META = {
 function ScholarshipDialog({ open, onClose, studentId, feeHeads, onDone }) {
   const { t } = useTranslation();
   const [form, setForm] = useState({ name: '', type: 'PERCENT', value: '', feeHeadId: '' });
+  const [errors, setErrors] = useState({});
 
   const save = useMutation({
     mutationFn: () => schoolFinanceApi.addScholarship(studentId, {
@@ -38,8 +39,15 @@ function ScholarshipDialog({ open, onClose, studentId, feeHeads, onDone }) {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (!form.name.trim()) return toast.error(t('feeProfile.nameRequired', { defaultValue: 'Name is required' }));
-    if (!(Number(form.value) > 0)) return toast.error(t('feeProfile.valueRequired', { defaultValue: 'Enter a valid value' }));
+    const errs = {};
+    if (!form.name.trim()) errs.name = t('feeProfile.nameRequired', { defaultValue: 'Name is required' });
+    if (!(Number(form.value) > 0)) errs.value = t('feeProfile.valueRequired', { defaultValue: 'Enter a valid value' });
+    if (Object.keys(errs).length) {
+      setErrors(errs);
+      toast.error(Object.values(errs)[0]);
+      return;
+    }
+    setErrors({});
     save.mutate();
   };
 
@@ -50,7 +58,8 @@ function ScholarshipDialog({ open, onClose, studentId, feeHeads, onDone }) {
         <form onSubmit={handleSubmit} className="space-y-4 pt-2">
           <div className="space-y-1.5">
             <Label>{t('feeProfile.scholarshipName', { defaultValue: 'Name *' })}</Label>
-            <Input placeholder={t('feeProfile.scholarshipNamePlaceholder', { defaultValue: 'e.g. Dalit Scholarship, Sibling Discount' })} value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
+            <Input placeholder={t('feeProfile.scholarshipNamePlaceholder', { defaultValue: 'e.g. Dalit Scholarship, Sibling Discount' })} value={form.name} onChange={e => { setForm(f => ({ ...f, name: e.target.value })); if (errors.name) setErrors(er => ({ ...er, name: undefined })); }} />
+            {errors.name && <p className="text-xs text-red-600">{errors.name}</p>}
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
@@ -62,7 +71,8 @@ function ScholarshipDialog({ open, onClose, studentId, feeHeads, onDone }) {
             </div>
             <div className="space-y-1.5">
               <Label>{t('feeProfile.value', { defaultValue: 'Value *' })}</Label>
-              <Input type="number" min="0" step="0.01" placeholder={form.type === 'PERCENT' ? '50' : '500'} value={form.value} onChange={e => setForm(f => ({ ...f, value: e.target.value }))} />
+              <Input type="number" min="0" step="0.01" placeholder={form.type === 'PERCENT' ? '50' : '500'} value={form.value} onChange={e => { setForm(f => ({ ...f, value: e.target.value })); if (errors.value) setErrors(er => ({ ...er, value: undefined })); }} />
+              {errors.value && <p className="text-xs text-red-600">{errors.value}</p>}
             </div>
           </div>
           <div className="space-y-1.5">

@@ -33,3 +33,5 @@ dist-ssr
 coverage/
 backend/dist/
 frontend/dist/
+backend/uploads/*
+!backend/uploads/.gitkeep
