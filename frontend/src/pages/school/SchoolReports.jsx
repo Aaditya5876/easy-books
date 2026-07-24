@@ -9,6 +9,7 @@ import {
 import { ledgerApi, schoolAnalyticsApi, transactionApi, schoolDashboardApi } from '@/api';
 import { getActiveCompanyId } from '@/lib/companyContext';
 import { getCurrentFiscalYear } from '@/lib/nepaliDate';
+import { useRole } from '@/lib/useRole';
 import { BarChart2, CalendarCheck2, DollarSign, Trophy, Boxes, Phone, ShieldCheck, Printer } from 'lucide-react';
 
 const fmtRs = (n) => `Rs. ${Number(n ?? 0).toLocaleString('en-NP')}`;
@@ -802,16 +803,22 @@ const TABS = [
   { key: 'operations', label: 'Operations', icon: Boxes, component: OperationsTab },
   { key: 'audit', label: 'Audit', icon: ShieldCheck, component: AuditTab },
 ];
+// The backend only grants TEACHER the analytics/attendance and analytics/academics
+// endpoints (fees/operations/audit stay STAFF/ACCOUNTANT/ADMIN-only) — show only
+// the tabs a teacher can actually load data for.
+const TEACHER_VISIBLE_TABS = ['attendance', 'academics'];
 
 export default function SchoolReports() {
   const { t } = useTranslation();
   const companyId = getActiveCompanyId();
+  const { isTeacher } = useRole();
+  const visibleTabs = isTeacher ? TABS.filter(x => TEACHER_VISIBLE_TABS.includes(x.key)) : TABS;
   const [tab, setTab] = useState('attendance');
   const [auditStartDate, setAuditStartDate] = useState('');
   const [auditEndDate, setAuditEndDate] = useState('');
   const [filterStartDate, setFilterStartDate] = useState('');
   const [filterEndDate, setFilterEndDate] = useState('');
-  const Active = TABS.find(x => x.key === tab)?.component ?? AttendanceTab;
+  const Active = visibleTabs.find(x => x.key === tab)?.component ?? AttendanceTab;
 
   if (!companyId) return null;
 
@@ -875,7 +882,7 @@ export default function SchoolReports() {
       </div>
 
       <div className="flex gap-1 bg-muted/40 p-1 rounded-lg w-fit">
-        {TABS.map(item => {
+        {visibleTabs.map(item => {
           const Icon = item.icon;
           return (
             <button

@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { homeworkApi, classesApi, subjectsApi, aiApi } from '@/api';
 import { getActiveCompanyId } from '@/lib/companyContext';
 import { filterSubjectsByClass } from '@/lib/subjectFilter';
+import { confirm } from '@/lib/confirm';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -237,7 +238,11 @@ export default function Homework() {
                       <Pencil className="w-3.5 h-3.5" />
                     </button>
                     <button
-                      onClick={() => { if (confirm(t('homework.deleteConfirm', { defaultValue: 'Delete this homework?' }))) remove.mutate(hw.id); }}
+                      onClick={async () => {
+                        const ok = await confirm({ description: t('homework.deleteConfirm', { defaultValue: 'Delete this homework?' }), variant: 'destructive' });
+                        if (!ok) return;
+                        remove.mutate(hw.id);
+                      }}
                       className="p-1.5 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600 transition-colors"
                     >
                       <Trash2 className="w-3.5 h-3.5" />

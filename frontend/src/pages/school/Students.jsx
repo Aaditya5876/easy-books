@@ -6,6 +6,8 @@ import BulkImportDialog from '@/components/shared/BulkImportDialog';
 import { STUDENT_FIELDS } from '@/components/shared/bulkImportFields';
 import { studentsApi, classesApi, portalApi } from '@/api';
 import { getActiveCompanyId } from '@/lib/companyContext';
+import { useRole } from '@/lib/useRole';
+import { confirm } from '@/lib/confirm';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -326,6 +328,7 @@ const PAGE_SIZE = 50;
 export default function Students() {
   const { t } = useTranslation();
   const companyId = getActiveCompanyId();
+  const { canCreate, canEdit, canDelete } = useRole();
   const qc = useQueryClient();
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
@@ -391,9 +394,11 @@ export default function Students() {
           <Button variant="outline" onClick={() => setPromoteDialog(true)}>
             <ArrowRight className="w-4 h-4 mr-1" /> {t('students.promote', { defaultValue: 'Promote' })}
           </Button>
-          <Button onClick={() => setDialog({ mode: 'add' })}>
-            <Plus className="w-4 h-4 mr-2" /> {t('students.enrollStudent', { defaultValue: 'Enroll Student' })}
-          </Button>
+          {canCreate && (
+            <Button onClick={() => setDialog({ mode: 'add' })}>
+              <Plus className="w-4 h-4 mr-2" /> {t('students.enrollStudent', { defaultValue: 'Enroll Student' })}
+            </Button>
+          )}
         </div>
       </div>
 
@@ -450,7 +455,7 @@ export default function Students() {
             <p className="text-muted-foreground text-sm">
               {search || filterClass ? t('students.noMatch', { defaultValue: 'No students match your search' }) : t('students.noStudentsYet', { defaultValue: 'No students enrolled yet' })}
             </p>
-            {!search && !filterClass && (
+            {!search && !filterClass && canCreate && (
               <Button className="mt-4" size="sm" onClick={() => setDialog({ mode: 'add' })}>
                 {t('students.enrollFirstStudent', { defaultValue: 'Enroll First Student' })}
               </Button>
@@ -496,20 +501,26 @@ export default function Students() {
                         >
                           <KeyRound className="w-3.5 h-3.5" />
                         </button>
-                        <button
-                          onClick={() => setDialog({ mode: 'edit', student })}
-                          className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
-                        >
-                          <Pencil className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          onClick={() => {
-                            if (confirm(t('students.confirmRemove', { defaultValue: 'Remove {{name}}?', name: student.name }))) remove.mutate(student.id);
-                          }}
-                          className="p-1.5 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600 transition-colors"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                        {canEdit && (
+                          <button
+                            onClick={() => setDialog({ mode: 'edit', student })}
+                            className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                        {canDelete && (
+                          <button
+                            onClick={async () => {
+                              const ok = await confirm({ description: t('students.confirmRemove', { defaultValue: 'Remove {{name}}?', name: student.name }), variant: 'destructive' });
+                              if (!ok) return;
+                              remove.mutate(student.id);
+                            }}
+                            className="p-1.5 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600 transition-colors"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>

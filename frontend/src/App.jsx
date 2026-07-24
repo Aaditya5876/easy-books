@@ -72,7 +72,7 @@ const schoolRoutes = [
   { path: '/fees', page: Fees },
   { path: '/exams', page: Exams, roles: ['TEACHER'] },
   { path: '/student-attendance', page: StudentAttendance, roles: ['TEACHER'] },
-  { path: '/calendar-events', page: CalendarEvents },
+  { path: '/calendar-events', page: CalendarEvents, roles: ['TEACHER', 'LIBRARIAN'] },
   { path: '/routine', page: Routine, roles: ['TEACHER'] },
   { path: '/notices', page: Notices, roles: ['TEACHER', 'LIBRARIAN'] },
   { path: '/study-materials', page: StudyMaterial, roles: ['TEACHER'] },
@@ -88,7 +88,7 @@ const schoolRoutes = [
   { path: '/payroll', page: Payroll },
   { path: '/ledger', page: Ledger },
   { path: '/transactions', page: Transactions },
-  { path: '/reports', page: SchoolReports },
+  { path: '/reports', page: SchoolReports, roles: ['TEACHER'] },
   { path: '/settings', page: Settings },
 ];
 

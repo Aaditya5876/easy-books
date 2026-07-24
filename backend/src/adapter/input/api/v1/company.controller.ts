@@ -10,28 +10,28 @@ export class CompanyController {
   constructor(private readonly service: CompanyServiceImpl) {}
 
   @Get()
-  @Roles('STAFF', 'ACCOUNTANT', 'ADMIN')
+  @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'TEACHER', 'LIBRARIAN')
   @ApiOperation({ summary: 'Get all companies for current user' })
   findAll(@Req() req: any) {
     return this.service.findAll(req.user.sub);
   }
 
   @Get('user-companies')
-  @Roles('STAFF', 'ACCOUNTANT', 'ADMIN')
+  @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'TEACHER', 'LIBRARIAN')
   @ApiOperation({ summary: 'Get user companies with default flag' })
   getUserCompanies(@Req() req: any) {
     return this.service.getUserCompanies(req.user.sub);
   }
 
   @Get('default')
-  @Roles('STAFF', 'ACCOUNTANT', 'ADMIN')
+  @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'TEACHER', 'LIBRARIAN')
   @ApiOperation({ summary: 'Get default company for current user' })
   getDefaultCompany(@Req() req: any) {
     return this.service.getDefaultCompany(req.user.sub);
   }
 
   @Get(':id')
-  @Roles('STAFF', 'ACCOUNTANT', 'ADMIN')
+  @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'TEACHER', 'LIBRARIAN')
   @ApiOperation({ summary: 'Get a company by id' })
   findOne(@Param('id') id: string) {
     return this.service.findOne(id);

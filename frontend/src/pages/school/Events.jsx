@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { schoolEventsApi } from '@/api';
 import { confirm } from '@/lib/confirm';
+import { useRole } from '@/lib/useRole';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -184,6 +185,7 @@ function EventDialog({ open, onClose, event, mode = 'AD', monthKey }) {
 
 export default function Events({ mode: propMode = 'AD' }) {
   const { t } = useTranslation();
+  const { canEdit, canDelete } = useRole();
   const qc = useQueryClient();
   const [dialog, setDialog] = useState({ open: false, event: null });
   const [mode, setMode] = useState(propMode);
@@ -267,9 +269,11 @@ export default function Events({ mode: propMode = 'AD' }) {
             <option value="AD">AD</option>
             <option value="BS">BS</option>
           </select>
-          <Button onClick={() => setDialog({ open: true, event: null })}>
-            <Plus className="h-4 w-4 mr-1" /> {t('events.addEvent', { defaultValue: 'Add Event' })}
-          </Button>
+          {canEdit && (
+            <Button onClick={() => setDialog({ open: true, event: null })}>
+              <Plus className="h-4 w-4 mr-1" /> {t('events.addEvent', { defaultValue: 'Add Event' })}
+            </Button>
+          )}
         </div>
       </div>
 
@@ -335,12 +339,16 @@ export default function Events({ mode: propMode = 'AD' }) {
               {e.description && <p className="text-sm mt-1">{e.description}</p>}
             </div>
             <div className="flex gap-1">
-              <Button size="icon" variant="ghost" onClick={() => setDialog({ open: true, event: e })}>
-                <Pencil className="h-4 w-4" />
-              </Button>
-              <Button size="icon" variant="ghost" onClick={async () => { if (await confirm({ description: t('events.deleteConfirm', { defaultValue: 'Delete this event?' }), variant: 'destructive' })) remove.mutate(e.id); }}>
-                <Trash2 className="h-4 w-4 text-destructive" />
-              </Button>
+              {canEdit && (
+                <Button size="icon" variant="ghost" onClick={() => setDialog({ open: true, event: e })}>
+                  <Pencil className="h-4 w-4" />
+                </Button>
+              )}
+              {canDelete && (
+                <Button size="icon" variant="ghost" onClick={async () => { if (await confirm({ description: t('events.deleteConfirm', { defaultValue: 'Delete this event?' }), variant: 'destructive' })) remove.mutate(e.id); }}>
+                  <Trash2 className="h-4 w-4 text-destructive" />
+                </Button>
+              )}
             </div>
           </div>
         ))}

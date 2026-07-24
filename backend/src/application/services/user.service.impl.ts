@@ -26,6 +26,10 @@ export class UserServiceImpl {
     const company = await this.prisma.company.findUnique({ where: { id: companyId } });
     if (!company) throw new NotFoundException('Company not found');
 
+    if ((data.role === 'TEACHER' || data.role === 'LIBRARIAN') && company.businessType !== 'SCHOOL') {
+      throw new BadRequestException('TEACHER and LIBRARIAN roles are only valid for school companies');
+    }
+
     const existing = await this.prisma.user.findUnique({ where: { email: data.email } });
 
     if (existing) {
@@ -86,6 +90,13 @@ export class UserServiceImpl {
       where: { userId_companyId: { userId: targetUserId, companyId } },
     });
     if (!link) throw new NotFoundException('User does not belong to this company');
+
+    if (newRole === 'TEACHER' || newRole === 'LIBRARIAN') {
+      const company = await this.prisma.company.findUnique({ where: { id: companyId } });
+      if (company?.businessType !== 'SCHOOL') {
+        throw new BadRequestException('TEACHER and LIBRARIAN roles are only valid for school companies');
+      }
+    }
 
     const updated = await this.prisma.user.update({
       where: { id: targetUserId },

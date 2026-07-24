@@ -8,6 +8,8 @@ import FeeHeadsTab from './fees/FeeHeadsTab';
 import FeePackagesTab from './fees/FeePackagesTab';
 import StudentCombobox from '@/components/shared/StudentCombobox';
 import { getActiveCompanyId } from '@/lib/companyContext';
+import { useRole } from '@/lib/useRole';
+import { confirm } from '@/lib/confirm';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -575,6 +577,7 @@ const INVOICE_PAGE_SIZE = 50;
 export default function Fees() {
   const { t } = useTranslation();
   const companyId = getActiveCompanyId();
+  const { canDelete } = useRole();
   const qc = useQueryClient();
   const [tab, setTab] = useState('invoices');
   const [filterStatus, setFilterStatus] = useState('');
@@ -904,9 +907,15 @@ export default function Fees() {
                           <button onClick={() => setStructureDialog({ mode: 'edit', structure: s })} className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors">
                             <Pencil className="w-3.5 h-3.5" />
                           </button>
-                          <button onClick={() => { if (confirm(t('fees.deleteConfirm', { defaultValue: 'Delete "{{name}}"?', name: s.name }))) removeStructure.mutate(s.id); }} className="p-1.5 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600 transition-colors">
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
+                          {canDelete && (
+                            <button onClick={async () => {
+                              const ok = await confirm({ description: t('fees.deleteConfirm', { defaultValue: 'Delete "{{name}}"?', name: s.name }), variant: 'destructive' });
+                              if (!ok) return;
+                              removeStructure.mutate(s.id);
+                            }} className="p-1.5 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600 transition-colors">
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>

@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { subjectsApi, classesApi } from '@/api';
 import { confirm } from '@/lib/confirm';
+import { useRole } from '@/lib/useRole';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -127,6 +128,7 @@ function SubjectDialog({ open, onClose, subject }) {
 
 export default function Subjects() {
   const { t } = useTranslation();
+  const { canManageAcademicContent } = useRole();
   const qc = useQueryClient();
   const [dialog, setDialog] = useState({ open: false, subject: null });
   const [importOpen, setImportOpen] = useState(false);
@@ -164,9 +166,11 @@ export default function Subjects() {
           <Button variant="outline" onClick={() => setImportOpen(true)}>
             <Upload className="h-4 w-4 mr-1" /> {t('subjects.import', { defaultValue: 'Import' })}
           </Button>
-          <Button onClick={() => setDialog({ open: true, subject: null })}>
-            <Plus className="h-4 w-4 mr-1" /> {t('subjects.addSubject', { defaultValue: 'Add Subject' })}
-          </Button>
+          {canManageAcademicContent && (
+            <Button onClick={() => setDialog({ open: true, subject: null })}>
+              <Plus className="h-4 w-4 mr-1" /> {t('subjects.addSubject', { defaultValue: 'Add Subject' })}
+            </Button>
+          )}
         </div>
       </div>
 
@@ -207,12 +211,16 @@ export default function Subjects() {
                   <TableCell>{s.chapters ?? <span className="text-muted-foreground">—</span>}</TableCell>
                   <TableCell>
                     <div className="flex gap-1">
-                      <Button size="icon" variant="ghost" onClick={() => setDialog({ open: true, subject: s })}>
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                      <Button size="icon" variant="ghost" onClick={() => handleDelete(s)}>
-                        <Trash2 className="h-4 w-4 text-destructive" />
-                      </Button>
+                      {canManageAcademicContent && (
+                        <Button size="icon" variant="ghost" onClick={() => setDialog({ open: true, subject: s })}>
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                      )}
+                      {canManageAcademicContent && (
+                        <Button size="icon" variant="ghost" onClick={() => handleDelete(s)}>
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                      )}
                     </div>
                   </TableCell>
               </TableRow>

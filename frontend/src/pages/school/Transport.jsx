@@ -5,6 +5,7 @@ import { Plus, Pencil, Trash2, Bus, UserMinus } from 'lucide-react';
 import { transportApi } from '@/api';
 import StudentCombobox from '@/components/shared/StudentCombobox';
 import { getActiveCompanyId } from '@/lib/companyContext';
+import { confirm } from '@/lib/confirm';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -247,7 +248,11 @@ export default function Transport() {
                   <button onClick={() => setRouteDialog({ mode: 'edit', route })} className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors">
                     <Pencil className="w-3.5 h-3.5" />
                   </button>
-                  <button onClick={() => { if (confirm(t('transport.deleteConfirm', { defaultValue: 'Delete "{{name}}"?', name: route.routeName }))) removeRoute.mutate(route.id); }}
+                  <button onClick={async () => {
+                    const ok = await confirm({ description: t('transport.deleteConfirm', { defaultValue: 'Delete "{{name}}"?', name: route.routeName }), variant: 'destructive' });
+                    if (!ok) return;
+                    removeRoute.mutate(route.id);
+                  }}
                     className="p-1.5 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600 transition-colors">
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
@@ -288,7 +293,11 @@ export default function Transport() {
                       <td className="px-5 py-3">{a.route?.routeName}</td>
                       <td className="px-5 py-3 text-muted-foreground">{a.pickupStop || '—'}</td>
                       <td className="px-5 py-3">
-                        <button onClick={() => { if (confirm(t('transport.removeConfirm', { defaultValue: 'Remove {{name}} from transport?', name: a.student?.name }))) unassign.mutate(a.id); }}
+                        <button onClick={async () => {
+                          const ok = await confirm({ description: t('transport.removeConfirm', { defaultValue: 'Remove {{name}} from transport?', name: a.student?.name }), variant: 'destructive' });
+                          if (!ok) return;
+                          unassign.mutate(a.id);
+                        }}
                           className="flex items-center gap-1 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 px-2 py-1 rounded transition-colors">
                           <UserMinus className="w-3.5 h-3.5" /> {t('transport.remove', { defaultValue: 'Remove' })}
                         </button>

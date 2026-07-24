@@ -13,6 +13,17 @@ export class EmployeeServiceImpl {
     });
   }
 
+  // Name-only listing for pickers/labels (e.g. "assign class teacher") that need to
+  // resolve an employee id to a display name without exposing salary/PAN/bank data
+  // to roles that shouldn't see the full HR record (TEACHER, LIBRARIAN, STAFF).
+  async findAllDirectory(companyId: string) {
+    return this.prisma.employee.findMany({
+      where: { companyId, deletedAt: null },
+      select: { id: true, name: true, designation: true },
+      orderBy: { name: 'asc' },
+    });
+  }
+
   async findOne(id: string, companyId: string) {
     const emp = await this.prisma.employee.findFirst({ where: { id, companyId, deletedAt: null } });
     if (!emp) throw new NotFoundException('Employee not found');

@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { academicYearsApi } from '@/api';
 import { confirm } from '@/lib/confirm';
+import { useRole } from '@/lib/useRole';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -117,6 +118,7 @@ function AcademicYearDialog({ open, onClose, year }) {
 
 export default function AcademicYear() {
   const { t } = useTranslation();
+  const { canEdit, canDelete } = useRole();
   const qc = useQueryClient();
   const [dialog, setDialog] = useState({ open: false, year: null });
 
@@ -153,9 +155,11 @@ export default function AcademicYear() {
           <CalendarDays className="h-6 w-6 text-primary" />
           <h1 className="text-2xl font-bold">{t('years.title', { defaultValue: 'Academic Years' })}</h1>
         </div>
-        <Button onClick={() => setDialog({ open: true, year: null })}>
-          <Plus className="h-4 w-4 mr-1" /> {t('years.addYearButton', { defaultValue: 'Add Year' })}
-        </Button>
+        {canEdit && (
+          <Button onClick={() => setDialog({ open: true, year: null })}>
+            <Plus className="h-4 w-4 mr-1" /> {t('years.addYearButton', { defaultValue: 'Add Year' })}
+          </Button>
+        )}
       </div>
 
       <div className="rounded-md border bg-card">
@@ -188,12 +192,16 @@ export default function AcademicYear() {
                 </TableCell>
                 <TableCell>
                   <div className="flex gap-1">
-                    <Button size="icon" variant="ghost" onClick={() => setDialog({ open: true, year: y })}>
-                      <Pencil className="h-4 w-4" />
-                    </Button>
-                    <Button size="icon" variant="ghost" onClick={() => handleDelete(y)}>
-                      <Trash2 className="h-4 w-4 text-destructive" />
-                    </Button>
+                    {canEdit && (
+                      <Button size="icon" variant="ghost" onClick={() => setDialog({ open: true, year: y })}>
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                    )}
+                    {canDelete && (
+                      <Button size="icon" variant="ghost" onClick={() => handleDelete(y)}>
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    )}
                   </div>
                 </TableCell>
               </TableRow>

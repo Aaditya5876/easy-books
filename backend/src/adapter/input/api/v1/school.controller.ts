@@ -116,11 +116,13 @@ export class SchoolController {
   }
 
   @Post('classes')
+  @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'TEACHER')
   createClass(@Body() body: { companyId: string; name: string; section?: string; classTeacherId?: string }) {
     return this.service.createClass(body);
   }
 
   @Put('classes/:id')
+  @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'TEACHER')
   updateClass(@Param('id') id: string, @Body() body: any) {
     return this.service.updateClass(id, body);
   }
@@ -199,16 +201,19 @@ export class SchoolController {
   }
 
   @Post('subjects')
+  @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'TEACHER')
   createSubject(@Body() body: { companyId: string; name: string; code?: string; classIds?: string[]; bookReference?: string; chapters?: number }) {
     return this.service.createSubject(body);
   }
 
   @Put('subjects/:id')
+  @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'TEACHER')
   updateSubject(@Param('id') id: string, @Body() body: any) {
     return this.service.updateSubject(id, body);
   }
 
   @Delete('subjects/:id')
+  @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'TEACHER')
   @ApiQuery({ name: 'companyId', required: true })
   deleteSubject(@Param('id') id: string, @Query('companyId') companyId: string) {
     return this.service.deleteSubject(id, companyId);
@@ -572,11 +577,13 @@ export class SchoolController {
   }
 
   @Post('timetable')
+  @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'TEACHER')
   upsertTimetableEntry(@Body() body: any) {
     return this.service.upsertTimetableEntry(body);
   }
 
   @Delete('timetable/:id')
+  @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'TEACHER')
   @ApiQuery({ name: 'companyId', required: true })
   deleteTimetableEntry(@Param('id') id: string, @Query('companyId') companyId: string) {
     return this.service.deleteTimetableEntry(id, companyId);
@@ -671,6 +678,7 @@ export class SchoolController {
   }
 
   @Delete('study-materials/:id')
+  @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'TEACHER')
   @ApiQuery({ name: 'companyId', required: true })
   deleteStudyMaterial(@Param('id') id: string, @Query('companyId') companyId: string) {
     return this.service.deleteStudyMaterial(id, companyId);

@@ -116,7 +116,12 @@
     "reminders": "स्मरणहरू",
     "remindersSub": "बाँकी चेक/उधारो कारोबार, आगामी परीक्षा र कार्यक्रमहरू",
     "tagCheque": "चेक",
-    "tagCredit": "उधारो"
+    "tagCredit": "उधारो",
+    "subtitleAcademic": "कक्षा, हाजिरी र तालिकाको समग्र विवरण",
+    "remindersSubAcademic": "आगामी परीक्षा र कार्यक्रमहरू",
+    "recentNotices": "हालैका सूचनाहरू",
+    "recentNoticesSub": "तपाईंको विद्यालयका पछिल्ला घोषणाहरू",
+    "noNotices": "हाल कुनै सूचना छैन"
   },
   "students": {
     "studentUpdated": "विद्यार्थी अद्यावधिक भयो",

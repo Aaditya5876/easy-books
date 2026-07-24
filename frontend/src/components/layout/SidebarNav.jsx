@@ -30,6 +30,9 @@ const navSections = [
     label: 'Accounts',
     labelColor: 'text-blue-400',
     activeClass: 'bg-blue-600 text-white shadow-sm shadow-blue-900/30',
+    // Ledger/Transactions endpoints are ACCOUNTANT/ADMIN-only on the backend —
+    // keep STAFF from seeing a dead link.
+    minRole: 'accountant',
     items: [
       { icon: BookOpen, label: 'Ledger', path: '/ledger' },
       { icon: ArrowLeftRight, label: 'Transactions', path: '/transactions' },
@@ -101,7 +104,10 @@ const schoolNavSections = [
     activeClass: 'bg-sidebar-primary text-sidebar-primary-foreground shadow-sm',
     items: [
       { icon: LayoutDashboard, label: 'Dashboard', path: '/', roles: ['TEACHER', 'LIBRARIAN'] },
-      { icon: BarChart2, label: 'Reports', path: '/reports' },
+      // Reports is split by tab for TEACHER (see SchoolReports.jsx) — the backend
+      // only grants TEACHER the Attendance/Academics analytics endpoints, not
+      // Fees/Operations/Audit. LIBRARIAN has no backend access to any tab, so stays hidden.
+      { icon: BarChart2, label: 'Reports', path: '/reports', roles: ['TEACHER'] },
     ]
   },
   {
@@ -109,7 +115,7 @@ const schoolNavSections = [
     labelColor: 'text-rose-400',
     activeClass: 'bg-rose-600 text-white shadow-sm shadow-rose-900/30',
     items: [
-      { icon: CalendarDays, label: 'Calendar and Events', path: '/calendar-events' },
+      { icon: CalendarDays, label: 'Calendar and Events', path: '/calendar-events', roles: ['TEACHER', 'LIBRARIAN'] },
       { icon: UserCircle, label: 'Teachers', path: '/employees', minRole: 'accountant' },
       { icon: School, label: 'Classes', path: '/classes', roles: ['TEACHER'] },
       { icon: BookMarked, label: 'Subjects', path: '/subjects', roles: ['TEACHER'] },
@@ -134,8 +140,10 @@ const schoolNavSections = [
     activeClass: 'bg-blue-600 text-white shadow-sm shadow-blue-900/30',
     items: [
       { icon: DollarSign, label: 'Fees', path: '/fees' },
-      { icon: BookOpen, label: 'Ledger', path: '/ledger' },
-      { icon: ArrowLeftRight, label: 'Transactions', path: '/transactions' },
+      // Ledger/Transactions endpoints are ACCOUNTANT/ADMIN-only on the backend —
+      // keep STAFF from seeing a dead link (Fees stays open to STAFF for front-desk use).
+      { icon: BookOpen, label: 'Ledger', path: '/ledger', minRole: 'accountant' },
+      { icon: ArrowLeftRight, label: 'Transactions', path: '/transactions', minRole: 'accountant' },
     ]
   },
   {

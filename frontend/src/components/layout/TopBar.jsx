@@ -52,14 +52,21 @@ export default function TopBar({ onMobileMenuToggle, onToolOpen }) {
     if (activeId) {
       const active = companyList.find(c => c.id === activeId);
       setActiveCompany(active || companyList[0] || null);
-      // Pre-load search data in background
-      Promise.all([
-        api.Client.filter({ company_id: activeId }),
-        api.Vendor.filter({ company_id: activeId }),
-        api.InventoryItem.filter({ company_id: activeId }),
-      ]).then(([cls, vens, inv]) => {
-        setSearchData({ clients: cls, vendors: vens, inventory: inv });
-      }).catch(() => {});
+      // Pre-load search data in background — Clients/Vendors/Inventory are
+      // business-ERP-only modules (don't exist for school companies) and are
+      // also role-gated to STAFF/ACCOUNTANT/ADMIN, so skip entirely for school
+      // companies or for TEACHER/LIBRARIAN to avoid pointless 403s.
+      const company = active || companyList[0];
+      const canSearchBusinessData = company?.businessType !== 'SCHOOL' && me?.role !== 'TEACHER' && me?.role !== 'LIBRARIAN';
+      if (canSearchBusinessData) {
+        Promise.all([
+          api.Client.filter({ company_id: activeId }),
+          api.Vendor.filter({ company_id: activeId }),
+          api.InventoryItem.filter({ company_id: activeId }),
+        ]).then(([cls, vens, inv]) => {
+          setSearchData({ clients: cls, vendors: vens, inventory: inv });
+        }).catch(() => {});
+      }
     } else if (companyList.length > 0) {
       setActiveCompany(companyList[0]);
       setActiveCompanyId(companyList[0].id);

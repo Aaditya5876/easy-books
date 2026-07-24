@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { timetableApi, classesApi, subjectsApi } from '@/api';
 import { filterSubjectsByClass } from '@/lib/subjectFilter';
+import { useRole } from '@/lib/useRole';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
@@ -122,6 +123,7 @@ function PeriodDialog({ open, onClose, entry, classId }) {
 
 export default function Routine() {
   const { t } = useTranslation();
+  const { canManageAcademicContent } = useRole();
   const qc = useQueryClient();
   const [classId, setClassId] = useState('');
   const [dialog, setDialog] = useState({ open: false, entry: null });
@@ -193,18 +195,20 @@ export default function Routine() {
           </Select>
         </div>
 
-        <form onSubmit={handleAddClass} className="flex items-end gap-2">
-          <div className="space-y-1">
-            <Label className="text-xs text-muted-foreground">{t('timetable.orAddNewClass', { defaultValue: 'Or add a new class' })}</Label>
-            <Input className="w-36" placeholder={t('timetable.className', { defaultValue: 'Class name' })} value={newClassName} onChange={e => setNewClassName(e.target.value)} />
-          </div>
-          <Input className="w-24" placeholder={t('timetable.section', { defaultValue: 'Section' })} value={newClassSection} onChange={e => setNewClassSection(e.target.value)} />
-          <Button type="submit" variant="outline" disabled={!newClassName.trim() || addClass.isPending}>
-            <Plus className="h-4 w-4 mr-1" /> {addClass.isPending ? t('timetable.adding', { defaultValue: 'Adding…' }) : t('timetable.addClass', { defaultValue: 'Add Class' })}
-          </Button>
-        </form>
+        {canManageAcademicContent && (
+          <form onSubmit={handleAddClass} className="flex items-end gap-2">
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground">{t('timetable.orAddNewClass', { defaultValue: 'Or add a new class' })}</Label>
+              <Input className="w-36" placeholder={t('timetable.className', { defaultValue: 'Class name' })} value={newClassName} onChange={e => setNewClassName(e.target.value)} />
+            </div>
+            <Input className="w-24" placeholder={t('timetable.section', { defaultValue: 'Section' })} value={newClassSection} onChange={e => setNewClassSection(e.target.value)} />
+            <Button type="submit" variant="outline" disabled={!newClassName.trim() || addClass.isPending}>
+              <Plus className="h-4 w-4 mr-1" /> {addClass.isPending ? t('timetable.adding', { defaultValue: 'Adding…' }) : t('timetable.addClass', { defaultValue: 'Add Class' })}
+            </Button>
+          </form>
+        )}
 
-        {classId && (
+        {classId && canManageAcademicContent && (
           <Button className="ml-auto" onClick={() => setDialog({ open: true, entry: null })}>
             <Plus className="h-4 w-4 mr-1" /> {t('timetable.addPeriod', { defaultValue: 'Add Period' })}
           </Button>
@@ -235,21 +239,23 @@ export default function Routine() {
                             <div className="font-semibold text-primary text-xs">{e.subject?.name || t('timetable.free', { defaultValue: 'Free' })}</div>
                             <div className="text-xs text-muted-foreground">{e.startTime}–{e.endTime}</div>
                             {e.roomNumber && <div className="text-xs text-muted-foreground">{e.roomNumber}</div>}
-                            <button
-                              onClick={() => remove.mutate(e.id)}
-                              className="absolute top-0.5 right-0.5 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive"
-                            >
-                              <X className="h-3 w-3" />
-                            </button>
+                            {canManageAcademicContent && (
+                              <button
+                                onClick={() => remove.mutate(e.id)}
+                                className="absolute top-0.5 right-0.5 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive"
+                              >
+                                <X className="h-3 w-3" />
+                              </button>
+                            )}
                           </div>
-                        ) : (
+                        ) : canManageAcademicContent ? (
                           <button
                             onClick={() => setDialog({ open: true, entry: { dayOfWeek: d, periodNumber: p } })}
                             className="w-full h-10 text-muted-foreground/40 hover:text-primary hover:bg-primary/5 rounded transition-colors text-xs"
                           >
                             {t('timetable.addCell', { defaultValue: '+ Add' })}
                           </button>
-                        )}
+                        ) : null}
                       </td>
                     );
                   })}

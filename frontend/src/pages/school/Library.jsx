@@ -6,6 +6,7 @@ import BulkImportDialog from '@/components/shared/BulkImportDialog';
 import { BOOK_FIELDS } from '@/components/shared/bulkImportFields';
 import { libraryApi } from '@/api';
 import { getActiveCompanyId } from '@/lib/companyContext';
+import { confirm } from '@/lib/confirm';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -317,7 +318,11 @@ export default function Library() {
                           <button onClick={() => setBookDialog({ mode: 'edit', book: b })} className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors">
                             <Pencil className="w-3.5 h-3.5" />
                           </button>
-                          <button onClick={() => { if (confirm(t('library.confirmDeleteBook', { defaultValue: 'Delete "{{title}}"?', title: b.title }))) removeBook.mutate(b.id); }}
+                          <button onClick={async () => {
+                            const ok = await confirm({ description: t('library.confirmDeleteBook', { defaultValue: 'Delete "{{title}}"?', title: b.title }), variant: 'destructive' });
+                            if (!ok) return;
+                            removeBook.mutate(b.id);
+                          }}
                             className="p-1.5 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600 transition-colors">
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>

@@ -1,8 +1,11 @@
 import { Controller, Post, Body } from '@nestjs/common';
-import { ApiTags } from '@nestjs/swagger';
+import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { AiService } from '../../../../application/services/ai.service';
+import { Roles } from '../../../../modules/decorators/roles.decorator';
 
 @ApiTags('AI')
+@ApiBearerAuth()
+@Roles('ADMIN', 'ACCOUNTANT', 'STAFF', 'TEACHER', 'LIBRARIAN')
 @Controller('api/v1/ai')
 export class AiController {
   constructor(private readonly aiService: AiService) {}
@@ -23,6 +26,7 @@ export class AiController {
   }
 
   @Post('fee-reminder')
+  @Roles('ADMIN', 'ACCOUNTANT', 'STAFF')
   feeReminder(@Body() body: { studentName: string; guardianName: string; month: string; amountDue: number; daysOverdue: number }) {
     return this.aiService.generateFeeReminder(
       body.studentName, body.guardianName, body.month, body.amountDue, body.daysOverdue,

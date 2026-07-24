@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { noticesApi } from '@/api';
 import { confirm } from '@/lib/confirm';
+import { useRole } from '@/lib/useRole';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -177,6 +178,7 @@ function printNotice(n) {
 
 export default function Notices() {
   const { t } = useTranslation();
+  const { canEdit, canDelete } = useRole();
   const qc = useQueryClient();
   const [dialog, setDialog] = useState({ open: false, notice: null });
   const [search, setSearch] = useState('');
@@ -206,9 +208,11 @@ export default function Notices() {
           <Megaphone className="h-6 w-6 text-primary" />
           <h1 className="text-2xl font-bold">{t('notices.noticeBoard', { defaultValue: 'Notice Board' })}</h1>
         </div>
-        <Button onClick={() => setDialog({ open: true, notice: null })}>
-          <Plus className="h-4 w-4 mr-1" /> {t('notices.postNotice', { defaultValue: 'Post Notice' })}
-        </Button>
+        {canEdit && (
+          <Button onClick={() => setDialog({ open: true, notice: null })}>
+            <Plus className="h-4 w-4 mr-1" /> {t('notices.postNotice', { defaultValue: 'Post Notice' })}
+          </Button>
+        )}
       </div>
 
       <Input
@@ -253,12 +257,16 @@ export default function Notices() {
                   }}>
                     <MessageSquare className="h-4 w-4 text-violet-600" />
                   </Button>
-                  <Button size="icon" variant="ghost" onClick={() => setDialog({ open: true, notice: n })}>
-                    <Pencil className="h-4 w-4" />
-                  </Button>
-                  <Button size="icon" variant="ghost" onClick={async () => { if (await confirm({ description: t('notices.deleteConfirm', { defaultValue: 'Delete this notice?' }), variant: 'destructive' })) remove.mutate(n.id); }}>
-                    <Trash2 className="h-4 w-4 text-destructive" />
-                  </Button>
+                  {canEdit && (
+                    <Button size="icon" variant="ghost" onClick={() => setDialog({ open: true, notice: n })}>
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                  )}
+                  {canDelete && (
+                    <Button size="icon" variant="ghost" onClick={async () => { if (await confirm({ description: t('notices.deleteConfirm', { defaultValue: 'Delete this notice?' }), variant: 'destructive' })) remove.mutate(n.id); }}>
+                      <Trash2 className="h-4 w-4 text-destructive" />
+                    </Button>
+                  )}
                 </div>
               </div>
             </div>

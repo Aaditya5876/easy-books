@@ -3,12 +3,14 @@ import { useQuery } from '@tanstack/react-query';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend,
 } from 'recharts';
-import { GraduationCap, DollarSign, AlertCircle, Users, TrendingUp, CheckCircle, Sparkles, CalendarClock, CalendarDays, ClipboardList, CreditCard } from 'lucide-react';
+import { GraduationCap, DollarSign, AlertCircle, Users, TrendingUp, CheckCircle, Sparkles, CalendarClock, CalendarDays, ClipboardList, CreditCard, Megaphone } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { schoolDashboardApi, schoolAnalyticsApi, aiApi, transactionApi, examSchedulesApi, schoolEventsApi } from '@/api';
+import { schoolDashboardApi, schoolAnalyticsApi, aiApi, transactionApi, examSchedulesApi, schoolEventsApi, noticesApi } from '@/api';
 import { getActiveCompanyId } from '@/lib/companyContext';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { useRole } from '@/lib/useRole';
+import { formatDate } from '@/lib/utils';
 
 function StatCard({ icon: Icon, label, value, sub, color = 'blue', loading }) {
   const colors = {
@@ -178,11 +180,45 @@ function Reminders({ transactions, examSchedules, schoolEvents }) {
   );
 }
 
+function RecentNotices({ notices }) {
+  const { t } = useTranslation();
+  const items = (notices ?? [])
+    .filter(n => n.isPublished)
+    .sort((a, b) => new Date(b.publishedAt || b.createdAt) - new Date(a.publishedAt || a.createdAt))
+    .slice(0, 6);
+
+  if (items.length === 0) {
+    return <div className="h-52 flex items-center justify-center text-sm text-muted-foreground">{t('dashboard.noNotices', { defaultValue: 'No notices yet' })}</div>;
+  }
+
+  return (
+    <div className="space-y-2 max-h-52 overflow-y-auto pr-1">
+      {items.map((n) => (
+        <div key={n.id} className="flex items-center gap-3 text-sm">
+          <div className="p-1.5 rounded-md shrink-0 text-amber-600 bg-amber-50"><Megaphone className="w-3.5 h-3.5" /></div>
+          <div className="flex-1 min-w-0">
+            <p className="truncate">{n.title}</p>
+            <p className="text-xs text-muted-foreground">{formatDate(n.publishedAt || n.createdAt)}</p>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 const fmtRs = (n) => `Rs. ${Number(n ?? 0).toLocaleString('en-NP')}`;
 
 export default function SchoolDashboard() {
   const { t } = useTranslation();
   const companyId = getActiveCompanyId();
+  const { isTeacher, isLibrarian, isAdmin, isAccountant } = useRole();
+  // Teachers/librarians don't have visibility into Fees anywhere else in the app
+  // (see SidebarNav.jsx) — keep the dashboard consistent with that instead of
+  // leading with money figures they can't act on or drill into. STAFF does have
+  // Fees access (front-desk cashier use case) so stays "financial" here, but NOT
+  // Ledger/Transactions access — that query is gated separately below.
+  const showFinancials = !isTeacher && !isLibrarian;
+  const canViewTransactions = isAdmin || isAccountant;
   const [insightsDialog, setInsightsDialog] = useState(false);
   const [insights, setInsights] = useState(null);
   const [insightsLoading, setInsightsLoading] = useState(false);
@@ -198,7 +234,7 @@ export default function SchoolDashboard() {
   const { data: transactions } = useQuery({
     queryKey: ['school-dashboard-transactions', companyId],
     queryFn: () => transactionApi.list().then(r => r.data ?? []),
-    enabled: !!companyId,
+    enabled: !!companyId && canViewTransactions,
     staleTime: 60_000,
   });
   const { data: examSchedules } = useQuery({
@@ -211,6 +247,12 @@ export default function SchoolDashboard() {
     queryKey: ['school-dashboard-events', companyId],
     queryFn: () => schoolEventsApi.list().then(r => r.data ?? []),
     enabled: !!companyId,
+    staleTime: 60_000,
+  });
+  const { data: notices } = useQuery({
+    queryKey: ['school-dashboard-notices', companyId],
+    queryFn: () => noticesApi.list().then(r => r.data ?? []),
+    enabled: !!companyId && !showFinancials,
     staleTime: 60_000,
   });
 
@@ -236,10 +278,12 @@ export default function SchoolDashboard() {
           attendanceToday: data.attendanceToday,
           attendanceLast30Days: data.attendanceTrend,
           todayAttendanceByClass: data.todayByClass,
-          studentsWithDues: data.studentsWithDues,
-          totalPendingFees: data.totalPendingFees,
-          feeCollectedThisMonth: data.feeCollectedThisMonth,
-          feeCollectionByMonth: data.feeMonths,
+          ...(showFinancials ? {
+            studentsWithDues: data.studentsWithDues,
+            totalPendingFees: data.totalPendingFees,
+            feeCollectedThisMonth: data.feeCollectedThisMonth,
+            feeCollectionByMonth: data.feeMonths,
+          } : {}),
           latestExam: academics?.selected ?? null,
           examPassRateByClass: academics?.passRateByClass ?? [],
           weakestSubjects: (academics?.subjectAverages ?? [])
@@ -262,7 +306,11 @@ export default function SchoolDashboard() {
       <div className="flex items-start justify-between">
         <div>
           <h1 className="text-2xl font-bold">{t('dashboard.title', { defaultValue: 'School Dashboard' })}</h1>
-          <p className="text-muted-foreground text-sm mt-1">{t('dashboard.subtitle', { defaultValue: 'Overview of students, fees, and attendance' })}</p>
+          <p className="text-muted-foreground text-sm mt-1">
+            {showFinancials
+              ? t('dashboard.subtitle', { defaultValue: 'Overview of students, fees, and attendance' })
+              : t('dashboard.subtitleAcademic', { defaultValue: 'Overview of classes, attendance, and schedule' })}
+          </p>
         </div>
         <button
           onClick={getClassInsights}
@@ -291,21 +339,25 @@ export default function SchoolDashboard() {
           color="violet"
           loading={isLoading}
         />
-        <StatCard
-          icon={TrendingUp}
-          label={t('dashboard.feeCollectedMonth', { defaultValue: 'Fee Collected (This Month)' })}
-          value={fmtAmt(data?.feeCollectedThisMonth)}
-          color="green"
-          loading={isLoading}
-        />
-        <StatCard
-          icon={AlertCircle}
-          label={t('dashboard.pendingDues', { defaultValue: 'Pending Dues' })}
-          value={fmtAmt(data?.totalPendingFees)}
-          sub={t('dashboard.nStudents', { defaultValue: '{{count}} students', count: data?.studentsWithDues ?? 0 })}
-          color="amber"
-          loading={isLoading}
-        />
+        {showFinancials && (
+          <StatCard
+            icon={TrendingUp}
+            label={t('dashboard.feeCollectedMonth', { defaultValue: 'Fee Collected (This Month)' })}
+            value={fmtAmt(data?.feeCollectedThisMonth)}
+            color="green"
+            loading={isLoading}
+          />
+        )}
+        {showFinancials && (
+          <StatCard
+            icon={AlertCircle}
+            label={t('dashboard.pendingDues', { defaultValue: 'Pending Dues' })}
+            value={fmtAmt(data?.totalPendingFees)}
+            sub={t('dashboard.nStudents', { defaultValue: '{{count}} students', count: data?.studentsWithDues ?? 0 })}
+            color="amber"
+            loading={isLoading}
+          />
+        )}
         <StatCard
           icon={CheckCircle}
           label={t('dashboard.attendanceToday', { defaultValue: 'Attendance Today' })}
@@ -314,13 +366,15 @@ export default function SchoolDashboard() {
           color="green"
           loading={isLoading}
         />
-        <StatCard
-          icon={DollarSign}
-          label={t('dashboard.feeCollectedYear', { defaultValue: 'Fee Collected (This Year)' })}
-          value={fmtAmt(data?.feeCollectedThisYear)}
-          color="blue"
-          loading={isLoading}
-        />
+        {showFinancials && (
+          <StatCard
+            icon={DollarSign}
+            label={t('dashboard.feeCollectedYear', { defaultValue: 'Fee Collected (This Year)' })}
+            value={fmtAmt(data?.feeCollectedThisYear)}
+            color="blue"
+            loading={isLoading}
+          />
+        )}
       </div>
 
       {/* Analytics row 1 — reminders + today's attendance
@@ -328,7 +382,9 @@ export default function SchoolDashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <ChartCard
           title={t('dashboard.reminders', { defaultValue: 'Reminders' })}
-          sub={t('dashboard.remindersSub', { defaultValue: 'Pending cheque/credit transactions, upcoming exams and events' })}
+          sub={canViewTransactions
+            ? t('dashboard.remindersSub', { defaultValue: 'Pending cheque/credit transactions, upcoming exams and events' })
+            : t('dashboard.remindersSubAcademic', { defaultValue: 'Upcoming exams and events' })}
         >
           <Reminders transactions={transactions} examSchedules={examSchedules} schoolEvents={schoolEvents} />
         </ChartCard>
@@ -342,25 +398,34 @@ export default function SchoolDashboard() {
         </ChartCard>
       </div>
 
-      {/* Analytics row 2 — money + upcoming */}
+      {/* Analytics row 2 — money + upcoming (financial roles), or notices + upcoming (academic roles) */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <ChartCard
-          title={t('dashboard.feeByMonth', { defaultValue: 'Fee Collection by Month' })}
-          sub={t('dashboard.feeByMonthSub', { defaultValue: 'Collected vs still pending, per fee month' })}
-          empty={!isLoading && !(data?.feeMonths?.length) ? t('dashboard.noInvoicesYet', { defaultValue: 'No fee invoices generated yet' }) : null}
-        >
-          <ResponsiveContainer width="100%" height={210}>
-            <BarChart data={data?.feeMonths ?? []} margin={{ top: 5, right: 10, left: -10, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-              <XAxis dataKey="month" tick={{ fontSize: 11 }} />
-              <YAxis tick={{ fontSize: 11 }} tickFormatter={v => v >= 1000 ? `${Math.round(v / 1000)}k` : v} />
-              <Tooltip formatter={(v, name) => [fmtRs(v), name === 'collected' ? 'Collected' : 'Pending']} />
-              <Legend formatter={v => v === 'collected' ? 'Collected' : 'Pending'} wrapperStyle={{ fontSize: 12 }} />
-              <Bar dataKey="collected" stackId="a" fill="#10b981" />
-              <Bar dataKey="pending" stackId="a" fill="#f59e0b" radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </ChartCard>
+        {showFinancials ? (
+          <ChartCard
+            title={t('dashboard.feeByMonth', { defaultValue: 'Fee Collection by Month' })}
+            sub={t('dashboard.feeByMonthSub', { defaultValue: 'Collected vs still pending, per fee month' })}
+            empty={!isLoading && !(data?.feeMonths?.length) ? t('dashboard.noInvoicesYet', { defaultValue: 'No fee invoices generated yet' }) : null}
+          >
+            <ResponsiveContainer width="100%" height={210}>
+              <BarChart data={data?.feeMonths ?? []} margin={{ top: 5, right: 10, left: -10, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                <XAxis dataKey="month" tick={{ fontSize: 11 }} />
+                <YAxis tick={{ fontSize: 11 }} tickFormatter={v => v >= 1000 ? `${Math.round(v / 1000)}k` : v} />
+                <Tooltip formatter={(v, name) => [fmtRs(v), name === 'collected' ? 'Collected' : 'Pending']} />
+                <Legend formatter={v => v === 'collected' ? 'Collected' : 'Pending'} wrapperStyle={{ fontSize: 12 }} />
+                <Bar dataKey="collected" stackId="a" fill="#10b981" />
+                <Bar dataKey="pending" stackId="a" fill="#f59e0b" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </ChartCard>
+        ) : (
+          <ChartCard
+            title={t('dashboard.recentNotices', { defaultValue: 'Recent Notices' })}
+            sub={t('dashboard.recentNoticesSub', { defaultValue: 'Latest announcements for your school' })}
+          >
+            <RecentNotices notices={notices} />
+          </ChartCard>
+        )}
 
         <ChartCard
           title={t('dashboard.weekAhead', { defaultValue: 'This Week Ahead' })}
@@ -370,43 +435,45 @@ export default function SchoolDashboard() {
         </ChartCard>
       </div>
 
-      {/* Pending fees table */}
-      <div className="bg-white rounded-xl border border-border">
-        <div className="px-5 py-4 border-b border-border flex items-center justify-between">
-          <h2 className="font-semibold text-sm">{t('dashboard.pendingFeesTitle', { defaultValue: 'Students with Pending Fees' })}</h2>
-          <span className="text-xs text-muted-foreground">{t('dashboard.nStudents', { defaultValue: '{{count}} students', count: data?.studentsWithDues ?? 0 })}</span>
-        </div>
-        {isLoading ? (
-          <div className="p-8 text-center text-muted-foreground text-sm">{t('common.loading', { defaultValue: 'Loading…' })}</div>
-        ) : data?.pendingFeesList?.length === 0 ? (
-          <div className="p-8 text-center text-muted-foreground text-sm">{t('dashboard.allFeesCollected', { defaultValue: 'All fees are collected — great work!' })}</div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-muted/40">
-                <tr>
-                  <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('common.student', { defaultValue: 'Student' })}</th>
-                  <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('common.class', { defaultValue: 'Class' })}</th>
-                  <th className="text-right px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('dashboard.dueAmount', { defaultValue: 'Due Amount' })}</th>
-                  <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('common.month', { defaultValue: 'Month' })}</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {(data?.pendingFeesList ?? []).slice(0, 10).map((row) => (
-                  <tr key={row.id} className="hover:bg-muted/20">
-                    <td className="px-5 py-3 font-medium">{row.studentName}</td>
-                    <td className="px-5 py-3 text-muted-foreground">{row.className}</td>
-                    <td className="px-5 py-3 text-right font-mono tabular-nums text-amber-700">
-                      Rs. {Number(row.dueAmount).toLocaleString('en-NP', { minimumFractionDigits: 2 })}
-                    </td>
-                    <td className="px-5 py-3 text-muted-foreground">{row.month}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+      {/* Pending fees table — financial roles only */}
+      {showFinancials && (
+        <div className="bg-white rounded-xl border border-border">
+          <div className="px-5 py-4 border-b border-border flex items-center justify-between">
+            <h2 className="font-semibold text-sm">{t('dashboard.pendingFeesTitle', { defaultValue: 'Students with Pending Fees' })}</h2>
+            <span className="text-xs text-muted-foreground">{t('dashboard.nStudents', { defaultValue: '{{count}} students', count: data?.studentsWithDues ?? 0 })}</span>
           </div>
-        )}
-      </div>
+          {isLoading ? (
+            <div className="p-8 text-center text-muted-foreground text-sm">{t('common.loading', { defaultValue: 'Loading…' })}</div>
+          ) : data?.pendingFeesList?.length === 0 ? (
+            <div className="p-8 text-center text-muted-foreground text-sm">{t('dashboard.allFeesCollected', { defaultValue: 'All fees are collected — great work!' })}</div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-muted/40">
+                  <tr>
+                    <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('common.student', { defaultValue: 'Student' })}</th>
+                    <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('common.class', { defaultValue: 'Class' })}</th>
+                    <th className="text-right px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('dashboard.dueAmount', { defaultValue: 'Due Amount' })}</th>
+                    <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('common.month', { defaultValue: 'Month' })}</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {(data?.pendingFeesList ?? []).slice(0, 10).map((row) => (
+                    <tr key={row.id} className="hover:bg-muted/20">
+                      <td className="px-5 py-3 font-medium">{row.studentName}</td>
+                      <td className="px-5 py-3 text-muted-foreground">{row.className}</td>
+                      <td className="px-5 py-3 text-right font-mono tabular-nums text-amber-700">
+                        Rs. {Number(row.dueAmount).toLocaleString('en-NP', { minimumFractionDigits: 2 })}
+                      </td>
+                      <td className="px-5 py-3 text-muted-foreground">{row.month}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
 
       <Dialog open={insightsDialog} onOpenChange={setInsightsDialog}>
         <DialogContent className="max-w-lg">

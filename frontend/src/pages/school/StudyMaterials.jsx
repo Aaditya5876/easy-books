@@ -6,6 +6,8 @@ import { studyMaterialsApi, classesApi, subjectsApi, uploadApi } from '@/api';
 import apiClient from '@/api/client';
 import { getActiveCompanyId } from '@/lib/companyContext';
 import { filterSubjectsByClass } from '@/lib/subjectFilter';
+import { useRole } from '@/lib/useRole';
+import { confirm } from '@/lib/confirm';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -123,6 +125,7 @@ function UploadDialog({ open, onClose, classes, subjects, companyId }) {
 export default function StudyMaterials() {
   const { t } = useTranslation();
   const companyId = getActiveCompanyId();
+  const { canManageAcademicContent } = useRole();
   const qc = useQueryClient();
   const [showUpload, setShowUpload] = useState(false);
   const [filterClass, setFilterClass] = useState('');
@@ -162,9 +165,11 @@ export default function StudyMaterials() {
           <h1 className="text-2xl font-bold">{t('materials.pageTitle', { defaultValue: 'Study Materials' })}</h1>
           <p className="text-muted-foreground text-sm mt-1">{t('materials.filesUploaded', { defaultValue: '{{count}} files uploaded', count: materials.length })}</p>
         </div>
-        <Button onClick={() => setShowUpload(true)}>
-          <Plus className="w-4 h-4 mr-2" /> {t('materials.uploadMaterial', { defaultValue: 'Upload Material' })}
-        </Button>
+        {canManageAcademicContent && (
+          <Button onClick={() => setShowUpload(true)}>
+            <Plus className="w-4 h-4 mr-2" /> {t('materials.uploadMaterial', { defaultValue: 'Upload Material' })}
+          </Button>
+        )}
       </div>
 
       {/* Filters */}
@@ -210,12 +215,18 @@ export default function StudyMaterials() {
                     <Download className="w-3.5 h-3.5 mr-1.5" /> {t('materials.download', { defaultValue: 'Download' })}
                   </Button>
                 </a>
-                <button
-                  onClick={() => { if (confirm(t('materials.deleteConfirm', { defaultValue: 'Delete this material?' }))) remove.mutate(mat.id); }}
-                  className="p-2 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600 transition-colors"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
+                {canManageAcademicContent && (
+                  <button
+                    onClick={async () => {
+                      const ok = await confirm({ description: t('materials.deleteConfirm', { defaultValue: 'Delete this material?' }), variant: 'destructive' });
+                      if (!ok) return;
+                      remove.mutate(mat.id);
+                    }}
+                    className="p-2 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600 transition-colors"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                )}
               </div>
             </div>
           ))}

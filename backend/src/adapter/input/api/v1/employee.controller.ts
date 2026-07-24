@@ -19,6 +19,14 @@ export class EmployeeController {
     return this.service.findAll(companyId);
   }
 
+  @Get('directory')
+  @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'TEACHER', 'LIBRARIAN')
+  @ApiOperation({ summary: 'Name-only employee list for pickers (no salary/PAN/bank data)' })
+  @ApiQuery({ name: 'companyId', required: true })
+  findAllDirectory(@Query('companyId') companyId: string) {
+    return this.service.findAllDirectory(companyId);
+  }
+
   @Get(':id')
   @Roles('ACCOUNTANT', 'ADMIN')
   @ApiOperation({ summary: 'Get an employee by id' })

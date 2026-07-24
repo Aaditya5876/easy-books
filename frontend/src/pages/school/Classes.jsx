@@ -4,6 +4,8 @@ import { Plus, Pencil, Trash2, School } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { classesApi, employeeApi } from '@/api';
 import { getActiveCompanyId } from '@/lib/companyContext';
+import { useRole } from '@/lib/useRole';
+import { confirm } from '@/lib/confirm';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -87,6 +89,7 @@ function ClassDialog({ open, onClose, initial, employees, companyId }) {
 export default function Classes() {
   const { t } = useTranslation();
   const companyId = getActiveCompanyId();
+  const { canManageAcademicContent, canDelete } = useRole();
   const qc = useQueryClient();
   const [dialog, setDialog] = useState(null);
 
@@ -97,8 +100,8 @@ export default function Classes() {
   });
 
   const { data: employees = [] } = useQuery({
-    queryKey: ['employees', companyId],
-    queryFn: () => employeeApi.list().then(r => r.data),
+    queryKey: ['employees-directory', companyId],
+    queryFn: () => employeeApi.directory().then(r => r.data),
     enabled: !!companyId,
   });
 
@@ -120,9 +123,11 @@ export default function Classes() {
           <h1 className="text-2xl font-bold">{t('classes.title', { defaultValue: 'Classes & Sections' })}</h1>
           <p className="text-muted-foreground text-sm mt-1">{t('classes.classesConfigured', { defaultValue: '{{count}} classes configured', count: classes.length })}</p>
         </div>
-        <Button onClick={() => setDialog({ mode: 'add' })}>
-          <Plus className="w-4 h-4 mr-2" /> {t('classes.addClass', { defaultValue: 'Add Class' })}
-        </Button>
+        {canManageAcademicContent && (
+          <Button onClick={() => setDialog({ mode: 'add' })}>
+            <Plus className="w-4 h-4 mr-2" /> {t('classes.addClass', { defaultValue: 'Add Class' })}
+          </Button>
+        )}
       </div>
 
       <div className="bg-white rounded-xl border border-border overflow-hidden">
@@ -132,7 +137,9 @@ export default function Classes() {
           <div className="p-12 text-center">
             <School className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
             <p className="text-muted-foreground text-sm">{t('classes.noClassesYet', { defaultValue: 'No classes yet. Add your first class to get started.' })}</p>
-            <Button className="mt-4" size="sm" onClick={() => setDialog({ mode: 'add' })}>{t('classes.addFirstClass', { defaultValue: 'Add First Class' })}</Button>
+            {canManageAcademicContent && (
+              <Button className="mt-4" size="sm" onClick={() => setDialog({ mode: 'add' })}>{t('classes.addFirstClass', { defaultValue: 'Add First Class' })}</Button>
+            )}
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -155,20 +162,26 @@ export default function Classes() {
                     <td className="px-5 py-3 text-right tabular-nums text-muted-foreground">{cls._count?.students ?? 0}</td>
                     <td className="px-5 py-3">
                       <div className="flex items-center gap-2 justify-end">
-                        <button
-                          onClick={() => setDialog({ mode: 'edit', cls })}
-                          className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
-                        >
-                          <Pencil className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          onClick={() => {
-                            if (confirm(t('classes.confirmDelete', { defaultValue: 'Delete {{name}}?', name: `${cls.name}${cls.section ? ` (${cls.section})` : ''}` }))) remove.mutate(cls.id);
-                          }}
-                          className="p-1.5 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600 transition-colors"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                        {canManageAcademicContent && (
+                          <button
+                            onClick={() => setDialog({ mode: 'edit', cls })}
+                            className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                        {canDelete && (
+                          <button
+                            onClick={async () => {
+                              const ok = await confirm({ description: t('classes.confirmDelete', { defaultValue: 'Delete {{name}}?', name: `${cls.name}${cls.section ? ` (${cls.section})` : ''}` }), variant: 'destructive' });
+                              if (!ok) return;
+                              remove.mutate(cls.id);
+                            }}
+                            className="p-1.5 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600 transition-colors"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>

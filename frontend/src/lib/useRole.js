@@ -22,6 +22,11 @@ export function useRole() {
     canCreate:      isAdmin || isAccountant,  // ADMIN + ACCOUNTANT
     canEdit:        isAdmin || isAccountant,  // ADMIN + ACCOUNTANT
     canDelete:      isAdmin,                  // ADMIN only
+    // Classes/Subjects/Routine/Study Materials are TEACHER-only nav items (their
+    // whole purpose is teacher self-service) and the backend grants TEACHER write
+    // access there specifically — use this instead of canCreate/canEdit/canDelete
+    // on those four pages only.
+    canManageAcademicContent: isAdmin || isAccountant || isTeacher,
     canManageUsers: isAdmin,                  // ADMIN only
     canProcessPayroll: isAdmin,               // ADMIN only
     canViewPayroll: isAdmin || isAccountant,  // ADMIN + ACCOUNTANT

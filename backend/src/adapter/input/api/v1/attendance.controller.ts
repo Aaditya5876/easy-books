@@ -7,7 +7,7 @@ import { CreateAttendanceSchema, UpdateAttendanceSchema, CreateAttendanceDTO, Up
 
 @ApiTags('Attendance')
 @ApiBearerAuth()
-@Roles('STAFF', 'ACCOUNTANT', 'ADMIN')
+@Roles('ACCOUNTANT', 'ADMIN')
 @Controller('api/v1/attendance')
 export class AttendanceController {
   constructor(private readonly service: AttendanceServiceImpl) {}

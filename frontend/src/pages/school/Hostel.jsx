@@ -4,6 +4,7 @@ import { Plus, Pencil, Trash2, Home, UserMinus } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { hostelApi } from '@/api';
 import StudentCombobox from '@/components/shared/StudentCombobox';
+import { confirm } from '@/lib/confirm';
 
 import { getActiveCompanyId } from '@/lib/companyContext';
 import { Button } from '@/components/ui/button';
@@ -266,7 +267,11 @@ export default function Hostel() {
                   <button onClick={() => setRoomDialog({ mode: 'edit', room })} className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors">
                     <Pencil className="w-3.5 h-3.5" />
                   </button>
-                  <button onClick={() => { if (confirm(t('hostel.confirmDeleteRoom', { defaultValue: 'Delete Room {{number}}?', number: room.roomNumber }))) removeRoom.mutate(room.id); }}
+                  <button onClick={async () => {
+                    const ok = await confirm({ description: t('hostel.confirmDeleteRoom', { defaultValue: 'Delete Room {{number}}?', number: room.roomNumber }), variant: 'destructive' });
+                    if (!ok) return;
+                    removeRoom.mutate(room.id);
+                  }}
                     className="p-1.5 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600 transition-colors">
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
@@ -302,7 +307,11 @@ export default function Hostel() {
                     <td className="px-5 py-3">{t('hostel.roomTitle', { defaultValue: 'Room {{number}}', number: `${a.room?.roomNumber}${a.room?.floor ? `, ${a.room.floor}` : ''}` })}</td>
                     <td className="px-5 py-3 text-muted-foreground">{fmtDate(a.startDate)}</td>
                     <td className="px-5 py-3">
-                      <button onClick={() => { if (confirm(t('hostel.confirmRemoveStudent', { defaultValue: 'Remove {{name}} from hostel?', name: a.student?.name }))) deallocate.mutate(a.id); }}
+                      <button onClick={async () => {
+                        const ok = await confirm({ description: t('hostel.confirmRemoveStudent', { defaultValue: 'Remove {{name}} from hostel?', name: a.student?.name }), variant: 'destructive' });
+                        if (!ok) return;
+                        deallocate.mutate(a.id);
+                      }}
                         className="flex items-center gap-1 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 px-2 py-1 rounded transition-colors">
                         <UserMinus className="w-3.5 h-3.5" /> {t('hostel.remove', { defaultValue: 'Remove' })}
                       </button>

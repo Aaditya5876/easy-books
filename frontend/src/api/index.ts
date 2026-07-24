@@ -67,6 +67,9 @@ export const vendorApi = {
 // Employees
 export const employeeApi = {
   list: () => apiClient.get('/api/v1/employees', { params: { companyId: companyId() } }),
+  // Name-only listing — safe for roles (TEACHER, LIBRARIAN, STAFF) that shouldn't
+  // see salary/PAN/bank data but still need to resolve/pick an employee by name.
+  directory: () => apiClient.get('/api/v1/employees/directory', { params: { companyId: companyId() } }),
   get: (id: string) => apiClient.get(`/api/v1/employees/${id}`, { params: { companyId: companyId() } }),
   create: (data: object) => apiClient.post('/api/v1/employees', data),
   update: (id: string, data: object) => apiClient.put(`/api/v1/employees/${id}`, data, { params: { companyId: companyId() } }),
