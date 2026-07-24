@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { api, apiAuth } from '@/api/adapter';
 import { getActiveCompanyId } from '@/lib/companyContext';
+import { formatDate } from '@/lib/utils';
 import PageHeader from '../components/shared/PageHeader';
 import DataTable from '../components/shared/DataTable';
 import { Button } from "@/components/ui/button";
@@ -116,7 +117,7 @@ export default function Communication() {
       </div>
     ) : '—' },
     { key: 'created_date', label: 'Assigned Date', filterValue: colFilters.created_date, filterType: 'date', onFilterChange: v => setCol('created_date', v), render: (row) => row.created_date ? new Date(row.created_date).toLocaleDateString() : '—' },
-    { key: 'due_date', label: 'Due Date', filterValue: colFilters.due_date, filterType: 'date', onFilterChange: v => setCol('due_date', v) },
+    { key: 'due_date', label: 'Due Date', filterValue: colFilters.due_date, filterType: 'date', onFilterChange: v => setCol('due_date', v), render: (row) => formatDate(row.due_date) },
     { key: 'priority', label: 'Priority', filterValue: colFilters.priority, onFilterChange: v => setCol('priority', v), filterPlaceholder: 'e.g. high', render: (row) => (
       <span className={`text-xs px-2 py-0.5 rounded-full font-medium capitalize ${priorityColors[row.priority] || ''}`}>
         {row.priority}
@@ -245,7 +246,7 @@ export default function Communication() {
                 </div>
                 <div className="space-y-0.5">
                   <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Due Date & Time</p>
-                  <p className="font-medium">{selectedTask.due_date || '—'}{selectedTask.due_time ? ' · ' + selectedTask.due_time : ''}</p>
+                  <p className="font-medium">{formatDate(selectedTask.due_date)}{selectedTask.due_time ? ' · ' + selectedTask.due_time : ''}</p>
                 </div>
                 <div className="space-y-0.5">
                   <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Priority</p>

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { api } from '@/api/adapter';
 import { getActiveCompanyId } from '@/lib/companyContext';
+import { formatDate } from '@/lib/utils';
 import PageHeader from '../components/shared/PageHeader';
 import DataTable from '../components/shared/DataTable';
 import { Button } from "@/components/ui/button";
@@ -317,7 +318,7 @@ export default function Employees() {
     { key: 'department', label: 'Department', filterValue: colFilters.department, onFilterChange: v => setCol('department', v) },
     { key: 'designation', label: 'Designation', filterValue: colFilters.designation, onFilterChange: v => setCol('designation', v) },
     { key: 'phone', label: 'Phone' },
-    { key: 'date_of_joining', label: 'Joined' },
+    { key: 'date_of_joining', label: 'Joined', render: r => formatDate(r.date_of_joining) },
     { key: 'basic_salary', label: 'Salary', render: r => r.basic_salary ? `NPR ${Number(r.basic_salary).toLocaleString()}` : '—' },
     {
       key: 'status',

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { api } from '@/api/adapter';
 import { getActiveCompanyId } from '@/lib/companyContext';
+import { formatDate } from '@/lib/utils';
 import PageHeader from '../components/shared/PageHeader';
 import DataTable from '../components/shared/DataTable';
 import { Button } from "@/components/ui/button";
@@ -86,7 +87,7 @@ export default function Attendance() {
   );
 
   const columns = [
-    { key: 'date', label: 'Date', filterValue: colFilters.date, filterType: 'date', onFilterChange: v => setCol('date', v) },
+    { key: 'date', label: 'Date', filterValue: colFilters.date, filterType: 'date', onFilterChange: v => setCol('date', v), render: (row) => formatDate(row.date) },
     {
       key: 'employee_name',
       label: 'Employee',

@@ -3,6 +3,7 @@ import { api } from '@/api/adapter';
 import { quotationApi } from '@/api';
 import { getActiveCompanyId } from '@/lib/companyContext';
 import { adToBs, getCurrentFiscalYear } from '@/lib/nepaliDate';
+import { formatDate } from '@/lib/utils';
 import PageHeader from '../components/shared/PageHeader';
 import DataTable from '../components/shared/DataTable';
 import PageLoader from '../components/PageLoader';
@@ -280,7 +281,7 @@ export default function Quotations() {
     {
       key: 'date_ad', label: 'Date', render: (row) => (
         <div className="text-xs">
-          <div>{row.date_ad}</div>
+          <div>{formatDate(row.date_ad)}</div>
           <div className="text-muted-foreground">{row.date_bs}</div>
         </div>
       ),

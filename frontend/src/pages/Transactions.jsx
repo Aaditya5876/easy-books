@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { api } from '@/api/adapter';
 import { getActiveCompanyId } from '@/lib/companyContext';
 import { adToBs } from '@/lib/nepaliDate';
+import { formatDate } from '@/lib/utils';
 import PageHeader from '../components/shared/PageHeader';
 import DataTable from '../components/shared/DataTable';
 import { Button } from "@/components/ui/button";
@@ -262,7 +263,7 @@ export default function Transactions() {
 
   const columns = [
     { key: 'date_ad', label: 'Date', render: (row) => (
-      <div className="text-xs"><div>{row.date_ad}</div><div className="text-muted-foreground">{row.date_bs}</div></div>
+      <div className="text-xs"><div>{formatDate(row.date_ad)}</div><div className="text-muted-foreground">{row.date_bs}</div></div>
     )},
     { key: 'type', label: 'Type', render: (row) => {
       const Icon = typeIcons[row.type] || Banknote;
@@ -274,7 +275,7 @@ export default function Transactions() {
     { key: 'description', label: 'Description', filterValue: colFilters.description, onFilterChange: v => setCol('description', v) },
     { key: 'party_name', label: 'Party', filterValue: colFilters.party_name, onFilterChange: v => setCol('party_name', v) },
     { key: 'cheque_date', label: 'Cheque Due Date', render: (row) => row.type === 'cheque' && row.cheque_date ? (
-      <span className="text-xs font-mono">{row.cheque_date}</span>
+      <span className="text-xs font-mono">{formatDate(row.cheque_date)}</span>
     ) : <span className="text-muted-foreground text-xs">-</span> },
     // Same inflow/outflow rule the old single Amount column used (only 'expense' is an
     // outflow) — now split across two columns instead of a +/- prefix on one.

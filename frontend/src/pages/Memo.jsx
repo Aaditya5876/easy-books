@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { api } from '@/api/adapter';
 import { getActiveCompanyId } from '@/lib/companyContext';
 import { adToBs } from '@/lib/nepaliDate';
+import { formatDate } from '@/lib/utils';
 import PageHeader from '../components/shared/PageHeader';
 import DataTable from '../components/shared/DataTable';
 import { Button } from "@/components/ui/button";
@@ -220,7 +221,7 @@ export default function Memo() {
   const quotationColumns = [
     { key: 'date_ad', label: 'Date', render: (row) => (
       <div className="text-xs">
-        <div>{row.date_ad}</div>
+        <div>{formatDate(row.date_ad)}</div>
         <div className="text-muted-foreground">{row.date_bs}</div>
       </div>
     )},
@@ -258,7 +259,7 @@ export default function Memo() {
 
   const purchaseBillColumns = [
     { key: 'date_ad', label: 'Date', render: (row) => (
-      <div className="text-xs"><div>{row.date_ad}</div><div className="text-muted-foreground">{row.date_bs}</div></div>
+      <div className="text-xs"><div>{formatDate(row.date_ad)}</div><div className="text-muted-foreground">{row.date_bs}</div></div>
     )},
     { key: 'reference_id', label: 'Bill #',
       filterValue: colFilters.reference_id, onFilterChange: v => setCol('reference_id', v),
@@ -283,7 +284,7 @@ export default function Memo() {
 
   const salesBillColumns = [
     { key: 'date_ad', label: 'Date', render: (row) => (
-      <div className="text-xs"><div>{row.date_ad}</div><div className="text-muted-foreground">{row.date_bs}</div></div>
+      <div className="text-xs"><div>{formatDate(row.date_ad)}</div><div className="text-muted-foreground">{row.date_bs}</div></div>
     )},
     { key: 'reference_id', label: 'Invoice #',
       filterValue: colFilters.reference_id, onFilterChange: v => setCol('reference_id', v),
@@ -305,7 +306,7 @@ export default function Memo() {
 
   const jobCardColumns = [
     { key: 'date_ad', label: 'Date', render: (row) => (
-      <div className="text-xs"><div>{row.date_ad}</div><div className="text-muted-foreground">{row.date_bs}</div></div>
+      <div className="text-xs"><div>{formatDate(row.date_ad)}</div><div className="text-muted-foreground">{row.date_bs}</div></div>
     )},
     { key: 'client_name', label: 'Client',
       filterValue: colFilters.client_name, onFilterChange: v => setCol('client_name', v),
@@ -313,21 +314,21 @@ export default function Memo() {
     { key: 'client_contact', label: 'Contact' },
     { key: 'assigned_to', label: 'Assigned To',
       render: (row) => row.assigned_to || '-' },
-    { key: 'start_date', label: 'Start', render: (row) => row.start_date || '-' },
-    { key: 'end_date',   label: 'End',   render: (row) => row.end_date   || '-' },
+    { key: 'start_date', label: 'Start', render: (row) => row.start_date ? formatDate(row.start_date) : '-' },
+    { key: 'end_date',   label: 'End',   render: (row) => row.end_date   ? formatDate(row.end_date)   : '-' },
     { key: 'description', label: 'Description',
       render: (row) => <span className="text-sm truncate max-w-[200px] block">{row.description || '-'}</span> },
   ];
 
   const orderSlipColumns = [
     { key: 'date_ad', label: 'Date', render: (row) => (
-      <div className="text-xs"><div>{row.date_ad}</div><div className="text-muted-foreground">{row.date_bs}</div></div>
+      <div className="text-xs"><div>{formatDate(row.date_ad)}</div><div className="text-muted-foreground">{row.date_bs}</div></div>
     )},
     { key: 'client_name', label: 'Client',
       filterValue: colFilters.client_name, onFilterChange: v => setCol('client_name', v),
       render: (row) => <span className="font-medium">{row.client_name}</span> },
     { key: 'client_contact', label: 'Contact' },
-    { key: 'delivery_date', label: 'Delivery Date', render: (row) => row.delivery_date || '-' },
+    { key: 'delivery_date', label: 'Delivery Date', render: (row) => row.delivery_date ? formatDate(row.delivery_date) : '-' },
     { key: 'description', label: 'Description',
       render: (row) => <span className="text-sm truncate max-w-[200px] block">{row.description || '-'}</span> },
     { key: 'amount', label: 'Amount',
@@ -336,13 +337,13 @@ export default function Memo() {
 
   const extraWorkColumns = [
     { key: 'date_ad', label: 'Date', render: (row) => (
-      <div className="text-xs"><div>{row.date_ad}</div><div className="text-muted-foreground">{row.date_bs}</div></div>
+      <div className="text-xs"><div>{formatDate(row.date_ad)}</div><div className="text-muted-foreground">{row.date_bs}</div></div>
     )},
     { key: 'client_name', label: 'Client',
       filterValue: colFilters.client_name, onFilterChange: v => setCol('client_name', v),
       render: (row) => <span className="font-medium">{row.client_name}</span> },
     { key: 'client_contact', label: 'Contact' },
-    { key: 'due_date', label: 'Due Date', render: (row) => row.due_date || '-' },
+    { key: 'due_date', label: 'Due Date', render: (row) => row.due_date ? formatDate(row.due_date) : '-' },
     { key: 'description', label: 'Description',
       render: (row) => <span className="text-sm truncate max-w-[200px] block">{row.description || '-'}</span> },
     { key: 'amount', label: 'Amount',
@@ -351,7 +352,7 @@ export default function Memo() {
 
   const supportingDocColumns = [
     { key: 'date_ad', label: 'Date', render: (row) => (
-      <div className="text-xs"><div>{row.date_ad}</div><div className="text-muted-foreground">{row.date_bs}</div></div>
+      <div className="text-xs"><div>{formatDate(row.date_ad)}</div><div className="text-muted-foreground">{row.date_bs}</div></div>
     )},
     { key: 'doc_type', label: 'Type',
       render: (row) => row.doc_type ? <span className="capitalize">{row.doc_type}</span> : '-' },

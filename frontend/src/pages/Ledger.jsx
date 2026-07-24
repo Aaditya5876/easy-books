@@ -4,6 +4,7 @@ import { api } from '@/api/adapter';
 import { ledgerApi } from '@/api';
 import { getActiveCompanyId } from '@/lib/companyContext';
 import { adToBs } from '@/lib/nepaliDate';
+import { formatDate } from '@/lib/utils';
 import PageHeader from '../components/shared/PageHeader';
 import DataTable from '../components/shared/DataTable';
 import PageLoader from '../components/PageLoader';
@@ -225,7 +226,7 @@ export default function Ledger() {
   ];
 
   const entryColumns = [
-    { key: 'date_ad', label: t('ledger.dateAD', { defaultValue: 'Date (AD)' }), render: (row) => row.date_ad || '-' },
+    { key: 'date_ad', label: t('ledger.dateAD', { defaultValue: 'Date (AD)' }), render: (row) => row.date_ad ? formatDate(row.date_ad) : '-' },
     { key: 'date_bs', label: t('ledger.dateBS', { defaultValue: 'Date (BS)' }), render: (row) => row.date_bs || '-' },
     { key: 'description', label: t('ledger.description', { defaultValue: 'Description' }) },
     { key: 'reference_id', label: t('ledger.referenceNo', { defaultValue: 'Reference No.' }), render: (row) => (

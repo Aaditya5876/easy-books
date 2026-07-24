@@ -4,6 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus, Printer, Share2, Save, X, Minus } from 'lucide-react';
+import { formatDate } from '@/lib/utils';
 import DataTable from '../shared/DataTable';
 
 export default function FloatingAccountDetail({ account, entries, onClose, onNewEntry, showNewEntry, setShowNewEntry, newEntry, setNewEntry, createEntry, allAccounts = [] }) {
@@ -31,7 +32,7 @@ export default function FloatingAccountDetail({ account, entries, onClose, onNew
   const entryColumns = [
     { key: 'date_ad', label: 'Date (AD)', render: (row) => (
       <div>
-        <div className="text-xs">{row.date_ad || '-'}</div>
+        <div className="text-xs">{row.date_ad ? formatDate(row.date_ad) : '-'}</div>
         <div className="text-xs text-muted-foreground">{row.date_bs || ''}</div>
       </div>
     )},
