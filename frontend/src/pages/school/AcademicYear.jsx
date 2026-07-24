@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { academicYearsApi } from '@/api';
+import { confirm } from '@/lib/confirm';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -130,8 +131,14 @@ export default function AcademicYear() {
     onError: (e) => toast.error(e.response?.data?.message || t('years.cannotDelete', { defaultValue: 'Cannot delete' })),
   });
 
-  const handleDelete = (y) => {
-    if (!window.confirm(t('years.confirmDelete', { defaultValue: 'Delete "{{name}}"?', name: y.name }))) return;
+  const handleDelete = async (y) => {
+    const ok = await confirm({
+      title: t('common.deleteConfirmTitle', { defaultValue: 'Delete?' }),
+      description: t('years.confirmDelete', { defaultValue: 'Delete "{{name}}"?', name: y.name }),
+      confirmLabel: t('common.delete', { defaultValue: 'Delete' }),
+      variant: 'destructive',
+    });
+    if (!ok) return;
     remove.mutate(y.id);
   };
 

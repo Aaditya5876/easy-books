@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { noticesApi } from '@/api';
+import { confirm } from '@/lib/confirm';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -255,7 +256,7 @@ export default function Notices() {
                   <Button size="icon" variant="ghost" onClick={() => setDialog({ open: true, notice: n })}>
                     <Pencil className="h-4 w-4" />
                   </Button>
-                  <Button size="icon" variant="ghost" onClick={() => { if (window.confirm(t('notices.deleteConfirm', { defaultValue: 'Delete this notice?' }))) remove.mutate(n.id); }}>
+                  <Button size="icon" variant="ghost" onClick={async () => { if (await confirm({ description: t('notices.deleteConfirm', { defaultValue: 'Delete this notice?' }), variant: 'destructive' })) remove.mutate(n.id); }}>
                     <Trash2 className="h-4 w-4 text-destructive" />
                   </Button>
                 </div>

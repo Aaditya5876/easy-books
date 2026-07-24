@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { examSchedulesApi, classesApi, subjectsApi } from '@/api';
+import { confirm } from '@/lib/confirm';
 import { filterSubjectsByClass } from '@/lib/subjectFilter';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -386,7 +387,7 @@ export default function ExamSchedule() {
                       <Button size="icon" variant="ghost" onClick={() => setEditEntry(s)}>
                         <Pencil className="h-4 w-4" />
                       </Button>
-                      <Button size="icon" variant="ghost" onClick={() => { if (window.confirm(t('examSchedule.deleteThisSchedule', { defaultValue: 'Delete this exam schedule?' }))) remove.mutate(s.id); }}>
+                      <Button size="icon" variant="ghost" onClick={async () => { if (await confirm({ description: t('examSchedule.deleteThisSchedule', { defaultValue: 'Delete this exam schedule?' }), variant: 'destructive' })) remove.mutate(s.id); }}>
                         <Trash2 className="h-4 w-4 text-destructive" />
                       </Button>
                     </td>

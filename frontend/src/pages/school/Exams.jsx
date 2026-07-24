@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, Trophy, Pencil, Trash2, Eye, Sparkles } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { examResultsApi, examsApi, subjectsApi, studentsApi, aiApi } from '@/api';
+import { confirm } from '@/lib/confirm';
 import { filterSubjectsByClass } from '@/lib/subjectFilter';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import ExamSchedulePage from './ExamSchedule';
@@ -499,7 +500,7 @@ export default function Exams() {
                             <button onClick={() => setEntryDialog({ mode: 'edit', result: r })} className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors">
                               <Pencil className="w-3.5 h-3.5" />
                             </button>
-                            <button onClick={() => { if (window.confirm(t('exams.deleteThisResult', { defaultValue: 'Delete this result?' }))) remove.mutate(r.id); }} className="p-1.5 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600 transition-colors">
+                            <button onClick={async () => { if (await confirm({ description: t('exams.deleteThisResult', { defaultValue: 'Delete this result?' }), variant: 'destructive' })) remove.mutate(r.id); }} className="p-1.5 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600 transition-colors">
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>
                           </div>

@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { api } from '@/api/adapter';
 import { getActiveCompanyId } from '@/lib/companyContext';
 import { formatDate } from '@/lib/utils';
+import { confirm } from '@/lib/confirm';
 import PageHeader from '../components/shared/PageHeader';
 import DataTable from '../components/shared/DataTable';
 import { Button } from "@/components/ui/button";
@@ -289,7 +290,13 @@ export default function Employees() {
   }
 
   async function removeEmployee(emp) {
-    if (!window.confirm(`Remove ${emp.name}? They will no longer appear in this list (use this when a staff member or teacher leaves the school).`)) return;
+    const ok = await confirm({
+      title: 'Remove employee?',
+      description: `Remove ${emp.name}? They will no longer appear in this list (use this when a staff member or teacher leaves the school).`,
+      confirmLabel: 'Remove',
+      variant: 'destructive',
+    });
+    if (!ok) return;
     try {
       await api.Employee.delete(emp.id);
       toast.success('Employee removed');

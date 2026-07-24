@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { schoolEventsApi } from '@/api';
+import { confirm } from '@/lib/confirm';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -337,7 +338,7 @@ export default function Events({ mode: propMode = 'AD' }) {
               <Button size="icon" variant="ghost" onClick={() => setDialog({ open: true, event: e })}>
                 <Pencil className="h-4 w-4" />
               </Button>
-              <Button size="icon" variant="ghost" onClick={() => { if (window.confirm(t('events.deleteConfirm', { defaultValue: 'Delete this event?' }))) remove.mutate(e.id); }}>
+              <Button size="icon" variant="ghost" onClick={async () => { if (await confirm({ description: t('events.deleteConfirm', { defaultValue: 'Delete this event?' }), variant: 'destructive' })) remove.mutate(e.id); }}>
                 <Trash2 className="h-4 w-4 text-destructive" />
               </Button>
             </div>

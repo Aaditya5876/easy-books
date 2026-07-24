@@ -1,4 +1,5 @@
 import { Toaster } from "@/components/ui/toaster"
+import { ConfirmDialogHost } from "@/lib/confirm"
 import { QueryClientProvider } from '@tanstack/react-query'
 import { queryClientInstance } from '@/lib/query-client'
 import { ThemeProvider } from 'next-themes'
@@ -181,6 +182,7 @@ function App() {
             </Routes>
           </Router>
           <Toaster />
+          <ConfirmDialogHost />
         </QueryClientProvider>
       </AuthProvider>
       </PreferencesProvider>

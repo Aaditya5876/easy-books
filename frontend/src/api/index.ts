@@ -469,6 +469,8 @@ export const usersApi = {
   invite: (cid: string, data: object) => apiClient.post('/api/v1/users/invite', data, { params: { companyId: cid } }),
   changeRole: (userId: string, cid: string, role: string) =>
     apiClient.patch(`/api/v1/users/${userId}/role`, { role }, { params: { companyId: cid } }),
+  remove: (userId: string, cid: string) =>
+    apiClient.delete(`/api/v1/users/${userId}`, { params: { companyId: cid } }),
 };
 
 // ── Portal API (parent/student token-based auth) ─────────────────────────────

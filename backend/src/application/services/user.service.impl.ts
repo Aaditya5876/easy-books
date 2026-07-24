@@ -96,6 +96,32 @@ export class UserServiceImpl {
     return updated;
   }
 
+  async removeUser(targetUserId: string, companyId: string, removedByRole: string, requesterId: string) {
+    if (targetUserId === requesterId) {
+      throw new BadRequestException('You cannot remove yourself from the company');
+    }
+
+    const user = await this.prisma.user.findUnique({ where: { id: targetUserId } });
+    if (!user) throw new NotFoundException('User not found');
+
+    if (user.role === 'SUPER_ADMIN') {
+      throw new ForbiddenException('Cannot remove a SUPER_ADMIN');
+    }
+
+    if (removedByRole === 'ADMIN' && !ADMIN_GRANTABLE.includes(user.role)) {
+      throw new ForbiddenException('ADMIN can only remove STAFF, TEACHER, LIBRARIAN or ACCOUNTANT users');
+    }
+
+    const link = await this.prisma.userCompany.findUnique({
+      where: { userId_companyId: { userId: targetUserId, companyId } },
+    });
+    if (!link) throw new NotFoundException('User does not belong to this company');
+
+    await this.prisma.userCompany.delete({ where: { id: link.id } });
+
+    return { message: 'User removed from company' };
+  }
+
   async listCompanyUsers(companyId: string) {
     const links = await this.prisma.userCompany.findMany({
       where: { companyId },

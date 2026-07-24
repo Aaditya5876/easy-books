@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Body, Param, Query, Req } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Body, Param, Query, Req } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { UserServiceImpl } from '../../../../application/services/user.service.impl';
 import { Roles } from '../../../../modules/decorators/roles.decorator';
@@ -40,5 +40,17 @@ export class UserController {
     @Req() req: any,
   ) {
     return this.service.changeRole(userId, companyId, body.role, req.user.role);
+  }
+
+  @Delete(':id')
+  @Roles('ADMIN')
+  @ApiOperation({ summary: 'Remove a user from the company' })
+  @ApiQuery({ name: 'companyId', required: true })
+  remove(
+    @Param('id') userId: string,
+    @Query('companyId') companyId: string,
+    @Req() req: any,
+  ) {
+    return this.service.removeUser(userId, companyId, req.user.role, req.user.sub);
   }
 }

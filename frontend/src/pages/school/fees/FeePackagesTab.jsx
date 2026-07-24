@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { schoolFinanceApi } from '@/api';
+import { confirm } from '@/lib/confirm';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -145,8 +146,8 @@ export default function FeePackagesTab() {
                 </div>
                 <div className="flex gap-1">
                   <Button size="icon" variant="ghost" onClick={() => setDialog(p)}><Pencil className="w-4 h-4" /></Button>
-                  <Button size="icon" variant="ghost" onClick={() => {
-                    if (window.confirm(t('packages.deleteConfirm', { defaultValue: 'Delete package "{{name}}"?', name: p.name }))) remove.mutate(p.id);
+                  <Button size="icon" variant="ghost" onClick={async () => {
+                    if (await confirm({ description: t('packages.deleteConfirm', { defaultValue: 'Delete package "{{name}}"?', name: p.name }), variant: 'destructive' })) remove.mutate(p.id);
                   }}>
                     <Trash2 className="w-4 h-4 text-destructive" />
                   </Button>

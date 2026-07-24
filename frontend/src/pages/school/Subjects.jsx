@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { subjectsApi, classesApi } from '@/api';
+import { confirm } from '@/lib/confirm';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -141,8 +142,14 @@ export default function Subjects() {
     onError: (e) => toast.error(e.response?.data?.message || t('subjects.cannotDeleteSubject', { defaultValue: 'Cannot delete subject' })),
   });
 
-  const handleDelete = (s) => {
-    if (!window.confirm(t('subjects.confirmDelete', { defaultValue: 'Delete subject "{{name}}"?', name: s.name }))) return;
+  const handleDelete = async (s) => {
+    const ok = await confirm({
+      title: t('common.deleteConfirmTitle', { defaultValue: 'Delete?' }),
+      description: t('subjects.confirmDelete', { defaultValue: 'Delete subject "{{name}}"?', name: s.name }),
+      confirmLabel: t('common.delete', { defaultValue: 'Delete' }),
+      variant: 'destructive',
+    });
+    if (!ok) return;
     remove.mutate(s.id);
   };
 

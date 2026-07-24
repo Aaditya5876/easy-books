@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { schoolFinanceApi } from '@/api';
+import { confirm } from '@/lib/confirm';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -161,8 +162,8 @@ export default function FeeHeadsTab() {
                   <td className="px-5 py-3">
                     <div className="flex gap-1 justify-end">
                       <Button size="icon" variant="ghost" onClick={() => setDialog(h)}><Pencil className="w-4 h-4" /></Button>
-                      <Button size="icon" variant="ghost" onClick={() => {
-                        if (window.confirm(t('feeHeads.deleteConfirm', { defaultValue: 'Delete "{{name}}"? If it has billing history it will be deactivated instead.', name: h.name }))) remove.mutate(h.id);
+                      <Button size="icon" variant="ghost" onClick={async () => {
+                        if (await confirm({ description: t('feeHeads.deleteConfirm', { defaultValue: 'Delete "{{name}}"? If it has billing history it will be deactivated instead.', name: h.name }), variant: 'destructive' })) remove.mutate(h.id);
                       }}>
                         <Trash2 className="w-4 h-4 text-destructive" />
                       </Button>

@@ -6,6 +6,7 @@ import { useAuth } from '@/lib/AuthContext';
 import { useRole } from "@/lib/useRole";
 import { usePreferences } from '@/lib/PreferencesContext';
 import { getActiveCompanyId, setActiveCompanyId } from '@/lib/companyContext';
+import { confirm } from '@/lib/confirm';
 import PageHeader from '../components/shared/PageHeader';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -81,6 +82,7 @@ export default function Settings() {
   const [tempPassword, setTempPassword] = useState(null);
   const [copied, setCopied] = useState(false);
   const [roleChanging, setRoleChanging] = useState(null);
+  const [removingUserId, setRemovingUserId] = useState(null);
 
   // ── Recycle Bin ───────────────────────────────────────────────────────────
   const [binAccessGranted, setBinAccessGranted] = useState(false);
@@ -191,6 +193,25 @@ export default function Settings() {
       alert(err?.response?.data?.message || 'Failed to change role');
     } finally {
       setRoleChanging(null);
+    }
+  }
+
+  async function handleRemoveUser(u) {
+    const ok = await confirm({
+      title: 'Remove user?',
+      description: `Remove ${u.name || u.email} from this company? They will lose access immediately.`,
+      confirmLabel: 'Remove',
+      variant: 'destructive',
+    });
+    if (!ok) return;
+    setRemovingUserId(u.id);
+    try {
+      await usersApi.remove(u.id, activeCompanyId);
+      loadUsers();
+    } catch (err) {
+      alert(err?.response?.data?.message || 'Failed to remove user');
+    } finally {
+      setRemovingUserId(null);
     }
   }
 
@@ -407,7 +428,7 @@ export default function Settings() {
                         </div>
                       </div>
                       <div className="flex items-center gap-3">
-                        {u.id === user?.sub ? (
+                        {u.id === user?.id ? (
                           <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${ROLE_COLORS[u.role] || 'bg-secondary'}`}>
                             {u.role} (you)
                           </span>
@@ -426,6 +447,16 @@ export default function Settings() {
                             {isSchool && <option value="LIBRARIAN">LIBRARIAN</option>}
                             <option value="ADMIN">ADMIN</option>
                           </select>
+                        )}
+                        {canManageUsers && u.id !== user?.id && u.role !== 'SUPER_ADMIN' && (
+                          <button
+                            onClick={() => handleRemoveUser(u)}
+                            disabled={removingUserId === u.id}
+                            className="p-1.5 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600 transition-colors disabled:opacity-50"
+                            title="Remove from company"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
                         )}
                       </div>
                     </div>
