@@ -16,8 +16,8 @@ export const CreateTransactionSchema = z.object({
   reference: z.string().optional(),
   status: TransactionStatusEnum.default('COMPLETED'),
   // Every transaction is a balanced double-entry — see LedgerPostingService.postManualJournalEntryTx.
-  debitAccountId: z.string().uuid(),
-  creditAccountId: z.string().uuid(),
+  debitAccountId: z.string().uuid().optional(),
+  creditAccountId: z.string().uuid().optional(),
 });
 
 export const UpdateTransactionSchema = CreateTransactionSchema.omit({ companyId: true }).partial();

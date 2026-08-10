@@ -90,7 +90,7 @@ export default function Ledger() {
   }, [contextMenu]);
   const [newAccount, setNewAccount] = useState({
     account_name: '', contact_name: '', contact_phone: '',
-    address: '', pan_vat: '', opening_balance: '', notes: '', ob_type: 'debit',
+    address: '', pan_vat: '', account_type: 'purchase', notes: '',
   });
   const [newEntry, setNewEntry] = useState({ description: '', debit: 0, credit: 0, reference_id: '', contra_account_id: '', date_ad: new Date().toISOString().split('T')[0] });
   const [allAccounts, setAllAccounts] = useState([]);
@@ -99,6 +99,12 @@ export default function Ledger() {
     if (companyId) loadData();
   }, [companyId, activeTab]);
 
+  useEffect(() => {
+    if (showNewAccount) {
+      setNewAccount(prev => ({ ...prev, account_type: activeTab }));
+    }
+  }, [showNewAccount, activeTab]);
+
   async function loadData() {
     setLoading(true);
     const [accs, ents, allAccs] = await Promise.all([
@@ -106,7 +112,19 @@ export default function Ledger() {
       api.LedgerEntry.filter({ company_id: companyId }, '-created_date', 50),
       api.LedgerAccount.filter({ company_id: companyId }),
     ]);
-    setAccounts(accs);
+    // Hide certain system accounts from the Ledger UI while keeping them
+    // available for reports and dashboard. Match case-insensitively on the
+    // account name so other accounts are unaffected.
+    const excluded = new Set([
+      'accounts receivable',
+      'purchase expenses',
+      'sales revenue',
+      'accounts payable',
+      'bank account',
+      'cash in hand',
+    ]);
+    const visibleAccounts = accs.filter(a => !excluded.has((a.account_name || '').trim().toLowerCase()));
+    setAccounts(visibleAccounts);
     setEntries(ents);
     setAllAccounts(allAccs);
     setLoading(false);
@@ -140,20 +158,23 @@ export default function Ledger() {
   }
 
   async function createAccount() {
-    const today = new Date().toISOString().split('T')[0];
-    const bsDate = adToBs(new Date());
+    const accountTypeMap = {
+      purchase: 'LIABILITY',
+      sales: 'INCOME',
+      expense: 'EXPENSE',
+    };
     await api.LedgerAccount.create({
       ...newAccount,
       company_id: companyId,
-      account_type: activeTab,
-      opening_balance: newAccount.opening_balance ? parseFloat(newAccount.opening_balance) : 0,
-      current_balance: newAccount.opening_balance ? parseFloat(newAccount.opening_balance) : 0,
+      account_type: accountTypeMap[newAccount.account_type || activeTab] || 'EXPENSE',
+      opening_balance: 0,
+      current_balance: 0,
       fiscal_year: '2081/2082',
       is_active: true,
     });
     setNewAccount({
       account_name: '', contact_name: '', contact_phone: '',
-      address: '', pan_vat: '', opening_balance: '', notes: '', ob_type: 'debit',
+      address: '', pan_vat: '', account_type: activeTab, notes: '',
     });
     setShowNewAccount(false);
     loadData();
@@ -409,42 +430,19 @@ export default function Ledger() {
                 </div>
               </div>
 
-              {/* Opening Balance */}
+              {/* Account Type */}
               <div>
-                <Label className="text-xs font-medium">{t('ledger.openingBalance', { defaultValue: 'Opening Balance' })}</Label>
-                <div className="flex gap-2 mt-1 mb-2">
-                  <label className="flex items-center gap-1.5 text-xs cursor-pointer">
-                    <input
-                      type="radio"
-                      name="ob_type"
-                      value="debit"
-                      checked={newAccount.ob_type !== 'credit'}
-                      onChange={() => setNewAccount({ ...newAccount, ob_type: 'debit' })}
-                      className="accent-primary"
-                    />
-                    <span>{t('ledger.debitYouOweThem', { defaultValue: 'Debit (you owe them)' })}</span>
-                  </label>
-                  <label className="flex items-center gap-1.5 text-xs cursor-pointer">
-                    <input
-                      type="radio"
-                      name="ob_type"
-                      value="credit"
-                      checked={newAccount.ob_type === 'credit'}
-                      onChange={() => setNewAccount({ ...newAccount, ob_type: 'credit' })}
-                      className="accent-primary"
-                    />
-                    <span>{t('ledger.creditTheyOweYou', { defaultValue: 'Credit (they owe you)' })}</span>
-                  </label>
-                </div>
-                <div className="flex items-stretch">
-                  <span className="flex items-center px-2.5 text-xs font-bold text-muted-foreground bg-muted border border-r-0 border-input rounded-l-md select-none shrink-0">NPR</span>
-                  <Input
-                    type="number"
-                    className="rounded-l-none h-9 text-sm flex-1"
-                    placeholder="0.00"
-                    value={newAccount.opening_balance}
-                    onChange={e => setNewAccount({ ...newAccount, opening_balance: e.target.value })}
-                  />
+                <Label className="text-xs font-medium">{t('ledger.accountType', { defaultValue: 'Account Type' })}</Label>
+                <div className="mt-1">
+                  <select
+                    className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+                    value={newAccount.account_type}
+                    onChange={e => setNewAccount({ ...newAccount, account_type: e.target.value })}
+                  >
+                    <option value="purchase">{t('ledger.purchaseAccount', { defaultValue: 'Purchase Account' })}</option>
+                    <option value="sales">{t('ledger.salesAccount', { defaultValue: 'Sales Account' })}</option>
+                    <option value="expense">{t('ledger.expensesAccount', { defaultValue: 'Expenses Account' })}</option>
+                  </select>
                 </div>
               </div>
 

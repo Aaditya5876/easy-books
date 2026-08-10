@@ -26,6 +26,8 @@ export class TransactionServiceImpl {
   async create(dto: CreateTransactionDTO) {
     const dateAd = new Date(dto.dateAd);
     return this.prisma.$transaction(async (tx) => {
+      const { debitAccountId, creditAccountId } = await this.resolveTransactionAccounts(dto);
+
       const transaction = await tx.transaction.create({
         data: {
           companyId: dto.companyId,
@@ -38,15 +40,15 @@ export class TransactionServiceImpl {
           partyName: dto.partyName,
           reference: dto.reference,
           status: dto.status,
-          debitAccountId: dto.debitAccountId,
-          creditAccountId: dto.creditAccountId,
+          debitAccountId,
+          creditAccountId,
         },
       });
 
       if (dto.status === 'COMPLETED') {
         await this.ledgerPosting.postManualJournalEntryTx(tx, dto.companyId, {
-          debitAccountId: dto.debitAccountId,
-          creditAccountId: dto.creditAccountId,
+          debitAccountId,
+          creditAccountId,
           amount: dto.amount,
           dateAd: dto.dateAd,
           description: dto.description || 'Transaction entry',
@@ -57,6 +59,63 @@ export class TransactionServiceImpl {
 
       return transaction;
     });
+  }
+
+  private async resolveTransactionAccounts(dto: CreateTransactionDTO) {
+    if (dto.debitAccountId && dto.creditAccountId) {
+      return { debitAccountId: dto.debitAccountId, creditAccountId: dto.creditAccountId };
+    }
+
+    const isIncome = dto.category === 'INCOME';
+    const isCredit = dto.type === 'CREDIT';
+    const paymentAccountName = dto.type === 'CASH'
+      ? 'Cash in Hand'
+      : dto.type === 'BANK' || dto.type === 'QR' || dto.type === 'CHEQUE'
+        ? 'Bank Account'
+        : 'Cash in Hand';
+
+    const cashOrBankAccount = await this.ledgerPosting.getOrCreateSystemAccount(
+      dto.companyId,
+      paymentAccountName,
+      'ASSET',
+    );
+
+    const salesRevenueAccount = await this.ledgerPosting.getOrCreateSystemAccount(
+      dto.companyId,
+      'Sales Revenue',
+      'INCOME',
+    );
+
+    const purchaseExpenseAccount = await this.ledgerPosting.getOrCreateSystemAccount(
+      dto.companyId,
+      'Purchase Expenses',
+      'EXPENSE',
+    );
+
+    const accountsReceivable = await this.ledgerPosting.getOrCreateSystemAccount(
+      dto.companyId,
+      'Accounts Receivable',
+      'ASSET',
+    );
+
+    const accountsPayable = await this.ledgerPosting.getOrCreateSystemAccount(
+      dto.companyId,
+      'Accounts Payable',
+      'LIABILITY',
+    );
+
+    if (isIncome) {
+      if (isCredit) {
+        return { debitAccountId: accountsReceivable.id, creditAccountId: salesRevenueAccount.id };
+      }
+      return { debitAccountId: cashOrBankAccount.id, creditAccountId: salesRevenueAccount.id };
+    }
+
+    // Expense path
+    if (isCredit) {
+      return { debitAccountId: purchaseExpenseAccount.id, creditAccountId: accountsPayable.id };
+    }
+    return { debitAccountId: purchaseExpenseAccount.id, creditAccountId: cashOrBankAccount.id };
   }
 
   async update(id: string, companyId: string, dto: UpdateTransactionDTO) {

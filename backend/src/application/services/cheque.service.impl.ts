@@ -81,8 +81,29 @@ export class ChequeServiceImpl {
       },
     });
 
+    // If cheque is linked to a Transaction (referenceType === 'TRANSACTION'),
+    // update that transaction's status instead of posting standalone cheque
+    // ledger entries here. The TransactionServiceImpl will post its manual
+    // journal when the transaction becomes COMPLETED. For cheques not linked
+    // to a transaction, call the ledger posting helper directly.
     if (status === 'CLEARED') {
-      await this.ledgerPosting.postChequeCleared(companyId, id);
+      if (cheque.referenceType === 'TRANSACTION' && cheque.referenceId) {
+        try {
+          await this.prisma.transaction.update({ where: { id: cheque.referenceId }, data: { status: 'COMPLETED' } });
+        } catch (e) {
+          // ignore if transaction not found — still attempt cheque ledger posting
+          await this.ledgerPosting.postChequeCleared(companyId, id);
+        }
+      } else {
+        await this.ledgerPosting.postChequeCleared(companyId, id);
+      }
+    }
+
+    // If cheque was cancelled or bounced and it's linked to a transaction,
+    // reflect that on the transaction so the ledger will not be posted.
+    if ((status === 'CANCELLED' || status === 'BOUNCED') && cheque.referenceType === 'TRANSACTION' && cheque.referenceId) {
+      const txStatus = status === 'CANCELLED' ? 'CANCELLED' : 'PENDING';
+      await this.prisma.transaction.update({ where: { id: cheque.referenceId }, data: { status: txStatus } });
     }
 
     return updated;

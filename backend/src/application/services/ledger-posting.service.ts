@@ -787,7 +787,7 @@ export class LedgerPostingService {
 
   // ─── Internal ────────────────────────────────────────────────────────────────
 
-  private async getOrCreateSystemAccount(companyId: string, accountName: string, accountType: string) {
+  async getOrCreateSystemAccount(companyId: string, accountName: string, accountType: string) {
     const existing = await this.prisma.ledgerAccount.findFirst({
       where: { companyId, accountName },
     });

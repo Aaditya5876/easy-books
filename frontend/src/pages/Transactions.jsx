@@ -27,12 +27,10 @@ import PageLoader from '../components/PageLoader';
 import EmptyState from '../components/EmptyState';
 import FloatingBankBrowser from '../components/FloatingBankBrowser';
 
-const CATEGORIES = [
-  { v: 'income',     label: 'Income',     color: 'border-green-400 text-green-700',  active: 'bg-green-50 border-green-500' },
-  { v: 'expense',    label: 'Expense',    color: 'border-red-400 text-red-700',      active: 'bg-red-50 border-red-500' },
-  { v: 'transfer',   label: 'Transfer',   color: 'border-blue-400 text-blue-700',    active: 'bg-blue-50 border-blue-500' },
-  { v: 'investment', label: 'Investment', color: 'border-violet-400 text-violet-700',active: 'bg-violet-50 border-violet-500' },
-  { v: 'hand-outs',  label: 'Hand-outs',  color: 'border-amber-400 text-amber-700',  active: 'bg-amber-50 border-amber-500' },
+const ACCOUNT_TYPES = [
+  { v: 'purchase', label: 'Purchase Account', color: 'border-blue-400 text-blue-700', active: 'bg-blue-50 border-blue-500' },
+  { v: 'sales',    label: 'Sales Account',    color: 'border-green-400 text-green-700', active: 'bg-green-50 border-green-500' },
+  { v: 'expense',  label: 'Expenses Account', color: 'border-red-400 text-red-700',  active: 'bg-red-50 border-red-500' },
 ];
 
 const PAY_METHODS = [
@@ -97,7 +95,6 @@ export default function Transactions() {
   const setCol = (key, val) => setColFilters(f => ({ ...f, [key]: val }));
   const [showNew, setShowNew] = useState(false);
   const [payMethod, setPayMethod] = useState('cash');
-  const [selectedLedgerAccountId, setSelectedLedgerAccountId] = useState('');
   const [activeBankId, setActiveBankId] = useState(null);
   const [showAddBank, setShowAddBank] = useState(false);
   const [browserAccount, setBrowserAccount] = useState(null);
@@ -108,7 +105,7 @@ export default function Transactions() {
   });
   const [showPassword, setShowPassword] = useState(false);
   const [form, setForm] = useState({
-    category: 'income', amount: 0, description: '',
+    account_type: 'purchase', category: 'expense', status: defaultStatusForMethod('cash'), amount: 0, description: '',
     bank_name: '', bank_account_number: '', cheque_number: '', cheque_date: '',
     cheque_issue_date: '', party_name: '',
     date_ad: new Date().toISOString().split('T')[0], reference_number: '', cash_bank_note: '',
@@ -137,10 +134,6 @@ export default function Transactions() {
     setBankAccounts(banks);
     setLedgerAccounts(ledgerAccountsData);
     if (banks.length > 0 && !activeBankId) setActiveBankId(banks[0].id);
-    if (!selectedLedgerAccountId) {
-      const receivable = findSystemAccount(ledgerAccountsData, 'receivable');
-      setSelectedLedgerAccountId(receivable?.id || ledgerAccountsData[0]?.id || '');
-    }
     setLoading(false);
   }
 
@@ -178,17 +171,18 @@ export default function Transactions() {
     return refreshed;
   }
 
-  async function selectPayMethod(id) {
-    setPayMethod(id);
-    const accounts = await ensureSystemAccounts(ledgerAccounts);
-    const acct = findSystemAccount(accounts, form.category === 'income' ? 'receivable' : 'payable');
-    if (acct) setSelectedLedgerAccountId(acct.id);
+  function findLedgerAccountByType(accounts, type) {
+    return accounts.find(a => (a.account_type || a.accountType || '').toLowerCase() === type);
   }
 
-  function selectCategory(v) {
-    setForm(f => ({ ...f, category: v }));
-    const acct = findSystemAccount(ledgerAccounts, v === 'income' ? 'receivable' : 'payable');
-    if (acct) setSelectedLedgerAccountId(acct.id);
+  async function selectPayMethod(id) {
+    setPayMethod(id);
+    setForm(f => ({ ...f, status: defaultStatusForMethod(id) }));
+  }
+
+  function selectAccountType(v) {
+    const category = v === 'sales' ? 'income' : 'expense';
+    setForm(f => ({ ...f, account_type: v, category }));
   }
 
   async function createTransaction() {
@@ -196,24 +190,16 @@ export default function Transactions() {
     const bsDate = adToBs(new Date(entryDate));
     const amount = Number(form.amount || 0);
 
-    const accounts = await ensureSystemAccounts(ledgerAccounts);
-    const counterAccountId = findSystemAccount(accounts, counterAccountKey(payMethod, form.category))?.id || '';
-    // Income: DR Cash/Bank (or Sales Revenue, for credit), CR the selected Ledger Account.
-    // Everything else: DR the selected Ledger Account, CR Cash/Bank (or Purchase Expenses, for credit).
-    const debitAccountId = form.category === 'income' ? counterAccountId : selectedLedgerAccountId;
-    const creditAccountId = form.category === 'income' ? selectedLedgerAccountId : counterAccountId;
     const description = form.cash_bank_note ? `${form.description} — ${form.cash_bank_note}` : form.description;
     const payload = {
       ...form,
       description,
       type: toApiEnum(payMethod),
       category: toApiEnum(form.category),
-      status: toApiEnum(defaultStatusForMethod(payMethod)),
+      status: toApiEnum(form.status),
       company_id: companyId,
       date_ad: entryDate,
       date_bs: bsDate.formatted,
-      debit_account_id: debitAccountId,
-      credit_account_id: creditAccountId,
       amount,
     };
     delete payload.cash_bank_note;
@@ -221,13 +207,16 @@ export default function Transactions() {
     await api.Transaction.create(payload);
 
     setForm({
-      category: 'income', amount: 0, description: '',
+      account_type: 'purchase',
+      category: 'expense',
+      status: defaultStatusForMethod('cash'),
+      amount: 0,
+      description: '',
       bank_name: '', bank_account_number: '', cheque_number: '', cheque_date: '',
       cheque_issue_date: '', party_name: '',
       date_ad: new Date().toISOString().split('T')[0], reference_number: '', cash_bank_note: '',
     });
     setPayMethod('cash');
-    setSelectedLedgerAccountId(ledgerAccounts[0]?.id || '');
     setShowNew(false);
     loadData();
   }
@@ -252,13 +241,14 @@ export default function Transactions() {
 
   const typeIcons = { cash: Banknote, bank: CreditCard, qr: QrCode, cheque: FileCheck, credit: Receipt };
 
-  // The Ledger Account field is always just Payable/Receivable — not the full chart of
-  // accounts — regardless of payment method.
-  const ledgerAccountOptions = ledgerAccounts.filter(
-    a => ['accounts payable', 'accounts receivable'].includes((a.account_name || a.accountName || '').toLowerCase())
-  );
+  // The Ledger Account field now filters by the selected account type (purchase/sales/expense).
+  // The payment method still resolves the counterparty side automatically.
+  const matchedLedgerAccount = form.party_name.trim()
+    ? ledgerAccounts.find(a => (a.account_name || a.accountName || '').toLowerCase() === form.party_name.trim().toLowerCase())
+    : null;
+
   const counterLabel = payMethod === 'credit'
-    ? (form.category === 'income' ? 'Sales Revenue' : 'Purchase Expenses')
+    ? (form.account_type === 'sales' ? 'Sales Revenue' : 'Accounts Payable')
     : 'Cash/Bank Account';
 
   const columns = [
@@ -280,12 +270,16 @@ export default function Transactions() {
     // Same inflow/outflow rule the old single Amount column used (only 'expense' is an
     // outflow) — now split across two columns instead of a +/- prefix on one.
     { key: 'debit', label: 'Debit', render: (row) => (
-      row.category === 'expense' ? (
+      row.type === 'credit' ? (
+        <span className="text-muted-foreground text-xs">—</span>
+      ) : row.category === 'expense' ? (
         <span className="font-semibold font-mono text-red-600">NPR {(row.amount || 0).toLocaleString()}</span>
       ) : <span className="text-muted-foreground text-xs">—</span>
     )},
     { key: 'credit', label: 'Credit', render: (row) => (
-      row.category === 'expense' ? (
+      row.type === 'credit' ? (
+        <span className="font-semibold font-mono text-green-600">NPR {(row.amount || 0).toLocaleString()}</span>
+      ) : row.category === 'expense' ? (
         <span className="text-muted-foreground text-xs">—</span>
       ) : <span className="font-semibold font-mono text-green-600">NPR {(row.amount || 0).toLocaleString()}</span>
     )},
@@ -671,17 +665,17 @@ export default function Transactions() {
                 </div>
               </div>
 
-              {/* Category chips */}
+              {/* Ledger Account Type */}
               <div>
-                <Label className="text-xs font-medium">Category</Label>
+                <Label className="text-xs font-medium">Ledger Account Type</Label>
                 <div className="flex flex-wrap gap-1.5 mt-1">
-                  {CATEGORIES.map(c => (
+                  {ACCOUNT_TYPES.map(c => (
                     <button
                       key={c.v}
                       type="button"
-                      onClick={() => selectCategory(c.v)}
+                      onClick={() => selectAccountType(c.v)}
                       className={`sel-chip text-xs px-3 py-1.5 rounded-md ${
-                        form.category === c.v
+                        form.account_type === c.v
                           ? c.active + ' border-2'
                           : c.color + ' border opacity-70'
                       }`}
@@ -727,9 +721,13 @@ export default function Transactions() {
               <div className="pt-1 border-t">
                 <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground pt-2 pb-1">Debit &amp; Credit</p>
                 <p className="text-xs text-muted-foreground mb-2">
-                  {form.category === 'income'
-                    ? `${counterLabel} is debited, Ledger Account is credited.`
-                    : `Ledger Account is debited, ${counterLabel} is credited.`}
+                  {form.account_type === 'sales'
+                    ? (payMethod === 'credit'
+                        ? 'Accounts Receivable is debited, Sales Revenue is credited.'
+                        : 'Cash/Bank Account is debited, Sales Revenue is credited.')
+                    : (payMethod === 'credit'
+                        ? 'Purchase Expenses is debited, Accounts Payable is credited.'
+                        : 'Purchase Expenses is debited, Cash/Bank Account is credited.')}
                 </p>
                 {(payMethod === 'cheque' || payMethod === 'credit') && (
                   <p className="text-xs text-amber-600 mb-2">
@@ -737,20 +735,32 @@ export default function Transactions() {
                   </p>
                 )}
               </div>
-              <div>
-                <Label className="text-xs font-medium">Ledger Account (Payable / Receivable) *</Label>
-                <Select value={selectedLedgerAccountId} onValueChange={setSelectedLedgerAccountId}>
-                  <SelectTrigger className="h-9 text-sm mt-1"><SelectValue placeholder="Choose ledger account" /></SelectTrigger>
-                  <SelectContent>
-                    {ledgerAccountOptions.length === 0 ? (
-                      <div className="px-3 py-2 text-sm text-muted-foreground">No ledger accounts available</div>
-                    ) : ledgerAccountOptions.map(account => (
-                      <SelectItem key={account.id} value={account.id}>
-                        {account.account_name || account.accountName || 'Unnamed account'}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+              <div className="rounded-xl border border-border bg-muted/50 p-3">
+                <div className="flex flex-col gap-2">
+                  <div>
+                    <p className="text-xs font-medium">Auto-resolved Ledger Account</p>
+                    <p className="text-sm font-semibold mt-1">
+                      {form.account_type === 'sales' ? 'Accounts Receivable' : 'Accounts Payable'}
+                    </p>
+                    {matchedLedgerAccount ? (
+                      <p className="text-xs text-muted-foreground mt-1">Matched ledger account: {matchedLedgerAccount.account_name}</p>
+                    ) : (
+                      <p className="text-xs text-muted-foreground mt-1">No matching party ledger account found yet.</p>
+                    )}
+                  </div>
+                  <div>
+                    <Label className="text-xs font-medium">Status</Label>
+                    <select
+                      className="mt-1 h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+                      value={form.status}
+                      onChange={e => setForm(f => ({ ...f, status: e.target.value }))}
+                    >
+                      <option value="completed">Completed</option>
+                      <option value="pending">Pending</option>
+                      <option value="cancelled">Cancelled</option>
+                    </select>
+                  </div>
+                </div>
               </div>
               <div>
                 <Label className="text-xs font-medium">Note (optional)</Label>
@@ -892,7 +902,7 @@ export default function Transactions() {
             <Button variant="outline" onClick={() => setShowNew(false)}>Cancel</Button>
             <Button
               onClick={createTransaction}
-              disabled={!form.amount || !form.description || !selectedLedgerAccountId}
+              disabled={!form.amount || !form.description || !form.party_name}
             >
               Save
             </Button>

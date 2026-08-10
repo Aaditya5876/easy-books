@@ -7,7 +7,7 @@
   },
   "scripts": {
     "postinstall": "prisma generate",
-    "dev": "nest start --watch",
+    "dev": "nest start --watch --entry-file backend/src/main",
     "build": "nest build",
     "start": "node dist/backend/src/main",
     "test": "jest",
