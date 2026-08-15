@@ -161,59 +161,122 @@ export default function Payroll() {
   function exportPDF(p) {
     const doc = new jsPDF();
     const name = p.employee?.name || '—';
+    const pageWidth = 210;
+    const marginX = 20;
+    const rightX = 190;
 
-    doc.setFontSize(18);
+    // Reserved blank space at the very top for a school/company letterhead
+    // (logo, name, address) — either printed on letterhead paper, or added
+    // manually — so the content below never overlaps it.
+    let y = 42;
+
+    doc.setFontSize(16);
     doc.setFont(undefined, 'bold');
-    doc.text('PAY SLIP', 105, 20, { align: 'center' });
-
-    doc.setFontSize(11);
-    doc.setFont(undefined, 'normal');
-    doc.text(`Month (BS): ${p.month}`, 20, 35);
-    doc.text(`Employee: ${name}`, 20, 43);
-    doc.text(`Generated: ${new Date().toLocaleDateString()}`, 20, 51);
-
-    doc.line(20, 57, 190, 57);
-
-    doc.setFont(undefined, 'bold');
-    doc.text('Earnings', 20, 66);
-    doc.setFont(undefined, 'normal');
-    doc.text('Basic Salary', 25, 74);
-    doc.text(npr(p.basicSalary), 150, 74, { align: 'right' });
-    doc.text('Allowances', 25, 82);
-    doc.text(npr(p.allowances), 150, 82, { align: 'right' });
-    if (p.isDashainBonus) {
-      doc.text('Dashain Bonus', 25, 90);
-      doc.text(npr(p.basicSalary), 150, 90, { align: 'right' });
-    }
-    doc.text('Overtime', 25, 98);
-    doc.text(npr(p.overtimeAmount), 150, 98, { align: 'right' });
-
-    doc.line(20, 104, 190, 104);
-
-    doc.setFont(undefined, 'bold');
-    doc.text('Deductions', 20, 113);
-    doc.setFont(undefined, 'normal');
-    doc.text(`Absent / Half Days (${p.absentDays}/${p.halfDays})`, 25, 121);
-    doc.text(`- ${npr(p.absentDeduction)}`, 150, 121, { align: 'right' });
-    doc.text('SSF (Employee)', 25, 129);
-    doc.text(`- ${npr(p.ssfEmployee)}`, 150, 129, { align: 'right' });
-    doc.text('Income Tax (PIT)', 25, 137);
-    doc.text(`- ${npr(p.pit)}`, 150, 137, { align: 'right' });
-    doc.text('Other Deductions', 25, 145);
-    doc.text(`- ${npr(p.otherDeductions)}`, 150, 145, { align: 'right' });
-
-    doc.line(20, 151, 190, 151);
-
-    doc.setFont(undefined, 'bold');
-    doc.setFontSize(13);
-    doc.text('Net Salary', 20, 162);
-    doc.text(npr(p.netSalary), 150, 162, { align: 'right' });
-
-    doc.line(20, 167, 190, 167);
-
+    doc.setTextColor(0);
+    doc.text('PAY SLIP', pageWidth / 2, y, { align: 'center' });
     doc.setFontSize(9);
+    doc.setFont(undefined, 'normal');
+    doc.setTextColor(120);
+    doc.text(`Salary Statement -- ${p.month} (BS)`, pageWidth / 2, y + 5, { align: 'center' });
+
+    y += 14;
+
+    // Employee details box
+    doc.setDrawColor(200);
+    doc.roundedRect(marginX, y, rightX - marginX, 24, 1, 1);
+    const col2X = marginX + 90;
+    const detailLabelY = y + 6, detailValueY = y + 12, detailLabel2Y = y + 18, detailValue2Y = y + 23;
+
+    doc.setFontSize(8);
+    doc.setTextColor(120);
+    doc.text('EMPLOYEE', marginX + 4, detailLabelY);
+    doc.text('MONTH (BS)', col2X, detailLabelY);
+    doc.setFontSize(11);
+    doc.setTextColor(0);
+    doc.setFont(undefined, 'bold');
+    doc.text(name, marginX + 4, detailValueY);
+    doc.text(p.month, col2X, detailValueY);
+
+    doc.setFont(undefined, 'normal');
+    doc.setFontSize(8);
+    doc.setTextColor(120);
+    doc.text('EMPLOYEE ID / DESIGNATION', marginX + 4, detailLabel2Y);
+    doc.text('GENERATED ON', col2X, detailLabel2Y);
+    doc.setFontSize(10);
+    doc.setTextColor(0);
+    const idDesignation = [p.employee?.employeeId, p.employee?.designation || p.employee?.department].filter(Boolean).join(' -- ') || '—';
+    doc.text(idDesignation, marginX + 4, detailValue2Y);
+    doc.text(new Date().toLocaleDateString('en-GB'), col2X, detailValue2Y);
+
+    y += 24 + 10;
+
+    // Earnings section
+    const sectionHeader = (label) => {
+      doc.setFillColor(245, 247, 250);
+      doc.rect(marginX, y, rightX - marginX, 7, 'F');
+      doc.setFont(undefined, 'bold');
+      doc.setFontSize(9);
+      doc.setTextColor(60);
+      doc.text(label, marginX + 3, y + 5);
+      doc.text('AMOUNT', rightX - 3, y + 5, { align: 'right' });
+      y += 7;
+    };
+    const row = (label, amount, negative = false) => {
+      y += 8;
+      doc.setFont(undefined, 'normal');
+      doc.setFontSize(10);
+      doc.setTextColor(0);
+      doc.text(label, marginX + 3, y);
+      doc.text(`${negative ? '- ' : ''}${npr(amount)}`, rightX - 3, y, { align: 'right' });
+    };
+
+    sectionHeader('EARNINGS');
+    row('Basic Salary', p.basicSalary);
+    row('Allowances', p.allowances);
+    if (p.isDashainBonus) row('Dashain Bonus', p.basicSalary);
+    row('Overtime', p.overtimeAmount);
+    y += 4;
+    doc.setDrawColor(220);
+    doc.line(marginX, y, rightX, y);
+
+    y += 10;
+
+    // Deductions section
+    sectionHeader('DEDUCTIONS');
+    row(`Absent / Half Days (${p.absentDays}/${p.halfDays})`, p.absentDeduction, true);
+    row('SSF (Employee)', p.ssfEmployee, true);
+    row('Income Tax (PIT)', p.pit, true);
+    row('Other Deductions', p.otherDeductions, true);
+    y += 4;
+    doc.setDrawColor(220);
+    doc.line(marginX, y, rightX, y);
+
+    y += 12;
+
+    // Net Salary — highlighted bar
+    doc.setFillColor(30, 41, 59);
+    doc.rect(marginX, y, rightX - marginX, 12, 'F');
+    doc.setTextColor(255);
+    doc.setFont(undefined, 'bold');
+    doc.setFontSize(12);
+    doc.text('NET SALARY', marginX + 4, y + 8);
+    doc.text(npr(p.netSalary), rightX - 4, y + 8, { align: 'right' });
+    doc.setTextColor(0);
+
+    y += 12 + 25;
+
+    // Signatures
+    doc.setDrawColor(150);
+    doc.setFontSize(9);
+    doc.line(marginX, y, marginX + 60, y);
+    doc.line(rightX - 60, y, rightX, y);
+    doc.text('Employee Signature', marginX, y + 5);
+    doc.text('Authorized Signature', rightX - 60, y + 5);
+
+    // Footer
+    doc.setFontSize(8);
     doc.setTextColor(150);
-    doc.text('This is a computer generated pay slip.', 105, 285, { align: 'center' });
+    doc.text('This is a computer generated pay slip.', pageWidth / 2, 285, { align: 'center' });
 
     doc.save(`payslip_${name.replace(/\s+/g, '_')}_${p.month}.pdf`);
   }

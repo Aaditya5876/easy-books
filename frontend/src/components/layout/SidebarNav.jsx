@@ -88,6 +88,7 @@ const navSections = [
     minRole: 'admin',
     items: [
       { icon: Settings, label: 'Settings', path: '/settings' },
+      { icon: Shield, label: 'Audit Log', path: '/audit-log' },
     ]
   },
 ];
@@ -183,6 +184,7 @@ const schoolNavSections = [
     minRole: 'admin',
     items: [
       { icon: Settings, label: 'Settings', path: '/settings' },
+      { icon: Shield, label: 'Audit Log', path: '/audit-log' },
     ]
   },
 ];

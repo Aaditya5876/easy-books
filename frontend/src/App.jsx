@@ -25,6 +25,7 @@ import Calculator from './pages/Calculator';
 import CalendarPage from './pages/CalendarPage';
 import CurrencyConverter from './pages/CurrencyConverter';
 import Settings from './pages/Settings';
+import AuditLog from './pages/AuditLog';
 import Employees from './pages/Employees';
 import Attendance from './pages/Attendance';
 import Payroll from './pages/Payroll';
@@ -90,6 +91,7 @@ const schoolRoutes = [
   { path: '/transactions', page: Transactions },
   { path: '/reports', page: SchoolReports, roles: ['TEACHER'] },
   { path: '/settings', page: Settings },
+  { path: '/audit-log', page: AuditLog },
 ];
 
 const AuthenticatedApp = () => {
@@ -140,6 +142,7 @@ const AuthenticatedApp = () => {
             <Route path="/calendar" element={<CalendarPage />} />
             <Route path="/currency" element={<CurrencyConverter />} />
             <Route path="/settings" element={<Settings />} />
+            <Route path="/audit-log" element={<AuditLog />} />
             <Route path="/employees" element={<Employees />} />
             <Route path="/attendance" element={<Attendance />} />
             <Route path="/payroll" element={<Payroll />} />

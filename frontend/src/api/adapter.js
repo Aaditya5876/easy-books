@@ -49,6 +49,7 @@ const ENDPOINTS = {
   Task:          '/api/v1/tasks',
   Quotation:     '/api/v1/quotations',
   Company:       '/api/v1/companies',
+  AuditLog:      '/api/v1/audit-logs',
 };
 
 function makeEntity(endpoint) {

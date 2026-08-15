@@ -344,7 +344,7 @@ export class SchoolFinanceService {
       const profile = await this.getStudentFeeProfile(companyId, s.id);
       if (profile.monthlyTotal <= 0 || profile.lines.length === 0) { skippedEmpty++; continue; }
 
-      await this.prisma.feeInvoice.create({
+      const invoice = await this.prisma.feeInvoice.create({
         data: {
           companyId,
           studentId: s.id,
@@ -362,10 +362,84 @@ export class SchoolFinanceService {
           },
         },
       });
+
+      // Best-effort, same as recordPayment() below — a ledger posting failure
+      // must never block the invoice itself from being created.
+      try {
+        await this.postFeeInvoiceAccrual(companyId, invoice.id);
+      } catch (err) {
+        console.error('Fee invoice accrual posting failed:', (err as Error).message);
+      }
+
       created++;
     }
 
     return { created, skippedExisting, skippedEmpty, students: students.length };
+  }
+
+  // The moment an invoice is generated (whether from a manual billing run or
+  // the automatic monthly scheduler), recognize the income right away — DR Fee
+  // Receivable, CR each fee head's Income account. This is accrual accounting:
+  // a student owing fees counts as income now, not only once they actually pay.
+  // recordPayment()/postFeePayment() below then just clears Fee Receivable via
+  // Cash/Bank when payment actually happens — it does NOT credit Income again,
+  // otherwise every fee would be counted twice.
+  private async postFeeInvoiceAccrual(companyId: string, invoiceId: string) {
+    const invoice = await this.prisma.feeInvoice.findUnique({
+      where: { id: invoiceId },
+      include: { items: { include: { feeHead: true } }, student: { select: { name: true } } },
+    });
+    if (!invoice) return;
+
+    const total = Number(invoice.totalAmount);
+    if (total <= 0) return; // fully covered by scholarship — nothing to accrue
+
+    const date = new Date(invoice.createdAt);
+    const dateBs = adToBs(date);
+    const desc = `Fee billed — ${invoice.student?.name ?? 'Student'} (${invoice.month})`;
+
+    // Net per income head — a scholarship line against a specific head reduces
+    // that head's net (rare case: net could even be negative for a head with a
+    // large targeted scholarship, handled as a debit to that Income account).
+    const byHead = new Map<string, number>();
+    for (const item of invoice.items) {
+      const accName = `${item.feeHead?.name ?? 'General Fee'} Income`;
+      byHead.set(accName, round2((byHead.get(accName) ?? 0) + Number(item.amount)));
+    }
+
+    const receivable = await this.getOrCreateAccount(companyId, 'Fee Receivable', 'ASSET');
+    const ops: any[] = [
+      this.prisma.ledgerEntry.create({
+        data: {
+          companyId, accountId: receivable.id, dateAd: date, dateBs,
+          description: desc, debit: total, credit: 0,
+          balance: Number(receivable.currentBalance) + total,
+          referenceType: 'FEE_INVOICE', referenceId: invoice.id, isAutoPosted: true,
+        },
+      }),
+      this.prisma.ledgerAccount.update({ where: { id: receivable.id }, data: { currentBalance: { increment: total } } }),
+    ];
+
+    for (const [accName, netAmt] of byHead) {
+      if (Math.abs(netAmt) < 0.005) continue;
+      const account = await this.getOrCreateAccount(companyId, accName, 'INCOME');
+      const debit = netAmt < 0 ? -netAmt : 0;
+      const credit = netAmt > 0 ? netAmt : 0;
+      const delta = credit - debit; // INCOME is credit-normal
+      ops.push(
+        this.prisma.ledgerEntry.create({
+          data: {
+            companyId, accountId: account.id, dateAd: date, dateBs,
+            description: desc, debit, credit,
+            balance: Number(account.currentBalance) + delta,
+            referenceType: 'FEE_INVOICE', referenceId: invoice.id, isAutoPosted: true,
+          },
+        }),
+        this.prisma.ledgerAccount.update({ where: { id: account.id }, data: { currentBalance: { increment: delta } } }),
+      );
+    }
+
+    await this.prisma.$transaction(ops);
   }
 
   // ── Payments & Receipts ──────────────────────────────────────────────────────
@@ -485,10 +559,14 @@ export class SchoolFinanceService {
   }
 
   // DR Cash/Bank · CR each head's income account, allocated across invoice items
+  // DR Cash/Bank · CR Fee Receivable — the actual cash receipt, clearing the
+  // receivable that postFeeInvoiceAccrual() already created when the invoice
+  // was generated. This must NOT credit Income again (that already happened at
+  // billing time) — otherwise every fee would be counted twice.
   private async postFeePayment(companyId: string, paymentId: string, studentName: string) {
     const payment = await this.prisma.feePayment.findUnique({
       where: { id: paymentId },
-      include: { invoice: { include: { items: { include: { feeHead: true } } } } },
+      include: { invoice: true },
     });
     if (!payment) return;
 
@@ -496,34 +574,14 @@ export class SchoolFinanceService {
     const date = new Date(payment.paidAt);
     const dateBs = adToBs(date);
     const drAccountName = payment.method === 'CASH' ? 'Cash in Hand' : 'Bank Account';
-
-    // Allocate proportionally across positive line items
-    const positiveItems = payment.invoice.items.filter(i => Number(i.amount) > 0);
-    const positiveSum = positiveItems.reduce((s, i) => s + Number(i.amount), 0);
-    const invoiceNet = Number(payment.invoice.totalAmount);
-
-    const allocations = new Map<string, number>(); // income account name -> amount
-    if (positiveSum > 0 && invoiceNet > 0) {
-      // scholarship-adjusted: scale item shares so they sum to the payment amount
-      for (const item of positiveItems) {
-        const share = round2((Number(item.amount) / positiveSum) * amount);
-        const accName = `${item.feeHead?.name ?? 'General Fee'} Income`;
-        allocations.set(accName, round2((allocations.get(accName) ?? 0) + share));
-      }
-      // fix rounding drift on the largest allocation
-      const drift = round2(amount - [...allocations.values()].reduce((s, v) => s + v, 0));
-      if (drift !== 0) {
-        const largest = [...allocations.entries()].sort((a, b) => b[1] - a[1])[0];
-        if (largest) allocations.set(largest[0], round2(largest[1] + drift));
-      }
-    } else {
-      allocations.set('General Fee Income', amount);
-    }
-
-    const drAccount = await this.getOrCreateAccount(companyId, drAccountName, 'ASSET');
     const desc = `Fee receipt ${payment.receiptNo} — ${studentName} (${payment.invoice.month})`;
 
-    const ops: any[] = [
+    const [drAccount, receivable] = await Promise.all([
+      this.getOrCreateAccount(companyId, drAccountName, 'ASSET'),
+      this.getOrCreateAccount(companyId, 'Fee Receivable', 'ASSET'),
+    ]);
+
+    await this.prisma.$transaction([
       this.prisma.ledgerEntry.create({
         data: {
           companyId, accountId: drAccount.id, dateAd: date, dateBs,
@@ -536,28 +594,19 @@ export class SchoolFinanceService {
         where: { id: drAccount.id },
         data: { currentBalance: { increment: amount } },
       }),
-    ];
-
-    for (const [accName, alloc] of allocations) {
-      if (alloc <= 0) continue;
-      const account = await this.getOrCreateAccount(companyId, accName, 'INCOME');
-      ops.push(
-        this.prisma.ledgerEntry.create({
-          data: {
-            companyId, accountId: account.id, dateAd: date, dateBs,
-            description: desc, debit: 0, credit: alloc,
-            balance: Number(account.currentBalance) + alloc,
-            referenceType: 'FEE_PAYMENT', referenceId: payment.id, isAutoPosted: true,
-          },
-        }),
-        this.prisma.ledgerAccount.update({
-          where: { id: account.id },
-          data: { currentBalance: { increment: alloc } },
-        }),
-      );
-    }
-
-    await this.prisma.$transaction(ops);
+      this.prisma.ledgerEntry.create({
+        data: {
+          companyId, accountId: receivable.id, dateAd: date, dateBs,
+          description: desc, debit: 0, credit: amount,
+          balance: Number(receivable.currentBalance) - amount,
+          referenceType: 'FEE_PAYMENT', referenceId: payment.id, isAutoPosted: true,
+        },
+      }),
+      this.prisma.ledgerAccount.update({
+        where: { id: receivable.id },
+        data: { currentBalance: { decrement: amount } },
+      }),
+    ]);
   }
 
   private async getOrCreateAccount(companyId: string, accountName: string, accountType: string) {

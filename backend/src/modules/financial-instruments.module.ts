@@ -7,8 +7,10 @@ import { LedgerPostingService } from '../application/services/ledger-posting.ser
 import { ChequeController } from '../adapter/input/api/v1/cheque.controller';
 import { BankGuaranteeController } from '../adapter/input/api/v1/bank-guarantee.controller';
 import { PettyCashController } from '../adapter/input/api/v1/petty-cash.controller';
+import { TransactionModule } from './transaction.module';
 
 @Module({
+  imports: [TransactionModule],
   controllers: [ChequeController, BankGuaranteeController, PettyCashController],
   providers: [PrismaService, LedgerPostingService, ChequeServiceImpl, BankGuaranteeServiceImpl, PettyCashServiceImpl],
   exports: [ChequeServiceImpl, BankGuaranteeServiceImpl, PettyCashServiceImpl],

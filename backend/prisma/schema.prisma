@@ -82,6 +82,16 @@ enum LedgerAccountType {
   EXPENSE
 }
 
+// Which Cash Flow Statement section a non-cash account's movements belong to
+// (see ReportsService.getCashFlowStatement) — e.g. Fixed Assets = INVESTING.
+// Left unset on an account and the report falls back to a sensible default
+// (EQUITY -> FINANCING, everything else -> OPERATING).
+enum CashFlowActivity {
+  OPERATING
+  INVESTING
+  FINANCING
+}
+
 enum OrderStatus {
   PENDING
   CONFIRMED
@@ -232,6 +242,7 @@ model Company {
   cheques              Cheque[]
   bankGuarantees       BankGuarantee[]
   pettyCashVouchers    PettyCashVoucher[]
+  fixedAssets          FixedAsset[]
   payrollSettings      CompanyPayrollSettings?
   inventoryAdjustments InventoryAdjustment[]
   schoolClasses        SchoolClass[]
@@ -468,6 +479,13 @@ model Transaction {
   debitAccount    LedgerAccount?      @relation("TransactionDebitAccount", fields: [debitAccountId], references: [id])
   creditAccountId String?
   creditAccount   LedgerAccount?      @relation("TransactionCreditAccount", fields: [creditAccountId], references: [id])
+  // A matched/created vendor or customer Ledger account — tracked via a separate
+  // single-sided memo entry (LedgerPostingService.postPartyLedgerLineTx), never one
+  // of the two balanced legs above. Persisted here (not just passed through the
+  // DTO) so status updates later (cancel/un-cancel, amount edits) know which
+  // party account to reverse/re-post without needing it resupplied by the caller.
+  partyAccountId  String?
+  partyAccount    LedgerAccount?      @relation("TransactionPartyAccount", fields: [partyAccountId], references: [id])
   dateAd          DateTime
   dateBs          String?
   type            TransactionType
@@ -547,6 +565,40 @@ model PettyCashVoucher {
   @@map("petty_cash_vouchers")
 }
 
+enum FixedAssetStatus {
+  ACTIVE
+  DISPOSED
+}
+
+// Individual assets tracked here for depreciation math (cost, useful life,
+// accumulated depreciation per asset) — the actual ledger postings share two
+// company-wide system accounts ("Fixed Assets", "Accumulated Depreciation"),
+// the same pattern Payroll uses (per-employee records, shared Salary Expense
+// account), rather than one ledger account per asset.
+model FixedAsset {
+  id                     String           @id @default(uuid())
+  companyId              String
+  company                Company          @relation(fields: [companyId], references: [id])
+  assetName              String
+  assetCode              String?
+  category               String?
+  purchaseDateAd         DateTime
+  purchaseDateBs         String?
+  cost                   Decimal          @db.Decimal(14, 2)
+  usefulLifeYears        Int
+  salvageValue           Decimal          @default(0) @db.Decimal(14, 2)
+  accumulatedDepreciation Decimal         @default(0) @db.Decimal(14, 2)
+  lastDepreciationDateAd DateTime?
+  status                 FixedAssetStatus @default(ACTIVE)
+  disposalDateAd         DateTime?
+  disposalAmount         Decimal?         @db.Decimal(14, 2)
+  notes                  String?
+  createdAt              DateTime         @default(now())
+  updatedAt               DateTime        @updatedAt
+
+  @@map("fixed_assets")
+}
+
 model LedgerAccount {
   id             String            @id @default(uuid())
   companyId      String
@@ -561,12 +613,14 @@ model LedgerAccount {
   fiscalYear     String?
   isSystem       Boolean           @default(false)
   isHidden       Boolean           @default(false)
+  cashFlowActivity CashFlowActivity?
   createdAt      DateTime          @default(now())
   updatedAt      DateTime          @updatedAt
 
   entries LedgerEntry[]
   debitTransactions  Transaction[] @relation("TransactionDebitAccount")
   creditTransactions Transaction[] @relation("TransactionCreditAccount")
+  partyTransactions  Transaction[] @relation("TransactionPartyAccount")
 
   @@unique([companyId, accountCode])
   @@map("ledger_accounts")
@@ -1551,4 +1605,28 @@ model Notification {
   @@index([userId, isRead])
   @@index([companyId])
   @@map("notifications")
+}
+
+// "Who did what" activity trail — every non-GET API request gets one row here
+// (see AuditLogInterceptor). Deliberately has NO foreign-key relations to User/
+// Company: the log must survive a user or company being deleted, and it must
+// never be able to block a delete elsewhere in the app.
+model AuditLog {
+  id        String   @id @default(uuid())
+  companyId String?
+  userId    String?
+  userEmail String?
+  userRole  String?
+  action    String // CREATE | UPDATE | DELETE
+  module    String // e.g. "transactions", "ledger/accounts"
+  entityId  String?
+  method    String
+  path      String
+  changes   Json?
+  createdAt DateTime @default(now())
+
+  @@index([companyId, createdAt])
+  @@index([module, entityId])
+  @@index([userId])
+  @@map("audit_logs")
 }

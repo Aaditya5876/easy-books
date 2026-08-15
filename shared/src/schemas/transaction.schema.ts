@@ -18,6 +18,12 @@ export const CreateTransactionSchema = z.object({
   // Every transaction is a balanced double-entry — see LedgerPostingService.postManualJournalEntryTx.
   debitAccountId: z.string().uuid().optional(),
   creditAccountId: z.string().uuid().optional(),
+  // A matched/created party (vendor or customer) Ledger account — tracked as a
+  // running spend/income total regardless of payment method, via a separate
+  // single-sided memo entry (see LedgerPostingService.postPartyMemoEntryTx).
+  // Deliberately NOT one of the two balanced legs above — it never replaces
+  // the real Cash/Bank/Payable/Receivable posting.
+  partyAccountId: z.string().uuid().optional(),
 });
 
 export const UpdateTransactionSchema = CreateTransactionSchema.omit({ companyId: true }).partial();

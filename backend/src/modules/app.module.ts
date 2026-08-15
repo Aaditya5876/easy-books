@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
-import { APP_GUARD } from '@nestjs/core';
+import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
+import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { validateEnv } from '../../core/config';
 import { PinoLoggerModule } from '../../core/utils/logger';
@@ -35,12 +36,18 @@ import { SchoolModule } from './school.module';
 import { PortalModule } from './portal.module';
 import { AiModule } from './ai.module';
 import { BulkImportModule } from './bulk-import.module';
+import { AuditLogModule } from './audit-log.module';
+import { ReportsModule } from './reports.module';
+import { FixedAssetModule } from './fixed-asset.module';
+import { ScheduledTasksModule } from './scheduled-tasks.module';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { RolesGuard } from './guards/roles.guard';
+import { AuditLogInterceptor } from './interceptors/audit-log.interceptor';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true, validate: validateEnv }),
+    ScheduleModule.forRoot(),
     ThrottlerModule.forRoot([{ ttl: 60000, limit: 200 }]),
     PinoLoggerModule,
     BullRootModule,
@@ -74,12 +81,19 @@ import { RolesGuard } from './guards/roles.guard';
     PortalModule,
     AiModule,
     BulkImportModule,
+    AuditLogModule,
+    ReportsModule,
+    FixedAssetModule,
+    ScheduledTasksModule,
   ],
   providers: [
     // Global guards — run on every request in order: Throttler, JWT, then Roles
     { provide: APP_GUARD, useClass: ThrottlerGuard },
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_GUARD, useClass: RolesGuard },
+    // Runs after the guards above (so req.user is already populated) — logs
+    // every non-GET request as an audit trail entry. See AuditLogInterceptor.
+    { provide: APP_INTERCEPTOR, useClass: AuditLogInterceptor },
   ],
 })
 export class AppModule {}

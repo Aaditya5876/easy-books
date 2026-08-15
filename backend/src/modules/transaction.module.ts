@@ -7,5 +7,6 @@ import { LedgerPostingService } from '../application/services/ledger-posting.ser
 @Module({
   controllers: [TransactionController],
   providers: [PrismaService, TransactionServiceImpl, LedgerPostingService],
+  exports: [TransactionServiceImpl],
 })
 export class TransactionModule {}

@@ -39,39 +39,47 @@ export class BankGuaranteeServiceImpl {
     const issuedDate = new Date(data.issuedDateAd);
     const expiryDate = new Date(data.expiryDateAd);
 
-    const bg = await this.prisma.bankGuarantee.create({
-      data: {
-        companyId,
-        bgNumber: data.bgNumber,
-        partyName: data.partyName,
-        bankName: data.bankName,
-        amount: data.amount,
-        issuedDateAd: issuedDate,
-        issuedDateBs: adToBs(issuedDate),
-        expiryDateAd: expiryDate,
-        expiryDateBs: adToBs(expiryDate),
-        purpose: data.purpose,
-        notes: data.notes,
-        status: 'ACTIVE',
-      },
-    });
+    return this.prisma.$transaction(async (tx) => {
+      const bg = await tx.bankGuarantee.create({
+        data: {
+          companyId,
+          bgNumber: data.bgNumber,
+          partyName: data.partyName,
+          bankName: data.bankName,
+          amount: data.amount,
+          issuedDateAd: issuedDate,
+          issuedDateBs: adToBs(issuedDate),
+          expiryDateAd: expiryDate,
+          expiryDateBs: adToBs(expiryDate),
+          purpose: data.purpose,
+          notes: data.notes,
+          status: 'ACTIVE',
+        },
+      });
 
-    await this.ledgerPosting.postBankGuaranteeIssued(companyId, bg.id);
-    return bg;
+      await this.ledgerPosting.postBankGuaranteeIssuedTx(tx, companyId, bg.id);
+      return bg;
+    });
   }
 
   async update(id: string, companyId: string, data: { status?: string; notes?: string }) {
-    const bg = await this.prisma.bankGuarantee.findFirst({ where: { id, companyId } });
-    if (!bg) throw new NotFoundException('Bank guarantee not found');
+    return this.prisma.$transaction(async (tx) => {
+      const bg = await tx.bankGuarantee.findFirst({ where: { id, companyId } });
+      if (!bg) throw new NotFoundException('Bank guarantee not found');
 
-    const updated = await this.prisma.bankGuarantee.update({ where: { id }, data: data as any });
+      const updated = await tx.bankGuarantee.update({ where: { id }, data: data as any });
 
-    // Reverse GL entries when BG is closed or expired
-    if (data.status && ['EXPIRED', 'CANCELLED', 'INVOKED'].includes(data.status) && bg.status === 'ACTIVE') {
-      await this.ledgerPosting.postBankGuaranteeClosed(companyId, id);
-    }
+      // Reverse GL entries when BG is closed, expired, claimed, or released.
+      // (BankGuaranteeStatus is ACTIVE | EXPIRED | CLAIMED | RELEASED — this
+      // previously checked for 'CANCELLED'/'INVOKED', values that don't exist
+      // in the enum, while missing 'CLAIMED'/'RELEASED', which do — so closing
+      // a guarantee as Claimed or Released never actually reversed the ledger.)
+      if (data.status && ['EXPIRED', 'CLAIMED', 'RELEASED'].includes(data.status) && bg.status === 'ACTIVE') {
+        await this.ledgerPosting.postBankGuaranteeClosedTx(tx, companyId, id);
+      }
 
-    return updated;
+      return updated;
+    });
   }
 
   async findExpiringSoon(companyId: string, withinDays: number = 30) {

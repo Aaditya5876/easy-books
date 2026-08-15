@@ -516,3 +516,13 @@ export const aiApi = {
   feeReminder: (data: object) => apiClient.post('/api/v1/ai/fee-reminder', data),
   homeworkDescription: (data: object) => apiClient.post('/api/v1/ai/homework-description', data),
 };
+
+// ── Reports ──────────────────────────────────────────────────────────────────
+// Trial Balance is the only one surfaced in the UI (Reports > Audit tab) — it's
+// real, computed server-side from ledger entries (see backend ReportsService).
+// Day Book / Party Statement / Balance Sheet / Cash Flow exist on the backend
+// but have no frontend consumer right now.
+
+export const reportsApi = {
+  trialBalance: () => apiClient.get('/api/v1/reports/trial-balance', { params: { companyId: companyId() } }),
+};

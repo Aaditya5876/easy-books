@@ -25,6 +25,11 @@ import { useRole } from '@/lib/useRole';
 import { useAuth } from '@/lib/AuthContext';
 import { useToast } from '@/components/ui/use-toast';
 
+// Maps a tab key to the underlying LedgerAccount.accountType it holds — kept in
+// sync with createAccount()'s accountTypeMap, which is what actually sets this
+// field when a party account is created.
+const TAB_ACCOUNT_TYPE = { purchase: 'LIABILITY', sales: 'INCOME', expense: 'EXPENSE' };
+
 export default function Ledger() {
   const { t } = useTranslation();
   const companyId = getActiveCompanyId();
@@ -107,23 +112,22 @@ export default function Ledger() {
 
   async function loadData() {
     setLoading(true);
-    const [accs, ents, allAccs] = await Promise.all([
-      api.LedgerAccount.filter({ company_id: companyId, account_type: activeTab }),
-      api.LedgerEntry.filter({ company_id: companyId }, '-created_date', 50),
+    // The backend's GET /ledger/accounts doesn't actually filter by account_type —
+    // it just returns every non-hidden account for the company — so all tab
+    // filtering happens here on the client. The "System Accounts" tab shows the
+    // auto-created accounts (Cash in Hand, Bank Account, Sales Revenue, Purchase
+    // Expenses, Accounts Receivable/Payable, etc.) that Transactions/Payroll/Cheques
+    // post to automatically (is_system = true). The purchase/sales/expense tabs show
+    // only the party-specific accounts a user created by hand, matched by their
+    // underlying accountType (purchase=LIABILITY, sales=INCOME, expense=EXPENSE) —
+    // see createAccount()'s accountTypeMap below.
+    const [allAccs, ents] = await Promise.all([
       api.LedgerAccount.filter({ company_id: companyId }),
+      api.LedgerEntry.filter({ company_id: companyId }, '-created_date', 50),
     ]);
-    // Hide certain system accounts from the Ledger UI while keeping them
-    // available for reports and dashboard. Match case-insensitively on the
-    // account name so other accounts are unaffected.
-    const excluded = new Set([
-      'accounts receivable',
-      'purchase expenses',
-      'sales revenue',
-      'accounts payable',
-      'bank account',
-      'cash in hand',
-    ]);
-    const visibleAccounts = accs.filter(a => !excluded.has((a.account_name || '').trim().toLowerCase()));
+    const visibleAccounts = activeTab === 'system'
+      ? allAccs.filter(a => a.is_system)
+      : allAccs.filter(a => !a.is_system && (a.account_type || '').toUpperCase() === TAB_ACCOUNT_TYPE[activeTab]);
     setAccounts(visibleAccounts);
     setEntries(ents);
     setAllAccounts(allAccs);
@@ -273,7 +277,7 @@ export default function Ledger() {
         subtitle={isSchool ? t('ledger.subtitleSchool', { defaultValue: 'School income & expense accounts' }) : t('ledger.subtitleBusiness', { defaultValue: 'Purchase, Sales & Expense Accounts' })}
         searchValue={search}
         onSearchChange={setSearch}
-        onAdd={() => setShowNewAccount(true)}
+        onAdd={activeTab === 'system' ? undefined : () => setShowNewAccount(true)}
         addLabel={t('ledger.newAccount', { defaultValue: 'New Account' })}
       />
 
@@ -282,19 +286,24 @@ export default function Ledger() {
           <TabsTrigger value="purchase">{t('ledger.purchaseAccount', { defaultValue: 'Purchase Account' })}</TabsTrigger>
           <TabsTrigger value="sales">{t('ledger.salesAccount', { defaultValue: 'Sales Account' })}</TabsTrigger>
           <TabsTrigger value="expense">{t('ledger.expensesAccount', { defaultValue: 'Expenses Account' })}</TabsTrigger>
+          <TabsTrigger value="system">{t('ledger.systemAccounts', { defaultValue: 'System Accounts' })}</TabsTrigger>
         </TabsList>
 
         <TabsContent value={activeTab} className="mt-4">
           {filteredAccounts.length === 0 && !searchIsEmpty ? (
             <EmptyState
               icon={BookOpen}
-              title={t('ledger.noAccountsYet', { defaultValue: 'No accounts yet' })}
-              description={t('ledger.noAccountsYetHint', { defaultValue: 'Add your first ledger account to start tracking balances.' })}
-              action={
+              title={activeTab === 'system'
+                ? t('ledger.noSystemAccountsYet', { defaultValue: 'No system accounts yet' })
+                : t('ledger.noAccountsYet', { defaultValue: 'No accounts yet' })}
+              description={activeTab === 'system'
+                ? t('ledger.noSystemAccountsYetHint', { defaultValue: 'These are created automatically the first time a Transaction, Payroll, or Cheque posts to the ledger.' })
+                : t('ledger.noAccountsYetHint', { defaultValue: 'Add your first ledger account to start tracking balances.' })}
+              action={activeTab === 'system' ? undefined : (
                 <Button onClick={() => setShowNewAccount(true)}>
                   <Plus className="w-4 h-4 mr-2" />{t('ledger.addFirstRecord', { defaultValue: 'Add First Record' })}
                 </Button>
-              }
+              )}
             />
           ) : searchIsEmpty && isAdmin ? (
             <div className="bg-card rounded-xl border border-border p-10 text-center space-y-3">

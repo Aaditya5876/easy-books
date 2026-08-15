@@ -94,6 +94,7 @@ export default function Transactions() {
   const [colFilters, setColFilters] = useState({ description: '', party_name: '', category: '', status: '' });
   const setCol = (key, val) => setColFilters(f => ({ ...f, [key]: val }));
   const [showNew, setShowNew] = useState(false);
+  const [showPartySuggestions, setShowPartySuggestions] = useState(false);
   const [payMethod, setPayMethod] = useState('cash');
   const [activeBankId, setActiveBankId] = useState(null);
   const [showAddBank, setShowAddBank] = useState(false);
@@ -191,6 +192,35 @@ export default function Transactions() {
     const amount = Number(form.amount || 0);
 
     const description = form.cash_bank_note ? `${form.description} — ${form.cash_bank_note}` : form.description;
+
+    // Resolve the party's own Ledger account — auto-creating it if this is the
+    // first time this exact name is used — so purchases/sales always land
+    // somewhere findable instead of silently falling back to the hidden generic
+    // system bucket (Purchase Expenses / Sales Revenue).
+    let partyAccount = matchedLedgerAccount;
+    if (!partyAccount && form.party_name.trim()) {
+      const accountTypeMap = { purchase: 'LIABILITY', sales: 'INCOME', expense: 'EXPENSE' };
+      partyAccount = await api.LedgerAccount.create({
+        company_id: companyId,
+        account_name: form.party_name.trim(),
+        account_type: accountTypeMap[form.account_type] || 'EXPENSE',
+        opening_balance: 0,
+      });
+      setLedgerAccounts(accts => [...accts, partyAccount]);
+    }
+
+    const partyType = (partyAccount?.account_type || partyAccount?.accountType || '').toUpperCase();
+    // An EXPENSE-type party account (Expenses Account tab = a cost category, e.g.
+    // "Electricity Bill") replaces the real debit leg — it's still one balanced
+    // GL account, just a more specific one than generic "Purchase Expenses".
+    // A LIABILITY (vendor) or INCOME (customer) account never replaces the real
+    // Cash/Bank/Payable/Receivable leg — by design those track total spend/income
+    // per party (regardless of payment method) via a separate memo entry instead
+    // (partyAccountId), which only actually posts once the transaction becomes
+    // COMPLETED — see backend TransactionServiceImpl / LedgerPostingService.postPartyMemoEntryTx.
+    const debitAccountId = partyType === 'EXPENSE' ? partyAccount.id : undefined;
+    const partyAccountId = (partyType === 'LIABILITY' || partyType === 'INCOME') ? partyAccount.id : undefined;
+
     const payload = {
       ...form,
       description,
@@ -201,8 +231,12 @@ export default function Transactions() {
       date_ad: entryDate,
       date_bs: bsDate.formatted,
       amount,
+      reference: form.reference_number || undefined,
+      debit_account_id: debitAccountId,
+      party_account_id: partyAccountId,
     };
     delete payload.cash_bank_note;
+    delete payload.reference_number;
 
     await api.Transaction.create(payload);
 
@@ -221,6 +255,20 @@ export default function Transactions() {
     loadData();
   }
 
+  // Updates local state immediately instead of calling loadData() (which flips the
+  // page-wide `loading` flag and swaps the whole table out for a spinner mid-click —
+  // that's what made the status dropdown feel like it needed two clicks to register).
+  async function updateTransactionStatus(id, newStatusLower) {
+    const previous = transactions;
+    setTransactions(txns => txns.map(t => t.id === id ? { ...t, status: newStatusLower } : t));
+    try {
+      await api.Transaction.update(id, { status: toApiEnum(newStatusLower) });
+    } catch (err) {
+      setTransactions(previous);
+      alert(err?.response?.data?.message || 'Failed to update status.');
+    }
+  }
+
   const filtered = transactions.filter(t => {
     if (activeTab !== 'all' && t.type !== activeTab) return false;
     if (!(t.description?.toLowerCase().includes(search.toLowerCase()) ||
@@ -235,7 +283,10 @@ export default function Transactions() {
   });
 
   // Summaries
-  const cashBalance = transactions.filter(t => t.type === 'cash')
+  // Only Completed transactions have actually moved real cash — a Pending cash
+  // transaction now posts to Accounts Receivable/Payable instead (see backend),
+  // so it must not count here or this number won't match the real Ledger.
+  const cashBalance = transactions.filter(t => t.type === 'cash' && t.status === 'completed')
     .reduce((sum, t) => sum + (t.category === 'income' ? (t.amount || 0) : -(t.amount || 0)), 0);
   const bankTotal = bankAccounts.reduce((sum, b) => sum + (b.current_balance || 0), 0);
 
@@ -247,9 +298,40 @@ export default function Transactions() {
     ? ledgerAccounts.find(a => (a.account_name || a.accountName || '').toLowerCase() === form.party_name.trim().toLowerCase())
     : null;
 
+  // Suggestions for the Party Name autocomplete — accounts whose name starts
+  // with what's typed so far, so "ABC" surfaces an existing "ABC Stationary"
+  // instead of silently creating a duplicate "ABC" account on save.
+  const partyNameQuery = form.party_name.trim().toLowerCase();
+  const partySuggestions = partyNameQuery && !matchedLedgerAccount
+    ? ledgerAccounts
+        .filter(a => (a.account_name || a.accountName || '').toLowerCase().startsWith(partyNameQuery))
+        .slice(0, 6)
+    : [];
+
   const counterLabel = payMethod === 'credit'
     ? (form.account_type === 'sales' ? 'Sales Revenue' : 'Accounts Payable')
     : 'Cash/Bank Account';
+
+  // Mirrors createTransaction()'s real posting logic, for the on-screen preview.
+  const partyLabel = form.party_name.trim() || null;
+  let debitCreditSummary;
+  let partyTrackingNote = null;
+  if (form.account_type === 'expense') {
+    const debitSide = partyLabel || 'Purchase Expenses';
+    debitCreditSummary = payMethod === 'credit'
+      ? `${debitSide} is debited, Accounts Payable is credited.`
+      : `${debitSide} is debited, Cash/Bank Account is credited.`;
+  } else if (form.account_type === 'sales') {
+    debitCreditSummary = payMethod === 'credit'
+      ? 'Accounts Receivable is debited, Sales Revenue is credited.'
+      : 'Cash/Bank Account is debited, Sales Revenue is credited.';
+    if (partyLabel) partyTrackingNote = `"${partyLabel}" account will also track this sale once it's Completed, regardless of payment method.`;
+  } else {
+    debitCreditSummary = payMethod === 'credit'
+      ? 'Purchase Expenses is debited, Accounts Payable is credited.'
+      : 'Purchase Expenses is debited, Cash/Bank Account is credited.';
+    if (partyLabel) partyTrackingNote = `"${partyLabel}" account will also track this purchase once it's Completed, regardless of payment method.`;
+  }
 
   const columns = [
     { key: 'date_ad', label: 'Date', render: (row) => (
@@ -287,10 +369,7 @@ export default function Transactions() {
       <select
         value={row.status}
         onClick={e => e.stopPropagation()}
-        onChange={async e => {
-          await api.Transaction.update(row.id, { status: toApiEnum(e.target.value) });
-          loadData();
-        }}
+        onChange={e => updateTransactionStatus(row.id, e.target.value)}
         className="text-xs border border-input rounded-md px-2 py-1 bg-background cursor-pointer"
       >
         <option value="completed">Completed</option>
@@ -701,7 +780,7 @@ export default function Transactions() {
               </div>
 
               {/* Party Name */}
-              <div>
+              <div className="relative">
                 <Label className="text-xs font-medium">Party Name</Label>
                 <div className="relative mt-1">
                   <User className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
@@ -710,8 +789,29 @@ export default function Transactions() {
                     placeholder="Vendor, customer, or party (optional)"
                     value={form.party_name}
                     onChange={e => setForm({ ...form, party_name: e.target.value })}
+                    onFocus={() => setShowPartySuggestions(true)}
+                    onBlur={() => setTimeout(() => setShowPartySuggestions(false), 150)}
                   />
                 </div>
+                {showPartySuggestions && partySuggestions.length > 0 && (
+                  <div className="absolute z-10 mt-1 w-full rounded-md border border-input bg-background shadow-md max-h-48 overflow-y-auto">
+                    {partySuggestions.map(a => (
+                      <button
+                        type="button"
+                        key={a.id}
+                        className="w-full text-left px-3 py-1.5 text-sm hover:bg-muted flex items-center justify-between gap-2"
+                        onMouseDown={e => e.preventDefault()}
+                        onClick={() => {
+                          setForm(f => ({ ...f, party_name: a.account_name || a.accountName }));
+                          setShowPartySuggestions(false);
+                        }}
+                      >
+                        <span>{a.account_name || a.accountName}</span>
+                        <span className="text-xs text-muted-foreground shrink-0">{a.account_type || a.accountType}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {/* Debit / Credit — every transaction posts a balanced double-entry pair.
@@ -720,32 +820,28 @@ export default function Transactions() {
                   counterAccountKey() — so only the category/debt side needs picking here. */}
               <div className="pt-1 border-t">
                 <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground pt-2 pb-1">Debit &amp; Credit</p>
-                <p className="text-xs text-muted-foreground mb-2">
-                  {form.account_type === 'sales'
-                    ? (payMethod === 'credit'
-                        ? 'Accounts Receivable is debited, Sales Revenue is credited.'
-                        : 'Cash/Bank Account is debited, Sales Revenue is credited.')
-                    : (payMethod === 'credit'
-                        ? 'Purchase Expenses is debited, Accounts Payable is credited.'
-                        : 'Purchase Expenses is debited, Cash/Bank Account is credited.')}
-                </p>
-                {(payMethod === 'cheque' || payMethod === 'credit') && (
+                <p className="text-xs text-muted-foreground mb-2">{debitCreditSummary}</p>
+                {partyTrackingNote && (
+                  <p className="text-xs text-muted-foreground mb-2">{partyTrackingNote}</p>
+                )}
+                {form.status === 'pending' && (
                   <p className="text-xs text-amber-600 mb-2">
-                    Recorded as <strong>Pending</strong> — balances update once it's marked Completed (e.g. when the cheque clears or payment is received).
+                    Recorded as <strong>Pending</strong> — Cash/Bank won't move yet. Instead this posts to{' '}
+                    {form.category === 'income' ? 'Accounts Receivable' : 'Accounts Payable'} as money{' '}
+                    {form.category === 'income' ? 'expected' : 'owed'}, until it's marked Completed (e.g. the cheque clears or payment is received).
                   </p>
                 )}
               </div>
               <div className="rounded-xl border border-border bg-muted/50 p-3">
                 <div className="flex flex-col gap-2">
                   <div>
-                    <p className="text-xs font-medium">Auto-resolved Ledger Account</p>
-                    <p className="text-sm font-semibold mt-1">
-                      {form.account_type === 'sales' ? 'Accounts Receivable' : 'Accounts Payable'}
-                    </p>
+                    <p className="text-xs font-medium">Party Ledger Account</p>
                     {matchedLedgerAccount ? (
-                      <p className="text-xs text-muted-foreground mt-1">Matched ledger account: {matchedLedgerAccount.account_name}</p>
+                      <p className="text-xs text-muted-foreground mt-1">Matched: {matchedLedgerAccount.account_name}</p>
+                    ) : partyLabel ? (
+                      <p className="text-xs text-muted-foreground mt-1">Will create a new "{partyLabel}" account on save.</p>
                     ) : (
-                      <p className="text-xs text-muted-foreground mt-1">No matching party ledger account found yet.</p>
+                      <p className="text-xs text-muted-foreground mt-1">No Party Name entered yet.</p>
                     )}
                   </div>
                   <div>

@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../../core/db/psql/prisma.client';
 import { LedgerPostingService } from './ledger-posting.service';
+import { TransactionServiceImpl } from './transaction.service.impl';
 import { adToBs } from '@easy-books/shared';
 
 @Injectable()
@@ -8,6 +9,7 @@ export class ChequeServiceImpl {
   constructor(
     private readonly prisma: PrismaService,
     private readonly ledgerPosting: LedgerPostingService,
+    private readonly transactionService: TransactionServiceImpl,
   ) {}
 
   async findAll(companyId: string, filters?: { status?: string; isReceivable?: boolean }) {
@@ -72,38 +74,46 @@ export class ChequeServiceImpl {
       throw new BadRequestException(`Cannot transition cheque from ${cheque.status} to ${status}`);
     }
 
-    const updated = await this.prisma.cheque.update({
-      where: { id },
-      data: {
-        status: status as any,
-        ...(status === 'CLEARED' ? { clearedAt: new Date() } : {}),
-        ...(notes ? { notes } : {}),
-      },
-    });
+    const chequeUpdateData = {
+      status: status as any,
+      ...(status === 'CLEARED' ? { clearedAt: new Date() } : {}),
+      ...(notes ? { notes } : {}),
+    };
+    const isLinkedToTransaction = cheque.referenceType === 'TRANSACTION' && !!cheque.referenceId;
 
-    // If cheque is linked to a Transaction (referenceType === 'TRANSACTION'),
-    // update that transaction's status instead of posting standalone cheque
-    // ledger entries here. The TransactionServiceImpl will post its manual
-    // journal when the transaction becomes COMPLETED. For cheques not linked
-    // to a transaction, call the ledger posting helper directly.
-    if (status === 'CLEARED') {
-      if (cheque.referenceType === 'TRANSACTION' && cheque.referenceId) {
-        try {
-          await this.prisma.transaction.update({ where: { id: cheque.referenceId }, data: { status: 'COMPLETED' } });
-        } catch (e) {
-          // ignore if transaction not found — still attempt cheque ledger posting
-          await this.ledgerPosting.postChequeCleared(companyId, id);
+    if (!isLinkedToTransaction) {
+      // Standalone cheque (no linked Transaction) — the status change and its
+      // ledger posting must succeed or fail together, same as any other atomic
+      // fix in this codebase: a thrown ledger error must not leave the cheque
+      // stuck as "Cleared" with nothing posted.
+      return this.prisma.$transaction(async (tx) => {
+        const updated = await tx.cheque.update({ where: { id }, data: chequeUpdateData });
+        if (status === 'CLEARED') {
+          await this.ledgerPosting.postChequeClearedTx(tx, companyId, id);
         }
-      } else {
+        return updated;
+      });
+    }
+
+    // Linked to a Transaction — the Transaction's own status is the source of
+    // truth for ledger postings (TransactionServiceImpl.update() is atomic on
+    // its own), so the cheque row itself is just a status label here.
+    const updated = await this.prisma.cheque.update({ where: { id }, data: chequeUpdateData });
+
+    if (status === 'CLEARED') {
+      try {
+        // Go through TransactionServiceImpl.update() (not a raw prisma write) so the
+        // COMPLETED transition actually posts its ledger entry.
+        await this.transactionService.update(cheque.referenceId!, companyId, { status: 'COMPLETED' });
+      } catch (e) {
+        // ignore if transaction not found — still attempt cheque ledger posting
         await this.ledgerPosting.postChequeCleared(companyId, id);
       }
     }
 
-    // If cheque was cancelled or bounced and it's linked to a transaction,
-    // reflect that on the transaction so the ledger will not be posted.
-    if ((status === 'CANCELLED' || status === 'BOUNCED') && cheque.referenceType === 'TRANSACTION' && cheque.referenceId) {
+    if (status === 'CANCELLED' || status === 'BOUNCED') {
       const txStatus = status === 'CANCELLED' ? 'CANCELLED' : 'PENDING';
-      await this.prisma.transaction.update({ where: { id: cheque.referenceId }, data: { status: txStatus } });
+      await this.transactionService.update(cheque.referenceId!, companyId, { status: txStatus });
     }
 
     return updated;

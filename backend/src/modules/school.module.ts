@@ -13,5 +13,6 @@ import { NotificationModule } from './notification.module';
   imports: [NotificationModule],
   controllers: [SchoolController],
   providers: [PrismaService, SchoolService, SchoolAnalyticsService, SchoolFinanceService, LedgerPostingService, SmsService, AiService],
+  exports: [SchoolFinanceService],
 })
 export class SchoolModule {}

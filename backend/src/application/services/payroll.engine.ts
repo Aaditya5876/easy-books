@@ -141,67 +141,70 @@ export class PayrollEngineService {
 
     const netSalary = Number((grossSalary - absentDeduction - ssf.employee - pit + overtimeAmount + dashainBonus).toFixed(2));
 
-    await this.prisma.payroll.upsert({
-      where: { employeeId_month: { employeeId, month } },
-      create: {
-        companyId,
-        employeeId,
-        month,
-        basicSalary,
-        allowances,
-        grossSalary,
-        absentDays,
-        halfDays,
-        absentDeduction,
-        overtimeAmount,
-        ssfEmployee: ssf.employee,
-        ssfEmployer: ssf.employer,
-        pit,
-        netSalary,
-        isDashainBonus,
-        status: 'PROCESSED',
-      },
-      update: {
-        basicSalary,
-        allowances,
-        grossSalary,
-        absentDays,
-        halfDays,
-        absentDeduction,
-        overtimeAmount,
-        ssfEmployee: ssf.employee,
-        ssfEmployer: ssf.employer,
-        pit,
-        netSalary,
-        isDashainBonus,
-        status: 'PROCESSED',
-      },
+    const data = {
+      basicSalary, allowances, grossSalary, absentDays, halfDays, absentDeduction,
+      overtimeAmount, ssfEmployee: ssf.employee, ssfEmployer: ssf.employer, pit,
+      netSalary, isDashainBonus, status: 'PROCESSED' as const,
+    };
+
+    const existing = await this.prisma.payroll.findUnique({ where: { employeeId_month: { employeeId, month } } });
+
+    // A paid payroll is final — the accrual is already settled, so silently
+    // recalculating it (e.g. a stale re-trigger) would corrupt closed books.
+    if (existing?.status === 'PAID') {
+      return this.toPayrollResult(employeeId, employee.name, month, data, dashainBonus);
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      if (!existing) {
+        // First time this employee/month is computed — create the row and
+        // post its accrual (Salary Expense/SSF/Tax/Salary Payable) immediately,
+        // same moment the monthly run computes it, no "Mark Paid" needed.
+        const payroll = await tx.payroll.create({ data: { companyId, employeeId, month, ...data } });
+        await this.ledgerPosting.postPayrollAccrualTx(tx, companyId, payroll.id);
+      } else {
+        // Recalculating before payment (e.g. attendance changed) — undo the
+        // old accrual and post a fresh one with the corrected numbers.
+        await tx.payroll.update({ where: { id: existing.id }, data });
+        await this.ledgerPosting.reversePayrollAccrualTx(tx, companyId, existing.id);
+        await this.ledgerPosting.postPayrollAccrualTx(tx, companyId, existing.id);
+      }
     });
 
+    return this.toPayrollResult(employeeId, employee.name, month, data, dashainBonus);
+  }
+
+  private toPayrollResult(
+    employeeId: string,
+    employeeName: string,
+    month: string,
+    data: { basicSalary: number; allowances: number; grossSalary: number; absentDays: number; halfDays: number; absentDeduction: number; overtimeAmount: number; ssfEmployee: number; ssfEmployer: number; pit: number; netSalary: number; isDashainBonus: boolean },
+    dashainBonus: number,
+  ): PayrollResult {
     return {
       employeeId,
-      employeeName: employee.name,
+      employeeName,
       month,
-      basicSalary,
-      allowances,
-      grossSalary,
-      absentDays,
-      halfDays,
-      absentDeduction,
-      overtimeAmount,
-      ssfEmployee: ssf.employee,
-      ssfEmployer: ssf.employer,
-      pit,
+      basicSalary: data.basicSalary,
+      allowances: data.allowances,
+      grossSalary: data.grossSalary,
+      absentDays: data.absentDays,
+      halfDays: data.halfDays,
+      absentDeduction: data.absentDeduction,
+      overtimeAmount: data.overtimeAmount,
+      ssfEmployee: data.ssfEmployee,
+      ssfEmployer: data.ssfEmployer,
+      pit: data.pit,
       dashainBonus,
-      isDashainBonus,
-      netSalary,
+      isDashainBonus: data.isDashainBonus,
+      netSalary: data.netSalary,
     };
   }
 
   async getPayrollSummary(companyId: string, month: string) {
     const payrolls = await this.prisma.payroll.findMany({
       where: { companyId, month },
-      include: { employee: { select: { name: true, designation: true, department: true } } },
+      include: { employee: { select: { name: true, employeeId: true, designation: true, department: true } } },
     });
 
     const summary = {
@@ -256,8 +259,9 @@ export class PayrollEngineService {
       data: { status: 'PAID', paidAt: new Date() },
     });
 
-    // Post to GL after marking paid — outside the update so a ledger failure doesn't prevent status change
-    await this.ledgerPosting.postPayroll(companyId, payrollId);
+    // Post the settlement (clears Salary Payable via Cash) — the accrual itself
+    // was already posted back when this payroll row was first computed.
+    await this.ledgerPosting.postPayrollSettlement(companyId, payrollId);
 
     try {
       const employee = await this.prisma.employee.findUnique({ where: { id: payroll.employeeId }, select: { name: true } });

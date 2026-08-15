@@ -19,10 +19,12 @@ const SYSTEM_ACCOUNTS = {
   SSF_EXPENSE: 'SSF Expense',
   SSF_PAYABLE: 'SSF Payable',
   TAX_PAYABLE: 'Tax Payable',
+  SALARY_PAYABLE: 'Salary Payable',
   CASH_IN_HAND: 'Cash in Hand',
   BANK: 'Bank Account',
   BANK_GUARANTEE_ASSET: 'Bank Guarantee — Contingent Asset',
   BANK_GUARANTEE_LIABILITY: 'Bank Guarantee — Contingent Liability',
+  FEE_RECEIVABLE: 'Fee Receivable',
 };
 
 @Injectable()
@@ -417,8 +419,16 @@ export class LedgerPostingService {
 
   // ─── Cheque Cleared ───────────────────────────────────────────────────────────
 
+  // Standalone entry point (cheque not linked to a Transaction) — wraps its own transaction.
   async postChequeCleared(companyId: string, chequeId: string): Promise<void> {
-    const cheque = await this.prisma.cheque.findFirst({ where: { id: chequeId, companyId } });
+    return this.prisma.$transaction((tx) => this.postChequeClearedTx(tx, companyId, chequeId));
+  }
+
+  // Nested entry point — lets ChequeServiceImpl.updateStatus() post this as part of
+  // the SAME atomic write as the cheque's own status change, so a thrown error here
+  // rolls back the status change too instead of leaving them inconsistent.
+  async postChequeClearedTx(tx: Tx, companyId: string, chequeId: string): Promise<void> {
+    const cheque = await tx.cheque.findFirst({ where: { id: chequeId, companyId } });
     if (!cheque) return;
 
     const date = new Date();
@@ -434,59 +444,61 @@ export class LedgerPostingService {
 
     if (cheque.isReceivable) {
       // Received cheque cleared: DR Bank, CR Accounts Receivable
-      await this.prisma.$transaction([
-        this.prisma.ledgerEntry.create({
-          data: {
-            companyId, accountId: bankAccount.id, dateAd: date, dateBs,
-            description: `Cheque #${cheque.chequeNumber} cleared — ${cheque.partyName}`,
-            debit: amount, credit: 0,
-            balance: Number(bankAccount.currentBalance) + amount,
-            referenceType: 'CHEQUE', referenceId: chequeId, isAutoPosted: true,
-          },
-        }),
-        this.prisma.ledgerEntry.create({
-          data: {
-            companyId, accountId: counterAccount.id, dateAd: date, dateBs,
-            description: `Cheque #${cheque.chequeNumber} cleared — ${cheque.partyName}`,
-            debit: 0, credit: amount,
-            balance: Number(counterAccount.currentBalance) - amount,
-            referenceType: 'CHEQUE', referenceId: chequeId, isAutoPosted: true,
-          },
-        }),
-        this.prisma.ledgerAccount.update({ where: { id: bankAccount.id }, data: { currentBalance: { increment: amount } } }),
-        this.prisma.ledgerAccount.update({ where: { id: counterAccount.id }, data: { currentBalance: { decrement: amount } } }),
-      ]);
+      await tx.ledgerEntry.create({
+        data: {
+          companyId, accountId: bankAccount.id, dateAd: date, dateBs,
+          description: `Cheque #${cheque.chequeNumber} cleared — ${cheque.partyName}`,
+          debit: amount, credit: 0,
+          balance: Number(bankAccount.currentBalance) + amount,
+          referenceType: 'CHEQUE', referenceId: chequeId, isAutoPosted: true,
+        },
+      });
+      await tx.ledgerEntry.create({
+        data: {
+          companyId, accountId: counterAccount.id, dateAd: date, dateBs,
+          description: `Cheque #${cheque.chequeNumber} cleared — ${cheque.partyName}`,
+          debit: 0, credit: amount,
+          balance: Number(counterAccount.currentBalance) - amount,
+          referenceType: 'CHEQUE', referenceId: chequeId, isAutoPosted: true,
+        },
+      });
+      await tx.ledgerAccount.update({ where: { id: bankAccount.id }, data: { currentBalance: { increment: amount } } });
+      await tx.ledgerAccount.update({ where: { id: counterAccount.id }, data: { currentBalance: { decrement: amount } } });
     } else {
       // Issued cheque cleared: DR Accounts Payable, CR Bank
-      await this.prisma.$transaction([
-        this.prisma.ledgerEntry.create({
-          data: {
-            companyId, accountId: counterAccount.id, dateAd: date, dateBs,
-            description: `Cheque #${cheque.chequeNumber} cleared — ${cheque.partyName}`,
-            debit: amount, credit: 0,
-            balance: Number(counterAccount.currentBalance) - amount,
-            referenceType: 'CHEQUE', referenceId: chequeId, isAutoPosted: true,
-          },
-        }),
-        this.prisma.ledgerEntry.create({
-          data: {
-            companyId, accountId: bankAccount.id, dateAd: date, dateBs,
-            description: `Cheque #${cheque.chequeNumber} cleared — ${cheque.partyName}`,
-            debit: 0, credit: amount,
-            balance: Number(bankAccount.currentBalance) - amount,
-            referenceType: 'CHEQUE', referenceId: chequeId, isAutoPosted: true,
-          },
-        }),
-        this.prisma.ledgerAccount.update({ where: { id: counterAccount.id }, data: { currentBalance: { decrement: amount } } }),
-        this.prisma.ledgerAccount.update({ where: { id: bankAccount.id }, data: { currentBalance: { decrement: amount } } }),
-      ]);
+      await tx.ledgerEntry.create({
+        data: {
+          companyId, accountId: counterAccount.id, dateAd: date, dateBs,
+          description: `Cheque #${cheque.chequeNumber} cleared — ${cheque.partyName}`,
+          debit: amount, credit: 0,
+          balance: Number(counterAccount.currentBalance) - amount,
+          referenceType: 'CHEQUE', referenceId: chequeId, isAutoPosted: true,
+        },
+      });
+      await tx.ledgerEntry.create({
+        data: {
+          companyId, accountId: bankAccount.id, dateAd: date, dateBs,
+          description: `Cheque #${cheque.chequeNumber} cleared — ${cheque.partyName}`,
+          debit: 0, credit: amount,
+          balance: Number(bankAccount.currentBalance) - amount,
+          referenceType: 'CHEQUE', referenceId: chequeId, isAutoPosted: true,
+        },
+      });
+      await tx.ledgerAccount.update({ where: { id: counterAccount.id }, data: { currentBalance: { decrement: amount } } });
+      await tx.ledgerAccount.update({ where: { id: bankAccount.id }, data: { currentBalance: { decrement: amount } } });
     }
   }
 
   // ─── Petty Cash ───────────────────────────────────────────────────────────────
 
   async postPettyCash(companyId: string, voucherId: string): Promise<void> {
-    const voucher = await this.prisma.pettyCashVoucher.findFirst({ where: { id: voucherId, companyId } });
+    return this.prisma.$transaction((tx) => this.postPettyCashTx(tx, companyId, voucherId));
+  }
+
+  // Nested entry point — lets PettyCashServiceImpl.create() post this as part of the
+  // same atomic write as the voucher row itself.
+  async postPettyCashTx(tx: Tx, companyId: string, voucherId: string): Promise<void> {
+    const voucher = await tx.pettyCashVoucher.findFirst({ where: { id: voucherId, companyId } });
     if (!voucher) return;
 
     const date = new Date(voucher.dateAd);
@@ -501,36 +513,48 @@ export class LedgerPostingService {
       this.getOrCreateSystemAccount(companyId, SYSTEM_ACCOUNTS.CASH_IN_HAND, 'ASSET'),
     ]);
 
-    await this.prisma.$transaction([
-      // DR Expense Account
-      this.prisma.ledgerEntry.create({
-        data: {
-          companyId, accountId: expenseAccount.id, dateAd: date, dateBs,
-          description: `Petty Cash #${voucher.voucherNo} — ${voucher.description}`,
-          debit: amount, credit: 0,
-          balance: Number(expenseAccount.currentBalance) + amount,
-          referenceType: 'PETTY_CASH', referenceId: voucherId, isAutoPosted: true,
-        },
-      }),
-      // CR Cash in Hand
-      this.prisma.ledgerEntry.create({
-        data: {
-          companyId, accountId: cashAccount.id, dateAd: date, dateBs,
-          description: `Petty Cash #${voucher.voucherNo} — ${voucher.description}`,
-          debit: 0, credit: amount,
-          balance: Number(cashAccount.currentBalance) - amount,
-          referenceType: 'PETTY_CASH', referenceId: voucherId, isAutoPosted: true,
-        },
-      }),
-      this.prisma.ledgerAccount.update({ where: { id: expenseAccount.id }, data: { currentBalance: { increment: amount } } }),
-      this.prisma.ledgerAccount.update({ where: { id: cashAccount.id }, data: { currentBalance: { decrement: amount } } }),
-    ]);
+    // DR Expense Account
+    await tx.ledgerEntry.create({
+      data: {
+        companyId, accountId: expenseAccount.id, dateAd: date, dateBs,
+        description: `Petty Cash #${voucher.voucherNo} — ${voucher.description}`,
+        debit: amount, credit: 0,
+        balance: Number(expenseAccount.currentBalance) + amount,
+        referenceType: 'PETTY_CASH', referenceId: voucherId, isAutoPosted: true,
+      },
+    });
+    // CR Cash in Hand
+    await tx.ledgerEntry.create({
+      data: {
+        companyId, accountId: cashAccount.id, dateAd: date, dateBs,
+        description: `Petty Cash #${voucher.voucherNo} — ${voucher.description}`,
+        debit: 0, credit: amount,
+        balance: Number(cashAccount.currentBalance) - amount,
+        referenceType: 'PETTY_CASH', referenceId: voucherId, isAutoPosted: true,
+      },
+    });
+    await tx.ledgerAccount.update({ where: { id: expenseAccount.id }, data: { currentBalance: { increment: amount } } });
+    await tx.ledgerAccount.update({ where: { id: cashAccount.id }, data: { currentBalance: { decrement: amount } } });
   }
 
   // ─── Payroll ──────────────────────────────────────────────────────────────────
+  // Split into two stages so payroll can be computed automatically every month
+  // without waiting for anyone to click "Mark Paid":
+  //  - Accrual (postPayrollAccrualTx): posted the moment a payroll row is first
+  //    computed. Recognizes the expense and the liability to the employee
+  //    (Salary Payable) — money hasn't actually been disbursed yet.
+  //  - Settlement (postPayrollSettlementTx): posted when "Mark Paid" is clicked
+  //    (still a manual, per-employee action). Clears Salary Payable via Cash —
+  //    the actual disbursement.
+  // This mirrors the same accrual/settlement split used for Fee Receivable and
+  // for Transaction Pending→Completed elsewhere in this file.
 
-  async postPayroll(companyId: string, payrollId: string): Promise<void> {
-    const payroll = await this.prisma.payroll.findFirst({
+  async postPayrollAccrual(companyId: string, payrollId: string): Promise<void> {
+    return this.prisma.$transaction((tx) => this.postPayrollAccrualTx(tx, companyId, payrollId));
+  }
+
+  async postPayrollAccrualTx(tx: Tx, companyId: string, payrollId: string): Promise<void> {
+    const payroll = await tx.payroll.findFirst({
       where: { id: payrollId, companyId },
       include: { employee: { select: { name: true } } },
     });
@@ -543,80 +567,136 @@ export class LedgerPostingService {
     const dashainBonus = payroll.isDashainBonus ? Number(payroll.basicSalary) : 0;
     const effectiveGross = Number(payroll.grossSalary) - Number(payroll.absentDeduction) + Number(payroll.overtimeAmount) + dashainBonus;
 
-    const [salaryExpense, ssfExpense, ssfPayable, taxPayable, cashAccount] = await Promise.all([
+    const [salaryExpense, ssfExpense, ssfPayable, taxPayable, salaryPayable] = await Promise.all([
       this.getOrCreateSystemAccount(companyId, SYSTEM_ACCOUNTS.SALARY_EXPENSE, 'EXPENSE'),
       this.getOrCreateSystemAccount(companyId, SYSTEM_ACCOUNTS.SSF_EXPENSE, 'EXPENSE'),
       this.getOrCreateSystemAccount(companyId, SYSTEM_ACCOUNTS.SSF_PAYABLE, 'LIABILITY'),
       this.getOrCreateSystemAccount(companyId, SYSTEM_ACCOUNTS.TAX_PAYABLE, 'LIABILITY'),
-      this.getOrCreateSystemAccount(companyId, SYSTEM_ACCOUNTS.CASH_IN_HAND, 'ASSET'),
+      this.getOrCreateSystemAccount(companyId, SYSTEM_ACCOUNTS.SALARY_PAYABLE, 'LIABILITY'),
     ]);
 
     const totalSsf = Number(payroll.ssfEmployee) + Number(payroll.ssfEmployer);
     const desc = `Payroll ${payroll.month} — ${payroll.employee.name}`;
 
-    await this.prisma.$transaction([
-      // DR Salary Expense — effective gross paid (incl. dashain bonus, excl. absent deductions)
-      this.prisma.ledgerEntry.create({
-        data: {
-          companyId, accountId: salaryExpense.id, dateAd: date, dateBs,
-          description: desc,
-          debit: effectiveGross, credit: 0,
-          balance: Number(salaryExpense.currentBalance) + effectiveGross,
-          referenceType: 'PAYROLL', referenceId: payrollId, isAutoPosted: true,
-        },
-      }),
-      // DR SSF Expense — employer's contribution (additional cost to company)
-      this.prisma.ledgerEntry.create({
-        data: {
-          companyId, accountId: ssfExpense.id, dateAd: date, dateBs,
-          description: `SSF Employer Contribution ${payroll.month} — ${payroll.employee.name}`,
-          debit: Number(payroll.ssfEmployer), credit: 0,
-          balance: Number(ssfExpense.currentBalance) + Number(payroll.ssfEmployer),
-          referenceType: 'PAYROLL', referenceId: payrollId, isAutoPosted: true,
-        },
-      }),
-      // CR SSF Payable — total SSF (employee + employer) owed to SSF board
-      this.prisma.ledgerEntry.create({
-        data: {
-          companyId, accountId: ssfPayable.id, dateAd: date, dateBs,
-          description: `SSF Payable ${payroll.month} — ${payroll.employee.name}`,
-          debit: 0, credit: totalSsf,
-          balance: Number(ssfPayable.currentBalance) + totalSsf,
-          referenceType: 'PAYROLL', referenceId: payrollId, isAutoPosted: true,
-        },
-      }),
-      // CR Tax Payable — PIT withheld from employee
-      this.prisma.ledgerEntry.create({
-        data: {
-          companyId, accountId: taxPayable.id, dateAd: date, dateBs,
-          description: `PIT Withheld ${payroll.month} — ${payroll.employee.name}`,
-          debit: 0, credit: Number(payroll.pit),
-          balance: Number(taxPayable.currentBalance) + Number(payroll.pit),
-          referenceType: 'PAYROLL', referenceId: payrollId, isAutoPosted: true,
-        },
-      }),
-      // CR Cash — net salary disbursed
-      this.prisma.ledgerEntry.create({
-        data: {
-          companyId, accountId: cashAccount.id, dateAd: date, dateBs,
-          description: `Net Salary Paid ${payroll.month} — ${payroll.employee.name}`,
-          debit: 0, credit: Number(payroll.netSalary),
-          balance: Number(cashAccount.currentBalance) - Number(payroll.netSalary),
-          referenceType: 'PAYROLL', referenceId: payrollId, isAutoPosted: true,
-        },
-      }),
-      this.prisma.ledgerAccount.update({ where: { id: salaryExpense.id }, data: { currentBalance: { increment: effectiveGross } } }),
-      this.prisma.ledgerAccount.update({ where: { id: ssfExpense.id }, data: { currentBalance: { increment: Number(payroll.ssfEmployer) } } }),
-      this.prisma.ledgerAccount.update({ where: { id: ssfPayable.id }, data: { currentBalance: { increment: totalSsf } } }),
-      this.prisma.ledgerAccount.update({ where: { id: taxPayable.id }, data: { currentBalance: { increment: Number(payroll.pit) } } }),
-      this.prisma.ledgerAccount.update({ where: { id: cashAccount.id }, data: { currentBalance: { decrement: Number(payroll.netSalary) } } }),
+    // DR Salary Expense — effective gross paid (incl. dashain bonus, excl. absent deductions)
+    await tx.ledgerEntry.create({
+      data: {
+        companyId, accountId: salaryExpense.id, dateAd: date, dateBs,
+        description: desc,
+        debit: effectiveGross, credit: 0,
+        balance: Number(salaryExpense.currentBalance) + effectiveGross,
+        referenceType: 'PAYROLL_ACCRUAL', referenceId: payrollId, isAutoPosted: true,
+      },
+    });
+    // DR SSF Expense — employer's contribution (additional cost to company)
+    await tx.ledgerEntry.create({
+      data: {
+        companyId, accountId: ssfExpense.id, dateAd: date, dateBs,
+        description: `SSF Employer Contribution ${payroll.month} — ${payroll.employee.name}`,
+        debit: Number(payroll.ssfEmployer), credit: 0,
+        balance: Number(ssfExpense.currentBalance) + Number(payroll.ssfEmployer),
+        referenceType: 'PAYROLL_ACCRUAL', referenceId: payrollId, isAutoPosted: true,
+      },
+    });
+    // CR SSF Payable — total SSF (employee + employer) owed to SSF board
+    await tx.ledgerEntry.create({
+      data: {
+        companyId, accountId: ssfPayable.id, dateAd: date, dateBs,
+        description: `SSF Payable ${payroll.month} — ${payroll.employee.name}`,
+        debit: 0, credit: totalSsf,
+        balance: Number(ssfPayable.currentBalance) + totalSsf,
+        referenceType: 'PAYROLL_ACCRUAL', referenceId: payrollId, isAutoPosted: true,
+      },
+    });
+    // CR Tax Payable — PIT withheld from employee
+    await tx.ledgerEntry.create({
+      data: {
+        companyId, accountId: taxPayable.id, dateAd: date, dateBs,
+        description: `PIT Withheld ${payroll.month} — ${payroll.employee.name}`,
+        debit: 0, credit: Number(payroll.pit),
+        balance: Number(taxPayable.currentBalance) + Number(payroll.pit),
+        referenceType: 'PAYROLL_ACCRUAL', referenceId: payrollId, isAutoPosted: true,
+      },
+    });
+    // CR Salary Payable — net salary now owed to the employee (not yet disbursed)
+    await tx.ledgerEntry.create({
+      data: {
+        companyId, accountId: salaryPayable.id, dateAd: date, dateBs,
+        description: `Net Salary Payable ${payroll.month} — ${payroll.employee.name}`,
+        debit: 0, credit: Number(payroll.netSalary),
+        balance: Number(salaryPayable.currentBalance) + Number(payroll.netSalary),
+        referenceType: 'PAYROLL_ACCRUAL', referenceId: payrollId, isAutoPosted: true,
+      },
+    });
+
+    await tx.ledgerAccount.update({ where: { id: salaryExpense.id }, data: { currentBalance: { increment: effectiveGross } } });
+    await tx.ledgerAccount.update({ where: { id: ssfExpense.id }, data: { currentBalance: { increment: Number(payroll.ssfEmployer) } } });
+    await tx.ledgerAccount.update({ where: { id: ssfPayable.id }, data: { currentBalance: { increment: totalSsf } } });
+    await tx.ledgerAccount.update({ where: { id: taxPayable.id }, data: { currentBalance: { increment: Number(payroll.pit) } } });
+    await tx.ledgerAccount.update({ where: { id: salaryPayable.id }, data: { currentBalance: { increment: Number(payroll.netSalary) } } });
+  }
+
+  // Reverses the accrual for a payroll row (used when recalculating a not-yet-paid
+  // payroll — attendance/adjustments changed the numbers, so the old accrual must
+  // be undone before the new one posts) — thin wrapper over reverseEntriesTx.
+  async reversePayrollAccrualTx(tx: Tx, companyId: string, payrollId: string): Promise<void> {
+    await this.reverseEntriesTx(tx, companyId, 'PAYROLL_ACCRUAL', payrollId);
+  }
+
+  async postPayrollSettlement(companyId: string, payrollId: string): Promise<void> {
+    return this.prisma.$transaction((tx) => this.postPayrollSettlementTx(tx, companyId, payrollId));
+  }
+
+  // DR Salary Payable, CR Cash — clears the liability the accrual created,
+  // via the actual disbursement. Called from markAsPaid(), still a manual,
+  // per-employee action.
+  async postPayrollSettlementTx(tx: Tx, companyId: string, payrollId: string): Promise<void> {
+    const payroll = await tx.payroll.findFirst({
+      where: { id: payrollId, companyId },
+      include: { employee: { select: { name: true } } },
+    });
+    if (!payroll) return;
+
+    const date = new Date();
+    const dateBs = adToBs(date);
+    const amount = Number(payroll.netSalary);
+
+    const [salaryPayable, cashAccount] = await Promise.all([
+      this.getOrCreateSystemAccount(companyId, SYSTEM_ACCOUNTS.SALARY_PAYABLE, 'LIABILITY'),
+      this.getOrCreateSystemAccount(companyId, SYSTEM_ACCOUNTS.CASH_IN_HAND, 'ASSET'),
     ]);
+    const desc = `Net Salary Paid ${payroll.month} — ${payroll.employee.name}`;
+
+    await tx.ledgerEntry.create({
+      data: {
+        companyId, accountId: salaryPayable.id, dateAd: date, dateBs, description: desc,
+        debit: amount, credit: 0,
+        balance: Number(salaryPayable.currentBalance) - amount,
+        referenceType: 'PAYROLL', referenceId: payrollId, isAutoPosted: true,
+      },
+    });
+    await tx.ledgerEntry.create({
+      data: {
+        companyId, accountId: cashAccount.id, dateAd: date, dateBs, description: desc,
+        debit: 0, credit: amount,
+        balance: Number(cashAccount.currentBalance) - amount,
+        referenceType: 'PAYROLL', referenceId: payrollId, isAutoPosted: true,
+      },
+    });
+    await tx.ledgerAccount.update({ where: { id: salaryPayable.id }, data: { currentBalance: { decrement: amount } } });
+    await tx.ledgerAccount.update({ where: { id: cashAccount.id }, data: { currentBalance: { decrement: amount } } });
   }
 
   // ─── Bank Guarantee ───────────────────────────────────────────────────────────
 
   async postBankGuaranteeIssued(companyId: string, bgId: string): Promise<void> {
-    const bg = await this.prisma.bankGuarantee.findFirst({ where: { id: bgId, companyId } });
+    return this.prisma.$transaction((tx) => this.postBankGuaranteeIssuedTx(tx, companyId, bgId));
+  }
+
+  // Nested entry point — lets BankGuaranteeServiceImpl.create() post this as part of
+  // the same atomic write as the BG row itself.
+  async postBankGuaranteeIssuedTx(tx: Tx, companyId: string, bgId: string): Promise<void> {
+    const bg = await tx.bankGuarantee.findFirst({ where: { id: bgId, companyId } });
     if (!bg) return;
 
     const date = new Date(bg.issuedDateAd);
@@ -629,32 +709,36 @@ export class LedgerPostingService {
       this.getOrCreateSystemAccount(companyId, SYSTEM_ACCOUNTS.BANK_GUARANTEE_LIABILITY, 'LIABILITY'),
     ]);
 
-    await this.prisma.$transaction([
-      // DR Contingent Asset — company has a claim/security
-      this.prisma.ledgerEntry.create({
-        data: {
-          companyId, accountId: assetAccount.id, dateAd: date, dateBs,
-          description: desc, debit: amount, credit: 0,
-          balance: Number(assetAccount.currentBalance) + amount,
-          referenceType: 'BANK_GUARANTEE', referenceId: bgId, isAutoPosted: true,
-        },
-      }),
-      // CR Contingent Liability — obligation to the bank
-      this.prisma.ledgerEntry.create({
-        data: {
-          companyId, accountId: liabilityAccount.id, dateAd: date, dateBs,
-          description: desc, debit: 0, credit: amount,
-          balance: Number(liabilityAccount.currentBalance) + amount,
-          referenceType: 'BANK_GUARANTEE', referenceId: bgId, isAutoPosted: true,
-        },
-      }),
-      this.prisma.ledgerAccount.update({ where: { id: assetAccount.id }, data: { currentBalance: { increment: amount } } }),
-      this.prisma.ledgerAccount.update({ where: { id: liabilityAccount.id }, data: { currentBalance: { increment: amount } } }),
-    ]);
+    // DR Contingent Asset — company has a claim/security
+    await tx.ledgerEntry.create({
+      data: {
+        companyId, accountId: assetAccount.id, dateAd: date, dateBs,
+        description: desc, debit: amount, credit: 0,
+        balance: Number(assetAccount.currentBalance) + amount,
+        referenceType: 'BANK_GUARANTEE', referenceId: bgId, isAutoPosted: true,
+      },
+    });
+    // CR Contingent Liability — obligation to the bank
+    await tx.ledgerEntry.create({
+      data: {
+        companyId, accountId: liabilityAccount.id, dateAd: date, dateBs,
+        description: desc, debit: 0, credit: amount,
+        balance: Number(liabilityAccount.currentBalance) + amount,
+        referenceType: 'BANK_GUARANTEE', referenceId: bgId, isAutoPosted: true,
+      },
+    });
+    await tx.ledgerAccount.update({ where: { id: assetAccount.id }, data: { currentBalance: { increment: amount } } });
+    await tx.ledgerAccount.update({ where: { id: liabilityAccount.id }, data: { currentBalance: { increment: amount } } });
   }
 
   async postBankGuaranteeClosed(companyId: string, bgId: string): Promise<void> {
-    const bg = await this.prisma.bankGuarantee.findFirst({ where: { id: bgId, companyId } });
+    return this.prisma.$transaction((tx) => this.postBankGuaranteeClosedTx(tx, companyId, bgId));
+  }
+
+  // Nested entry point — lets BankGuaranteeServiceImpl.update() post this as part of
+  // the same atomic write as the BG's own status change.
+  async postBankGuaranteeClosedTx(tx: Tx, companyId: string, bgId: string): Promise<void> {
+    const bg = await tx.bankGuarantee.findFirst({ where: { id: bgId, companyId } });
     if (!bg) return;
 
     const date = new Date();
@@ -667,28 +751,26 @@ export class LedgerPostingService {
       this.getOrCreateSystemAccount(companyId, SYSTEM_ACCOUNTS.BANK_GUARANTEE_LIABILITY, 'LIABILITY'),
     ]);
 
-    await this.prisma.$transaction([
-      // Reverse: CR Contingent Asset
-      this.prisma.ledgerEntry.create({
-        data: {
-          companyId, accountId: assetAccount.id, dateAd: date, dateBs,
-          description: desc, debit: 0, credit: amount,
-          balance: Number(assetAccount.currentBalance) - amount,
-          referenceType: 'BANK_GUARANTEE', referenceId: bgId, isAutoPosted: true,
-        },
-      }),
-      // Reverse: DR Contingent Liability
-      this.prisma.ledgerEntry.create({
-        data: {
-          companyId, accountId: liabilityAccount.id, dateAd: date, dateBs,
-          description: desc, debit: amount, credit: 0,
-          balance: Number(liabilityAccount.currentBalance) - amount,
-          referenceType: 'BANK_GUARANTEE', referenceId: bgId, isAutoPosted: true,
-        },
-      }),
-      this.prisma.ledgerAccount.update({ where: { id: assetAccount.id }, data: { currentBalance: { decrement: amount } } }),
-      this.prisma.ledgerAccount.update({ where: { id: liabilityAccount.id }, data: { currentBalance: { decrement: amount } } }),
-    ]);
+    // Reverse: CR Contingent Asset
+    await tx.ledgerEntry.create({
+      data: {
+        companyId, accountId: assetAccount.id, dateAd: date, dateBs,
+        description: desc, debit: 0, credit: amount,
+        balance: Number(assetAccount.currentBalance) - amount,
+        referenceType: 'BANK_GUARANTEE', referenceId: bgId, isAutoPosted: true,
+      },
+    });
+    // Reverse: DR Contingent Liability
+    await tx.ledgerEntry.create({
+      data: {
+        companyId, accountId: liabilityAccount.id, dateAd: date, dateBs,
+        description: desc, debit: amount, credit: 0,
+        balance: Number(liabilityAccount.currentBalance) - amount,
+        referenceType: 'BANK_GUARANTEE', referenceId: bgId, isAutoPosted: true,
+      },
+    });
+    await tx.ledgerAccount.update({ where: { id: assetAccount.id }, data: { currentBalance: { decrement: amount } } });
+    await tx.ledgerAccount.update({ where: { id: liabilityAccount.id }, data: { currentBalance: { decrement: amount } } });
   }
 
   // ─── Manual Journal Entry ─────────────────────────────────────────────────────
@@ -774,6 +856,75 @@ export class LedgerPostingService {
         return this.prisma.ledgerAccount.update({ where: { id: s.accountId }, data: { currentBalance: { decrement: delta } } });
       }),
     ]);
+  }
+
+  // Tx-aware sibling of reverseManualJournalEntry — used when a status change
+  // (e.g. a transaction going PENDING → COMPLETED, or → CANCELLED) needs to undo
+  // whatever was previously posted for it as part of the SAME atomic update, not
+  // as a separate standalone call. No-ops cleanly if nothing was ever posted.
+  async reverseEntriesTx(tx: Tx, companyId: string, referenceType: string, referenceId: string) {
+    const siblings = await tx.ledgerEntry.findMany({ where: { companyId, referenceType, referenceId } });
+    if (siblings.length === 0) return;
+
+    const accounts = await tx.ledgerAccount.findMany({ where: { id: { in: siblings.map((s) => s.accountId) } } });
+    const accountById = new Map(accounts.map((a) => [a.id, a]));
+
+    for (const s of siblings) {
+      await tx.ledgerEntry.delete({ where: { id: s.id } });
+      const acc = accountById.get(s.accountId);
+      const delta = acc ? this.ledgerDelta(acc.accountType, Number(s.debit), Number(s.credit)) : 0;
+      await tx.ledgerAccount.update({ where: { id: s.accountId }, data: { currentBalance: { decrement: delta } } });
+    }
+  }
+
+  // ─── Party (vendor/customer) Running Ledger ────────────────────────────────────
+  // Deliberately single-sided — NOT a balanced double-entry leg (the real
+  // Cash/Bank/Payable/Receivable posting via postManualJournalEntryTx always
+  // still happens separately and correctly reflects actual money movement).
+  //
+  // Behaves like a real running statement/passbook for that one vendor or
+  // customer: Credit = an amount became outstanding (transaction is Pending —
+  // "owed"), Debit = that outstanding amount got settled (transaction became
+  // Completed, or a Pending amount was Cancelled). Every call ADDS a new line —
+  // nothing is ever deleted or replaced — so the full history (owed, then
+  // settled) stays visible, the same way a bank passbook never erases old rows.
+  // See TransactionServiceImpl.sideForPartyLedgerTransition for exactly which
+  // side gets posted on each status transition.
+  //
+  // Because these entries have no offsetting leg anywhere else in the ledger, a
+  // future Trial Balance / Balance Sheet builder MUST exclude these accounts
+  // (and their entries — referenceType 'TRANSACTION_MEMO') from formal totals,
+  // or the books will not balance.
+  async postPartyLedgerLineTx(
+    tx: Tx,
+    companyId: string,
+    params: { partyAccountId: string; amount: number; dateAd: string; description?: string; referenceId?: string; side: 'CREDIT' | 'DEBIT' },
+  ) {
+    const account = await tx.ledgerAccount.findFirst({ where: { id: params.partyAccountId, companyId } });
+    if (!account) return; // best-effort tracker — a bad id here must never break the real transaction
+
+    const date = new Date(params.dateAd);
+    const dateBs = adToBs(date);
+    const amount = params.amount;
+    const isCredit = params.side === 'CREDIT';
+    const delta = this.ledgerDelta(account.accountType, isCredit ? 0 : amount, isCredit ? amount : 0);
+
+    await tx.ledgerEntry.create({
+      data: {
+        companyId,
+        accountId: account.id,
+        dateAd: date,
+        dateBs,
+        description: params.description,
+        debit: isCredit ? 0 : amount,
+        credit: isCredit ? amount : 0,
+        balance: Number(account.currentBalance) + delta,
+        referenceType: 'TRANSACTION_MEMO',
+        referenceId: params.referenceId,
+        isAutoPosted: true,
+      },
+    });
+    await tx.ledgerAccount.update({ where: { id: account.id }, data: { currentBalance: { increment: delta } } });
   }
 
   private debitNormal(accountType: string): boolean {
