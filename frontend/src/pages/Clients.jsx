@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { motion } from 'framer-motion';
 import { api } from '@/api/adapter';
 import { getActiveCompanyId } from '@/lib/companyContext';
@@ -30,6 +31,7 @@ const PAYMENT_TERMS = ['Immediate', 'NET-15', 'NET-30', 'NET-45', 'NET-60'];
 const EMPTY_FORM = { name: '', contact_person: '', phone: '', email: '', address: '', pan_vat: '', crm_status: 'active', opening_balance: '', credit_limit: '', payment_terms: 'Immediate', notes: '' };
 
 export default function Clients() {
+  const { t } = useTranslation();
   const companyId = getActiveCompanyId();
   const { canEdit } = useRole();
   const [clients, setClients] = useState([]);
@@ -82,6 +84,21 @@ export default function Clients() {
     inactive: 'bg-gray-100 text-gray-600',
   };
 
+  const statusLabels = {
+    lead: t('clients.statusLead', { defaultValue: 'Lead' }),
+    prospect: t('clients.statusProspect', { defaultValue: 'Prospect' }),
+    active: t('clients.statusActive', { defaultValue: 'Active' }),
+    inactive: t('clients.statusInactive', { defaultValue: 'Inactive' }),
+  };
+
+  const paymentTermLabels = {
+    'Immediate': t('clients.paymentTermImmediate', { defaultValue: 'Immediate' }),
+    'NET-15': 'NET-15',
+    'NET-30': 'NET-30',
+    'NET-45': 'NET-45',
+    'NET-60': 'NET-60',
+  };
+
   const filtered = clients.filter(c =>
     (c.name?.toLowerCase().includes(search.toLowerCase()) ||
      c.contact_person?.toLowerCase().includes(search.toLowerCase()) ||
@@ -92,16 +109,16 @@ export default function Clients() {
   );
 
   const columns = [
-    { key: 'name', label: 'Client Name', filterValue: colFilters.name, onFilterChange: v => setCol('name', v), render: (row) => <span className="font-medium">{row.name}</span> },
-    { key: 'contact_person', label: 'Contact', filterValue: colFilters.contact_person, onFilterChange: v => setCol('contact_person', v) },
-    { key: 'phone', label: 'Phone' },
-    { key: 'email', label: 'Email' },
-    { key: 'crm_status', label: 'CRM Status', filterValue: colFilters.crm_status, onFilterChange: v => setCol('crm_status', v), filterPlaceholder: 'e.g. active', render: (row) => (
+    { key: 'name', label: t('clients.clientName', { defaultValue: 'Client Name' }), filterValue: colFilters.name, onFilterChange: v => setCol('name', v), render: (row) => <span className="font-medium">{row.name}</span> },
+    { key: 'contact_person', label: t('clients.contact', { defaultValue: 'Contact' }), filterValue: colFilters.contact_person, onFilterChange: v => setCol('contact_person', v) },
+    { key: 'phone', label: t('clients.phone', { defaultValue: 'Phone' }) },
+    { key: 'email', label: t('clients.email', { defaultValue: 'Email' }) },
+    { key: 'crm_status', label: t('clients.crmStatus', { defaultValue: 'CRM Status' }), filterValue: colFilters.crm_status, onFilterChange: v => setCol('crm_status', v), filterPlaceholder: t('clients.filterStatusPlaceholder', { defaultValue: 'e.g. active' }), render: (row) => (
       <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${statusColors[row.crm_status] || ''}`}>
-        {row.crm_status}
+        {statusLabels[row.crm_status] || row.crm_status}
       </span>
     )},
-    { key: 'total_sales', label: 'Total Sales', render: (row) => (
+    { key: 'total_sales', label: t('clients.totalSales', { defaultValue: 'Total Sales' }), render: (row) => (
       <span className="font-mono">NPR {(row.total_sales || 0).toLocaleString()}</span>
     )},
   ];
@@ -110,10 +127,10 @@ export default function Clients() {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <PageHeader title="Clients" subtitle={`${clients.length} clients · CRM Overview`} searchValue={search} onSearchChange={setSearch} onAdd={() => setShowAdd(true)} addLabel="Add Client">
+      <PageHeader title={t('clients.title', { defaultValue: 'Clients' })} subtitle={t('clients.subtitle', { defaultValue: '{{count}} clients · CRM Overview', count: clients.length })} searchValue={search} onSearchChange={setSearch} onAdd={() => setShowAdd(true)} addLabel={t('clients.addClient', { defaultValue: 'Add Client' })}>
         {canEdit && (
           <Button variant="outline" className="gap-2" onClick={() => setImportOpen(true)}>
-            <Upload className="w-4 h-4" /> Import
+            <Upload className="w-4 h-4" /> {t('clients.import', { defaultValue: 'Import' })}
           </Button>
         )}
       </PageHeader>
@@ -122,7 +139,7 @@ export default function Clients() {
         open={importOpen}
         onClose={() => setImportOpen(false)}
         entity="clients"
-        title="Import Clients"
+        title={t('clients.importClients', { defaultValue: 'Import Clients' })}
         fields={CLIENT_FIELDS}
         onDone={loadData}
       />
@@ -132,15 +149,15 @@ export default function Clients() {
         {CRM_STATUSES.map(status => (
           <div key={status} className="glass-card rounded-xl p-4 text-center">
             <p className="text-2xl font-bold">{clients.filter(c => c.crm_status === status).length}</p>
-            <p className="text-xs text-muted-foreground capitalize mt-1">{status}</p>
+            <p className="text-xs text-muted-foreground capitalize mt-1">{statusLabels[status] || status}</p>
           </div>
         ))}
       </div>
 
       {clients.length === 0 ? (
-        <EmptyState icon={UserCheck} title="No clients yet" description="Add your first client to start managing your sales relationships." action={<Button onClick={() => setShowAdd(true)}>Add Client</Button>} />
+        <EmptyState icon={UserCheck} title={t('clients.noClientsYet', { defaultValue: 'No clients yet' })} description={t('clients.noClientsYetHint', { defaultValue: 'Add your first client to start managing your sales relationships.' })} action={<Button onClick={() => setShowAdd(true)}>{t('clients.addClient', { defaultValue: 'Add Client' })}</Button>} />
       ) : (
-        <DataTable columns={columns} data={filtered} emptyMessage="No clients match your search." onRowClick={canEdit ? (row) => setEditClient({ ...row }) : undefined} />
+        <DataTable columns={columns} data={filtered} emptyMessage={t('clients.noClientsMatchSearch', { defaultValue: 'No clients match your search.' })} onRowClick={canEdit ? (row) => setEditClient({ ...row }) : undefined} />
       )}
 
       {/* Add Dialog */}
@@ -150,7 +167,7 @@ export default function Clients() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <UserCheck className="w-5 h-5 text-primary" />
-              Add Client
+              {t('clients.addClient', { defaultValue: 'Add Client' })}
             </DialogTitle>
           </DialogHeader>
 
@@ -162,11 +179,11 @@ export default function Clients() {
               className="space-y-3 overflow-y-auto pr-1">
               <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1.5 border-b pb-1.5 mb-2">
                 <UserCheck className="w-3.5 h-3.5" />
-                Client Details
+                {t('clients.clientDetails', { defaultValue: 'Client Details' })}
               </h4>
 
               <div className="space-y-1">
-                <Label className="text-xs font-medium">Client Name *</Label>
+                <Label className="text-xs font-medium">{t('clients.clientNameRequired', { defaultValue: 'Client Name *' })}</Label>
                 <div className="relative">
                   <Building2 className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
                   <Input className="pl-8 h-9 text-sm" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} />
@@ -174,33 +191,33 @@ export default function Clients() {
               </div>
 
               <div className="space-y-1">
-                <Label className="text-xs font-medium">PAN/VAT No.</Label>
+                <Label className="text-xs font-medium">{t('clients.panVatNo', { defaultValue: 'PAN/VAT No.' })}</Label>
                 <div className="relative">
                   <Hash className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
-                  <Input className="pl-8 h-9 text-sm" value={form.pan_vat} onChange={e => setForm({ ...form, pan_vat: e.target.value })} placeholder="e.g. 123456789" />
+                  <Input className="pl-8 h-9 text-sm" value={form.pan_vat} onChange={e => setForm({ ...form, pan_vat: e.target.value })} placeholder={t('clients.panVatPlaceholder', { defaultValue: 'e.g. 123456789' })} />
                 </div>
               </div>
 
               <div className="space-y-1">
-                <Label className="text-xs font-medium">CRM Status</Label>
+                <Label className="text-xs font-medium">{t('clients.crmStatus', { defaultValue: 'CRM Status' })}</Label>
                 <div className="flex flex-wrap gap-1.5 mt-1">
                   {CRM_STATUSES.map(s => (
                     <button key={s} type="button"
                       onClick={() => setForm({ ...form, crm_status: s })}
                       className={`px-2.5 py-1 rounded-md text-xs font-medium border transition-all capitalize
                         ${form.crm_status === s ? 'border-primary bg-primary/10 text-primary' : 'border-border text-muted-foreground hover:border-primary/50'}`}>
-                      {s}
+                      {statusLabels[s]}
                     </button>
                   ))}
                 </div>
               </div>
 
               <div className="space-y-1">
-                <Label className="text-xs font-medium">Payment Terms</Label>
+                <Label className="text-xs font-medium">{t('clients.paymentTerms', { defaultValue: 'Payment Terms' })}</Label>
                 <Select value={form.payment_terms} onValueChange={v => setForm({ ...form, payment_terms: v })}>
                   <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {PAYMENT_TERMS.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                    {PAYMENT_TERMS.map(term => <SelectItem key={term} value={term}>{paymentTermLabels[term] || term}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
@@ -213,11 +230,11 @@ export default function Clients() {
               className="space-y-3 overflow-y-auto pr-1">
               <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1.5 border-b pb-1.5 mb-2">
                 <User className="w-3.5 h-3.5" />
-                Contact &amp; Finance
+                {t('clients.contactAndFinance', { defaultValue: 'Contact & Finance' })}
               </h4>
 
               <div className="space-y-1">
-                <Label className="text-xs font-medium">Contact Person</Label>
+                <Label className="text-xs font-medium">{t('clients.contactPerson', { defaultValue: 'Contact Person' })}</Label>
                 <div className="relative">
                   <User className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
                   <Input className="pl-8 h-9 text-sm" value={form.contact_person} onChange={e => setForm({ ...form, contact_person: e.target.value })} />
@@ -225,7 +242,7 @@ export default function Clients() {
               </div>
 
               <div className="space-y-1">
-                <Label className="text-xs font-medium">Phone</Label>
+                <Label className="text-xs font-medium">{t('clients.phone', { defaultValue: 'Phone' })}</Label>
                 <div className="relative">
                   <Phone className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
                   <Input className="pl-8 h-9 text-sm" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} />
@@ -233,7 +250,7 @@ export default function Clients() {
               </div>
 
               <div className="space-y-1">
-                <Label className="text-xs font-medium">Email</Label>
+                <Label className="text-xs font-medium">{t('clients.email', { defaultValue: 'Email' })}</Label>
                 <div className="relative">
                   <Mail className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
                   <Input className="pl-8 h-9 text-sm" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} />
@@ -241,7 +258,7 @@ export default function Clients() {
               </div>
 
               <div className="space-y-1">
-                <Label className="text-xs font-medium">Address</Label>
+                <Label className="text-xs font-medium">{t('clients.address', { defaultValue: 'Address' })}</Label>
                 <div className="relative">
                   <MapPin className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
                   <Input className="pl-8 h-9 text-sm" value={form.address} onChange={e => setForm({ ...form, address: e.target.value })} />
@@ -249,24 +266,24 @@ export default function Clients() {
               </div>
 
               <div className="space-y-1">
-                <Label className="text-xs font-medium">Opening Balance</Label>
+                <Label className="text-xs font-medium">{t('clients.openingBalance', { defaultValue: 'Opening Balance' })}</Label>
                 <div className="flex items-stretch">
                   <span className="flex items-center px-2.5 text-xs font-bold text-muted-foreground bg-muted border border-r-0 border-input rounded-l-md select-none shrink-0">NPR</span>
                   <SmartNumberInput className="rounded-l-none h-9 text-sm flex-1" placeholder="0.00" value={form.opening_balance} onChange={e => setForm({ ...form, opening_balance: e.target.value })} />
                 </div>
-                <p className="text-xs text-muted-foreground">Amount client already owes you</p>
+                <p className="text-xs text-muted-foreground">{t('clients.amountClientOwesYou', { defaultValue: 'Amount client already owes you' })}</p>
               </div>
 
               <div className="space-y-1">
-                <Label className="text-xs font-medium">Credit Limit</Label>
+                <Label className="text-xs font-medium">{t('clients.creditLimit', { defaultValue: 'Credit Limit' })}</Label>
                 <div className="flex items-stretch">
                   <span className="flex items-center px-2.5 text-xs font-bold text-muted-foreground bg-muted border border-r-0 border-input rounded-l-md select-none shrink-0">NPR</span>
-                  <SmartNumberInput className="rounded-l-none h-9 text-sm flex-1" placeholder="e.g. 100000" value={form.credit_limit} onChange={e => setForm({ ...form, credit_limit: e.target.value })} />
+                  <SmartNumberInput className="rounded-l-none h-9 text-sm flex-1" placeholder={t('clients.creditLimitPlaceholder', { defaultValue: 'e.g. 100000' })} value={form.credit_limit} onChange={e => setForm({ ...form, credit_limit: e.target.value })} />
                 </div>
               </div>
 
               <div className="space-y-1">
-                <Label className="text-xs font-medium">Notes</Label>
+                <Label className="text-xs font-medium">{t('clients.notes', { defaultValue: 'Notes' })}</Label>
                 <div className="relative">
                   <FileText className="absolute left-2.5 top-2.5 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
                   <Textarea className="pl-8 text-sm" value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} rows={3} />
@@ -276,8 +293,8 @@ export default function Clients() {
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowAdd(false)}>Cancel</Button>
-            <Button onClick={addClient} disabled={!form.name}>Add Client</Button>
+            <Button variant="outline" onClick={() => setShowAdd(false)}>{t('clients.cancel', { defaultValue: 'Cancel' })}</Button>
+            <Button onClick={addClient} disabled={!form.name}>{t('clients.addClient', { defaultValue: 'Add Client' })}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -289,7 +306,7 @@ export default function Clients() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <UserCheck className="w-5 h-5 text-primary" />
-              Edit Client
+              {t('clients.editClient', { defaultValue: 'Edit Client' })}
             </DialogTitle>
           </DialogHeader>
 
@@ -302,11 +319,11 @@ export default function Clients() {
                 className="space-y-3 overflow-y-auto pr-1">
                 <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1.5 border-b pb-1.5 mb-2">
                   <UserCheck className="w-3.5 h-3.5" />
-                  Client Details
+                  {t('clients.clientDetails', { defaultValue: 'Client Details' })}
                 </h4>
 
                 <div className="space-y-1">
-                  <Label className="text-xs font-medium">Client Name *</Label>
+                  <Label className="text-xs font-medium">{t('clients.clientNameRequired', { defaultValue: 'Client Name *' })}</Label>
                   <div className="relative">
                     <Building2 className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
                     <Input className="pl-8 h-9 text-sm" value={editClient.name} onChange={e => setEditClient({ ...editClient, name: e.target.value })} />
@@ -314,33 +331,33 @@ export default function Clients() {
                 </div>
 
                 <div className="space-y-1">
-                  <Label className="text-xs font-medium">PAN/VAT No.</Label>
+                  <Label className="text-xs font-medium">{t('clients.panVatNo', { defaultValue: 'PAN/VAT No.' })}</Label>
                   <div className="relative">
                     <Hash className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
-                    <Input className="pl-8 h-9 text-sm" value={editClient.pan_vat || ''} onChange={e => setEditClient({ ...editClient, pan_vat: e.target.value })} placeholder="e.g. 123456789" />
+                    <Input className="pl-8 h-9 text-sm" value={editClient.pan_vat || ''} onChange={e => setEditClient({ ...editClient, pan_vat: e.target.value })} placeholder={t('clients.panVatPlaceholder', { defaultValue: 'e.g. 123456789' })} />
                   </div>
                 </div>
 
                 <div className="space-y-1">
-                  <Label className="text-xs font-medium">CRM Status</Label>
+                  <Label className="text-xs font-medium">{t('clients.crmStatus', { defaultValue: 'CRM Status' })}</Label>
                   <div className="flex flex-wrap gap-1.5 mt-1">
                     {CRM_STATUSES.map(s => (
                       <button key={s} type="button"
                         onClick={() => setEditClient({ ...editClient, crm_status: s })}
                         className={`px-2.5 py-1 rounded-md text-xs font-medium border transition-all capitalize
                           ${editClient.crm_status === s ? 'border-primary bg-primary/10 text-primary' : 'border-border text-muted-foreground hover:border-primary/50'}`}>
-                        {s}
+                        {statusLabels[s]}
                       </button>
                     ))}
                   </div>
                 </div>
 
                 <div className="space-y-1">
-                  <Label className="text-xs font-medium">Payment Terms</Label>
+                  <Label className="text-xs font-medium">{t('clients.paymentTerms', { defaultValue: 'Payment Terms' })}</Label>
                   <Select value={editClient.payment_terms} onValueChange={v => setEditClient({ ...editClient, payment_terms: v })}>
                     <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      {PAYMENT_TERMS.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                      {PAYMENT_TERMS.map(term => <SelectItem key={term} value={term}>{paymentTermLabels[term] || term}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
@@ -353,11 +370,11 @@ export default function Clients() {
                 className="space-y-3 overflow-y-auto pr-1">
                 <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1.5 border-b pb-1.5 mb-2">
                   <User className="w-3.5 h-3.5" />
-                  Contact &amp; Finance
+                  {t('clients.contactAndFinance', { defaultValue: 'Contact & Finance' })}
                 </h4>
 
                 <div className="space-y-1">
-                  <Label className="text-xs font-medium">Contact Person</Label>
+                  <Label className="text-xs font-medium">{t('clients.contactPerson', { defaultValue: 'Contact Person' })}</Label>
                   <div className="relative">
                     <User className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
                     <Input className="pl-8 h-9 text-sm" value={editClient.contact_person || ''} onChange={e => setEditClient({ ...editClient, contact_person: e.target.value })} />
@@ -365,7 +382,7 @@ export default function Clients() {
                 </div>
 
                 <div className="space-y-1">
-                  <Label className="text-xs font-medium">Phone</Label>
+                  <Label className="text-xs font-medium">{t('clients.phone', { defaultValue: 'Phone' })}</Label>
                   <div className="relative">
                     <Phone className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
                     <Input className="pl-8 h-9 text-sm" value={editClient.phone || ''} onChange={e => setEditClient({ ...editClient, phone: e.target.value })} />
@@ -373,7 +390,7 @@ export default function Clients() {
                 </div>
 
                 <div className="space-y-1">
-                  <Label className="text-xs font-medium">Email</Label>
+                  <Label className="text-xs font-medium">{t('clients.email', { defaultValue: 'Email' })}</Label>
                   <div className="relative">
                     <Mail className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
                     <Input className="pl-8 h-9 text-sm" value={editClient.email || ''} onChange={e => setEditClient({ ...editClient, email: e.target.value })} />
@@ -381,7 +398,7 @@ export default function Clients() {
                 </div>
 
                 <div className="space-y-1">
-                  <Label className="text-xs font-medium">Address</Label>
+                  <Label className="text-xs font-medium">{t('clients.address', { defaultValue: 'Address' })}</Label>
                   <div className="relative">
                     <MapPin className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
                     <Input className="pl-8 h-9 text-sm" value={editClient.address || ''} onChange={e => setEditClient({ ...editClient, address: e.target.value })} />
@@ -389,24 +406,24 @@ export default function Clients() {
                 </div>
 
                 <div className="space-y-1">
-                  <Label className="text-xs font-medium">Opening Balance</Label>
+                  <Label className="text-xs font-medium">{t('clients.openingBalance', { defaultValue: 'Opening Balance' })}</Label>
                   <div className="flex items-stretch">
                     <span className="flex items-center px-2.5 text-xs font-bold text-muted-foreground bg-muted border border-r-0 border-input rounded-l-md select-none shrink-0">NPR</span>
                     <SmartNumberInput className="rounded-l-none h-9 text-sm flex-1" placeholder="0.00" value={editClient.opening_balance || ''} onChange={e => setEditClient({ ...editClient, opening_balance: e.target.value })} />
                   </div>
-                  <p className="text-xs text-muted-foreground">Amount client already owes you</p>
+                  <p className="text-xs text-muted-foreground">{t('clients.amountClientOwesYou', { defaultValue: 'Amount client already owes you' })}</p>
                 </div>
 
                 <div className="space-y-1">
-                  <Label className="text-xs font-medium">Credit Limit</Label>
+                  <Label className="text-xs font-medium">{t('clients.creditLimit', { defaultValue: 'Credit Limit' })}</Label>
                   <div className="flex items-stretch">
                     <span className="flex items-center px-2.5 text-xs font-bold text-muted-foreground bg-muted border border-r-0 border-input rounded-l-md select-none shrink-0">NPR</span>
-                    <SmartNumberInput className="rounded-l-none h-9 text-sm flex-1" placeholder="e.g. 100000" value={editClient.credit_limit || ''} onChange={e => setEditClient({ ...editClient, credit_limit: e.target.value })} />
+                    <SmartNumberInput className="rounded-l-none h-9 text-sm flex-1" placeholder={t('clients.creditLimitPlaceholder', { defaultValue: 'e.g. 100000' })} value={editClient.credit_limit || ''} onChange={e => setEditClient({ ...editClient, credit_limit: e.target.value })} />
                   </div>
                 </div>
 
                 <div className="space-y-1">
-                  <Label className="text-xs font-medium">Notes</Label>
+                  <Label className="text-xs font-medium">{t('clients.notes', { defaultValue: 'Notes' })}</Label>
                   <div className="relative">
                     <FileText className="absolute left-2.5 top-2.5 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
                     <Textarea className="pl-8 text-sm" value={editClient.notes || ''} onChange={e => setEditClient({ ...editClient, notes: e.target.value })} rows={3} />
@@ -417,8 +434,8 @@ export default function Clients() {
           )}
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setEditClient(null)}>Cancel</Button>
-            {canEdit && <Button onClick={updateClient} disabled={!editClient?.name}>Save Changes</Button>}
+            <Button variant="outline" onClick={() => setEditClient(null)}>{t('clients.cancel', { defaultValue: 'Cancel' })}</Button>
+            {canEdit && <Button onClick={updateClient} disabled={!editClient?.name}>{t('clients.saveChanges', { defaultValue: 'Save Changes' })}</Button>}
           </DialogFooter>
         </DialogContent>
       </Dialog>

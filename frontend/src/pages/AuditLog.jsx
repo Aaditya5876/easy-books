@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { api } from '@/api/adapter';
 import { getActiveCompanyId } from '@/lib/companyContext';
 import { describeAuditLog } from '@/lib/describeAuditLog';
@@ -21,6 +22,7 @@ const ACTION_DOT = {
 };
 
 export default function AuditLog() {
+  const { t } = useTranslation();
   const companyId = getActiveCompanyId();
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -54,10 +56,10 @@ export default function AuditLog() {
   );
 
   const columns = [
-    { key: 'created_at', label: 'When', render: (row) => (
+    { key: 'created_at', label: t('auditLog.when', { defaultValue: 'When' }), render: (row) => (
       <span className="text-xs font-mono whitespace-nowrap">{row.created_at ? new Date(row.created_at).toLocaleString() : '-'}</span>
     )},
-    { key: 'summary', label: 'What happened', render: (row) => (
+    { key: 'summary', label: t('auditLog.whatHappened', { defaultValue: 'What happened' }), render: (row) => (
       <div className="flex items-center gap-2">
         <span className={`inline-block w-2 h-2 rounded-full shrink-0 ${ACTION_DOT[(row.action || '').toLowerCase()] || 'bg-muted-foreground'}`} />
         <span className="text-sm">{describeAuditLog(row)}</span>
@@ -66,7 +68,7 @@ export default function AuditLog() {
     { key: 'changes', label: '', render: (row) => (
       row.changes ? (
         <Button variant="ghost" size="sm" className="h-7 gap-1.5" onClick={() => setViewingChanges(row)}>
-          <Eye className="w-3.5 h-3.5" /> Details
+          <Eye className="w-3.5 h-3.5" /> {t('auditLog.details', { defaultValue: 'Details' })}
         </Button>
       ) : null
     )},
@@ -77,46 +79,46 @@ export default function AuditLog() {
   return (
     <div className="space-y-6 animate-fade-in">
       <PageHeader
-        title="Audit Log"
-        subtitle="Who did what, and when — every create/update/delete across the system"
+        title={t('auditLog.title', { defaultValue: 'Audit Log' })}
+        subtitle={t('auditLog.subtitle', { defaultValue: 'Who did what, and when — every create/update/delete across the system' })}
       />
 
       <div className="rounded-xl border bg-card p-4 shadow-sm">
         <div className="flex flex-col gap-3 md:flex-row md:items-end md:flex-wrap">
           <div className="flex-1 min-w-[140px]">
-            <Label className="text-xs font-medium">From Date</Label>
+            <Label className="text-xs font-medium">{t('auditLog.fromDate', { defaultValue: 'From Date' })}</Label>
             <Input type="date" className="h-9 text-sm mt-1" value={dateFrom} onChange={e => setDateFrom(e.target.value)} />
           </div>
           <div className="flex-1 min-w-[140px]">
-            <Label className="text-xs font-medium">To Date</Label>
+            <Label className="text-xs font-medium">{t('auditLog.toDate', { defaultValue: 'To Date' })}</Label>
             <Input type="date" className="h-9 text-sm mt-1" value={dateTo} onChange={e => setDateTo(e.target.value)} />
           </div>
           <div className="flex-1 min-w-[140px]">
-            <Label className="text-xs font-medium">User Email</Label>
-            <Input className="h-9 text-sm mt-1" placeholder="Search by user..." value={userFilter} onChange={e => setUserFilter(e.target.value)} />
+            <Label className="text-xs font-medium">{t('auditLog.userEmail', { defaultValue: 'User Email' })}</Label>
+            <Input className="h-9 text-sm mt-1" placeholder={t('auditLog.searchByUser', { defaultValue: 'Search by user...' })} value={userFilter} onChange={e => setUserFilter(e.target.value)} />
           </div>
           <div className="flex-1 min-w-[140px]">
-            <Label className="text-xs font-medium">Module</Label>
-            <Input className="h-9 text-sm mt-1" placeholder="e.g. transactions" value={moduleFilter} onChange={e => setModuleFilter(e.target.value)} />
+            <Label className="text-xs font-medium">{t('auditLog.module', { defaultValue: 'Module' })}</Label>
+            <Input className="h-9 text-sm mt-1" placeholder={t('auditLog.moduleExample', { defaultValue: 'e.g. transactions' })} value={moduleFilter} onChange={e => setModuleFilter(e.target.value)} />
           </div>
           <div className="flex-1 min-w-[140px]">
-            <Label className="text-xs font-medium">Action</Label>
+            <Label className="text-xs font-medium">{t('auditLog.action', { defaultValue: 'Action' })}</Label>
             <select
               className="mt-1 h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
               value={actionFilter}
               onChange={e => setActionFilter(e.target.value)}
             >
-              <option value="">All</option>
-              <option value="CREATE">Create</option>
-              <option value="UPDATE">Update</option>
-              <option value="DELETE">Delete</option>
+              <option value="">{t('auditLog.allActions', { defaultValue: 'All' })}</option>
+              <option value="CREATE">{t('auditLog.create', { defaultValue: 'Create' })}</option>
+              <option value="UPDATE">{t('auditLog.update', { defaultValue: 'Update' })}</option>
+              <option value="DELETE">{t('auditLog.delete', { defaultValue: 'Delete' })}</option>
             </select>
           </div>
           <Button
             variant="outline"
             onClick={() => { setDateFrom(''); setDateTo(''); setModuleFilter(''); setActionFilter(''); setUserFilter(''); }}
           >
-            Clear Filters
+            {t('auditLog.clearFilters', { defaultValue: 'Clear Filters' })}
           </Button>
         </div>
       </div>
@@ -124,11 +126,11 @@ export default function AuditLog() {
       {filtered.length === 0 ? (
         <EmptyState
           icon={Shield}
-          title="No activity recorded yet"
-          description="Every create, update, or delete anyone makes will show up here."
+          title={t('auditLog.noActivityTitle', { defaultValue: 'No activity recorded yet' })}
+          description={t('auditLog.noActivityDescription', { defaultValue: 'Every create, update, or delete anyone makes will show up here.' })}
         />
       ) : (
-        <DataTable columns={columns} data={filtered} emptyMessage="No matching activity" />
+        <DataTable columns={columns} data={filtered} emptyMessage={t('auditLog.noMatchingActivity', { defaultValue: 'No matching activity' })} />
       )}
 
       <Dialog open={!!viewingChanges} onOpenChange={open => !open && setViewingChanges(null)}>

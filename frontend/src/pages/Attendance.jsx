@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
+import { useTranslation } from 'react-i18next';
 import { api } from '@/api/adapter';
 import { getActiveCompanyId } from '@/lib/companyContext';
 import { formatDate } from '@/lib/utils';
@@ -21,15 +22,8 @@ const statusColors = {
   HOLIDAY: 'bg-slate-100 text-slate-700',
 };
 
-const statusLabels = {
-  PRESENT: 'Present',
-  ABSENT: 'Absent',
-  HALF_DAY: 'Half Day',
-  LEAVE: 'On Leave',
-  HOLIDAY: 'Holiday',
-};
-
 export default function Attendance() {
+  const { t } = useTranslation();
   const companyId = getActiveCompanyId();
   const [records, setRecords] = useState([]);
   const [employees, setEmployees] = useState([]);
@@ -86,20 +80,28 @@ export default function Attendance() {
     (!colFilters.status || r.status?.toLowerCase().includes(colFilters.status.toLowerCase()))
   );
 
+  const statusLabels = {
+    PRESENT: t('staffAttendance.statusPresent', { defaultValue: 'Present' }),
+    ABSENT: t('staffAttendance.statusAbsent', { defaultValue: 'Absent' }),
+    HALF_DAY: t('staffAttendance.statusHalfDay', { defaultValue: 'Half Day' }),
+    LEAVE: t('staffAttendance.statusOnLeave', { defaultValue: 'On Leave' }),
+    HOLIDAY: t('staffAttendance.statusHoliday', { defaultValue: 'Holiday' }),
+  };
+
   const columns = [
-    { key: 'date', label: 'Date', filterValue: colFilters.date, filterType: 'date', onFilterChange: v => setCol('date', v), render: (row) => formatDate(row.date) },
+    { key: 'date', label: t('staffAttendance.date', { defaultValue: 'Date' }), filterValue: colFilters.date, filterType: 'date', onFilterChange: v => setCol('date', v), render: (row) => formatDate(row.date) },
     {
       key: 'employee_name',
-      label: 'Employee',
+      label: t('staffAttendance.employee', { defaultValue: 'Employee' }),
       filterValue: colFilters.employee_name,
       onFilterChange: v => setCol('employee_name', v),
       render: r => <span className="font-medium">{r.employee_name}</span>,
     },
-    { key: 'check_in_time', label: 'Check In' },
-    { key: 'check_out_time', label: 'Check Out' },
+    { key: 'check_in_time', label: t('staffAttendance.checkIn', { defaultValue: 'Check In' }) },
+    { key: 'check_out_time', label: t('staffAttendance.checkOut', { defaultValue: 'Check Out' }) },
     {
       key: 'status',
-      label: 'Status',
+      label: t('staffAttendance.status', { defaultValue: 'Status' }),
       filterValue: colFilters.status,
       onFilterChange: v => setCol('status', v),
       render: r => (
@@ -110,7 +112,7 @@ export default function Attendance() {
     },
     {
       key: 'notes',
-      label: 'Notes',
+      label: t('staffAttendance.notes', { defaultValue: 'Notes' }),
       render: r => <span className="text-muted-foreground text-xs">{r.notes || '—'}</span>,
     },
   ];
@@ -120,19 +122,19 @@ export default function Attendance() {
   return (
     <div className="space-y-6 animate-fade-in">
       <PageHeader
-        title="Attendance"
-        subtitle="Track employee attendance"
+        title={t('staffAttendance.title', { defaultValue: 'Attendance' })}
+        subtitle={t('staffAttendance.subtitle', { defaultValue: 'Track employee attendance' })}
         onAdd={() => setShowForm(true)}
-        addLabel="Mark Attendance"
+        addLabel={t('staffAttendance.markAttendance', { defaultValue: 'Mark Attendance' })}
       />
-      <DataTable columns={columns} data={filtered} emptyMessage="No attendance records yet" />
+      <DataTable columns={columns} data={filtered} emptyMessage={t('staffAttendance.emptyMessage', { defaultValue: 'No attendance records yet' })} />
 
       <Dialog open={showForm} onOpenChange={open => { setShowForm(open); }}>
         <DialogContent className="glass-dialog max-w-xl overflow-hidden">
           <div className="h-1 bg-gradient-to-r from-green-400 to-emerald-500 -mx-6 -mt-6 mb-4" />
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <CalendarDays className="w-5 h-5 text-primary" />Mark Attendance
+              <CalendarDays className="w-5 h-5 text-primary" />{t('staffAttendance.markAttendance', { defaultValue: 'Mark Attendance' })}
             </DialogTitle>
           </DialogHeader>
 
@@ -144,14 +146,14 @@ export default function Attendance() {
           >
             {/* Employee section */}
             <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1.5 border-b pb-1.5 mb-2">
-              <Users className="w-3.5 h-3.5" />Select Employee
+              <Users className="w-3.5 h-3.5" />{t('staffAttendance.selectEmployeeSection', { defaultValue: 'Select Employee' })}
             </h4>
 
             <div className="space-y-1">
-              <Label className="text-xs">Employee *</Label>
+              <Label className="text-xs">{t('staffAttendance.employeeRequired', { defaultValue: 'Employee *' })}</Label>
               <Select value={form.employee_id} onValueChange={selectEmployee}>
                 <SelectTrigger className="h-9 text-sm">
-                  <SelectValue placeholder="Select employee" />
+                  <SelectValue placeholder={t('staffAttendance.selectEmployeePlaceholder', { defaultValue: 'Select employee' })} />
                 </SelectTrigger>
                 <SelectContent>
                   {employees.map(e => <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>)}
@@ -160,7 +162,7 @@ export default function Attendance() {
             </div>
 
             <div className="space-y-1">
-              <Label className="text-xs">Date *</Label>
+              <Label className="text-xs">{t('staffAttendance.dateRequired', { defaultValue: 'Date *' })}</Label>
               <div className="relative">
                 <Calendar className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
                 <Input
@@ -174,12 +176,12 @@ export default function Attendance() {
 
             {/* Time & Status section */}
             <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1.5 border-b pb-1.5 mb-2 pt-1">
-              <Clock className="w-3.5 h-3.5" />Time &amp; Status
+              <Clock className="w-3.5 h-3.5" />{t('staffAttendance.timeStatusSection', { defaultValue: 'Time & Status' })}
             </h4>
 
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
-                <Label className="text-xs">Check In</Label>
+                <Label className="text-xs">{t('staffAttendance.checkIn', { defaultValue: 'Check In' })}</Label>
                 <div className="relative">
                   <Clock className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
                   <Input
@@ -191,7 +193,7 @@ export default function Attendance() {
                 </div>
               </div>
               <div className="space-y-1">
-                <Label className="text-xs">Check Out</Label>
+                <Label className="text-xs">{t('staffAttendance.checkOut', { defaultValue: 'Check Out' })}</Label>
                 <div className="relative">
                   <Clock className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
                   <Input
@@ -205,21 +207,21 @@ export default function Attendance() {
             </div>
 
             <div className="space-y-1">
-              <Label className="text-xs">Status</Label>
+              <Label className="text-xs">{t('staffAttendance.status', { defaultValue: 'Status' })}</Label>
               <Select value={form.status} onValueChange={v => setForm({ ...form, status: v })}>
                 <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="PRESENT">Present</SelectItem>
-                  <SelectItem value="ABSENT">Absent</SelectItem>
-                  <SelectItem value="HALF_DAY">Half Day</SelectItem>
-                  <SelectItem value="LEAVE">On Leave</SelectItem>
-                  <SelectItem value="HOLIDAY">Holiday</SelectItem>
+                  <SelectItem value="PRESENT">{t('staffAttendance.statusPresent', { defaultValue: 'Present' })}</SelectItem>
+                  <SelectItem value="ABSENT">{t('staffAttendance.statusAbsent', { defaultValue: 'Absent' })}</SelectItem>
+                  <SelectItem value="HALF_DAY">{t('staffAttendance.statusHalfDay', { defaultValue: 'Half Day' })}</SelectItem>
+                  <SelectItem value="LEAVE">{t('staffAttendance.statusOnLeave', { defaultValue: 'On Leave' })}</SelectItem>
+                  <SelectItem value="HOLIDAY">{t('staffAttendance.statusHoliday', { defaultValue: 'Holiday' })}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
             <div className="space-y-1">
-              <Label className="text-xs">Notes</Label>
+              <Label className="text-xs">{t('staffAttendance.notes', { defaultValue: 'Notes' })}</Label>
               <div className="relative">
                 <MessageSquare className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
                 <Input
@@ -232,8 +234,8 @@ export default function Attendance() {
           </motion.div>
 
           <DialogFooter className="mt-4">
-            <Button variant="outline" onClick={() => setShowForm(false)}>Cancel</Button>
-            <Button onClick={save} disabled={!form.employee_id || !form.date}>Save</Button>
+            <Button variant="outline" onClick={() => setShowForm(false)}>{t('staffAttendance.cancel', { defaultValue: 'Cancel' })}</Button>
+            <Button onClick={save} disabled={!form.employee_id || !form.date}>{t('staffAttendance.save', { defaultValue: 'Save' })}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

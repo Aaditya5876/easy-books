@@ -490,6 +490,10 @@ export default function Ledger() {
           setNewEntry={setNewEntry}
           createEntry={createEntry}
           allAccounts={allAccounts}
+          onToggleHidden={isAdmin ? () => {
+            setPwDialog({ mode: 'hide', account: showAccountDetail });
+            setPwInput('');
+          } : undefined}
         />
       )}
 

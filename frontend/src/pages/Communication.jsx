@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { motion } from 'framer-motion';
 import { api, apiAuth } from '@/api/adapter';
 import { getActiveCompanyId } from '@/lib/companyContext';
@@ -25,13 +26,14 @@ import PageLoader from '../components/PageLoader';
 import EmptyState from '../components/EmptyState';
 
 const PRIORITY_CONFIG = [
-  { v: 'low',    label: '● Low',      cls: 'border-slate-300 text-slate-600', act: 'border-slate-500 bg-slate-50 text-slate-700' },
-  { v: 'medium', label: '●● Medium',  cls: 'border-yellow-400 text-yellow-700', act: 'border-yellow-500 bg-yellow-50 text-yellow-800' },
-  { v: 'high',   label: '●●● High',   cls: 'border-orange-400 text-orange-700', act: 'border-orange-500 bg-orange-50 text-orange-800' },
-  { v: 'urgent', label: '🔴 Urgent',  cls: 'border-red-400 text-red-600', act: 'border-red-500 bg-red-50 text-red-700' },
+  { v: 'low',    prefix: '●',    cls: 'border-slate-300 text-slate-600', act: 'border-slate-500 bg-slate-50 text-slate-700' },
+  { v: 'medium', prefix: '●●',   cls: 'border-yellow-400 text-yellow-700', act: 'border-yellow-500 bg-yellow-50 text-yellow-800' },
+  { v: 'high',   prefix: '●●●',  cls: 'border-orange-400 text-orange-700', act: 'border-orange-500 bg-orange-50 text-orange-800' },
+  { v: 'urgent', prefix: '🔴',   cls: 'border-red-400 text-red-600', act: 'border-red-500 bg-red-50 text-red-700' },
 ];
 
 export default function Communication() {
+  const { t } = useTranslation();
   const companyId = getActiveCompanyId();
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -74,16 +76,16 @@ export default function Communication() {
     loadData();
   }
 
-  const filtered = tasks.filter(t => {
+  const filtered = tasks.filter(task => {
     const f = colFilters;
     return (
-      (!f.title || t.title?.toLowerCase().includes(f.title.toLowerCase())) &&
-      (!f.assigned_to || (t.assigned_name || t.assigned_to || '').toLowerCase().includes(f.assigned_to.toLowerCase())) &&
-      (!f.created_date || (t.created_date ? new Date(t.created_date).toLocaleDateString() : '').includes(f.created_date)) &&
-      (!f.due_date || (t.due_date || '').includes(f.due_date)) &&
-      (!f.priority || (t.priority || '').toLowerCase().includes(f.priority.toLowerCase())) &&
-      (!f.department || (t.department || '').toLowerCase().includes(f.department.toLowerCase())) &&
-      (!f.status || (t.status || '').toLowerCase().includes(f.status.toLowerCase()))
+      (!f.title || task.title?.toLowerCase().includes(f.title.toLowerCase())) &&
+      (!f.assigned_to || (task.assigned_name || task.assigned_to || '').toLowerCase().includes(f.assigned_to.toLowerCase())) &&
+      (!f.created_date || (task.created_date ? new Date(task.created_date).toLocaleDateString() : '').includes(f.created_date)) &&
+      (!f.due_date || (task.due_date || '').includes(f.due_date)) &&
+      (!f.priority || (task.priority || '').toLowerCase().includes(f.priority.toLowerCase())) &&
+      (!f.department || (task.department || '').toLowerCase().includes(f.department.toLowerCase())) &&
+      (!f.status || (task.status || '').toLowerCase().includes(f.status.toLowerCase()))
     );
   });
 
@@ -100,50 +102,57 @@ export default function Communication() {
     completed: CheckCircle,
   };
 
+  const statusLabels = {
+    pending: t('communication.statusPending', { defaultValue: 'Pending' }),
+    in_progress: t('communication.statusInProgress', { defaultValue: 'In Progress' }),
+    completed: t('communication.statusCompleted', { defaultValue: 'Completed' }),
+    cancelled: t('communication.statusCancelled', { defaultValue: 'Cancelled' }),
+  };
+
   const taskColumns = [
-    { key: 'title', label: 'Task', filterValue: colFilters.title, onFilterChange: v => setCol('title', v), filterPlaceholder: 'Search title...', render: (row) => <span className="font-medium">{row.title}</span> },
-    { key: 'assigned_to', label: 'Assigned To', filterValue: colFilters.assigned_to, onFilterChange: v => setCol('assigned_to', v), filterPlaceholder: 'Search name...', render: (row) => (
+    { key: 'title', label: t('communication.taskLabel', { defaultValue: 'Task' }), filterValue: colFilters.title, onFilterChange: v => setCol('title', v), filterPlaceholder: t('communication.searchTitlePlaceholder', { defaultValue: 'Search title...' }), render: (row) => <span className="font-medium">{row.title}</span> },
+    { key: 'assigned_to', label: t('communication.assignedTo', { defaultValue: 'Assigned To' }), filterValue: colFilters.assigned_to, onFilterChange: v => setCol('assigned_to', v), filterPlaceholder: t('communication.searchNamePlaceholder', { defaultValue: 'Search name...' }), render: (row) => (
       <div>
         <div className="font-medium text-sm">{row.assigned_name || row.assigned_to}</div>
         {row.assigned_name && row.assigned_to && <div className="text-xs text-muted-foreground">{row.assigned_to}</div>}
       </div>
     )},
-    { key: 'department', label: 'Department', filterValue: colFilters.department, onFilterChange: v => setCol('department', v), filterPlaceholder: 'Search dept...', render: (row) => row.department || '—' },
-    { key: 'party', label: 'Party', render: (row) => row.party_name ? (
+    { key: 'department', label: t('communication.department', { defaultValue: 'Department' }), filterValue: colFilters.department, onFilterChange: v => setCol('department', v), filterPlaceholder: t('communication.searchDeptPlaceholder', { defaultValue: 'Search dept...' }), render: (row) => row.department || '—' },
+    { key: 'party', label: t('communication.party', { defaultValue: 'Party' }), render: (row) => row.party_name ? (
       <div>
         <div className="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 inline-block capitalize mb-0.5">{row.party_type}</div>
         <div className="font-medium text-sm">{row.party_name}</div>
         {row.party_contact && <div className="text-xs text-muted-foreground">{row.party_contact}</div>}
       </div>
     ) : '—' },
-    { key: 'created_date', label: 'Assigned Date', filterValue: colFilters.created_date, filterType: 'date', onFilterChange: v => setCol('created_date', v), render: (row) => row.created_date ? new Date(row.created_date).toLocaleDateString() : '—' },
-    { key: 'due_date', label: 'Due Date', filterValue: colFilters.due_date, filterType: 'date', onFilterChange: v => setCol('due_date', v), render: (row) => formatDate(row.due_date) },
-    { key: 'priority', label: 'Priority', filterValue: colFilters.priority, onFilterChange: v => setCol('priority', v), filterPlaceholder: 'e.g. high', render: (row) => (
+    { key: 'created_date', label: t('communication.assignedDate', { defaultValue: 'Assigned Date' }), filterValue: colFilters.created_date, filterType: 'date', onFilterChange: v => setCol('created_date', v), render: (row) => row.created_date ? new Date(row.created_date).toLocaleDateString() : '—' },
+    { key: 'due_date', label: t('communication.dueDate', { defaultValue: 'Due Date' }), filterValue: colFilters.due_date, filterType: 'date', onFilterChange: v => setCol('due_date', v), render: (row) => formatDate(row.due_date) },
+    { key: 'priority', label: t('communication.priority', { defaultValue: 'Priority' }), filterValue: colFilters.priority, onFilterChange: v => setCol('priority', v), filterPlaceholder: t('communication.priorityFilterPlaceholder', { defaultValue: 'e.g. high' }), render: (row) => (
       <span className={`text-xs px-2 py-0.5 rounded-full font-medium capitalize ${priorityColors[row.priority] || ''}`}>
         {row.priority}
       </span>
     )},
-    { key: 'status', label: 'Status', filterValue: colFilters.status, onFilterChange: v => setCol('status', v), filterPlaceholder: 'e.g. pending', render: (row) => {
+    { key: 'status', label: t('communication.status', { defaultValue: 'Status' }), filterValue: colFilters.status, onFilterChange: v => setCol('status', v), filterPlaceholder: t('communication.statusFilterPlaceholder', { defaultValue: 'e.g. pending' }), render: (row) => {
       const Icon = statusIcons[row.status] || Clock;
       return (
         <Select value={row.status} onValueChange={v => updateTaskStatus(row.id, v)}>
           <SelectTrigger className="w-[130px] h-8 text-xs">
             <div className="flex items-center gap-1.5">
               <Icon className="w-3 h-3" />
-              <span className="capitalize">{row.status?.replace('_', ' ')}</span>
+              <span className="capitalize">{statusLabels[row.status] || row.status?.replace('_', ' ')}</span>
             </div>
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="pending">Pending</SelectItem>
-            <SelectItem value="in_progress">In Progress</SelectItem>
-            <SelectItem value="completed">Completed</SelectItem>
-            <SelectItem value="cancelled">Cancelled</SelectItem>
+            <SelectItem value="pending">{statusLabels.pending}</SelectItem>
+            <SelectItem value="in_progress">{statusLabels.in_progress}</SelectItem>
+            <SelectItem value="completed">{statusLabels.completed}</SelectItem>
+            <SelectItem value="cancelled">{statusLabels.cancelled}</SelectItem>
           </SelectContent>
         </Select>
       );
     }},
     { key: 'actions', label: '', render: (row) => (
-      <Button variant="outline" size="sm" className="h-7 text-xs" onClick={e => { e.stopPropagation(); setSelectedTask(row); }}>View Details</Button>
+      <Button variant="outline" size="sm" className="h-7 text-xs" onClick={e => { e.stopPropagation(); setSelectedTask(row); }}>{t('communication.viewDetails', { defaultValue: 'View Details' })}</Button>
     )},
   ];
 
@@ -157,62 +166,62 @@ export default function Communication() {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <PageHeader title="Communication" subtitle="Tasks, messages & team collaboration" onAdd={() => setShowNew(true)} addLabel="New Task" />
+      <PageHeader title={t('communication.pageTitle', { defaultValue: 'Communication' })} subtitle={t('communication.pageSubtitle', { defaultValue: 'Tasks, messages & team collaboration' })} onAdd={() => setShowNew(true)} addLabel={t('communication.newTask', { defaultValue: 'New Task' })} />
 
       <div className="grid grid-cols-3 gap-4">
         <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-center">
           <p className="text-2xl font-bold text-amber-700">{taskStats.pending}</p>
-          <p className="text-xs text-amber-600">Pending</p>
+          <p className="text-xs text-amber-600">{statusLabels.pending}</p>
         </div>
         <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-center">
           <p className="text-2xl font-bold text-blue-700">{taskStats.in_progress}</p>
-          <p className="text-xs text-blue-600">In Progress</p>
+          <p className="text-xs text-blue-600">{statusLabels.in_progress}</p>
         </div>
         <div className="bg-green-50 border border-green-200 rounded-xl p-4 text-center">
           <p className="text-2xl font-bold text-green-700">{taskStats.completed}</p>
-          <p className="text-xs text-green-600">Completed</p>
+          <p className="text-xs text-green-600">{statusLabels.completed}</p>
         </div>
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList>
-          <TabsTrigger value="tasks">Task Management</TabsTrigger>
-          <TabsTrigger value="messages">Messages</TabsTrigger>
-          <TabsTrigger value="email">Email</TabsTrigger>
+          <TabsTrigger value="tasks">{t('communication.taskManagement', { defaultValue: 'Task Management' })}</TabsTrigger>
+          <TabsTrigger value="messages">{t('communication.messages', { defaultValue: 'Messages' })}</TabsTrigger>
+          <TabsTrigger value="email">{t('communication.email', { defaultValue: 'Email' })}</TabsTrigger>
         </TabsList>
         <TabsContent value="tasks" className="mt-4">
           <div className="flex justify-end mb-4">
             {Object.values(colFilters).some(v => v) && (
-              <Button variant="outline" size="sm" onClick={() => setColFilters({ title: '', assigned_to: '', department: '', created_date: '', due_date: '', priority: '', status: '' })}>Clear Filters</Button>
+              <Button variant="outline" size="sm" onClick={() => setColFilters({ title: '', assigned_to: '', department: '', created_date: '', due_date: '', priority: '', status: '' })}>{t('communication.clearFilters', { defaultValue: 'Clear Filters' })}</Button>
             )}
           </div>
           {tasks.length === 0 ? (
               <EmptyState
                 icon={MessageSquare}
-                title="No tasks yet"
-                description="Assign your first task to a team member or party."
+                title={t('communication.noTasksYet', { defaultValue: 'No tasks yet' })}
+                description={t('communication.noTasksYetHint', { defaultValue: 'Assign your first task to a team member or party.' })}
                 action={
                   <Button onClick={() => setShowNew(true)}>
-                    <Plus className="w-4 h-4 mr-2" />Add First Record
+                    <Plus className="w-4 h-4 mr-2" />{t('communication.addFirstRecord', { defaultValue: 'Add First Record' })}
                   </Button>
                 }
               />
             ) : (
-              <DataTable columns={taskColumns} data={filtered} emptyMessage="No tasks assigned yet" />
+              <DataTable columns={taskColumns} data={filtered} emptyMessage={t('communication.noTasksAssignedYet', { defaultValue: 'No tasks assigned yet' })} />
             )}
         </TabsContent>
         <TabsContent value="messages" className="mt-4">
           <div className="bg-card rounded-xl border p-12 text-center">
             <MessageSquare className="w-10 h-10 text-muted-foreground mx-auto mb-3 opacity-30" />
-            <p className="text-sm text-muted-foreground">Internal messaging coming soon</p>
-            <p className="text-xs text-muted-foreground mt-1">Team WhatsApp and chat integration</p>
+            <p className="text-sm text-muted-foreground">{t('communication.messagingComingSoon', { defaultValue: 'Internal messaging coming soon' })}</p>
+            <p className="text-xs text-muted-foreground mt-1">{t('communication.messagingComingSoonHint', { defaultValue: 'Team WhatsApp and chat integration' })}</p>
           </div>
         </TabsContent>
         <TabsContent value="email" className="mt-4">
           <div className="bg-card rounded-xl border p-12 text-center">
             <Mail className="w-10 h-10 text-muted-foreground mx-auto mb-3 opacity-30" />
-            <p className="text-sm text-muted-foreground">Email integration coming soon</p>
-            <p className="text-xs text-muted-foreground mt-1">Send and receive team emails</p>
+            <p className="text-sm text-muted-foreground">{t('communication.emailComingSoon', { defaultValue: 'Email integration coming soon' })}</p>
+            <p className="text-xs text-muted-foreground mt-1">{t('communication.emailComingSoonHint', { defaultValue: 'Send and receive team emails' })}</p>
           </div>
         </TabsContent>
       </Tabs>
@@ -225,61 +234,61 @@ export default function Communication() {
             <div className="space-y-4 text-sm overflow-y-auto flex-1 pr-1">
               <div className="grid grid-cols-2 gap-x-6 gap-y-3">
                 <div className="space-y-0.5">
-                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Assigned To</p>
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t('communication.assignedTo', { defaultValue: 'Assigned To' })}</p>
                   <p className="font-medium">{selectedTask.assigned_name || '—'}</p>
                 </div>
                 <div className="space-y-0.5">
-                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Contact</p>
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t('communication.contact', { defaultValue: 'Contact' })}</p>
                   <p className="font-medium">{selectedTask.assigned_contact || '—'}</p>
                 </div>
                 <div className="space-y-0.5">
-                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Email</p>
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t('communication.email', { defaultValue: 'Email' })}</p>
                   <p className="font-medium">{selectedTask.assigned_to || '—'}</p>
                 </div>
                 <div className="space-y-0.5">
-                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Assigned By</p>
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t('communication.assignedBy', { defaultValue: 'Assigned By' })}</p>
                   <p className="font-medium">{selectedTask.assigned_by || '—'}</p>
                 </div>
                 <div className="space-y-0.5">
-                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Assigned Date</p>
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t('communication.assignedDate', { defaultValue: 'Assigned Date' })}</p>
                   <p className="font-medium">{selectedTask.created_date ? new Date(selectedTask.created_date).toLocaleDateString() : '—'}</p>
                 </div>
                 <div className="space-y-0.5">
-                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Due Date & Time</p>
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t('communication.dueDateAndTime', { defaultValue: 'Due Date & Time' })}</p>
                   <p className="font-medium">{formatDate(selectedTask.due_date)}{selectedTask.due_time ? ' · ' + selectedTask.due_time : ''}</p>
                 </div>
                 <div className="space-y-0.5">
-                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Priority</p>
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t('communication.priority', { defaultValue: 'Priority' })}</p>
                   <span className={`inline-block text-xs px-2 py-0.5 rounded-full font-medium capitalize ${priorityColors[selectedTask.priority] || ''}`}>{selectedTask.priority}</span>
                 </div>
                 <div className="space-y-0.5">
-                   <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Party Type</p>
+                   <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t('communication.partyType', { defaultValue: 'Party Type' })}</p>
                    <p className="font-medium capitalize">{selectedTask.party_type || '—'}</p>
                 </div>
                 <div className="space-y-0.5">
-                   <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Party Name</p>
+                   <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t('communication.partyName', { defaultValue: 'Party Name' })}</p>
                    <p className="font-medium">{selectedTask.party_name || '—'}{selectedTask.party_contact ? ' · ' + selectedTask.party_contact : ''}</p>
                 </div>
                 <div className="space-y-0.5">
-                   <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Status</p>
-                  <p className="font-medium capitalize">{selectedTask.status?.replace('_', ' ')}</p>
+                   <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t('communication.status', { defaultValue: 'Status' })}</p>
+                  <p className="font-medium capitalize">{statusLabels[selectedTask.status] || selectedTask.status?.replace('_', ' ')}</p>
                 </div>
               </div>
               {selectedTask.description && (
                 <div className="border-t pt-3 space-y-1">
-                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Description</p>
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t('communication.description', { defaultValue: 'Description' })}</p>
                   <p className="text-sm leading-relaxed whitespace-pre-wrap break-words max-h-40 overflow-y-auto">{selectedTask.description}</p>
                 </div>
               )}
               {selectedTask.progress_notes && (
                 <div className="border-t pt-3 space-y-1">
-                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Progress Notes</p>
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t('communication.progressNotes', { defaultValue: 'Progress Notes' })}</p>
                   <p className="text-sm leading-relaxed whitespace-pre-wrap break-words max-h-40 overflow-y-auto">{selectedTask.progress_notes}</p>
                 </div>
               )}
             </div>
           )}
-          <DialogFooter><Button variant="outline" onClick={() => setSelectedTask(null)}>Close</Button></DialogFooter>
+          <DialogFooter><Button variant="outline" onClick={() => setSelectedTask(null)}>{t('communication.close', { defaultValue: 'Close' })}</Button></DialogFooter>
         </DialogContent>
       </Dialog>
 
@@ -289,7 +298,7 @@ export default function Communication() {
           <div className="h-1 bg-gradient-to-r from-teal-400 to-cyan-500 -mx-6 -mt-6 mb-4" />
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <ClipboardList className="w-5 h-5 text-primary" />Assign New Task
+              <ClipboardList className="w-5 h-5 text-primary" />{t('communication.assignNewTask', { defaultValue: 'Assign New Task' })}
             </DialogTitle>
           </DialogHeader>
 
@@ -302,26 +311,26 @@ export default function Communication() {
               className="space-y-3 overflow-y-auto pr-1"
             >
               <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-                <ClipboardList className="w-3.5 h-3.5" />Task Details
+                <ClipboardList className="w-3.5 h-3.5" />{t('communication.taskDetails', { defaultValue: 'Task Details' })}
               </p>
 
               {/* Title */}
               <div className="space-y-1">
-                <Label>Task Title *</Label>
+                <Label>{t('communication.taskTitleRequired', { defaultValue: 'Task Title *' })}</Label>
                 <div className="relative">
                   <Pencil className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
                   <Input
                     className="pl-8 h-9 text-sm"
                     value={form.title}
                     onChange={e => setForm({ ...form, title: e.target.value })}
-                    placeholder="Task title"
+                    placeholder={t('communication.taskTitlePlaceholder', { defaultValue: 'Task title' })}
                   />
                 </div>
               </div>
 
               {/* Description */}
               <div className="space-y-1">
-                <Label>Description</Label>
+                <Label>{t('communication.description', { defaultValue: 'Description' })}</Label>
                 <div className="relative">
                   <FileText className="absolute left-2.5 top-3 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
                   <Textarea
@@ -329,14 +338,14 @@ export default function Communication() {
                     value={form.description}
                     onChange={e => setForm({ ...form, description: e.target.value })}
                     rows={3}
-                    placeholder="Optional details..."
+                    placeholder={t('communication.optionalDetailsPlaceholder', { defaultValue: 'Optional details...' })}
                   />
                 </div>
               </div>
 
               {/* Priority chips */}
               <div className="space-y-1">
-                <Label>Priority</Label>
+                <Label>{t('communication.priority', { defaultValue: 'Priority' })}</Label>
                 <div className="grid grid-cols-2 gap-2 mt-1">
                   {PRIORITY_CONFIG.map(p => (
                     <button
@@ -345,7 +354,7 @@ export default function Communication() {
                       onClick={() => setForm({ ...form, priority: p.v })}
                       className={`sel-chip text-xs ${form.priority === p.v ? p.act + ' border-2' : p.cls + ' border opacity-75'}`}
                     >
-                      {p.label}
+                      {p.prefix} {t(`communication.priority${p.v.charAt(0).toUpperCase()}${p.v.slice(1)}`, { defaultValue: p.v.charAt(0).toUpperCase() + p.v.slice(1) })}
                     </button>
                   ))}
                 </div>
@@ -354,7 +363,7 @@ export default function Communication() {
               {/* Due Date + Due Time */}
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
-                  <Label>Due Date</Label>
+                  <Label>{t('communication.dueDate', { defaultValue: 'Due Date' })}</Label>
                   <div className="relative">
                     <Calendar className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
                     <Input
@@ -366,7 +375,7 @@ export default function Communication() {
                   </div>
                 </div>
                 <div className="space-y-1">
-                  <Label>Due Time</Label>
+                  <Label>{t('communication.dueTime', { defaultValue: 'Due Time' })}</Label>
                   <div className="relative">
                     <Clock className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
                     <Input
@@ -388,40 +397,40 @@ export default function Communication() {
               className="space-y-3 overflow-y-auto pr-1"
             >
               <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-                <Users className="w-3.5 h-3.5" />Assignment
+                <Users className="w-3.5 h-3.5" />{t('communication.assignment', { defaultValue: 'Assignment' })}
               </p>
 
               {/* Assigned To (full name) */}
               <div className="space-y-1">
-                <Label>Assigned To</Label>
+                <Label>{t('communication.assignedTo', { defaultValue: 'Assigned To' })}</Label>
                 <div className="relative">
                   <User className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
                   <Input
                     className="pl-8 h-9 text-sm"
                     value={form.assigned_name || ''}
                     onChange={e => setForm({ ...form, assigned_name: e.target.value })}
-                    placeholder="Full name"
+                    placeholder={t('communication.fullNamePlaceholder', { defaultValue: 'Full name' })}
                   />
                 </div>
               </div>
 
               {/* Contact */}
               <div className="space-y-1">
-                <Label>Contact</Label>
+                <Label>{t('communication.contact', { defaultValue: 'Contact' })}</Label>
                 <div className="relative">
                   <Phone className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
                   <Input
                     className="pl-8 h-9 text-sm"
                     value={form.assigned_contact || ''}
                     onChange={e => setForm({ ...form, assigned_contact: e.target.value })}
-                    placeholder="Phone number"
+                    placeholder={t('communication.phoneNumberPlaceholder', { defaultValue: 'Phone number' })}
                   />
                 </div>
               </div>
 
               {/* Email */}
               <div className="space-y-1">
-                <Label>Email</Label>
+                <Label>{t('communication.email', { defaultValue: 'Email' })}</Label>
                 <div className="relative">
                   <Mail className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
                   <Input
@@ -435,39 +444,39 @@ export default function Communication() {
 
               {/* Department */}
               <div className="space-y-1">
-                <Label>Department</Label>
+                <Label>{t('communication.department', { defaultValue: 'Department' })}</Label>
                 <div className="relative">
                   <Building2 className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
                   <Input
                     className="pl-8 h-9 text-sm"
                     value={form.department}
                     onChange={e => setForm({ ...form, department: e.target.value })}
-                    placeholder="e.g. Engineering, Sales"
+                    placeholder={t('communication.departmentPlaceholder', { defaultValue: 'e.g. Engineering, Sales' })}
                   />
                 </div>
               </div>
 
               {/* Party Type chips */}
               <div className="space-y-1">
-                <Label>Party Type</Label>
+                <Label>{t('communication.partyType', { defaultValue: 'Party Type' })}</Label>
                 <div className="flex gap-2 mt-1">
-                  {['client', 'vendor'].map(t => (
+                  {['client', 'vendor'].map(pt => (
                     <button
-                      key={t}
+                      key={pt}
                       type="button"
                       onClick={async () => {
-                        setForm({ ...form, party_type: t, party_name: '', party_contact: '' });
-                        if (t === 'client') {
+                        setForm({ ...form, party_type: pt, party_name: '', party_contact: '' });
+                        if (pt === 'client') {
                           const data = await api.Client.filter({ company_id: companyId });
                           setPartyOptions(data.map(c => ({ id: c.id, name: c.name, contact: c.phone || c.email || '' })));
-                        } else if (t === 'vendor') {
+                        } else if (pt === 'vendor') {
                           const data = await api.Vendor.filter({ company_id: companyId });
                           setPartyOptions(data.map(v => ({ id: v.id, name: v.name, contact: v.phone || v.email || '' })));
                         }
                       }}
-                      className={`sel-chip flex-1 capitalize text-xs ${form.party_type === t ? 'border-primary bg-primary/10 text-primary border-2' : 'border-border text-muted-foreground border opacity-70'}`}
+                      className={`sel-chip flex-1 capitalize text-xs ${form.party_type === pt ? 'border-primary bg-primary/10 text-primary border-2' : 'border-border text-muted-foreground border opacity-70'}`}
                     >
-                      {t}
+                      {pt === 'client' ? t('communication.client', { defaultValue: 'Client' }) : t('communication.vendor', { defaultValue: 'Vendor' })}
                     </button>
                   ))}
                   <button
@@ -475,7 +484,7 @@ export default function Communication() {
                     onClick={() => setForm({ ...form, party_type: '', party_name: '', party_contact: '' })}
                     className={`sel-chip flex-1 text-xs ${!form.party_type ? 'border-primary bg-primary/10 text-primary border-2' : 'border-border text-muted-foreground border opacity-70'}`}
                   >
-                    Internal
+                    {t('communication.internal', { defaultValue: 'Internal' })}
                   </button>
                 </div>
               </div>
@@ -484,12 +493,12 @@ export default function Communication() {
               {form.party_type && (
                 <div className="space-y-2">
                   <div>
-                    <Label>Select Existing {form.party_type === 'client' ? 'Client' : 'Vendor'}</Label>
+                    <Label>{t('communication.selectExisting', { defaultValue: 'Select Existing {{type}}', type: form.party_type === 'client' ? t('communication.client', { defaultValue: 'Client' }) : t('communication.vendor', { defaultValue: 'Vendor' }) })}</Label>
                     <Select value={form.party_name} onValueChange={v => {
                       const opt = partyOptions.find(o => o.name === v);
                       setForm({ ...form, party_name: v, party_contact: opt?.contact || '' });
                     }}>
-                      <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Pick from list or type below..." /></SelectTrigger>
+                      <SelectTrigger className="h-9 text-sm"><SelectValue placeholder={t('communication.pickFromListPlaceholder', { defaultValue: 'Pick from list or type below...' })} /></SelectTrigger>
                       <SelectContent>
                         {partyOptions.map(o => <SelectItem key={o.id} value={o.name}>{o.name}{o.contact ? ` · ${o.contact}` : ''}</SelectItem>)}
                       </SelectContent>
@@ -497,12 +506,12 @@ export default function Communication() {
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <Label>Name (or type new)</Label>
-                      <Input className="h-9 text-sm" value={form.party_name || ''} onChange={e => setForm({ ...form, party_name: e.target.value })} placeholder={form.party_type === 'client' ? 'Client name' : 'Vendor name'} />
+                      <Label>{t('communication.nameOrTypeNew', { defaultValue: 'Name (or type new)' })}</Label>
+                      <Input className="h-9 text-sm" value={form.party_name || ''} onChange={e => setForm({ ...form, party_name: e.target.value })} placeholder={t('communication.namePlaceholder', { defaultValue: '{{type}} name', type: form.party_type === 'client' ? t('communication.client', { defaultValue: 'Client' }) : t('communication.vendor', { defaultValue: 'Vendor' }) })} />
                     </div>
                     <div>
-                      <Label>Contact</Label>
-                      <Input className="h-9 text-sm" value={form.party_contact || ''} onChange={e => setForm({ ...form, party_contact: e.target.value })} placeholder="Phone / Email" />
+                      <Label>{t('communication.contact', { defaultValue: 'Contact' })}</Label>
+                      <Input className="h-9 text-sm" value={form.party_contact || ''} onChange={e => setForm({ ...form, party_contact: e.target.value })} placeholder={t('communication.phoneOrEmailPlaceholder', { defaultValue: 'Phone / Email' })} />
                     </div>
                   </div>
                 </div>
@@ -511,8 +520,8 @@ export default function Communication() {
           </div>
 
           <DialogFooter className="mt-4">
-            <Button variant="outline" onClick={() => setShowNew(false)}>Cancel</Button>
-            <Button onClick={createTask} disabled={!form.title}>Assign Task</Button>
+            <Button variant="outline" onClick={() => setShowNew(false)}>{t('communication.cancel', { defaultValue: 'Cancel' })}</Button>
+            <Button onClick={createTask} disabled={!form.title}>{t('communication.assignTask', { defaultValue: 'Assign Task' })}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

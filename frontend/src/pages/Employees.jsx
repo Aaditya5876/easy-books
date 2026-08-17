@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { motion } from 'framer-motion';
 import { api } from '@/api/adapter';
 import { getActiveCompanyId } from '@/lib/companyContext';
@@ -47,6 +48,7 @@ const EMPTY_FORM = {
 
 /* ── Reusable two-column dialog body ─────────────────────────────────── */
 function EmployeeFormBody({ data, onChange, errors = {} }) {
+  const { t } = useTranslation();
   return (
     <div className="grid grid-cols-2 gap-x-5 gap-y-0 mt-1">
       {/* LEFT column — Personal Info */}
@@ -57,12 +59,12 @@ function EmployeeFormBody({ data, onChange, errors = {} }) {
         className="space-y-3"
       >
         <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1.5 border-b pb-1.5 mb-2">
-          <UserCircle className="w-3.5 h-3.5" />Personal Info
+          <UserCircle className="w-3.5 h-3.5" />{t('employees.personalInfo', { defaultValue: 'Personal Info' })}
         </h4>
 
         {/* Full Name */}
         <div className="space-y-1">
-          <Label className="text-xs">Full Name *</Label>
+          <Label className="text-xs">{t('employees.fullName', { defaultValue: 'Full Name' })} *</Label>
           <div className="relative">
             <User className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
             <Input
@@ -76,7 +78,7 @@ function EmployeeFormBody({ data, onChange, errors = {} }) {
 
         {/* Phone */}
         <div className="space-y-1">
-          <Label className="text-xs">Phone</Label>
+          <Label className="text-xs">{t('employees.phone', { defaultValue: 'Phone' })}</Label>
           <div className="relative">
             <Phone className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
             <Input
@@ -89,7 +91,7 @@ function EmployeeFormBody({ data, onChange, errors = {} }) {
 
         {/* Email */}
         <div className="space-y-1">
-          <Label className="text-xs">Email</Label>
+          <Label className="text-xs">{t('employees.email', { defaultValue: 'Email' })}</Label>
           <div className="relative">
             <Mail className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
             <Input
@@ -103,7 +105,7 @@ function EmployeeFormBody({ data, onChange, errors = {} }) {
 
         {/* Address */}
         <div className="space-y-1">
-          <Label className="text-xs">Address</Label>
+          <Label className="text-xs">{t('employees.address', { defaultValue: 'Address' })}</Label>
           <div className="relative">
             <MapPin className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
             <Input
@@ -124,12 +126,12 @@ function EmployeeFormBody({ data, onChange, errors = {} }) {
         className="space-y-3"
       >
         <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1.5 border-b pb-1.5 mb-2">
-          <Briefcase className="w-3.5 h-3.5" />Employment Details
+          <Briefcase className="w-3.5 h-3.5" />{t('employees.employmentDetails', { defaultValue: 'Employment Details' })}
         </h4>
 
         {/* Employee ID */}
         <div className="space-y-1">
-          <Label className="text-xs">Employee ID *</Label>
+          <Label className="text-xs">{t('employees.employeeId', { defaultValue: 'Employee ID' })} *</Label>
           <div className="relative">
             <Hash className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
             <Input
@@ -143,7 +145,7 @@ function EmployeeFormBody({ data, onChange, errors = {} }) {
 
         {/* Department */}
         <div className="space-y-1">
-          <Label className="text-xs">Department</Label>
+          <Label className="text-xs">{t('employees.department', { defaultValue: 'Department' })}</Label>
           <div className="relative">
             <Building2 className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
             <Input
@@ -156,7 +158,7 @@ function EmployeeFormBody({ data, onChange, errors = {} }) {
 
         {/* Designation */}
         <div className="space-y-1">
-          <Label className="text-xs">Designation</Label>
+          <Label className="text-xs">{t('employees.designation', { defaultValue: 'Designation' })}</Label>
           <div className="relative">
             <Award className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
             <Input
@@ -169,7 +171,7 @@ function EmployeeFormBody({ data, onChange, errors = {} }) {
 
         {/* Date of Joining */}
         <div className="space-y-1">
-          <Label className="text-xs">Date of Joining</Label>
+          <Label className="text-xs">{t('employees.dateOfJoining', { defaultValue: 'Date of Joining' })}</Label>
           <div className="relative">
             <Calendar className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
             <Input
@@ -183,7 +185,7 @@ function EmployeeFormBody({ data, onChange, errors = {} }) {
 
         {/* Salary */}
         <div className="space-y-1">
-          <Label className="text-xs">Salary</Label>
+          <Label className="text-xs">{t('employees.salary', { defaultValue: 'Salary' })}</Label>
           <div className="flex items-stretch">
             <span className="flex items-center px-2.5 text-xs font-bold text-muted-foreground bg-muted border border-r-0 border-input rounded-l-md select-none shrink-0">
               NPR
@@ -199,13 +201,13 @@ function EmployeeFormBody({ data, onChange, errors = {} }) {
 
         {/* Status */}
         <div className="space-y-1">
-          <Label className="text-xs">Status</Label>
+          <Label className="text-xs">{t('employees.status', { defaultValue: 'Status' })}</Label>
           <Select value={data.status} onValueChange={v => onChange('status', v)}>
             <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="ACTIVE">Active</SelectItem>
-              <SelectItem value="INACTIVE">Inactive</SelectItem>
-              <SelectItem value="ON_LEAVE">On Leave</SelectItem>
+              <SelectItem value="ACTIVE">{t('employees.active', { defaultValue: 'Active' })}</SelectItem>
+              <SelectItem value="INACTIVE">{t('employees.inactive', { defaultValue: 'Inactive' })}</SelectItem>
+              <SelectItem value="ON_LEAVE">{t('employees.onLeave', { defaultValue: 'On Leave' })}</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -215,6 +217,7 @@ function EmployeeFormBody({ data, onChange, errors = {} }) {
 }
 
 export default function Employees() {
+  const { t } = useTranslation();
   const companyId = getActiveCompanyId();
   const { canEdit, canDelete } = useRole();
   const [employees, setEmployees] = useState([]);
@@ -242,8 +245,8 @@ export default function Employees() {
   // API 400 silently.
   function validateEmployee(data) {
     const errs = {};
-    if (!data.name?.trim()) errs.name = 'Full name is required';
-    if (!data.employee_id?.trim()) errs.employee_id = 'Employee ID is required';
+    if (!data.name?.trim()) errs.name = t('employees.fullNameRequired', { defaultValue: 'Full name is required' });
+    if (!data.employee_id?.trim()) errs.employee_id = t('employees.employeeIdRequired', { defaultValue: 'Employee ID is required' });
     return errs;
   }
 
@@ -251,7 +254,7 @@ export default function Employees() {
     const errs = validateEmployee(form);
     if (Object.keys(errs).length) {
       setFormErrors(errs);
-      toast.error('Please fix the highlighted fields');
+      toast.error(t('employees.fixHighlightedFields', { defaultValue: 'Please fix the highlighted fields' }));
       return;
     }
     setFormErrors({});
@@ -262,10 +265,10 @@ export default function Employees() {
       await api.Employee.create({ ...rest, company_id: companyId, basic_salary: parseFloat(salary) || 0 });
       setForm(EMPTY_FORM);
       setShowForm(false);
-      toast.success('Employee added');
+      toast.success(t('employees.employeeAdded', { defaultValue: 'Employee added' }));
       load();
     } catch (err) {
-      toast.error(err?.response?.data?.message || 'Failed to save employee');
+      toast.error(err?.response?.data?.message || t('employees.failedToSaveEmployee', { defaultValue: 'Failed to save employee' }));
     }
   }
 
@@ -274,7 +277,7 @@ export default function Employees() {
     const errs = validateEmployee(editEmployee);
     if (Object.keys(errs).length) {
       setEditErrors(errs);
-      toast.error('Please fix the highlighted fields');
+      toast.error(t('employees.fixHighlightedFields', { defaultValue: 'Please fix the highlighted fields' }));
       return;
     }
     setEditErrors({});
@@ -282,27 +285,30 @@ export default function Employees() {
     try {
       await api.Employee.update(editEmployee.id, { ...rest, basic_salary: parseFloat(salary) || 0 });
       setEditEmployee(null);
-      toast.success('Employee updated');
+      toast.success(t('employees.employeeUpdated', { defaultValue: 'Employee updated' }));
       load();
     } catch (err) {
-      toast.error(err?.response?.data?.message || 'Failed to update employee');
+      toast.error(err?.response?.data?.message || t('employees.failedToUpdateEmployee', { defaultValue: 'Failed to update employee' }));
     }
   }
 
   async function removeEmployee(emp) {
     const ok = await confirm({
-      title: 'Remove employee?',
-      description: `Remove ${emp.name}? They will no longer appear in this list (use this when a staff member or teacher leaves the school).`,
-      confirmLabel: 'Remove',
+      title: t('employees.removeEmployeeTitle', { defaultValue: 'Remove employee?' }),
+      description: t('employees.removeEmployeeDescription', {
+        defaultValue: 'Remove {{name}}? They will no longer appear in this list (use this when a staff member or teacher leaves the school).',
+        name: emp.name,
+      }),
+      confirmLabel: t('employees.remove', { defaultValue: 'Remove' }),
       variant: 'destructive',
     });
     if (!ok) return;
     try {
       await api.Employee.delete(emp.id);
-      toast.success('Employee removed');
+      toast.success(t('employees.employeeRemoved', { defaultValue: 'Employee removed' }));
       load();
     } catch (err) {
-      toast.error(err?.response?.data?.message || 'Failed to remove employee');
+      toast.error(err?.response?.data?.message || t('employees.failedToRemoveEmployee', { defaultValue: 'Failed to remove employee' }));
     }
   }
 
@@ -313,28 +319,34 @@ export default function Employees() {
     (!colFilters.status || e.status?.toLowerCase().includes(colFilters.status.toLowerCase()))
   );
 
+  const statusLabels = {
+    ACTIVE: t('employees.active', { defaultValue: 'Active' }),
+    INACTIVE: t('employees.inactive', { defaultValue: 'Inactive' }),
+    ON_LEAVE: t('employees.onLeave', { defaultValue: 'On Leave' }),
+  };
+
   const columns = [
-    { key: 'employee_id', label: 'ID' },
+    { key: 'employee_id', label: t('employees.id', { defaultValue: 'ID' }) },
     {
       key: 'name',
-      label: 'Name',
+      label: t('employees.name', { defaultValue: 'Name' }),
       filterValue: colFilters.name,
       onFilterChange: v => setCol('name', v),
       render: r => <span className="font-medium">{r.name}</span>,
     },
-    { key: 'department', label: 'Department', filterValue: colFilters.department, onFilterChange: v => setCol('department', v) },
-    { key: 'designation', label: 'Designation', filterValue: colFilters.designation, onFilterChange: v => setCol('designation', v) },
-    { key: 'phone', label: 'Phone' },
-    { key: 'date_of_joining', label: 'Joined', render: r => formatDate(r.date_of_joining) },
-    { key: 'basic_salary', label: 'Salary', render: r => r.basic_salary ? `NPR ${Number(r.basic_salary).toLocaleString()}` : '—' },
+    { key: 'department', label: t('employees.department', { defaultValue: 'Department' }), filterValue: colFilters.department, onFilterChange: v => setCol('department', v) },
+    { key: 'designation', label: t('employees.designation', { defaultValue: 'Designation' }), filterValue: colFilters.designation, onFilterChange: v => setCol('designation', v) },
+    { key: 'phone', label: t('employees.phone', { defaultValue: 'Phone' }) },
+    { key: 'date_of_joining', label: t('employees.joined', { defaultValue: 'Joined' }), render: r => formatDate(r.date_of_joining) },
+    { key: 'basic_salary', label: t('employees.salary', { defaultValue: 'Salary' }), render: r => r.basic_salary ? `NPR ${Number(r.basic_salary).toLocaleString()}` : '—' },
     {
       key: 'status',
-      label: 'Status',
+      label: t('employees.status', { defaultValue: 'Status' }),
       filterValue: colFilters.status,
       onFilterChange: v => setCol('status', v),
       render: r => (
         <span className={`text-xs px-2 py-0.5 rounded-full font-medium capitalize ${statusColors[r.status] || ''}`}>
-          {r.status?.replace('_', ' ')}
+          {statusLabels[r.status] || r.status?.replace('_', ' ')}
         </span>
       ),
     },
@@ -346,7 +358,7 @@ export default function Employees() {
           <button
             onClick={(e) => { e.stopPropagation(); removeEmployee(r); }}
             className="p-1.5 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600 transition-colors"
-            title="Remove employee"
+            title={t('employees.removeEmployeeTooltip', { defaultValue: 'Remove employee' })}
           >
             <Trash2 className="w-3.5 h-3.5" />
           </button>
@@ -360,14 +372,14 @@ export default function Employees() {
   return (
     <div className="space-y-6 animate-fade-in">
       <PageHeader
-        title="Employees"
-        subtitle="Manage employee records"
+        title={t('employees.title', { defaultValue: 'Employees' })}
+        subtitle={t('employees.subtitle', { defaultValue: 'Manage employee records' })}
         onAdd={() => setShowForm(true)}
-        addLabel="Add Employee"
+        addLabel={t('employees.addEmployee', { defaultValue: 'Add Employee' })}
       >
         {canEdit && (
           <Button variant="outline" className="gap-2" onClick={() => setImportOpen(true)}>
-            <Upload className="w-4 h-4" /> Import
+            <Upload className="w-4 h-4" /> {t('employees.import', { defaultValue: 'Import' })}
           </Button>
         )}
       </PageHeader>
@@ -376,7 +388,7 @@ export default function Employees() {
         open={importOpen}
         onClose={() => setImportOpen(false)}
         entity="employees"
-        title="Import Employees"
+        title={t('employees.importEmployees', { defaultValue: 'Import Employees' })}
         fields={EMPLOYEE_FIELDS}
         onDone={load}
       />
@@ -384,15 +396,15 @@ export default function Employees() {
       {employees.length === 0 ? (
         <EmptyState
           icon={UserCircle}
-          title="No employees yet"
-          description="Add your first employee to start tracking attendance and payroll."
-          action={<Button onClick={() => setShowForm(true)}>Add Employee</Button>}
+          title={t('employees.noEmployeesYet', { defaultValue: 'No employees yet' })}
+          description={t('employees.noEmployeesYetHint', { defaultValue: 'Add your first employee to start tracking attendance and payroll.' })}
+          action={<Button onClick={() => setShowForm(true)}>{t('employees.addEmployee', { defaultValue: 'Add Employee' })}</Button>}
         />
       ) : (
         <DataTable
           columns={columns}
           data={filtered}
-          emptyMessage="No employees match your search."
+          emptyMessage={t('employees.noEmployeesMatch', { defaultValue: 'No employees match your search.' })}
           onRowClick={canEdit ? (row) => setEditEmployee({ ...row, salary: row.basic_salary ?? '' }) : undefined}
         />
       )}
@@ -403,7 +415,7 @@ export default function Employees() {
           <div className="h-1 bg-gradient-to-r from-indigo-400 to-blue-500 -mx-6 -mt-6 mb-4" />
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <UserCircle className="w-5 h-5 text-primary" />Add Employee
+              <UserCircle className="w-5 h-5 text-primary" />{t('employees.addEmployee', { defaultValue: 'Add Employee' })}
             </DialogTitle>
           </DialogHeader>
           <EmployeeFormBody
@@ -412,8 +424,8 @@ export default function Employees() {
             errors={formErrors}
           />
           <DialogFooter className="mt-4">
-            <Button variant="outline" onClick={() => { setShowForm(false); setForm(EMPTY_FORM); setFormErrors({}); }}>Cancel</Button>
-            <Button onClick={save}>Save</Button>
+            <Button variant="outline" onClick={() => { setShowForm(false); setForm(EMPTY_FORM); setFormErrors({}); }}>{t('employees.cancel', { defaultValue: 'Cancel' })}</Button>
+            <Button onClick={save}>{t('employees.save', { defaultValue: 'Save' })}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -424,7 +436,7 @@ export default function Employees() {
           <div className="h-1 bg-gradient-to-r from-indigo-400 to-blue-500 -mx-6 -mt-6 mb-4" />
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <UserCircle className="w-5 h-5 text-primary" />Edit Employee
+              <UserCircle className="w-5 h-5 text-primary" />{t('employees.editEmployee', { defaultValue: 'Edit Employee' })}
             </DialogTitle>
           </DialogHeader>
           {editEmployee && (
@@ -435,8 +447,8 @@ export default function Employees() {
             />
           )}
           <DialogFooter className="mt-4">
-            <Button variant="outline" onClick={() => { setEditEmployee(null); setEditErrors({}); }}>Cancel</Button>
-            {canEdit && <Button onClick={updateEmployee}>Save Changes</Button>}
+            <Button variant="outline" onClick={() => { setEditEmployee(null); setEditErrors({}); }}>{t('employees.cancel', { defaultValue: 'Cancel' })}</Button>
+            {canEdit && <Button onClick={updateEmployee}>{t('employees.saveChanges', { defaultValue: 'Save Changes' })}</Button>}
           </DialogFooter>
         </DialogContent>
       </Dialog>

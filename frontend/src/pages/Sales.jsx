@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { api } from '@/api/adapter';
 import { memoApi } from '@/api';
 import { getActiveCompanyId } from '@/lib/companyContext';
@@ -37,6 +38,7 @@ const EMPTY_FORM = {
 };
 
 export default function Sales() {
+  const { t } = useTranslation();
   const companyId = getActiveCompanyId();
   const [orders, setOrders] = useState([]);
   const [inventory, setInventory] = useState([]);
@@ -213,9 +215,9 @@ export default function Sales() {
     if (form.attachments?.length > 0) {
       await memoApi.create({
         companyId,
-        title: `Sales Bill - ${form.client_name || 'Unknown Client'} - ${form.invoice_number || new Date().toLocaleDateString()}`,
+        title: `Sales Bill - ${form.client_name || t('sales.unknownClient', { defaultValue: 'Unknown Client' })} - ${form.invoice_number || new Date().toLocaleDateString()}`,
         type: 'sales_bill',
-        content: `Auto-saved from Sales entry. Order: ${form.invoice_number}`,
+        content: t('sales.autoSavedMemoContent', { defaultValue: `Auto-saved from Sales entry. Order: ${form.invoice_number}`, invoiceNumber: form.invoice_number }),
         files: form.attachments,
       }).catch(() => {});
     }
@@ -230,6 +232,25 @@ export default function Sales() {
     if (shouldPrint) {
       const total = subtotal + vatAmount;
       const win = window.open('', '_blank');
+      const printLabels = {
+        invoiceTitle: form.is_vat ? t('sales.printTaxInvoice', { defaultValue: 'TAX INVOICE' }) : t('sales.printInvoice', { defaultValue: 'INVOICE' }),
+        invoiceNo: t('sales.printInvoiceNo', { defaultValue: 'Invoice #:' }),
+        date: t('sales.printDate', { defaultValue: 'Date:' }),
+        due: t('sales.printDue', { defaultValue: 'Due:' }),
+        client: t('sales.printClient', { defaultValue: 'Client:' }),
+        panVat: t('sales.printPanVat', { defaultValue: 'PAN/VAT:' }),
+        work: t('sales.printWork', { defaultValue: 'Work:' }),
+        colNo: t('sales.printColNo', { defaultValue: '#' }),
+        colDescription: t('sales.printColDescription', { defaultValue: 'Description' }),
+        colQty: t('sales.printColQty', { defaultValue: 'Qty' }),
+        colUnitPrice: t('sales.printColUnitPrice', { defaultValue: 'Unit Price' }),
+        colTotal: t('sales.printColTotal', { defaultValue: 'Total' }),
+        labor: t('sales.printLabor', { defaultValue: 'Labor:' }),
+        vatLine: t('sales.printVatLine', { defaultValue: 'VAT (13%):' }),
+        total: t('sales.printTotal', { defaultValue: 'TOTAL:' }),
+        taxInvoiceFooter: t('sales.printTaxInvoiceFooter', { defaultValue: 'Tax Invoice' }),
+        notes: t('sales.printNotes', { defaultValue: 'Notes:' }),
+      };
       win.document.write(`<html><head><title>Invoice ${form.invoice_number}</title><style>
         body{font-family:sans-serif;padding:32px;color:#111}h1{font-size:22px;margin:0}
         table{width:100%;border-collapse:collapse;margin-top:16px}
@@ -238,20 +259,20 @@ export default function Sales() {
         .header{display:flex;justify-content:space-between;margin-bottom:24px}
       </style></head><body>
       <div class='header'>
-        <div><h1>${form.is_vat ? 'TAX INVOICE' : 'INVOICE'}</h1><div class='meta'>Invoice #: <b>${form.invoice_number}</b></div><div class='meta'>Date: ${entryDate} | BS: ${bsDate.formatted}</div>${form.due_date ? `<div class='meta'>Due: ${form.due_date}</div>` : ''}</div>
-        <div style='text-align:right'><div class='meta'>Client: <b>${form.client_name}</b></div><div class='meta'>${form.client_contact || ''}</div><div class='meta'>${form.client_address || ''}</div>${form.client_pan ? `<div class='meta'>PAN/VAT: ${form.client_pan}</div>` : ''}</div>
+        <div><h1>${printLabels.invoiceTitle}</h1><div class='meta'>${printLabels.invoiceNo} <b>${form.invoice_number}</b></div><div class='meta'>${printLabels.date} ${entryDate} | BS: ${bsDate.formatted}</div>${form.due_date ? `<div class='meta'>${printLabels.due} ${form.due_date}</div>` : ''}</div>
+        <div style='text-align:right'><div class='meta'>${printLabels.client} <b>${form.client_name}</b></div><div class='meta'>${form.client_contact || ''}</div><div class='meta'>${form.client_address || ''}</div>${form.client_pan ? `<div class='meta'>${printLabels.panVat} ${form.client_pan}</div>` : ''}</div>
       </div>
-      ${form.labor_items.some(li => li.description) ? `<div class='meta' style='margin-bottom:12px'>Work: ${form.labor_items.map(li => li.description).filter(Boolean).join('; ')}</div>` : ''}
-      <table><thead><tr><th>#</th><th>Description</th><th>Qty</th><th>Unit Price</th><th>Total</th></tr></thead><tbody>
+      ${form.labor_items.some(li => li.description) ? `<div class='meta' style='margin-bottom:12px'>${printLabels.work} ${form.labor_items.map(li => li.description).filter(Boolean).join('; ')}</div>` : ''}
+      <table><thead><tr><th>${printLabels.colNo}</th><th>${printLabels.colDescription}</th><th>${printLabels.colQty}</th><th>${printLabels.colUnitPrice}</th><th>${printLabels.colTotal}</th></tr></thead><tbody>
         ${form.items.map((item, i) => `<tr><td>${i + 1}</td><td>${item.description || '-'}</td><td>${item.quantity}</td><td>NPR ${(item.unit_price || 0).toLocaleString()}</td><td>NPR ${(item.total || 0).toLocaleString()}</td></tr>`).join('')}
       </tbody></table>
       <div style='margin-top:16px;text-align:right'>
-        ${totalLabor > 0 ? `<div class='meta'>Labor: NPR ${totalLabor.toLocaleString()}</div>` : ''}
-        ${form.is_vat ? `<div class='meta'>VAT (13%): NPR ${vatAmount.toLocaleString()}</div>` : ''}
-        <div style='font-weight:bold;font-size:15px;margin-top:8px'>TOTAL: NPR ${total.toLocaleString()}</div>
-        ${form.is_vat ? `<div class='meta'>Tax Invoice</div>` : ''}
+        ${totalLabor > 0 ? `<div class='meta'>${printLabels.labor} NPR ${totalLabor.toLocaleString()}</div>` : ''}
+        ${form.is_vat ? `<div class='meta'>${printLabels.vatLine} NPR ${vatAmount.toLocaleString()}</div>` : ''}
+        <div style='font-weight:bold;font-size:15px;margin-top:8px'>${printLabels.total} NPR ${total.toLocaleString()}</div>
+        ${form.is_vat ? `<div class='meta'>${printLabels.taxInvoiceFooter}</div>` : ''}
       </div>
-      ${form.notes ? `<div class='meta' style='margin-top:16px;padding-top:12px;border-top:1px solid #eee'>Notes: ${form.notes}</div>` : ''}
+      ${form.notes ? `<div class='meta' style='margin-top:16px;padding-top:12px;border-top:1px solid #eee'>${printLabels.notes} ${form.notes}</div>` : ''}
       </body></html>`);
       win.document.close();
       win.print();
@@ -271,22 +292,28 @@ export default function Sales() {
   const subtotal = itemsSubtotal + totalLabor;
   const vatAmount = form.is_vat ? subtotal * 0.13 : 0;
 
+  const paymentTypeLabels = {
+    cash: t('sales.paymentTypeCash', { defaultValue: 'Cash' }),
+    cheque: t('sales.paymentTypeCheque', { defaultValue: 'Cheque' }),
+    credit: t('sales.paymentTypeCredit', { defaultValue: 'Credit' }),
+  };
+
   const columns = [
     {
-      key: 'date_ad', label: 'Date', render: (row) => (
+      key: 'date_ad', label: t('sales.colDate', { defaultValue: 'Date' }), render: (row) => (
         <div className="text-xs">
           <div>{formatDate(row.date_ad)}</div>
           <div className="text-muted-foreground">{row.date_bs}</div>
         </div>
       ),
     },
-    { key: 'invoice_number', label: 'Invoice #', filterValue: colFilters.invoice_number, onFilterChange: v => setCol('invoice_number', v) },
-    { key: 'client_name', label: 'Client', filterValue: colFilters.client_name, onFilterChange: v => setCol('client_name', v), render: (row) => <span className="font-medium">{row.client_name}</span> },
-    { key: 'items', label: 'Items', render: (row) => <span>{row.items?.length || 0} items</span> },
-    { key: 'payment_type', label: 'Payment', render: (row) => <Badge variant="outline" className="capitalize">{row.payment_type || 'cash'}</Badge> },
-    { key: 'is_vat', label: 'VAT', render: (row) => <Badge variant={row.is_vat ? 'default' : 'secondary'}>{row.is_vat ? 'VAT' : 'Non-VAT'}</Badge> },
-    { key: 'total_amount', label: 'Total', render: (row) => <span className="font-semibold font-mono">NPR {(row.total_amount || 0).toLocaleString()}</span> },
-    { key: 'status', label: 'Status', filterValue: colFilters.status, onFilterChange: v => setCol('status', v), filterPlaceholder: 'e.g. confirmed', render: (row) => <Badge>{row.status}</Badge> },
+    { key: 'invoice_number', label: t('sales.colInvoiceNumber', { defaultValue: 'Invoice #' }), filterValue: colFilters.invoice_number, onFilterChange: v => setCol('invoice_number', v) },
+    { key: 'client_name', label: t('sales.colClient', { defaultValue: 'Client' }), filterValue: colFilters.client_name, onFilterChange: v => setCol('client_name', v), render: (row) => <span className="font-medium">{row.client_name}</span> },
+    { key: 'items', label: t('sales.colItems', { defaultValue: 'Items' }), render: (row) => <span>{t('sales.itemsCount', { defaultValue: `${row.items?.length || 0} items`, count: row.items?.length || 0 })}</span> },
+    { key: 'payment_type', label: t('sales.colPayment', { defaultValue: 'Payment' }), render: (row) => <Badge variant="outline" className="capitalize">{paymentTypeLabels[row.payment_type] || paymentTypeLabels.cash}</Badge> },
+    { key: 'is_vat', label: t('sales.colVat', { defaultValue: 'VAT' }), render: (row) => <Badge variant={row.is_vat ? 'default' : 'secondary'}>{row.is_vat ? t('sales.vatBadge', { defaultValue: 'VAT' }) : t('sales.nonVatBadge', { defaultValue: 'Non-VAT' })}</Badge> },
+    { key: 'total_amount', label: t('sales.colTotal', { defaultValue: 'Total' }), render: (row) => <span className="font-semibold font-mono">NPR {(row.total_amount || 0).toLocaleString()}</span> },
+    { key: 'status', label: t('sales.colStatus', { defaultValue: 'Status' }), filterValue: colFilters.status, onFilterChange: v => setCol('status', v), filterPlaceholder: t('sales.statusFilterPlaceholder', { defaultValue: 'e.g. confirmed' }), render: (row) => <Badge>{row.status}</Badge> },
   ];
 
   if (loading) return <PageLoader />;
@@ -294,23 +321,23 @@ export default function Sales() {
   return (
     <div className="space-y-6 animate-fade-in">
       <PageHeader
-        title="Sales"
-        subtitle="Sales orders and invoices"
+        title={t('sales.title', { defaultValue: 'Sales' })}
+        subtitle={t('sales.subtitle', { defaultValue: 'Sales orders and invoices' })}
         searchValue={search}
         onSearchChange={setSearch}
         onAdd={openNewSale}
-        addLabel="New Sale"
+        addLabel={t('sales.newSale', { defaultValue: 'New Sale' })}
       />
 
       {orders.length === 0 ? (
         <EmptyState
           icon={Receipt}
-          title="No sales orders yet"
-          description="Create your first invoice to get started."
-          action={<Button onClick={openNewSale}>New Sale</Button>}
+          title={t('sales.emptyTitle', { defaultValue: 'No sales orders yet' })}
+          description={t('sales.emptyDescription', { defaultValue: 'Create your first invoice to get started.' })}
+          action={<Button onClick={openNewSale}>{t('sales.newSale', { defaultValue: 'New Sale' })}</Button>}
         />
       ) : (
-        <DataTable columns={columns} data={filtered} emptyMessage="No sales orders match your search." />
+        <DataTable columns={columns} data={filtered} emptyMessage={t('sales.noSearchMatch', { defaultValue: 'No sales orders match your search.' })} />
       )}
 
       {/* New Sale Dialog — two-column layout */}
@@ -319,7 +346,7 @@ export default function Sales() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Receipt className="w-5 h-5 text-primary" />
-              New Sales Entry
+              {t('sales.newSalesEntry', { defaultValue: 'New Sales Entry' })}
             </DialogTitle>
           </DialogHeader>
 
@@ -330,13 +357,13 @@ export default function Sales() {
 
               {/* Client Details */}
               <div>
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Client Details</p>
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">{t('sales.clientDetails', { defaultValue: 'Client Details' })}</p>
                 <div className="space-y-3">
                   <div>
-                    <Label className="text-xs">Select Saved Client</Label>
+                    <Label className="text-xs">{t('sales.selectSavedClient', { defaultValue: 'Select Saved Client' })}</Label>
                     <Select onValueChange={selectClientFromDropdown}>
                       <SelectTrigger>
-                        <SelectValue placeholder="Select saved client (or type below)" />
+                        <SelectValue placeholder={t('sales.selectSavedClientPlaceholder', { defaultValue: 'Select saved client (or type below)' })} />
                       </SelectTrigger>
                       <SelectContent>
                         {clients.map(c => (
@@ -346,38 +373,38 @@ export default function Sales() {
                     </Select>
                   </div>
                   <div>
-                    <Label className="text-xs">Client Name *</Label>
-                    <Input value={form.client_name} onChange={e => setForm({ ...form, client_name: e.target.value })} placeholder="Full name or business name" />
+                    <Label className="text-xs">{t('sales.clientNameRequired', { defaultValue: 'Client Name *' })}</Label>
+                    <Input value={form.client_name} onChange={e => setForm({ ...form, client_name: e.target.value })} placeholder={t('sales.clientNamePlaceholder', { defaultValue: 'Full name or business name' })} />
                   </div>
                   <div>
-                    <Label className="text-xs">Contact <span className="text-muted-foreground">(optional)</span></Label>
-                    <Input value={form.client_contact} onChange={e => setForm({ ...form, client_contact: e.target.value })} placeholder="Phone number" />
+                    <Label className="text-xs">{t('sales.contact', { defaultValue: 'Contact' })} <span className="text-muted-foreground">({t('sales.optional', { defaultValue: 'optional' })})</span></Label>
+                    <Input value={form.client_contact} onChange={e => setForm({ ...form, client_contact: e.target.value })} placeholder={t('sales.phoneNumberPlaceholder', { defaultValue: 'Phone number' })} />
                   </div>
                   <div>
-                    <Label className="text-xs">Address <span className="text-muted-foreground">(optional)</span></Label>
-                    <Input value={form.client_address} onChange={e => setForm({ ...form, client_address: e.target.value })} placeholder="City / address" />
+                    <Label className="text-xs">{t('sales.address', { defaultValue: 'Address' })} <span className="text-muted-foreground">({t('sales.optional', { defaultValue: 'optional' })})</span></Label>
+                    <Input value={form.client_address} onChange={e => setForm({ ...form, client_address: e.target.value })} placeholder={t('sales.cityAddressPlaceholder', { defaultValue: 'City / address' })} />
                   </div>
                   <div>
-                    <Label className="text-xs">PAN / VAT No. <span className="text-muted-foreground">(optional)</span></Label>
-                    <Input value={form.client_pan} onChange={e => setForm({ ...form, client_pan: e.target.value })} placeholder="e.g. 123456789" />
+                    <Label className="text-xs">{t('sales.panVatNo', { defaultValue: 'PAN / VAT No.' })} <span className="text-muted-foreground">({t('sales.optional', { defaultValue: 'optional' })})</span></Label>
+                    <Input value={form.client_pan} onChange={e => setForm({ ...form, client_pan: e.target.value })} placeholder={t('sales.panVatPlaceholder', { defaultValue: 'e.g. 123456789' })} />
                   </div>
                 </div>
               </div>
 
               {/* Invoice Details */}
               <div>
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Invoice Details</p>
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">{t('sales.invoiceDetails', { defaultValue: 'Invoice Details' })}</p>
                 <div className="space-y-3">
                   <div>
-                    <Label className="text-xs">Invoice Date *</Label>
+                    <Label className="text-xs">{t('sales.invoiceDateRequired', { defaultValue: 'Invoice Date *' })}</Label>
                     <Input type="date" value={form.date_ad} onChange={e => setForm({ ...form, date_ad: e.target.value })} />
                   </div>
                   <div>
-                    <Label className="text-xs">Invoice Number</Label>
+                    <Label className="text-xs">{t('sales.invoiceNumber', { defaultValue: 'Invoice Number' })}</Label>
                     <Input value={form.invoice_number} onChange={e => setForm({ ...form, invoice_number: e.target.value })} />
                   </div>
                   <div>
-                    <Label className="text-xs">Due Date <span className="text-muted-foreground">(credit)</span></Label>
+                    <Label className="text-xs">{t('sales.dueDate', { defaultValue: 'Due Date' })} <span className="text-muted-foreground">({t('sales.credit', { defaultValue: 'credit' })})</span></Label>
                     <Input type="date" value={form.due_date} onChange={e => setForm({ ...form, due_date: e.target.value })} />
                   </div>
                 </div>
@@ -385,7 +412,7 @@ export default function Sales() {
 
               {/* Payment Type */}
               <div>
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Payment</p>
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">{t('sales.payment', { defaultValue: 'Payment' })}</p>
                 <div className="flex gap-3">
                   {['cash', 'cheque', 'credit'].map(type => (
                     <label key={type} className="flex items-center gap-1.5 cursor-pointer">
@@ -397,7 +424,7 @@ export default function Sales() {
                         onChange={() => setForm({ ...form, payment_type: type })}
                         className="accent-primary"
                       />
-                      <span className="text-sm capitalize">{type}</span>
+                      <span className="text-sm capitalize">{paymentTypeLabels[type]}</span>
                     </label>
                   ))}
                 </div>
@@ -412,7 +439,7 @@ export default function Sales() {
                     setForm({ ...form, is_vat: v, invoice_number: nextInvoice });
                   }}
                 />
-                <Label>VAT Bill (13%)</Label>
+                <Label>{t('sales.vatBillLabel', { defaultValue: 'VAT Bill (13%)' })}</Label>
               </div>
             </div>
 
@@ -422,21 +449,21 @@ export default function Sales() {
               {/* Items */}
               <div>
                 <div className="flex justify-between items-center mb-2">
-                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Items</p>
-                  <Button size="sm" variant="outline" onClick={addItem}><Plus className="w-3 h-3 mr-1" />Add Item</Button>
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t('sales.items', { defaultValue: 'Items' })}</p>
+                  <Button size="sm" variant="outline" onClick={addItem}><Plus className="w-3 h-3 mr-1" />{t('sales.addItem', { defaultValue: 'Add Item' })}</Button>
                 </div>
                 <div className="space-y-2">
                   {form.items.map((item, idx) => (
                     <div key={idx} className="grid grid-cols-12 gap-2 items-end p-3 bg-secondary/50 rounded-lg">
                       <div className="col-span-4">
-                        {idx === 0 && <Label className="text-xs">From Inventory / Description</Label>}
+                        {idx === 0 && <Label className="text-xs">{t('sales.fromInventoryOrDescription', { defaultValue: 'From Inventory / Description' })}</Label>}
                         <Select
                           value={item.inventory_item_id || 'custom'}
                           onValueChange={v => v === 'custom' ? updateItem(idx, 'inventory_item_id', '') : selectInventoryItem(idx, v)}
                         >
-                          <SelectTrigger><SelectValue placeholder="Select item" /></SelectTrigger>
+                          <SelectTrigger><SelectValue placeholder={t('sales.selectItemPlaceholder', { defaultValue: 'Select item' })} /></SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="custom">Custom Item</SelectItem>
+                            <SelectItem value="custom">{t('sales.customItem', { defaultValue: 'Custom Item' })}</SelectItem>
                             {inventory.map(inv => (
                               <SelectItem key={inv.id} value={inv.id}>{inv.description} ({inv.quantity} {inv.unit})</SelectItem>
                             ))}
@@ -444,19 +471,19 @@ export default function Sales() {
                         </Select>
                       </div>
                       <div className="col-span-2">
-                        {idx === 0 && <Label className="text-xs">Description</Label>}
-                        <Input value={item.description} onChange={e => updateItem(idx, 'description', e.target.value)} placeholder="Name" />
+                        {idx === 0 && <Label className="text-xs">{t('sales.description', { defaultValue: 'Description' })}</Label>}
+                        <Input value={item.description} onChange={e => updateItem(idx, 'description', e.target.value)} placeholder={t('sales.namePlaceholder', { defaultValue: 'Name' })} />
                       </div>
                       <div className="col-span-1">
-                        {idx === 0 && <Label className="text-xs">Qty</Label>}
+                        {idx === 0 && <Label className="text-xs">{t('sales.qty', { defaultValue: 'Qty' })}</Label>}
                         <SmartNumberInput value={item.quantity} onChange={e => updateItem(idx, 'quantity', parseInt(e.target.value) || 0)} />
                       </div>
                       <div className="col-span-2">
-                        {idx === 0 && <Label className="text-xs">Unit Price</Label>}
+                        {idx === 0 && <Label className="text-xs">{t('sales.unitPrice', { defaultValue: 'Unit Price' })}</Label>}
                         <SmartNumberInput value={item.unit_price} onChange={e => updateItem(idx, 'unit_price', parseFloat(e.target.value) || 0)} />
                       </div>
                       <div className="col-span-2">
-                        {idx === 0 && <Label className="text-xs">Total</Label>}
+                        {idx === 0 && <Label className="text-xs">{t('sales.total', { defaultValue: 'Total' })}</Label>}
                         <Input value={`NPR ${(item.total || 0).toLocaleString()}`} disabled className="font-mono" />
                       </div>
                       <div className="col-span-1 flex justify-end">
@@ -472,18 +499,18 @@ export default function Sales() {
               {/* Labour Charges */}
               <div>
                 <div className="flex justify-between items-center mb-2">
-                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Work / Labour Charges</p>
-                  <Button size="sm" variant="outline" onClick={addLaborItem}><Plus className="w-3 h-3 mr-1" />Add Row</Button>
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t('sales.workLabourCharges', { defaultValue: 'Work / Labour Charges' })}</p>
+                  <Button size="sm" variant="outline" onClick={addLaborItem}><Plus className="w-3 h-3 mr-1" />{t('sales.addRow', { defaultValue: 'Add Row' })}</Button>
                 </div>
                 <div className="space-y-2">
                   {form.labor_items.map((li, idx) => (
                     <div key={idx} className="grid grid-cols-12 gap-2 items-end p-3 bg-secondary/50 rounded-lg">
                       <div className="col-span-7">
-                        {idx === 0 && <Label className="text-xs">Work Description</Label>}
-                        <Input value={li.description} onChange={e => updateLaborItem(idx, 'description', e.target.value)} placeholder="e.g. Installation, Repair..." />
+                        {idx === 0 && <Label className="text-xs">{t('sales.workDescription', { defaultValue: 'Work Description' })}</Label>}
+                        <Input value={li.description} onChange={e => updateLaborItem(idx, 'description', e.target.value)} placeholder={t('sales.workDescriptionPlaceholder', { defaultValue: 'e.g. Installation, Repair...' })} />
                       </div>
                       <div className="col-span-3">
-                        {idx === 0 && <Label className="text-xs">Amount (NPR)</Label>}
+                        {idx === 0 && <Label className="text-xs">{t('sales.amountNpr', { defaultValue: 'Amount (NPR)' })}</Label>}
                         <SmartNumberInput value={li.amount} onChange={e => updateLaborItem(idx, 'amount', parseFloat(e.target.value) || 0)} />
                       </div>
                       <div className="col-span-2 flex justify-end">
@@ -499,44 +526,44 @@ export default function Sales() {
               {/* Summary */}
               <div className="bg-secondary rounded-lg p-4 space-y-2">
                 <div className="flex justify-between text-sm">
-                  <span>Items Subtotal</span>
+                  <span>{t('sales.itemsSubtotal', { defaultValue: 'Items Subtotal' })}</span>
                   <span className="font-mono">NPR {itemsSubtotal.toLocaleString()}</span>
                 </div>
                 {totalLabor > 0 && (
                   <div className="flex justify-between text-sm">
-                    <span>Labour Total</span>
+                    <span>{t('sales.labourTotal', { defaultValue: 'Labour Total' })}</span>
                     <span className="font-mono">NPR {totalLabor.toLocaleString()}</span>
                   </div>
                 )}
                 {form.is_vat && (
                   <div className="flex justify-between text-sm">
-                    <span>VAT (13%)</span>
+                    <span>{t('sales.vatPercent', { defaultValue: 'VAT (13%)' })}</span>
                     <span className="font-mono">NPR {vatAmount.toLocaleString()}</span>
                   </div>
                 )}
                 <div className="flex justify-between font-bold border-t pt-2">
-                  <span>Total</span>
+                  <span>{t('sales.total', { defaultValue: 'Total' })}</span>
                   <span className="font-mono">NPR {(subtotal + vatAmount).toLocaleString()}</span>
                 </div>
               </div>
 
               {/* Notes */}
               <div>
-                <Label className="text-xs">Notes / Remarks <span className="text-muted-foreground">(optional)</span></Label>
+                <Label className="text-xs">{t('sales.notesRemarks', { defaultValue: 'Notes / Remarks' })} <span className="text-muted-foreground">({t('sales.optional', { defaultValue: 'optional' })})</span></Label>
                 <Input
                   value={form.notes}
                   onChange={e => setForm({ ...form, notes: e.target.value })}
-                  placeholder="Special instructions, payment terms..."
+                  placeholder={t('sales.notesPlaceholder', { defaultValue: 'Special instructions, payment terms...' })}
                 />
               </div>
 
               {/* Attachments */}
               <div>
-                <Label className="text-xs font-medium">Attachments</Label>
+                <Label className="text-xs font-medium">{t('sales.attachments', { defaultValue: 'Attachments' })}</Label>
                 <FileAttachmentZone
                   files={form.attachments || []}
                   onChange={(files) => setForm({ ...form, attachments: files })}
-                  label="Attach invoices, receipts or photos"
+                  label={t('sales.attachmentsHint', { defaultValue: 'Attach invoices, receipts or photos' })}
                   className="mt-1"
                 />
               </div>
@@ -544,9 +571,9 @@ export default function Sales() {
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowNew(false)}>Cancel</Button>
-            <Button onClick={() => createOrder(false)} disabled={!form.client_name} variant="secondary">Save Sale</Button>
-            <Button onClick={() => createOrder(true)} disabled={!form.client_name}>Save &amp; Print</Button>
+            <Button variant="outline" onClick={() => setShowNew(false)}>{t('sales.cancel', { defaultValue: 'Cancel' })}</Button>
+            <Button onClick={() => createOrder(false)} disabled={!form.client_name} variant="secondary">{t('sales.saveSale', { defaultValue: 'Save Sale' })}</Button>
+            <Button onClick={() => createOrder(true)} disabled={!form.client_name}>{t('sales.saveAndPrint', { defaultValue: 'Save & Print' })}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

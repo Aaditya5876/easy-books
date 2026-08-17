@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { api } from '@/api/adapter';
 import { quotationApi } from '@/api';
 import { getActiveCompanyId } from '@/lib/companyContext';
@@ -43,6 +44,7 @@ const EMPTY_FORM = {
 };
 
 export default function Quotations() {
+  const { t } = useTranslation();
   const { canEdit } = useRole();
   const companyId = getActiveCompanyId();
   const [quotations, setQuotations] = useState([]);
@@ -55,6 +57,42 @@ export default function Quotations() {
   const [converting, setConverting] = useState(null);
   const [form, setForm] = useState(EMPTY_FORM);
   const [editQuotation, setEditQuotation] = useState(null);
+
+  const STATUS_LABEL_KEYS = {
+    pending: ['quotations.statusPending', 'Pending'],
+    sent: ['quotations.statusSent', 'Sent'],
+    accepted: ['quotations.statusAccepted', 'Accepted'],
+    rejected: ['quotations.statusRejected', 'Rejected'],
+    expired: ['quotations.statusExpired', 'Expired'],
+  };
+  const statusLabel = (s) => {
+    const entry = STATUS_LABEL_KEYS[s];
+    return entry ? t(entry[0], { defaultValue: entry[1] }) : s;
+  };
+
+  const UNIT_LABEL_KEYS = {
+    Piece: ['quotations.unitPiece', 'Piece'],
+    Set: ['quotations.unitSet', 'Set'],
+    Liter: ['quotations.unitLiter', 'Liter'],
+    ml: ['quotations.unitMl', 'ml'],
+    Kg: ['quotations.unitKg', 'Kg'],
+    gm: ['quotations.unitGm', 'gm'],
+    NOS: ['quotations.unitNos', 'NOS'],
+  };
+  const unitLabel = (u) => {
+    const entry = UNIT_LABEL_KEYS[u];
+    return entry ? t(entry[0], { defaultValue: entry[1] }) : u;
+  };
+
+  const PAYMENT_LABEL_KEYS = {
+    cash: ['quotations.paymentCash', 'Cash'],
+    cheque: ['quotations.paymentCheque', 'Cheque'],
+    credit: ['quotations.paymentCredit', 'Credit'],
+  };
+  const paymentLabel = (p) => {
+    const entry = PAYMENT_LABEL_KEYS[p];
+    return entry ? t(entry[0], { defaultValue: entry[1] }) : p;
+  };
 
   useEffect(() => {
     if (companyId) loadData();
@@ -252,7 +290,7 @@ export default function Quotations() {
       await quotationApi.convert(quotation.id);
       await loadData();
     } catch (err) {
-      alert(err?.response?.data?.message || 'Failed to convert quotation to sale');
+      alert(err?.response?.data?.message || t('quotations.convertFailed', { defaultValue: 'Failed to convert quotation to sale' }));
     } finally {
       setConverting(null);
     }
@@ -279,24 +317,24 @@ export default function Quotations() {
 
   const columns = [
     {
-      key: 'date_ad', label: 'Date', render: (row) => (
+      key: 'date_ad', label: t('quotations.date', { defaultValue: 'Date' }), render: (row) => (
         <div className="text-xs">
           <div>{formatDate(row.date_ad)}</div>
           <div className="text-muted-foreground">{row.date_bs}</div>
         </div>
       ),
     },
-    { key: 'quotation_number', label: 'Quote #', filterValue: colFilters.quotation_number, onFilterChange: v => setCol('quotation_number', v) },
-    { key: 'client_name', label: 'Client', filterValue: colFilters.client_name, onFilterChange: v => setCol('client_name', v), render: (row) => <span className="font-medium">{row.client_name}</span> },
+    { key: 'quotation_number', label: t('quotations.quoteNumber', { defaultValue: 'Quote #' }), filterValue: colFilters.quotation_number, onFilterChange: v => setCol('quotation_number', v) },
+    { key: 'client_name', label: t('quotations.client', { defaultValue: 'Client' }), filterValue: colFilters.client_name, onFilterChange: v => setCol('client_name', v), render: (row) => <span className="font-medium">{row.client_name}</span> },
     {
-      key: 'valid_until', label: 'Valid Until', render: (row) => row.valid_until
+      key: 'valid_until', label: t('quotations.validUntil', { defaultValue: 'Valid Until' }), render: (row) => row.valid_until
         ? <span className="text-xs font-mono">{row.valid_until}</span>
         : <span className="text-muted-foreground text-xs">—</span>,
     },
-    { key: 'is_vat', label: 'VAT', render: (row) => <Badge variant={row.is_vat ? 'default' : 'secondary'}>{row.is_vat ? 'VAT' : 'Non-VAT'}</Badge> },
-    { key: 'total_amount', label: 'Total', render: (row) => <span className="font-semibold font-mono">NPR {(row.total_amount || 0).toLocaleString()}</span> },
+    { key: 'is_vat', label: t('quotations.vat', { defaultValue: 'VAT' }), render: (row) => <Badge variant={row.is_vat ? 'default' : 'secondary'}>{row.is_vat ? t('quotations.vatLabel', { defaultValue: 'VAT' }) : t('quotations.nonVatLabel', { defaultValue: 'Non-VAT' })}</Badge> },
+    { key: 'total_amount', label: t('quotations.total', { defaultValue: 'Total' }), render: (row) => <span className="font-semibold font-mono">NPR {(row.total_amount || 0).toLocaleString()}</span> },
     {
-      key: 'status', label: 'Status', filterValue: colFilters.status, onFilterChange: v => setCol('status', v), filterPlaceholder: 'e.g. pending', render: (row) => (
+      key: 'status', label: t('quotations.status', { defaultValue: 'Status' }), filterValue: colFilters.status, onFilterChange: v => setCol('status', v), filterPlaceholder: t('quotations.statusFilterPlaceholder', { defaultValue: 'e.g. pending' }), render: (row) => (
         <select
           value={row.status || 'pending'}
           onClick={e => e.stopPropagation()}
@@ -306,7 +344,7 @@ export default function Quotations() {
           }}
           className={`text-xs px-2 py-0.5 rounded-full font-medium border-0 cursor-pointer outline-none ${STATUS_COLORS[row.status] || 'bg-gray-100 text-gray-600'}`}
         >
-          {STATUSES.map(s => <option key={s} value={s} className="bg-background text-foreground capitalize">{s}</option>)}
+          {STATUSES.map(s => <option key={s} value={s} className="bg-background text-foreground capitalize">{statusLabel(s)}</option>)}
         </select>
       ),
     },
@@ -319,7 +357,7 @@ export default function Quotations() {
           disabled={converting === row.id}
           className="text-xs whitespace-nowrap"
         >
-          {converting === row.id ? 'Converting...' : <><ArrowRight className="w-3 h-3 mr-1" />To Sale</>}
+          {converting === row.id ? t('quotations.converting', { defaultValue: 'Converting...' }) : <><ArrowRight className="w-3 h-3 mr-1" />{t('quotations.toSale', { defaultValue: 'To Sale' })}</>}
         </Button>
       ),
     },
@@ -337,13 +375,13 @@ export default function Quotations() {
 
           {/* Client Details */}
           <div>
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Client Details</p>
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">{t('quotations.clientDetails', { defaultValue: 'Client Details' })}</p>
             <div className="space-y-3">
               <div>
-                <Label className="text-xs">Select Saved Client</Label>
+                <Label className="text-xs">{t('quotations.selectSavedClient', { defaultValue: 'Select Saved Client' })}</Label>
                 <Select onValueChange={onClientSelect}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Select saved client (or type below)" />
+                    <SelectValue placeholder={t('quotations.selectSavedClientPlaceholder', { defaultValue: 'Select saved client (or type below)' })} />
                   </SelectTrigger>
                   <SelectContent>
                     {clients.map(c => (
@@ -353,46 +391,46 @@ export default function Quotations() {
                 </Select>
               </div>
               <div>
-                <Label className="text-xs">Client Name *</Label>
-                <Input value={data.client_name} onChange={e => setData(d => ({ ...d, client_name: e.target.value }))} placeholder="Full name or business name" />
+                <Label className="text-xs">{t('quotations.clientNameRequired', { defaultValue: 'Client Name *' })}</Label>
+                <Input value={data.client_name} onChange={e => setData(d => ({ ...d, client_name: e.target.value }))} placeholder={t('quotations.clientNamePlaceholder', { defaultValue: 'Full name or business name' })} />
               </div>
               <div>
-                <Label className="text-xs">Contact <span className="text-muted-foreground">(optional)</span></Label>
-                <Input value={data.client_contact} onChange={e => setData(d => ({ ...d, client_contact: e.target.value }))} placeholder="Phone number" />
+                <Label className="text-xs">{t('quotations.contact', { defaultValue: 'Contact' })} <span className="text-muted-foreground">({t('quotations.optional', { defaultValue: 'optional' })})</span></Label>
+                <Input value={data.client_contact} onChange={e => setData(d => ({ ...d, client_contact: e.target.value }))} placeholder={t('quotations.phoneNumberPlaceholder', { defaultValue: 'Phone number' })} />
               </div>
               <div>
-                <Label className="text-xs">Address <span className="text-muted-foreground">(optional)</span></Label>
-                <Input value={data.client_address} onChange={e => setData(d => ({ ...d, client_address: e.target.value }))} placeholder="City / address" />
+                <Label className="text-xs">{t('quotations.address', { defaultValue: 'Address' })} <span className="text-muted-foreground">({t('quotations.optional', { defaultValue: 'optional' })})</span></Label>
+                <Input value={data.client_address} onChange={e => setData(d => ({ ...d, client_address: e.target.value }))} placeholder={t('quotations.cityAddressPlaceholder', { defaultValue: 'City / address' })} />
               </div>
               <div>
-                <Label className="text-xs">PAN / VAT No. <span className="text-muted-foreground">(optional)</span></Label>
-                <Input value={data.client_pan} onChange={e => setData(d => ({ ...d, client_pan: e.target.value }))} placeholder="e.g. 123456789" />
+                <Label className="text-xs">{t('quotations.panVatNo', { defaultValue: 'PAN / VAT No.' })} <span className="text-muted-foreground">({t('quotations.optional', { defaultValue: 'optional' })})</span></Label>
+                <Input value={data.client_pan} onChange={e => setData(d => ({ ...d, client_pan: e.target.value }))} placeholder={t('quotations.panVatPlaceholder', { defaultValue: 'e.g. 123456789' })} />
               </div>
             </div>
           </div>
 
           {/* Quotation Details */}
           <div>
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Quotation Details</p>
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">{t('quotations.quotationDetails', { defaultValue: 'Quotation Details' })}</p>
             <div className="space-y-3">
               <div>
-                <Label className="text-xs">Date *</Label>
+                <Label className="text-xs">{t('quotations.dateRequired', { defaultValue: 'Date *' })}</Label>
                 <Input type="date" value={data.date_ad} onChange={e => setData(d => ({ ...d, date_ad: e.target.value }))} />
               </div>
               <div>
-                <Label className="text-xs">Quotation Number</Label>
+                <Label className="text-xs">{t('quotations.quotationNumber', { defaultValue: 'Quotation Number' })}</Label>
                 <Input value={data.quotation_number} onChange={e => setData(d => ({ ...d, quotation_number: e.target.value }))} />
               </div>
               <div>
-                <Label className="text-xs">Valid Until <span className="text-muted-foreground">(optional)</span></Label>
+                <Label className="text-xs">{t('quotations.validUntil', { defaultValue: 'Valid Until' })} <span className="text-muted-foreground">({t('quotations.optional', { defaultValue: 'optional' })})</span></Label>
                 <Input type="date" value={data.valid_until || ''} onChange={e => setData(d => ({ ...d, valid_until: e.target.value }))} />
               </div>
               <div>
-                <Label className="text-xs">Status</Label>
+                <Label className="text-xs">{t('quotations.status', { defaultValue: 'Status' })}</Label>
                 <Select value={data.status || 'pending'} onValueChange={v => setData(d => ({ ...d, status: v }))}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {STATUSES.map(s => <SelectItem key={s} value={s} className="capitalize">{s}</SelectItem>)}
+                    {STATUSES.map(s => <SelectItem key={s} value={s} className="capitalize">{statusLabel(s)}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
@@ -401,7 +439,7 @@ export default function Quotations() {
 
           {/* Payment */}
           <div>
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Payment</p>
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">{t('quotations.payment', { defaultValue: 'Payment' })}</p>
             <div className="flex gap-3">
               {['cash', 'cheque', 'credit'].map(type => (
                 <label key={type} className="flex items-center gap-1.5 cursor-pointer">
@@ -413,7 +451,7 @@ export default function Quotations() {
                     onChange={() => setData(d => ({ ...d, payment_type: type }))}
                     className="accent-primary"
                   />
-                  <span className="text-sm capitalize">{type}</span>
+                  <span className="text-sm capitalize">{paymentLabel(type)}</span>
                 </label>
               ))}
             </div>
@@ -422,7 +460,7 @@ export default function Quotations() {
           {/* VAT */}
           <div className="flex items-center gap-3 p-3 bg-secondary rounded-lg">
             <Switch checked={data.is_vat} onCheckedChange={v => setData(d => ({ ...d, is_vat: v }))} />
-            <Label>Include VAT (13%)</Label>
+            <Label>{t('quotations.includeVat', { defaultValue: 'Include VAT (13%)' })}</Label>
           </div>
         </div>
 
@@ -432,33 +470,33 @@ export default function Quotations() {
           {/* Items */}
           <div>
             <div className="flex justify-between items-center mb-2">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Items</p>
-              <Button size="sm" variant="outline" onClick={onAddItem}><Plus className="w-3 h-3 mr-1" />Add Item</Button>
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t('quotations.items', { defaultValue: 'Items' })}</p>
+              <Button size="sm" variant="outline" onClick={onAddItem}><Plus className="w-3 h-3 mr-1" />{t('quotations.addItem', { defaultValue: 'Add Item' })}</Button>
             </div>
             <div className="space-y-2">
               {items.map((item, idx) => (
                 <div key={idx} className="flex gap-2 items-end p-3 bg-secondary/50 rounded-lg">
                   <div className="flex-1 min-w-0">
-                    {idx === 0 && <Label className="text-xs">Description</Label>}
-                    <Input value={item.description} onChange={e => onUpdateItem(idx, 'description', e.target.value)} placeholder="Item or service description" />
+                    {idx === 0 && <Label className="text-xs">{t('quotations.description', { defaultValue: 'Description' })}</Label>}
+                    <Input value={item.description} onChange={e => onUpdateItem(idx, 'description', e.target.value)} placeholder={t('quotations.itemDescriptionPlaceholder', { defaultValue: 'Item or service description' })} />
                   </div>
                   <div style={{ width: 64 }}>
-                    {idx === 0 && <Label className="text-xs">Qty</Label>}
+                    {idx === 0 && <Label className="text-xs">{t('quotations.qty', { defaultValue: 'Qty' })}</Label>}
                     <SmartNumberInput value={item.quantity} onChange={e => onUpdateItem(idx, 'quantity', parseInt(e.target.value) || 0)} />
                   </div>
                   <div style={{ width: 90 }}>
-                    {idx === 0 && <Label className="text-xs">Unit</Label>}
+                    {idx === 0 && <Label className="text-xs">{t('quotations.unit', { defaultValue: 'Unit' })}</Label>}
                     <Select value={item.unit || 'Piece'} onValueChange={v => onUpdateItem(idx, 'unit', v)}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>{UNITS.map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}</SelectContent>
+                      <SelectContent>{UNITS.map(u => <SelectItem key={u} value={u}>{unitLabel(u)}</SelectItem>)}</SelectContent>
                     </Select>
                   </div>
                   <div style={{ width: 100 }}>
-                    {idx === 0 && <Label className="text-xs">Unit Price</Label>}
+                    {idx === 0 && <Label className="text-xs">{t('quotations.unitPrice', { defaultValue: 'Unit Price' })}</Label>}
                     <SmartNumberInput value={item.unit_price} onChange={e => onUpdateItem(idx, 'unit_price', parseFloat(e.target.value) || 0)} />
                   </div>
                   <div style={{ width: 110 }}>
-                    {idx === 0 && <Label className="text-xs">Total</Label>}
+                    {idx === 0 && <Label className="text-xs">{t('quotations.total', { defaultValue: 'Total' })}</Label>}
                     <Input value={`NPR ${(item.total || 0).toLocaleString()}`} disabled className="font-mono" />
                   </div>
                   <Button size="icon" variant="ghost" onClick={() => onRemoveItem(idx)} disabled={items.length <= 1}>
@@ -472,18 +510,18 @@ export default function Quotations() {
           {/* Labour */}
           <div>
             <div className="flex justify-between items-center mb-2">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Work / Labour Charges <span className="text-muted-foreground font-normal normal-case">(optional)</span></p>
-              <Button size="sm" variant="outline" onClick={onAddLabor}><Plus className="w-3 h-3 mr-1" />Add Row</Button>
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t('quotations.workLabourCharges', { defaultValue: 'Work / Labour Charges' })} <span className="text-muted-foreground font-normal normal-case">({t('quotations.optional', { defaultValue: 'optional' })})</span></p>
+              <Button size="sm" variant="outline" onClick={onAddLabor}><Plus className="w-3 h-3 mr-1" />{t('quotations.addRow', { defaultValue: 'Add Row' })}</Button>
             </div>
             <div className="space-y-2">
               {laborItems.map((li, idx) => (
                 <div key={idx} className="grid grid-cols-12 gap-2 items-end p-3 bg-secondary/50 rounded-lg">
                   <div className="col-span-7">
-                    {idx === 0 && <Label className="text-xs">Work Description</Label>}
-                    <Input value={li.description} onChange={e => onUpdateLabor(idx, 'description', e.target.value)} placeholder="e.g. Installation, Consulting..." />
+                    {idx === 0 && <Label className="text-xs">{t('quotations.workDescription', { defaultValue: 'Work Description' })}</Label>}
+                    <Input value={li.description} onChange={e => onUpdateLabor(idx, 'description', e.target.value)} placeholder={t('quotations.workDescriptionPlaceholder', { defaultValue: 'e.g. Installation, Consulting...' })} />
                   </div>
                   <div className="col-span-3">
-                    {idx === 0 && <Label className="text-xs">Amount (NPR)</Label>}
+                    {idx === 0 && <Label className="text-xs">{t('quotations.amountNpr', { defaultValue: 'Amount (NPR)' })}</Label>}
                     <SmartNumberInput value={li.amount} onChange={e => onUpdateLabor(idx, 'amount', parseFloat(e.target.value) || 0)} />
                   </div>
                   <div className="col-span-2 flex justify-end">
@@ -499,34 +537,34 @@ export default function Quotations() {
           {/* Summary */}
           <div className="bg-secondary rounded-lg p-4 space-y-2">
             <div className="flex justify-between text-sm">
-              <span>Items Subtotal</span>
+              <span>{t('quotations.itemsSubtotal', { defaultValue: 'Items Subtotal' })}</span>
               <span className="font-mono">NPR {calcSubtotal.toLocaleString()}</span>
             </div>
             {calcLabor > 0 && (
               <div className="flex justify-between text-sm">
-                <span>Labour Total</span>
+                <span>{t('quotations.labourTotal', { defaultValue: 'Labour Total' })}</span>
                 <span className="font-mono">NPR {calcLabor.toLocaleString()}</span>
               </div>
             )}
             {data.is_vat && (
               <div className="flex justify-between text-sm">
-                <span>VAT (13%)</span>
+                <span>{t('quotations.vatPercent', { defaultValue: 'VAT (13%)' })}</span>
                 <span className="font-mono">NPR {calcVat.toLocaleString()}</span>
               </div>
             )}
             <div className="flex justify-between font-bold border-t pt-2">
-              <span>Total</span>
+              <span>{t('quotations.total', { defaultValue: 'Total' })}</span>
               <span className="font-mono">NPR {(calcSubtotal + calcLabor + calcVat).toLocaleString()}</span>
             </div>
           </div>
 
           {/* Notes */}
           <div>
-            <Label className="text-xs">Notes / Terms <span className="text-muted-foreground">(optional)</span></Label>
+            <Label className="text-xs">{t('quotations.notesTerms', { defaultValue: 'Notes / Terms' })} <span className="text-muted-foreground">({t('quotations.optional', { defaultValue: 'optional' })})</span></Label>
             <Input
               value={data.notes}
               onChange={e => setData(d => ({ ...d, notes: e.target.value }))}
-              placeholder="Payment terms, validity conditions, special notes..."
+              placeholder={t('quotations.notesTermsPlaceholder', { defaultValue: 'Payment terms, validity conditions, special notes...' })}
             />
           </div>
         </div>
@@ -537,12 +575,12 @@ export default function Quotations() {
   return (
     <div className="space-y-6 animate-fade-in">
       <PageHeader
-        title="Quotations"
-        subtitle="Quotes & proposals for clients"
+        title={t('quotations.pageTitle', { defaultValue: 'Quotations' })}
+        subtitle={t('quotations.pageSubtitle', { defaultValue: 'Quotes & proposals for clients' })}
         searchValue={search}
         onSearchChange={setSearch}
         onAdd={openNew}
-        addLabel="New Quotation"
+        addLabel={t('quotations.newQuotation', { defaultValue: 'New Quotation' })}
       />
 
       {/* Status summary cards */}
@@ -550,7 +588,7 @@ export default function Quotations() {
         {STATUSES.map(s => (
           <div key={s} className="glass-card rounded-xl border p-3 text-center">
             <p className="text-xl font-bold">{quotations.filter(q => q.status === s).length}</p>
-            <p className="text-xs text-muted-foreground capitalize mt-0.5">{s}</p>
+            <p className="text-xs text-muted-foreground capitalize mt-0.5">{statusLabel(s)}</p>
           </div>
         ))}
       </div>
@@ -558,11 +596,11 @@ export default function Quotations() {
       {quotations.length === 0 ? (
         <EmptyState
           icon={ClipboardList}
-          title="No quotations yet"
-          description="Create your first quotation or proposal for a client."
+          title={t('quotations.emptyTitle', { defaultValue: 'No quotations yet' })}
+          description={t('quotations.emptyDescription', { defaultValue: 'Create your first quotation or proposal for a client.' })}
           action={
             <Button onClick={openNew}>
-              <Plus className="w-4 h-4 mr-2" />New Quotation
+              <Plus className="w-4 h-4 mr-2" />{t('quotations.newQuotation', { defaultValue: 'New Quotation' })}
             </Button>
           }
         />
@@ -570,7 +608,7 @@ export default function Quotations() {
         <DataTable
           columns={columns}
           data={filtered}
-          emptyMessage="No quotations match your filters."
+          emptyMessage={t('quotations.noMatchFilters', { defaultValue: 'No quotations match your filters.' })}
           onRowClick={canEdit ? openEdit : undefined}
         />
       )}
@@ -581,7 +619,7 @@ export default function Quotations() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <ClipboardList className="w-5 h-5 text-primary" />
-              New Quotation
+              {t('quotations.newQuotation', { defaultValue: 'New Quotation' })}
             </DialogTitle>
           </DialogHeader>
 
@@ -603,8 +641,8 @@ export default function Quotations() {
           />
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowNew(false)}>Cancel</Button>
-            <Button onClick={createQuotation} disabled={!form.client_name}>Save Quotation</Button>
+            <Button variant="outline" onClick={() => setShowNew(false)}>{t('quotations.cancel', { defaultValue: 'Cancel' })}</Button>
+            <Button onClick={createQuotation} disabled={!form.client_name}>{t('quotations.saveQuotation', { defaultValue: 'Save Quotation' })}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -615,7 +653,7 @@ export default function Quotations() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <ClipboardList className="w-5 h-5 text-primary" />
-              Edit Quotation — {editQuotation?.quotation_number}
+              {t('quotations.editQuotationWithNumber', { defaultValue: 'Edit Quotation — {{number}}', number: editQuotation?.quotation_number })}
             </DialogTitle>
           </DialogHeader>
 
@@ -639,8 +677,8 @@ export default function Quotations() {
           )}
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setEditQuotation(null)}>Cancel</Button>
-            <Button onClick={updateQuotation} disabled={!editQuotation?.client_name}>Save Changes</Button>
+            <Button variant="outline" onClick={() => setEditQuotation(null)}>{t('quotations.cancel', { defaultValue: 'Cancel' })}</Button>
+            <Button onClick={updateQuotation} disabled={!editQuotation?.client_name}>{t('quotations.saveChanges', { defaultValue: 'Save Changes' })}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

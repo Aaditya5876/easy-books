@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
+import { useTranslation } from 'react-i18next';
 import { api } from '@/api/adapter';
 import { usersApi, companyApi, recycleBinApi } from '@/api';
 import { useAuth } from '@/lib/AuthContext';
@@ -31,6 +32,13 @@ const FONT_SIZES = [
   { key: 'xl',     label: 'XL',      px: '18px' },
 ];
 
+const FONT_SIZE_I18N_KEY = {
+  small: 'settings.fontSizeSmall',
+  medium: 'settings.fontSizeMedium',
+  large: 'settings.fontSizeLarge',
+  xl: 'settings.fontSizeXl',
+};
+
 const ROLE_COLORS = {
   ADMIN: 'bg-red-100 text-red-700',
   ACCOUNTANT: 'bg-blue-100 text-blue-700',
@@ -38,6 +46,15 @@ const ROLE_COLORS = {
   TEACHER: 'bg-amber-100 text-amber-700',
   LIBRARIAN: 'bg-teal-100 text-teal-700',
   SUPER_ADMIN: 'bg-purple-100 text-purple-700',
+};
+
+const ROLE_I18N_KEY = {
+  STAFF: 'settings.roleStaff',
+  ACCOUNTANT: 'settings.roleAccountant',
+  TEACHER: 'settings.roleTeacher',
+  LIBRARIAN: 'settings.roleLibrarian',
+  ADMIN: 'settings.roleAdmin',
+  SUPER_ADMIN: 'settings.roleSuperAdmin',
 };
 
 const BUSINESS_TYPES = [
@@ -52,7 +69,18 @@ const BUSINESS_TYPES = [
 
 const BUSINESS_TYPE_LABELS = Object.fromEntries(BUSINESS_TYPES.map(b => [b.value, b.label]));
 
+const BUSINESS_TYPE_I18N_KEY = {
+  RETAIL: 'settings.businessTypeRetail',
+  PHARMACY: 'settings.businessTypePharmacy',
+  ELECTRONICS: 'settings.businessTypeElectronics',
+  FOOD_BEVERAGE: 'settings.businessTypeFoodBeverage',
+  SERVICES: 'settings.businessTypeServices',
+  MANUFACTURING: 'settings.businessTypeManufacturing',
+  OTHER: 'settings.businessTypeOther',
+};
+
 export default function Settings() {
+  const { t } = useTranslation();
   const { user } = useAuth();
   const { canEdit, canDelete, canManageUsers } = useRole();
   const { prefs, updatePref, resetPrefs } = usePreferences();
@@ -60,6 +88,17 @@ export default function Settings() {
   const isSchool = user?.defaultCompany?.businessType === 'SCHOOL';
   const activeCompanyId = getActiveCompanyId();
   const logoInputRef = useRef(null);
+
+  function roleLabel(role) {
+    const key = ROLE_I18N_KEY[role];
+    return key ? t(key, { defaultValue: role }) : role;
+  }
+
+  function businessTypeLabel(value) {
+    if (!value) return value;
+    const key = BUSINESS_TYPE_I18N_KEY[value];
+    return key ? t(key, { defaultValue: BUSINESS_TYPE_LABELS[value] || value }) : value;
+  }
 
   // ── Companies ─────────────────────────────────────────────────────────────
   const [companies, setCompanies] = useState([]);
@@ -148,7 +187,7 @@ export default function Settings() {
   }
 
   async function deleteCompany(id) {
-    if (!confirm('Are you sure you want to delete this company?')) return;
+    if (!confirm(t('settings.confirmDeleteCompany', { defaultValue: 'Are you sure you want to delete this company?' }))) return;
     await api.Company.delete(id);
     if (getActiveCompanyId() === id) {
       const remaining = companies.filter(c => c.id !== id);
@@ -178,7 +217,7 @@ export default function Settings() {
       else { setShowInvite(false); setInviteForm({ name: '', email: '', role: 'STAFF' }); }
       loadUsers();
     } catch (err) {
-      alert(err?.response?.data?.message || 'Failed to invite user');
+      alert(err?.response?.data?.message || t('settings.failedInviteUser', { defaultValue: 'Failed to invite user' }));
     } finally {
       setInviteLoading(false);
     }
@@ -190,7 +229,7 @@ export default function Settings() {
       await usersApi.changeRole(userId, activeCompanyId, newRole);
       loadUsers();
     } catch (err) {
-      alert(err?.response?.data?.message || 'Failed to change role');
+      alert(err?.response?.data?.message || t('settings.failedChangeRole', { defaultValue: 'Failed to change role' }));
     } finally {
       setRoleChanging(null);
     }
@@ -198,9 +237,9 @@ export default function Settings() {
 
   async function handleRemoveUser(u) {
     const ok = await confirm({
-      title: 'Remove user?',
-      description: `Remove ${u.name || u.email} from this company? They will lose access immediately.`,
-      confirmLabel: 'Remove',
+      title: t('settings.removeUserTitle', { defaultValue: 'Remove user?' }),
+      description: t('settings.removeUserDescription', { defaultValue: 'Remove {{name}} from this company? They will lose access immediately.', name: u.name || u.email }),
+      confirmLabel: t('settings.remove', { defaultValue: 'Remove' }),
       variant: 'destructive',
     });
     if (!ok) return;
@@ -209,7 +248,7 @@ export default function Settings() {
       await usersApi.remove(u.id, activeCompanyId);
       loadUsers();
     } catch (err) {
-      alert(err?.response?.data?.message || 'Failed to remove user');
+      alert(err?.response?.data?.message || t('settings.failedRemoveUser', { defaultValue: 'Failed to remove user' }));
     } finally {
       setRemovingUserId(null);
     }
@@ -242,7 +281,7 @@ export default function Settings() {
       setPrefsSaved(true);
       setTimeout(() => setPrefsSaved(false), 2000);
     } catch {
-      alert('Failed to save preferences');
+      alert(t('settings.failedSavePreferences', { defaultValue: 'Failed to save preferences' }));
     } finally {
       setPrefsSaving(false);
     }
@@ -259,10 +298,10 @@ export default function Settings() {
         setBinPassword('');
         loadBinItems();
       } else {
-        setBinPasswordError('Incorrect password.');
+        setBinPasswordError(t('settings.binIncorrectPassword', { defaultValue: 'Incorrect password.' }));
       }
     } catch {
-      setBinPasswordError('Incorrect password.');
+      setBinPasswordError(t('settings.binIncorrectPassword', { defaultValue: 'Incorrect password.' }));
     } finally {
       setBinVerifying(false);
     }
@@ -291,7 +330,7 @@ export default function Settings() {
   }
 
   async function permanentDeleteItem(id, type) {
-    if (!confirm('Permanently delete this item? This cannot be undone.')) return;
+    if (!confirm(t('settings.confirmPermanentDelete', { defaultValue: 'Permanently delete this item? This cannot be undone.' }))) return;
     await recycleBinApi.permanentDelete(id, type, activeCompanyId);
     loadBinItems();
   }
@@ -323,16 +362,16 @@ export default function Settings() {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <PageHeader title="Settings" subtitle="Manage companies, users and preferences" />
+      <PageHeader title={t('settings.title', { defaultValue: 'Settings' })} subtitle={t('settings.subtitle', { defaultValue: 'Manage companies, users and preferences' })} />
 
       <Tabs defaultValue="preferences">
         <TabsList>
-          <TabsTrigger value="companies">Companies</TabsTrigger>
-          <TabsTrigger value="users" onClick={loadUsers}>Users</TabsTrigger>
-          <TabsTrigger value="preferences">Preferences</TabsTrigger>
+          <TabsTrigger value="companies">{t('settings.tabCompanies', { defaultValue: 'Companies' })}</TabsTrigger>
+          <TabsTrigger value="users" onClick={loadUsers}>{t('settings.tabUsers', { defaultValue: 'Users' })}</TabsTrigger>
+          <TabsTrigger value="preferences">{t('settings.tabPreferences', { defaultValue: 'Preferences' })}</TabsTrigger>
           {isAdmin && (
             <TabsTrigger value="recycle-bin" className="gap-1.5">
-              <Recycle className="w-3.5 h-3.5" />Recycle Bin
+              <Recycle className="w-3.5 h-3.5" />{t('settings.tabRecycleBin', { defaultValue: 'Recycle Bin' })}
             </TabsTrigger>
           )}
         </TabsList>
@@ -340,7 +379,7 @@ export default function Settings() {
         {/* ── Companies Tab ─────────────────────────────────────────────── */}
         <TabsContent value="companies" className="mt-4 space-y-4">
           <div className="flex justify-end">
-            <Button onClick={() => setShowAddCompany(true)}><Plus className="w-4 h-4 mr-1" />Add Company</Button>
+            <Button onClick={() => setShowAddCompany(true)}><Plus className="w-4 h-4 mr-1" />{t('settings.addCompany', { defaultValue: 'Add Company' })}</Button>
           </div>
           <div className="grid gap-4">
             {companies.map(c => (
@@ -356,27 +395,27 @@ export default function Settings() {
                   <div>
                     <div className="flex items-center gap-2">
                       <h3 className="font-semibold">{c.name}</h3>
-                      {c.id === activeCompanyId && <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full">Active</span>}
+                      {c.id === activeCompanyId && <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full">{t('settings.active', { defaultValue: 'Active' })}</span>}
                       {c.business_type && (
                         <span className="text-xs bg-secondary text-muted-foreground px-2 py-0.5 rounded-full">
-                          {BUSINESS_TYPE_LABELS[c.business_type] || c.business_type}
+                          {businessTypeLabel(c.business_type)}
                         </span>
                       )}
                     </div>
-                    <p className="text-sm text-muted-foreground">{c.address || 'No address'}</p>
+                    <p className="text-sm text-muted-foreground">{c.address || t('settings.noAddress', { defaultValue: 'No address' })}</p>
                     <div className="flex gap-4 mt-1 text-xs text-muted-foreground">
                       {c.phone && <span>{c.phone}</span>}
                       {c.email && <span>{c.email}</span>}
-                      {c.pan_vat && <span>PAN: {c.pan_vat}</span>}
+                      {c.pan_vat && <span>{t('settings.panWithValue', { defaultValue: 'PAN: {{value}}', value: c.pan_vat })}</span>}
                     </div>
                   </div>
                 </div>
                 <div className="flex gap-2">
                   {canEdit && (
-                    <Button size="sm" variant="outline" onClick={() => setEditingCompany({ ...c })}>Edit</Button>
+                    <Button size="sm" variant="outline" onClick={() => setEditingCompany({ ...c })}>{t('settings.edit', { defaultValue: 'Edit' })}</Button>
                   )}
                   {c.id !== activeCompanyId && (
-                    <Button size="sm" variant="outline" onClick={() => { setActiveCompanyId(c.id); window.location.href = '/'; }}>Set Active</Button>
+                    <Button size="sm" variant="outline" onClick={() => { setActiveCompanyId(c.id); window.location.href = '/'; }}>{t('settings.setActive', { defaultValue: 'Set Active' })}</Button>
                   )}
                   {canDelete && (
                     <Button size="icon" variant="ghost" onClick={() => deleteCompany(c.id)}>
@@ -387,7 +426,7 @@ export default function Settings() {
               </div>
             ))}
             {companies.length === 0 && (
-              <div className="text-center py-12 text-muted-foreground">No companies yet</div>
+              <div className="text-center py-12 text-muted-foreground">{t('settings.noCompaniesYet', { defaultValue: 'No companies yet' })}</div>
             )}
           </div>
         </TabsContent>
@@ -397,15 +436,15 @@ export default function Settings() {
           {!isAdmin ? (
             <div className="flex flex-col items-center justify-center py-16 gap-3 text-muted-foreground">
               <Shield className="w-10 h-10 opacity-30" />
-              <p className="text-sm">Only Admins can manage team members.</p>
+              <p className="text-sm">{t('settings.adminOnlyManageUsers', { defaultValue: 'Only Admins can manage team members.' })}</p>
             </div>
           ) : (
             <>
               <div className="flex items-center justify-between">
-                <p className="text-sm text-muted-foreground">{users.length} member{users.length !== 1 ? 's' : ''} in this company</p>
+                <p className="text-sm text-muted-foreground">{t('settings.membersCount', { defaultValue: '{{count}} members in this company', count: users.length })}</p>
                 {canManageUsers && (
                   <Button onClick={() => setShowInvite(true)}>
-                    <UserPlus className="w-4 h-4 mr-1" />Invite User
+                    <UserPlus className="w-4 h-4 mr-1" />{t('settings.inviteUser', { defaultValue: 'Invite User' })}
                   </Button>
                 )}
               </div>
@@ -423,17 +462,17 @@ export default function Settings() {
                           {u.name?.[0]?.toUpperCase() || 'U'}
                         </div>
                         <div>
-                          <p className="font-medium text-sm">{u.name || 'Unknown'}</p>
+                          <p className="font-medium text-sm">{u.name || t('settings.unknownUser', { defaultValue: 'Unknown' })}</p>
                           <p className="text-xs text-muted-foreground">{u.email}</p>
                         </div>
                       </div>
                       <div className="flex items-center gap-3">
                         {u.id === user?.id ? (
                           <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${ROLE_COLORS[u.role] || 'bg-secondary'}`}>
-                            {u.role} (you)
+                            {roleLabel(u.role)} {t('settings.youSuffix', { defaultValue: '(you)' })}
                           </span>
                         ) : u.role === 'SUPER_ADMIN' ? (
-                          <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${ROLE_COLORS.SUPER_ADMIN}`}>SUPER_ADMIN</span>
+                          <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${ROLE_COLORS.SUPER_ADMIN}`}>{roleLabel('SUPER_ADMIN')}</span>
                         ) : (
                           <select
                             className="text-xs border rounded-md px-2 py-1 bg-background focus:outline-none focus:ring-1 focus:ring-ring"
@@ -441,11 +480,11 @@ export default function Settings() {
                             disabled={roleChanging === u.id}
                             onChange={e => handleRoleChange(u.id, e.target.value)}
                           >
-                            <option value="STAFF">STAFF</option>
-                            <option value="ACCOUNTANT">ACCOUNTANT</option>
-                            {isSchool && <option value="TEACHER">TEACHER</option>}
-                            {isSchool && <option value="LIBRARIAN">LIBRARIAN</option>}
-                            <option value="ADMIN">ADMIN</option>
+                            <option value="STAFF">{roleLabel('STAFF')}</option>
+                            <option value="ACCOUNTANT">{roleLabel('ACCOUNTANT')}</option>
+                            {isSchool && <option value="TEACHER">{roleLabel('TEACHER')}</option>}
+                            {isSchool && <option value="LIBRARIAN">{roleLabel('LIBRARIAN')}</option>}
+                            <option value="ADMIN">{roleLabel('ADMIN')}</option>
                           </select>
                         )}
                         {canManageUsers && u.id !== user?.id && u.role !== 'SUPER_ADMIN' && (
@@ -453,7 +492,7 @@ export default function Settings() {
                             onClick={() => handleRemoveUser(u)}
                             disabled={removingUserId === u.id}
                             className="p-1.5 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600 transition-colors disabled:opacity-50"
-                            title="Remove from company"
+                            title={t('settings.removeFromCompany', { defaultValue: 'Remove from company' })}
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
@@ -462,7 +501,7 @@ export default function Settings() {
                     </div>
                   ))}
                   {users.length === 0 && (
-                    <div className="text-center py-12 text-muted-foreground text-sm">No users yet. Invite your team.</div>
+                    <div className="text-center py-12 text-muted-foreground text-sm">{t('settings.noUsersYet', { defaultValue: 'No users yet. Invite your team.' })}</div>
                   )}
                 </div>
               )}
@@ -475,44 +514,44 @@ export default function Settings() {
 
           {/* Company Settings */}
           <div className="bg-card rounded-xl border p-6 space-y-5 max-w-lg">
-            <h3 className="font-semibold">Company Settings</h3>
+            <h3 className="font-semibold">{t('settings.companySettingsHeading', { defaultValue: 'Company Settings' })}</h3>
 
             <div className="space-y-1.5">
-              <Label>Invoice Prefix / Abbreviation</Label>
-              <Input placeholder="e.g. INV, ABC, XYZ" value={companyPrefs.abbreviation}
+              <Label>{t('settings.invoicePrefixLabel', { defaultValue: 'Invoice Prefix / Abbreviation' })}</Label>
+              <Input placeholder={t('settings.invoicePrefixPlaceholder', { defaultValue: 'e.g. INV, ABC, XYZ' })} value={companyPrefs.abbreviation}
                 onChange={e => setCompanyPrefs({ ...companyPrefs, abbreviation: e.target.value.toUpperCase().slice(0, 6) })} />
-              <p className="text-xs text-muted-foreground">Used in invoice numbers: ABC/2081-82/0001</p>
+              <p className="text-xs text-muted-foreground">{t('settings.invoiceNumberHint', { defaultValue: 'Used in invoice numbers: ABC/2081-82/0001' })}</p>
             </div>
 
             <div className="space-y-1.5">
-              <Label>Working Days per Month</Label>
+              <Label>{t('settings.workingDaysLabel', { defaultValue: 'Working Days per Month' })}</Label>
               <SmartNumberInput min={20} max={31} value={companyPrefs.workingDaysPerMonth}
                 onChange={e => setCompanyPrefs({ ...companyPrefs, workingDaysPerMonth: parseInt(e.target.value) || 26 })} />
-              <p className="text-xs text-muted-foreground">Used for absent-day salary deduction (default: 26)</p>
+              <p className="text-xs text-muted-foreground">{t('settings.workingDaysHint', { defaultValue: 'Used for absent-day salary deduction (default: 26)' })}</p>
             </div>
 
             <div className="pt-1 border-t space-y-3">
-              <h4 className="text-sm font-medium text-muted-foreground">System Defaults (read-only)</h4>
+              <h4 className="text-sm font-medium text-muted-foreground">{t('settings.systemDefaultsHeading', { defaultValue: 'System Defaults (read-only)' })}</h4>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <Label className="text-xs">Currency</Label>
-                  <Input value="NPR — Nepali Rupee" disabled className="text-sm" />
+                  <Label className="text-xs">{t('settings.currencyLabel', { defaultValue: 'Currency' })}</Label>
+                  <Input value={t('settings.currencyValue', { defaultValue: 'NPR — Nepali Rupee' })} disabled className="text-sm" />
                 </div>
                 <div>
-                  <Label className="text-xs">VAT Rate</Label>
+                  <Label className="text-xs">{t('settings.vatRateLabel', { defaultValue: 'VAT Rate' })}</Label>
                   <Input value="13%" disabled className="text-sm" />
                 </div>
               </div>
               <div>
-                <Label className="text-xs">Fiscal Year</Label>
-                <Input value="Shrawan 1 – Ashadh End (Nepali BS Calendar)" disabled className="text-sm" />
+                <Label className="text-xs">{t('settings.fiscalYearLabel', { defaultValue: 'Fiscal Year' })}</Label>
+                <Input value={t('settings.fiscalYearValue', { defaultValue: 'Shrawan 1 – Ashadh End (Nepali BS Calendar)' })} disabled className="text-sm" />
               </div>
             </div>
 
             <Button onClick={savePreferences} disabled={prefsSaving || !isAdmin} className="w-full">
-              {prefsSaved ? <><Check className="w-4 h-4 mr-1" />Saved!</> : prefsSaving ? 'Saving…' : <><Save className="w-4 h-4 mr-1" />Save Preferences</>}
+              {prefsSaved ? <><Check className="w-4 h-4 mr-1" />{t('settings.saved', { defaultValue: 'Saved!' })}</> : prefsSaving ? t('settings.savingEllipsis', { defaultValue: 'Saving…' }) : <><Save className="w-4 h-4 mr-1" />{t('settings.savePreferences', { defaultValue: 'Save Preferences' })}</>}
             </Button>
-            {!isAdmin && <p className="text-xs text-muted-foreground text-center">Only Admins can change preferences.</p>}
+            {!isAdmin && <p className="text-xs text-muted-foreground text-center">{t('settings.adminOnlyPreferences', { defaultValue: 'Only Admins can change preferences.' })}</p>}
           </div>
 
           {/* Appearance */}
@@ -520,7 +559,7 @@ export default function Settings() {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Palette className="w-4 h-4 text-primary" />
-                <h3 className="font-semibold">Appearance</h3>
+                <h3 className="font-semibold">{t('settings.appearanceHeading', { defaultValue: 'Appearance' })}</h3>
               </div>
               <Button
                 variant="ghost"
@@ -528,14 +567,14 @@ export default function Settings() {
                 onClick={resetPrefs}
                 className="text-muted-foreground gap-1.5"
               >
-                <RotateCcw className="w-3.5 h-3.5" />Reset to Defaults
+                <RotateCcw className="w-3.5 h-3.5" />{t('settings.resetToDefaults', { defaultValue: 'Reset to Defaults' })}
               </Button>
             </div>
 
             {/* Company Logo */}
             <div className="space-y-2">
-              <Label className="flex items-center gap-1.5"><Upload className="w-3.5 h-3.5" />Sidebar Logo</Label>
-              <p className="text-xs text-muted-foreground">Replaces the Building icon in the sidebar top-left. Shows "Powered by GeoInfosys" badge below.</p>
+              <Label className="flex items-center gap-1.5"><Upload className="w-3.5 h-3.5" />{t('settings.sidebarLogoLabel', { defaultValue: 'Sidebar Logo' })}</Label>
+              <p className="text-xs text-muted-foreground">{t('settings.sidebarLogoHint', { defaultValue: 'Replaces the Building icon in the sidebar top-left. Shows "Powered by GeoInfosys" badge below.' })}</p>
               <div className="flex items-center gap-3">
                 {prefs.companyLogoUrl ? (
                   <div className="relative">
@@ -551,19 +590,19 @@ export default function Settings() {
                 ) : (
                   <label className="flex flex-col items-center justify-center w-14 h-14 border-2 border-dashed border-muted-foreground/25 rounded-xl cursor-pointer hover:border-primary/50 hover:bg-primary/5 transition-colors">
                     <ImagePlus className="w-4 h-4 text-muted-foreground mb-0.5" />
-                    <span className="text-[10px] text-muted-foreground">Upload</span>
+                    <span className="text-[10px] text-muted-foreground">{t('settings.uploadLabel', { defaultValue: 'Upload' })}</span>
                     <input ref={logoInputRef} type="file" accept="image/*" className="hidden" onChange={handleUiLogoUpload} />
                   </label>
                 )}
                 {!prefs.companyLogoUrl && (
-                  <p className="text-xs text-muted-foreground">PNG, JPG, SVG up to 2 MB</p>
+                  <p className="text-xs text-muted-foreground">{t('settings.fileSizeHint', { defaultValue: 'PNG, JPG, SVG up to 2 MB' })}</p>
                 )}
               </div>
             </div>
 
             {/* Sidebar Color */}
             <div className="space-y-2">
-              <Label>Sidebar Background Color</Label>
+              <Label>{t('settings.sidebarColorLabel', { defaultValue: 'Sidebar Background Color' })}</Label>
               <div className="flex items-center gap-2 flex-wrap">
                 {SIDEBAR_PALETTE.map(c => (
                   <button
@@ -582,7 +621,7 @@ export default function Settings() {
                 ))}
                 <label
                   className="w-7 h-7 rounded-lg border-2 border-dashed border-muted-foreground/40 flex items-center justify-center cursor-pointer hover:border-primary/60 transition-colors overflow-hidden"
-                  title="Custom color"
+                  title={t('settings.customColor', { defaultValue: 'Custom color' })}
                   style={prefs.sidebarColor && !SIDEBAR_PALETTE.includes(prefs.sidebarColor) ? { backgroundColor: prefs.sidebarColor } : {}}
                 >
                   <Palette className="w-3.5 h-3.5 text-muted-foreground" />
@@ -599,18 +638,18 @@ export default function Settings() {
                     onClick={() => updatePref('sidebarColor', '')}
                     className="text-xs text-muted-foreground hover:text-foreground underline"
                   >
-                    Reset
+                    {t('settings.reset', { defaultValue: 'Reset' })}
                   </button>
                 )}
               </div>
               {prefs.sidebarColor && (
-                <p className="text-xs text-muted-foreground">Current: {prefs.sidebarColor}</p>
+                <p className="text-xs text-muted-foreground">{t('settings.currentColor', { defaultValue: 'Current: {{color}}', color: prefs.sidebarColor })}</p>
               )}
             </div>
 
             {/* Topbar Color */}
             <div className="space-y-2">
-              <Label>Topbar Background Color</Label>
+              <Label>{t('settings.topbarColorLabel', { defaultValue: 'Topbar Background Color' })}</Label>
               <div className="flex items-center gap-2 flex-wrap">
                 {TOPBAR_PALETTE.map(c => (
                   <button
@@ -629,7 +668,7 @@ export default function Settings() {
                 ))}
                 <label
                   className="w-7 h-7 rounded-lg border-2 border-dashed border-muted-foreground/40 flex items-center justify-center cursor-pointer hover:border-primary/60 transition-colors overflow-hidden"
-                  title="Custom color"
+                  title={t('settings.customColor', { defaultValue: 'Custom color' })}
                   style={prefs.topbarColor && !TOPBAR_PALETTE.includes(prefs.topbarColor) ? { backgroundColor: prefs.topbarColor } : {}}
                 >
                   <Palette className="w-3.5 h-3.5 text-muted-foreground" />
@@ -646,18 +685,18 @@ export default function Settings() {
                     onClick={() => updatePref('topbarColor', '')}
                     className="text-xs text-muted-foreground hover:text-foreground underline"
                   >
-                    Reset
+                    {t('settings.reset', { defaultValue: 'Reset' })}
                   </button>
                 )}
               </div>
               {prefs.topbarColor && (
-                <p className="text-xs text-muted-foreground">Current: {prefs.topbarColor}</p>
+                <p className="text-xs text-muted-foreground">{t('settings.currentColor', { defaultValue: 'Current: {{color}}', color: prefs.topbarColor })}</p>
               )}
             </div>
 
             {/* Font Size */}
             <div className="space-y-2">
-              <Label className="flex items-center gap-1.5"><Type className="w-3.5 h-3.5" />Font Size</Label>
+              <Label className="flex items-center gap-1.5"><Type className="w-3.5 h-3.5" />{t('settings.fontSizeLabel', { defaultValue: 'Font Size' })}</Label>
               <div className="flex gap-2">
                 {FONT_SIZES.map(f => (
                   <button
@@ -671,7 +710,7 @@ export default function Settings() {
                     }`}
                   >
                     <span className="font-semibold" style={{ fontSize: f.px }}>A</span>
-                    <span className="text-[10px] text-muted-foreground mt-0.5">{f.label}</span>
+                    <span className="text-[10px] text-muted-foreground mt-0.5">{t(FONT_SIZE_I18N_KEY[f.key], { defaultValue: f.label })}</span>
                     <span className="text-[9px] text-muted-foreground/60">{f.px}</span>
                   </button>
                 ))}
@@ -680,12 +719,12 @@ export default function Settings() {
 
             {/* Notifications */}
             <div className="space-y-2">
-              <Label className="flex items-center gap-1.5"><Bell className="w-3.5 h-3.5" />Notification Preferences</Label>
+              <Label className="flex items-center gap-1.5"><Bell className="w-3.5 h-3.5" />{t('settings.notificationPreferencesLabel', { defaultValue: 'Notification Preferences' })}</Label>
               <div className="space-y-2">
                 {[
-                  { key: 'transactions', label: 'Transaction Alerts', desc: 'Low stock, stale cheques, expiring bank guarantees' },
-                  { key: 'reminders',    label: 'Reminders',          desc: 'Payroll due, attendance missing, task deadlines' },
-                  { key: 'system',       label: 'System Notices',     desc: 'Updates, maintenance, role changes' },
+                  { key: 'transactions', label: t('settings.notifTransactionsLabel', { defaultValue: 'Transaction Alerts' }), desc: t('settings.notifTransactionsDesc', { defaultValue: 'Low stock, stale cheques, expiring bank guarantees' }) },
+                  { key: 'reminders',    label: t('settings.notifRemindersLabel', { defaultValue: 'Reminders' }),          desc: t('settings.notifRemindersDesc', { defaultValue: 'Payroll due, attendance missing, task deadlines' }) },
+                  { key: 'system',       label: t('settings.notifSystemLabel', { defaultValue: 'System Notices' }),     desc: t('settings.notifSystemDesc', { defaultValue: 'Updates, maintenance, role changes' }) },
                 ].map(n => (
                   <div key={n.key} className="flex items-start justify-between gap-4 py-2 border-b border-border/50 last:border-0">
                     <div>
@@ -722,13 +761,13 @@ export default function Settings() {
                   <Lock className="w-6 h-6 text-amber-600" />
                 </div>
                 <div>
-                  <h3 className="font-semibold text-lg">Admin Access Required</h3>
-                  <p className="text-sm text-muted-foreground mt-1">Enter your admin password to access the Recycle Bin.</p>
+                  <h3 className="font-semibold text-lg">{t('settings.binAdminAccessRequired', { defaultValue: 'Admin Access Required' })}</h3>
+                  <p className="text-sm text-muted-foreground mt-1">{t('settings.binAdminAccessDesc', { defaultValue: 'Enter your admin password to access the Recycle Bin.' })}</p>
                 </div>
                 <div className="space-y-2 text-left">
                   <input
                     type="password"
-                    placeholder="Admin password"
+                    placeholder={t('settings.binPasswordPlaceholder', { defaultValue: 'Admin password' })}
                     value={binPassword}
                     onChange={e => { setBinPassword(e.target.value); setBinPasswordError(''); }}
                     onKeyDown={e => e.key === 'Enter' && verifyBinPassword()}
@@ -737,7 +776,7 @@ export default function Settings() {
                   {binPasswordError && <p className="text-xs text-destructive">{binPasswordError}</p>}
                 </div>
                 <Button onClick={verifyBinPassword} disabled={binVerifying || !binPassword} className="w-full">
-                  {binVerifying ? 'Verifying…' : 'Unlock Recycle Bin'}
+                  {binVerifying ? t('settings.verifyingEllipsis', { defaultValue: 'Verifying…' }) : t('settings.unlockRecycleBin', { defaultValue: 'Unlock Recycle Bin' })}
                 </Button>
               </div>
             </div>
@@ -748,10 +787,15 @@ export default function Settings() {
                 <div className="flex items-center gap-3">
                   <div className="flex items-center gap-2">
                     <Clock className="w-4 h-4 text-muted-foreground" />
-                    <span className="text-sm text-muted-foreground">Auto-delete after:</span>
+                    <span className="text-sm text-muted-foreground">{t('settings.autoDeleteAfterLabel', { defaultValue: 'Auto-delete after:' })}</span>
                   </div>
                   <div className="flex gap-1">
-                    {[{ v: 0, l: 'Never' }, { v: 7, l: '7 days' }, { v: 30, l: '30 days' }, { v: 90, l: '90 days' }].map(opt => (
+                    {[
+                      { v: 0, l: t('settings.autoDeleteNever', { defaultValue: 'Never' }) },
+                      { v: 7, l: t('settings.autoDelete7Days', { defaultValue: '7 days' }) },
+                      { v: 30, l: t('settings.autoDelete30Days', { defaultValue: '30 days' }) },
+                      { v: 90, l: t('settings.autoDelete90Days', { defaultValue: '90 days' }) },
+                    ].map(opt => (
                       <button
                         key={opt.v}
                         onClick={() => setBinAutoDeletePref(opt.v)}
@@ -766,7 +810,7 @@ export default function Settings() {
                 </div>
                 <div className="flex gap-2">
                   <Button variant="outline" size="sm" onClick={loadBinItems}>
-                    <RotateCw className="w-3.5 h-3.5 mr-1" />Refresh
+                    <RotateCw className="w-3.5 h-3.5 mr-1" />{t('settings.refresh', { defaultValue: 'Refresh' })}
                   </Button>
                   <Button
                     variant="destructive"
@@ -774,7 +818,7 @@ export default function Settings() {
                     onClick={() => setBinConfirmEmpty(true)}
                     disabled={!binItems || Object.values(binItems).every(arr => arr.length === 0)}
                   >
-                    <Trash2 className="w-3.5 h-3.5 mr-1" />Empty Bin
+                    <Trash2 className="w-3.5 h-3.5 mr-1" />{t('settings.emptyBin', { defaultValue: 'Empty Bin' })}
                   </Button>
                 </div>
               </div>
@@ -784,11 +828,11 @@ export default function Settings() {
                 <div className="bg-destructive/10 border border-destructive/30 rounded-xl p-4 flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <AlertTriangle className="w-4 h-4 text-destructive" />
-                    <span className="text-sm font-medium">Permanently delete ALL items in the bin?</span>
+                    <span className="text-sm font-medium">{t('settings.confirmEmptyBinMessage', { defaultValue: 'Permanently delete ALL items in the bin?' })}</span>
                   </div>
                   <div className="flex gap-2">
-                    <Button variant="outline" size="sm" onClick={() => setBinConfirmEmpty(false)}>Cancel</Button>
-                    <Button variant="destructive" size="sm" onClick={emptyBin}>Yes, empty bin</Button>
+                    <Button variant="outline" size="sm" onClick={() => setBinConfirmEmpty(false)}>{t('settings.cancel', { defaultValue: 'Cancel' })}</Button>
+                    <Button variant="destructive" size="sm" onClick={emptyBin}>{t('settings.yesEmptyBin', { defaultValue: 'Yes, empty bin' })}</Button>
                   </div>
                 </div>
               )}
@@ -800,19 +844,19 @@ export default function Settings() {
               ) : !binItems || Object.values(binItems).every(arr => arr.length === 0) ? (
                 <div className="flex flex-col items-center justify-center py-20 gap-3 text-muted-foreground">
                   <Recycle className="w-12 h-12 opacity-20" />
-                  <p className="text-sm font-medium">Recycle bin is empty</p>
+                  <p className="text-sm font-medium">{t('settings.recycleBinEmpty', { defaultValue: 'Recycle bin is empty' })}</p>
                 </div>
               ) : (
                 <div className="space-y-4">
                   {[
-                    { key: 'clients',   label: 'Clients',         icon: '👤', type: 'client',   nameKey: 'name',         subKey: 'email' },
-                    { key: 'vendors',   label: 'Vendors',         icon: '🏢', type: 'vendor',   nameKey: 'name',         subKey: 'phone' },
-                    { key: 'employees', label: 'Employees',       icon: '👷', type: 'employee', nameKey: 'name',         subKey: 'designation' },
-                    { key: 'inventory', label: 'Inventory Items', icon: '📦', type: 'inventory',nameKey: 'itemName',     subKey: 'brand' },
-                    { key: 'sales',     label: 'Sales Orders',    icon: '🧾', type: 'sales',    nameKey: 'invoiceNumber',subKey: 'clientName' },
-                    { key: 'purchases', label: 'Purchase Orders', icon: '🛒', type: 'purchase', nameKey: 'orderNumber',  subKey: 'vendorName' },
-                    { key: 'tasks',     label: 'Tasks',           icon: '✅', type: 'task',     nameKey: 'title',        subKey: 'assignedTo' },
-                    { key: 'memos',     label: 'Memos',           icon: '📝', type: 'memo',     nameKey: 'title',        subKey: 'documentType' },
+                    { key: 'clients',   label: t('settings.sectionClients', { defaultValue: 'Clients' }),         icon: '👤', type: 'client',   nameKey: 'name',         subKey: 'email' },
+                    { key: 'vendors',   label: t('settings.sectionVendors', { defaultValue: 'Vendors' }),         icon: '🏢', type: 'vendor',   nameKey: 'name',         subKey: 'phone' },
+                    { key: 'employees', label: t('settings.sectionEmployees', { defaultValue: 'Employees' }),       icon: '👷', type: 'employee', nameKey: 'name',         subKey: 'designation' },
+                    { key: 'inventory', label: t('settings.sectionInventoryItems', { defaultValue: 'Inventory Items' }), icon: '📦', type: 'inventory',nameKey: 'itemName',     subKey: 'brand' },
+                    { key: 'sales',     label: t('settings.sectionSalesOrders', { defaultValue: 'Sales Orders' }),    icon: '🧾', type: 'sales',    nameKey: 'invoiceNumber',subKey: 'clientName' },
+                    { key: 'purchases', label: t('settings.sectionPurchaseOrders', { defaultValue: 'Purchase Orders' }), icon: '🛒', type: 'purchase', nameKey: 'orderNumber',  subKey: 'vendorName' },
+                    { key: 'tasks',     label: t('settings.sectionTasks', { defaultValue: 'Tasks' }),           icon: '✅', type: 'task',     nameKey: 'title',        subKey: 'assignedTo' },
+                    { key: 'memos',     label: t('settings.sectionMemos', { defaultValue: 'Memos' }),           icon: '📝', type: 'memo',     nameKey: 'title',        subKey: 'documentType' },
                   ].filter(s => binItems[s.key]?.length > 0).map(section => (
                     <div key={section.key} className="bg-card rounded-xl border overflow-hidden">
                       <div className="px-4 py-3 bg-secondary/50 border-b flex items-center gap-2">
@@ -829,7 +873,7 @@ export default function Settings() {
                               <p className="text-sm font-medium truncate">{item[section.nameKey] || '—'}</p>
                               <p className="text-xs text-muted-foreground truncate">
                                 {item[section.subKey] && `${item[section.subKey]} · `}
-                                Deleted {new Date(item.deletedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                {t('settings.deletedOn', { defaultValue: 'Deleted {{date}}', date: new Date(item.deletedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) })}
                               </p>
                             </div>
                             <div className="flex gap-2 ml-3 shrink-0">
@@ -839,7 +883,7 @@ export default function Settings() {
                                 onClick={() => restoreItem(item.id, section.type)}
                                 className="h-7 text-xs gap-1"
                               >
-                                <RotateCcw className="w-3 h-3" />Restore
+                                <RotateCcw className="w-3 h-3" />{t('settings.restore', { defaultValue: 'Restore' })}
                               </Button>
                               <Button
                                 size="sm"
@@ -868,7 +912,7 @@ export default function Settings() {
           <div className="h-1 bg-gradient-to-r from-blue-800 to-blue-500 -mx-6 -mt-6 mb-4" />
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Building2 className="w-5 h-5 text-primary" />Add Company
+              <Building2 className="w-5 h-5 text-primary" />{t('settings.addCompanyDialogTitle', { defaultValue: 'Add Company' })}
             </DialogTitle>
           </DialogHeader>
 
@@ -881,13 +925,13 @@ export default function Settings() {
               className="space-y-3 overflow-y-auto pr-1"
             >
               <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-                <Building2 className="w-3.5 h-3.5" />Company Info
+                <Building2 className="w-3.5 h-3.5" />{t('settings.companyInfoSection', { defaultValue: 'Company Info' })}
               </p>
 
               <LogoUpload value={companyForm.logo_url} onChange={url => setCompanyForm(f => ({ ...f, logo_url: url }))} onFile={e => handleLogoUpload(e, false)} uploading={uploadingLogo} />
 
               <div className="space-y-1">
-                <Label>Company Name *</Label>
+                <Label>{t('settings.companyNameRequired', { defaultValue: 'Company Name *' })}</Label>
                 <div className="relative">
                   <Building2 className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
                   <Input className="pl-8 h-9 text-sm" value={companyForm.name} onChange={e => setCompanyForm({ ...companyForm, name: e.target.value })} />
@@ -895,27 +939,27 @@ export default function Settings() {
               </div>
 
               <div className="space-y-1">
-                <Label>Business Type</Label>
+                <Label>{t('settings.businessTypeLabel', { defaultValue: 'Business Type' })}</Label>
                 <select
                   className="w-full border rounded-md px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring mt-1"
                   value={BUSINESS_TYPES.some(b => b.value === companyForm.business_type) ? companyForm.business_type : (companyForm.business_type ? 'OTHER' : '')}
                   onChange={e => setCompanyForm({ ...companyForm, business_type: e.target.value })}
                 >
-                  <option value="">Select business type…</option>
-                  {BUSINESS_TYPES.map(bt => <option key={bt.value} value={bt.value}>{bt.label}</option>)}
+                  <option value="">{t('settings.selectBusinessType', { defaultValue: 'Select business type…' })}</option>
+                  {BUSINESS_TYPES.map(bt => <option key={bt.value} value={bt.value}>{businessTypeLabel(bt.value)}</option>)}
                 </select>
                 {companyForm.business_type === 'OTHER' && (
-                  <Input className="mt-2" placeholder="Describe your business (e.g. Tailoring Shop, Laundry)" autoFocus
+                  <Input className="mt-2" placeholder={t('settings.describeBusinessPlaceholder', { defaultValue: 'Describe your business (e.g. Tailoring Shop, Laundry)' })} autoFocus
                     value='' onChange={e => setCompanyForm({ ...companyForm, business_type: e.target.value })} />
                 )}
                 {companyForm.business_type && !BUSINESS_TYPES.some(b => b.value === companyForm.business_type) && companyForm.business_type !== 'OTHER' && (
-                  <Input className="mt-2" placeholder="Describe your business"
+                  <Input className="mt-2" placeholder={t('settings.describeBusinessShortPlaceholder', { defaultValue: 'Describe your business' })}
                     value={companyForm.business_type} onChange={e => setCompanyForm({ ...companyForm, business_type: e.target.value })} />
                 )}
               </div>
 
               <div className="space-y-1">
-                <Label>Registration Number</Label>
+                <Label>{t('settings.registrationNumberLabel', { defaultValue: 'Registration Number' })}</Label>
                 <div className="relative">
                   <Hash className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
                   <Input className="pl-8 h-9 text-sm" value={companyForm.registration_number} onChange={e => setCompanyForm({ ...companyForm, registration_number: e.target.value })} />
@@ -931,11 +975,11 @@ export default function Settings() {
               className="space-y-3 overflow-y-auto pr-1"
             >
               <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-                <Phone className="w-3.5 h-3.5" />Contact Details
+                <Phone className="w-3.5 h-3.5" />{t('settings.contactDetailsSection', { defaultValue: 'Contact Details' })}
               </p>
 
               <div className="space-y-1">
-                <Label>Address</Label>
+                <Label>{t('settings.addressLabel', { defaultValue: 'Address' })}</Label>
                 <div className="relative">
                   <MapPin className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
                   <Input className="pl-8 h-9 text-sm" value={companyForm.address} onChange={e => setCompanyForm({ ...companyForm, address: e.target.value })} />
@@ -943,7 +987,7 @@ export default function Settings() {
               </div>
 
               <div className="space-y-1">
-                <Label>Phone</Label>
+                <Label>{t('settings.phoneLabel', { defaultValue: 'Phone' })}</Label>
                 <div className="relative">
                   <Phone className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
                   <Input className="pl-8 h-9 text-sm" value={companyForm.phone} onChange={e => setCompanyForm({ ...companyForm, phone: e.target.value })} />
@@ -951,7 +995,7 @@ export default function Settings() {
               </div>
 
               <div className="space-y-1">
-                <Label>Email</Label>
+                <Label>{t('settings.emailLabel', { defaultValue: 'Email' })}</Label>
                 <div className="relative">
                   <Mail className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
                   <Input className="pl-8 h-9 text-sm" value={companyForm.email} onChange={e => setCompanyForm({ ...companyForm, email: e.target.value })} />
@@ -959,7 +1003,7 @@ export default function Settings() {
               </div>
 
               <div className="space-y-1">
-                <Label>PAN/VAT Number</Label>
+                <Label>{t('settings.panVatLabel', { defaultValue: 'PAN/VAT Number' })}</Label>
                 <div className="relative">
                   <Hash className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
                   <Input className="pl-8 h-9 text-sm" value={companyForm.pan_vat} onChange={e => setCompanyForm({ ...companyForm, pan_vat: e.target.value })} />
@@ -969,8 +1013,8 @@ export default function Settings() {
           </div>
 
           <DialogFooter className="mt-4">
-            <Button variant="outline" onClick={() => setShowAddCompany(false)}>Cancel</Button>
-            <Button onClick={addCompany} disabled={!companyForm.name}>Create</Button>
+            <Button variant="outline" onClick={() => setShowAddCompany(false)}>{t('settings.cancel', { defaultValue: 'Cancel' })}</Button>
+            <Button onClick={addCompany} disabled={!companyForm.name}>{t('settings.create', { defaultValue: 'Create' })}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -981,7 +1025,7 @@ export default function Settings() {
           <div className="h-1 bg-gradient-to-r from-blue-800 to-blue-500 -mx-6 -mt-6 mb-4" />
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Building2 className="w-5 h-5 text-primary" />Edit Company
+              <Building2 className="w-5 h-5 text-primary" />{t('settings.editCompanyDialogTitle', { defaultValue: 'Edit Company' })}
             </DialogTitle>
           </DialogHeader>
 
@@ -995,13 +1039,13 @@ export default function Settings() {
                 className="space-y-3 overflow-y-auto pr-1"
               >
                 <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-                  <Building2 className="w-3.5 h-3.5" />Company Info
+                  <Building2 className="w-3.5 h-3.5" />{t('settings.companyInfoSection', { defaultValue: 'Company Info' })}
                 </p>
 
                 <LogoUpload value={editingCompany.logo_url} onChange={url => setEditingCompany(c => ({ ...c, logo_url: url }))} onFile={e => handleLogoUpload(e, true)} uploading={uploadingLogo} />
 
                 <div className="space-y-1">
-                  <Label>Company Name</Label>
+                  <Label>{t('settings.companyNameLabel', { defaultValue: 'Company Name' })}</Label>
                   <div className="relative">
                     <Building2 className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
                     <Input className="pl-8 h-9 text-sm" value={editingCompany.name} onChange={e => setEditingCompany({ ...editingCompany, name: e.target.value })} />
@@ -1009,27 +1053,27 @@ export default function Settings() {
                 </div>
 
                 <div className="space-y-1">
-                  <Label>Business Type</Label>
+                  <Label>{t('settings.businessTypeLabel', { defaultValue: 'Business Type' })}</Label>
                   <select
                     className="w-full border rounded-md px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring mt-1"
                     value={BUSINESS_TYPES.some(b => b.value === editingCompany.business_type) ? editingCompany.business_type : (editingCompany.business_type ? 'OTHER' : '')}
                     onChange={e => setEditingCompany({ ...editingCompany, business_type: e.target.value })}
                   >
-                    <option value="">Select business type…</option>
-                    {BUSINESS_TYPES.map(bt => <option key={bt.value} value={bt.value}>{bt.label}</option>)}
+                    <option value="">{t('settings.selectBusinessType', { defaultValue: 'Select business type…' })}</option>
+                    {BUSINESS_TYPES.map(bt => <option key={bt.value} value={bt.value}>{businessTypeLabel(bt.value)}</option>)}
                   </select>
                   {editingCompany.business_type === 'OTHER' && (
-                    <Input className="mt-2" placeholder="Describe your business (e.g. Tailoring Shop, Laundry)" autoFocus
+                    <Input className="mt-2" placeholder={t('settings.describeBusinessPlaceholder', { defaultValue: 'Describe your business (e.g. Tailoring Shop, Laundry)' })} autoFocus
                       value='' onChange={e => setEditingCompany({ ...editingCompany, business_type: e.target.value })} />
                   )}
                   {editingCompany.business_type && !BUSINESS_TYPES.some(b => b.value === editingCompany.business_type) && editingCompany.business_type !== 'OTHER' && (
-                    <Input className="mt-2" placeholder="Describe your business"
+                    <Input className="mt-2" placeholder={t('settings.describeBusinessShortPlaceholder', { defaultValue: 'Describe your business' })}
                       value={editingCompany.business_type} onChange={e => setEditingCompany({ ...editingCompany, business_type: e.target.value })} />
                   )}
                 </div>
 
                 <div className="space-y-1">
-                  <Label>Registration Number</Label>
+                  <Label>{t('settings.registrationNumberLabel', { defaultValue: 'Registration Number' })}</Label>
                   <div className="relative">
                     <Hash className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
                     <Input className="pl-8 h-9 text-sm" value={editingCompany.registration_number || ''} onChange={e => setEditingCompany({ ...editingCompany, registration_number: e.target.value })} />
@@ -1045,11 +1089,11 @@ export default function Settings() {
                 className="space-y-3 overflow-y-auto pr-1"
               >
                 <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-                  <Phone className="w-3.5 h-3.5" />Contact Details
+                  <Phone className="w-3.5 h-3.5" />{t('settings.contactDetailsSection', { defaultValue: 'Contact Details' })}
                 </p>
 
                 <div className="space-y-1">
-                  <Label>Address</Label>
+                  <Label>{t('settings.addressLabel', { defaultValue: 'Address' })}</Label>
                   <div className="relative">
                     <MapPin className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
                     <Input className="pl-8 h-9 text-sm" value={editingCompany.address || ''} onChange={e => setEditingCompany({ ...editingCompany, address: e.target.value })} />
@@ -1057,7 +1101,7 @@ export default function Settings() {
                 </div>
 
                 <div className="space-y-1">
-                  <Label>Phone</Label>
+                  <Label>{t('settings.phoneLabel', { defaultValue: 'Phone' })}</Label>
                   <div className="relative">
                     <Phone className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
                     <Input className="pl-8 h-9 text-sm" value={editingCompany.phone || ''} onChange={e => setEditingCompany({ ...editingCompany, phone: e.target.value })} />
@@ -1065,7 +1109,7 @@ export default function Settings() {
                 </div>
 
                 <div className="space-y-1">
-                  <Label>Email</Label>
+                  <Label>{t('settings.emailLabel', { defaultValue: 'Email' })}</Label>
                   <div className="relative">
                     <Mail className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
                     <Input className="pl-8 h-9 text-sm" value={editingCompany.email || ''} onChange={e => setEditingCompany({ ...editingCompany, email: e.target.value })} />
@@ -1073,7 +1117,7 @@ export default function Settings() {
                 </div>
 
                 <div className="space-y-1">
-                  <Label>PAN/VAT Number</Label>
+                  <Label>{t('settings.panVatLabel', { defaultValue: 'PAN/VAT Number' })}</Label>
                   <div className="relative">
                     <Hash className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
                     <Input className="pl-8 h-9 text-sm" value={editingCompany.pan_vat || ''} onChange={e => setEditingCompany({ ...editingCompany, pan_vat: e.target.value })} />
@@ -1084,8 +1128,8 @@ export default function Settings() {
           )}
 
           <DialogFooter className="mt-4">
-            <Button variant="outline" onClick={() => setEditingCompany(null)}>Cancel</Button>
-            <Button onClick={updateCompany}><Save className="w-4 h-4 mr-1" />Save</Button>
+            <Button variant="outline" onClick={() => setEditingCompany(null)}>{t('settings.cancel', { defaultValue: 'Cancel' })}</Button>
+            <Button onClick={updateCompany}><Save className="w-4 h-4 mr-1" />{t('settings.save', { defaultValue: 'Save' })}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -1096,7 +1140,7 @@ export default function Settings() {
           <div className="h-1 bg-gradient-to-r from-blue-800 to-blue-500 -mx-6 -mt-6 mb-4" />
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <UserPlus className="w-5 h-5 text-primary" />Invite Team Member
+              <UserPlus className="w-5 h-5 text-primary" />{t('settings.inviteTeamMemberTitle', { defaultValue: 'Invite Team Member' })}
             </DialogTitle>
           </DialogHeader>
 
@@ -1109,12 +1153,12 @@ export default function Settings() {
             >
               {/* Full Name */}
               <div className="space-y-1">
-                <Label>Full Name *</Label>
+                <Label>{t('settings.fullNameRequired', { defaultValue: 'Full Name *' })}</Label>
                 <div className="relative">
                   <User className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
                   <Input
                     className="pl-8 h-9 text-sm"
-                    placeholder="Ram Sharma"
+                    placeholder={t('settings.fullNamePlaceholder', { defaultValue: 'Ram Sharma' })}
                     value={inviteForm.name}
                     onChange={e => setInviteForm({ ...inviteForm, name: e.target.value })}
                     required
@@ -1124,13 +1168,13 @@ export default function Settings() {
 
               {/* Email */}
               <div className="space-y-1">
-                <Label>Email *</Label>
+                <Label>{t('settings.emailRequired', { defaultValue: 'Email *' })}</Label>
                 <div className="relative">
                   <Mail className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
                   <Input
                     type="email"
                     className="pl-8 h-9 text-sm"
-                    placeholder="ram@company.com"
+                    placeholder={t('settings.emailPlaceholder', { defaultValue: 'ram@company.com' })}
                     value={inviteForm.email}
                     onChange={e => setInviteForm({ ...inviteForm, email: e.target.value })}
                     required
@@ -1140,14 +1184,14 @@ export default function Settings() {
 
               {/* Role chips */}
               <div className="space-y-2">
-                <Label>Role *</Label>
+                <Label>{t('settings.roleRequired', { defaultValue: 'Role *' })}</Label>
                 <div className="flex flex-col gap-2">
                   {[
-                    { v: 'STAFF', label: 'Staff', desc: 'Day-to-day operations' },
-                    { v: 'ACCOUNTANT', label: 'Accountant', desc: 'Full financial access' },
+                    { v: 'STAFF', label: t('settings.roleStaffLabel', { defaultValue: 'Staff' }), desc: t('settings.roleStaffDesc', { defaultValue: 'Day-to-day operations' }) },
+                    { v: 'ACCOUNTANT', label: t('settings.roleAccountantLabel', { defaultValue: 'Accountant' }), desc: t('settings.roleAccountantDesc', { defaultValue: 'Full financial access' }) },
                     ...(isSchool ? [
-                      { v: 'TEACHER', label: 'Teacher', desc: 'Attendance, exams, homework, materials' },
-                      { v: 'LIBRARIAN', label: 'Librarian', desc: 'Library books, issues and returns' },
+                      { v: 'TEACHER', label: t('settings.roleTeacherLabel', { defaultValue: 'Teacher' }), desc: t('settings.roleTeacherDesc', { defaultValue: 'Attendance, exams, homework, materials' }) },
+                      { v: 'LIBRARIAN', label: t('settings.roleLibrarianLabel', { defaultValue: 'Librarian' }), desc: t('settings.roleLibrarianDesc', { defaultValue: 'Library books, issues and returns' }) },
                     ] : []),
                   ].map(r => (
                     <button
@@ -1163,12 +1207,12 @@ export default function Settings() {
                 </div>
               </div>
 
-              <p className="text-xs text-muted-foreground">A temporary password will be generated. Share it with the user so they can log in.</p>
+              <p className="text-xs text-muted-foreground">{t('settings.tempPasswordNotice', { defaultValue: 'A temporary password will be generated. Share it with the user so they can log in.' })}</p>
             </motion.div>
 
             <DialogFooter className="mt-4">
-              <Button type="button" variant="outline" onClick={() => { setShowInvite(false); setInviteForm({ name: '', email: '', role: 'STAFF' }); }}>Cancel</Button>
-              <Button type="submit" disabled={inviteLoading}>{inviteLoading ? 'Inviting…' : 'Send Invite'}</Button>
+              <Button type="button" variant="outline" onClick={() => { setShowInvite(false); setInviteForm({ name: '', email: '', role: 'STAFF' }); }}>{t('settings.cancel', { defaultValue: 'Cancel' })}</Button>
+              <Button type="submit" disabled={inviteLoading}>{inviteLoading ? t('settings.invitingEllipsis', { defaultValue: 'Inviting…' }) : t('settings.sendInvite', { defaultValue: 'Send Invite' })}</Button>
             </DialogFooter>
           </form>
         </DialogContent>
@@ -1177,9 +1221,9 @@ export default function Settings() {
       {/* ── Temp Password Dialog ──────────────────────────────────────────── */}
       <Dialog open={!!tempPassword} onOpenChange={() => {}}>
         <DialogContent className="max-w-sm">
-          <DialogHeader><DialogTitle>User Invited</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{t('settings.userInvitedTitle', { defaultValue: 'User Invited' })}</DialogTitle></DialogHeader>
           <div className="space-y-4">
-            <p className="text-sm text-muted-foreground">The user has been created. Share this temporary password with them — they should change it after first login.</p>
+            <p className="text-sm text-muted-foreground">{t('settings.tempPasswordDesc', { defaultValue: 'The user has been created. Share this temporary password with them — they should change it after first login.' })}</p>
             <div className="flex items-center gap-2 bg-secondary rounded-lg px-4 py-3">
               <code className="flex-1 text-sm font-mono tracking-widest">{tempPassword}</code>
               <button type="button" onClick={copyTempPassword} className="text-muted-foreground hover:text-foreground transition-colors">
@@ -1188,7 +1232,7 @@ export default function Settings() {
             </div>
           </div>
           <DialogFooter>
-            <Button className="w-full" onClick={closeTempPasswordDialog}>Done</Button>
+            <Button className="w-full" onClick={closeTempPasswordDialog}>{t('settings.done', { defaultValue: 'Done' })}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -1197,9 +1241,10 @@ export default function Settings() {
 }
 
 function LogoUpload({ value, onChange, onFile, uploading }) {
+  const { t } = useTranslation();
   return (
     <div>
-      <Label className="text-sm font-medium mb-2 block">Company Logo</Label>
+      <Label className="text-sm font-medium mb-2 block">{t('settings.companyLogoLabel', { defaultValue: 'Company Logo' })}</Label>
       {value ? (
         <div className="relative w-16 h-16">
           <img src={value} alt="logo" className="w-16 h-16 rounded-lg object-cover border shadow-sm" />
@@ -1211,7 +1256,7 @@ function LogoUpload({ value, onChange, onFile, uploading }) {
       ) : (
         <label className="flex flex-col items-center justify-center w-16 h-16 border-2 border-dashed border-muted-foreground/25 rounded-lg cursor-pointer hover:border-primary/50 hover:bg-primary/5 transition-colors">
           <ImagePlus className="w-4 h-4 text-muted-foreground mb-1" />
-          <span className="text-xs text-muted-foreground">Logo</span>
+          <span className="text-xs text-muted-foreground">{t('settings.logoLabel', { defaultValue: 'Logo' })}</span>
           <input type="file" accept="image/*" className="hidden" onChange={onFile} disabled={uploading} />
         </label>
       )}

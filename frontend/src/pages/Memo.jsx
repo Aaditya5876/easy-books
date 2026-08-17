@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { api } from '@/api/adapter';
 import { getActiveCompanyId } from '@/lib/companyContext';
 import { adToBs } from '@/lib/nepaliDate';
@@ -55,16 +56,26 @@ const CATEGORY_CONFIG = {
 };
 
 const CATEGORIES = [
-  { value: 'quotation',      label: 'Quotations' },
-  { value: 'purchase_bill',  label: 'Purchase Bills' },
-  { value: 'sales_bill',     label: 'Sales Bills' },
-  { value: 'job_card',       label: 'Job Cards' },
-  { value: 'order_slip',     label: 'Order Slips' },
-  { value: 'extra_work',     label: 'Extra Work / Pending' },
-  { value: 'supporting_doc', label: 'Supporting Documents' },
+  { value: 'quotation',      label: 'Quotations',              labelKey: 'memo.categoryQuotations' },
+  { value: 'purchase_bill',  label: 'Purchase Bills',          labelKey: 'memo.categoryPurchaseBills' },
+  { value: 'sales_bill',     label: 'Sales Bills',             labelKey: 'memo.categorySalesBills' },
+  { value: 'job_card',       label: 'Job Cards',                labelKey: 'memo.categoryJobCards' },
+  { value: 'order_slip',     label: 'Order Slips',             labelKey: 'memo.categoryOrderSlips' },
+  { value: 'extra_work',     label: 'Extra Work / Pending',     labelKey: 'memo.categoryExtraWork' },
+  { value: 'supporting_doc', label: 'Supporting Documents',     labelKey: 'memo.categorySupportingDocuments' },
 ];
 
 const REMARKS = ['Quoted', 'Work-done', 'Cancelled', 'Revised', 'Billed'];
+
+// Translation keys for remark values (the underlying values stay in English since
+// they are persisted as the `status` field; only the displayed label is translated)
+const REMARK_LABEL_KEYS = {
+  Quoted:      'memo.remarkQuoted',
+  'Work-done': 'memo.remarkWorkDone',
+  Cancelled:   'memo.remarkCancelled',
+  Revised:     'memo.remarkRevised',
+  Billed:      'memo.remarkBilled',
+};
 
 const today = new Date().toISOString().split('T')[0];
 
@@ -110,7 +121,10 @@ function SectionLabel({ children }) {
 
 // ─── Main component ───────────────────────────────────────────────────────────
 export default function Memo() {
+  const { t } = useTranslation();
   const companyId = getActiveCompanyId();
+  const remarkLabel = (r) => t(REMARK_LABEL_KEYS[r] || '', { defaultValue: r });
+  const categories = CATEGORIES.map(c => ({ ...c, label: t(c.labelKey, { defaultValue: c.label }) }));
   const [documents, setDocuments]         = useState([]);
   const [loading, setLoading]             = useState(true);
   const [activeTab, setActiveTab]         = useState('quotation');
@@ -143,11 +157,11 @@ export default function Memo() {
     const cat = form.category;
     // Basic required-field guard
     if (cat === 'purchase_bill' && !form.vendor_name?.trim()) {
-      alert('Vendor name is required');
+      alert(t('memo.vendorNameRequiredAlert', { defaultValue: 'Vendor name is required' }));
       return;
     }
     if (cat !== 'purchase_bill' && cat !== 'supporting_doc' && !form.client_name?.trim()) {
-      alert('Client name is required');
+      alert(t('memo.clientNameRequiredAlert', { defaultValue: 'Client name is required' }));
       return;
     }
 
@@ -196,7 +210,7 @@ export default function Memo() {
       await loadData();
     } catch (error) {
       console.error('Error creating document:', error);
-      alert('Error saving document: ' + error.message);
+      alert(t('memo.errorSavingDocument', { defaultValue: 'Error saving document: ' }) + error.message);
     }
   }
 
@@ -219,24 +233,24 @@ export default function Memo() {
 
   // ── Column definitions ──────────────────────────────────────────────────────
   const quotationColumns = [
-    { key: 'date_ad', label: 'Date', render: (row) => (
+    { key: 'date_ad', label: t('memo.colDate', { defaultValue: 'Date' }), render: (row) => (
       <div className="text-xs">
         <div>{formatDate(row.date_ad)}</div>
         <div className="text-muted-foreground">{row.date_bs}</div>
       </div>
     )},
-    { key: 'reference_id', label: 'Reference #',
+    { key: 'reference_id', label: t('memo.colReferenceNo', { defaultValue: 'Reference #' }),
       filterValue: colFilters.reference_id, onFilterChange: v => setCol('reference_id', v),
       render: (row) => <span className="text-sm font-mono">{row.reference_id || '-'}</span> },
-    { key: 'client_name', label: 'Client',
+    { key: 'client_name', label: t('memo.colClient', { defaultValue: 'Client' }),
       filterValue: colFilters.client_name, onFilterChange: v => setCol('client_name', v),
       render: (row) => <span className="font-medium">{row.client_name}</span> },
-    { key: 'client_contact', label: 'Contact' },
-    { key: 'amount', label: 'Amount',
+    { key: 'client_contact', label: t('memo.colContact', { defaultValue: 'Contact' }) },
+    { key: 'amount', label: t('memo.colAmount', { defaultValue: 'Amount' }),
       render: (row) => <span className="font-mono">{row.amount ? `NPR ${row.amount.toLocaleString()}` : '-'}</span> },
-    { key: 'status', label: 'Remark',
+    { key: 'status', label: t('memo.colRemark', { defaultValue: 'Remark' }),
       filterValue: colFilters.status, onFilterChange: v => setCol('status', v),
-      filterPlaceholder: 'e.g. Quoted',
+      filterPlaceholder: t('memo.filterRemarkPlaceholder', { defaultValue: 'e.g. Quoted' }),
       render: (row) => (
         <select
           value={row.status || ''}
@@ -244,127 +258,127 @@ export default function Memo() {
           onClick={e => e.stopPropagation()}
           className={`text-xs px-2 py-0.5 rounded-full font-medium border-0 cursor-pointer outline-none ${remarkColors[row.status] || 'bg-gray-100 text-gray-600'}`}
         >
-          <option value="">— select —</option>
-          {REMARKS.map(r => <option key={r} value={r}>{r}</option>)}
+          <option value="">{t('memo.selectPlaceholderDash', { defaultValue: '— select —' })}</option>
+          {REMARKS.map(r => <option key={r} value={r}>{remarkLabel(r)}</option>)}
         </select>
       )},
-    { key: 'document_url', label: 'Doc',
+    { key: 'document_url', label: t('memo.colDoc', { defaultValue: 'Doc' }),
       render: (row) => row.document_url ? (
         <a href={row.document_url} target="_blank" rel="noopener noreferrer"
            className="text-primary hover:underline flex items-center gap-1">
-          <ExternalLink className="w-3 h-3" />View
+          <ExternalLink className="w-3 h-3" />{t('memo.view', { defaultValue: 'View' })}
         </a>
       ) : '-' },
   ];
 
   const purchaseBillColumns = [
-    { key: 'date_ad', label: 'Date', render: (row) => (
+    { key: 'date_ad', label: t('memo.colDate', { defaultValue: 'Date' }), render: (row) => (
       <div className="text-xs"><div>{formatDate(row.date_ad)}</div><div className="text-muted-foreground">{row.date_bs}</div></div>
     )},
-    { key: 'reference_id', label: 'Bill #',
+    { key: 'reference_id', label: t('memo.colBillNo', { defaultValue: 'Bill #' }),
       filterValue: colFilters.reference_id, onFilterChange: v => setCol('reference_id', v),
       render: (row) => <span className="text-sm font-mono">{row.reference_id || '-'}</span> },
-    { key: 'vendor_name', label: 'Vendor',
+    { key: 'vendor_name', label: t('memo.colVendor', { defaultValue: 'Vendor' }),
       filterValue: colFilters.client_name, onFilterChange: v => setCol('client_name', v),
       render: (row) => <span className="font-medium">{row.vendor_name || '-'}</span> },
-    { key: 'vendor_contact', label: 'Contact',
+    { key: 'vendor_contact', label: t('memo.colContact', { defaultValue: 'Contact' }),
       render: (row) => row.vendor_contact || '-' },
-    { key: 'vendor_pan', label: 'PAN',
+    { key: 'vendor_pan', label: t('memo.colPan', { defaultValue: 'PAN' }),
       render: (row) => <span className="font-mono">{row.vendor_pan || '-'}</span> },
-    { key: 'amount', label: 'Amount',
+    { key: 'amount', label: t('memo.colAmount', { defaultValue: 'Amount' }),
       render: (row) => <span className="font-mono">{row.amount ? `NPR ${row.amount.toLocaleString()}` : '-'}</span> },
-    { key: 'document_url', label: 'Document',
+    { key: 'document_url', label: t('memo.colDocument', { defaultValue: 'Document' }),
       render: (row) => row.document_url ? (
         <a href={row.document_url} target="_blank" rel="noopener noreferrer"
            className="text-primary hover:underline flex items-center gap-1">
-          <ExternalLink className="w-3 h-3" />View
+          <ExternalLink className="w-3 h-3" />{t('memo.view', { defaultValue: 'View' })}
         </a>
       ) : '-' },
   ];
 
   const salesBillColumns = [
-    { key: 'date_ad', label: 'Date', render: (row) => (
+    { key: 'date_ad', label: t('memo.colDate', { defaultValue: 'Date' }), render: (row) => (
       <div className="text-xs"><div>{formatDate(row.date_ad)}</div><div className="text-muted-foreground">{row.date_bs}</div></div>
     )},
-    { key: 'reference_id', label: 'Invoice #',
+    { key: 'reference_id', label: t('memo.colInvoiceNo', { defaultValue: 'Invoice #' }),
       filterValue: colFilters.reference_id, onFilterChange: v => setCol('reference_id', v),
       render: (row) => <span className="text-sm font-mono">{row.reference_id || '-'}</span> },
-    { key: 'client_name', label: 'Client',
+    { key: 'client_name', label: t('memo.colClient', { defaultValue: 'Client' }),
       filterValue: colFilters.client_name, onFilterChange: v => setCol('client_name', v),
       render: (row) => <span className="font-medium">{row.client_name}</span> },
-    { key: 'client_contact', label: 'Contact' },
-    { key: 'amount', label: 'Amount',
+    { key: 'client_contact', label: t('memo.colContact', { defaultValue: 'Contact' }) },
+    { key: 'amount', label: t('memo.colAmount', { defaultValue: 'Amount' }),
       render: (row) => <span className="font-mono">{row.amount ? `NPR ${row.amount.toLocaleString()}` : '-'}</span> },
-    { key: 'document_url', label: 'Document',
+    { key: 'document_url', label: t('memo.colDocument', { defaultValue: 'Document' }),
       render: (row) => row.document_url ? (
         <a href={row.document_url} target="_blank" rel="noopener noreferrer"
            className="text-primary hover:underline flex items-center gap-1">
-          <ExternalLink className="w-3 h-3" />View
+          <ExternalLink className="w-3 h-3" />{t('memo.view', { defaultValue: 'View' })}
         </a>
       ) : '-' },
   ];
 
   const jobCardColumns = [
-    { key: 'date_ad', label: 'Date', render: (row) => (
+    { key: 'date_ad', label: t('memo.colDate', { defaultValue: 'Date' }), render: (row) => (
       <div className="text-xs"><div>{formatDate(row.date_ad)}</div><div className="text-muted-foreground">{row.date_bs}</div></div>
     )},
-    { key: 'client_name', label: 'Client',
+    { key: 'client_name', label: t('memo.colClient', { defaultValue: 'Client' }),
       filterValue: colFilters.client_name, onFilterChange: v => setCol('client_name', v),
       render: (row) => <span className="font-medium">{row.client_name}</span> },
-    { key: 'client_contact', label: 'Contact' },
-    { key: 'assigned_to', label: 'Assigned To',
+    { key: 'client_contact', label: t('memo.colContact', { defaultValue: 'Contact' }) },
+    { key: 'assigned_to', label: t('memo.assignedTo', { defaultValue: 'Assigned To' }),
       render: (row) => row.assigned_to || '-' },
-    { key: 'start_date', label: 'Start', render: (row) => row.start_date ? formatDate(row.start_date) : '-' },
-    { key: 'end_date',   label: 'End',   render: (row) => row.end_date   ? formatDate(row.end_date)   : '-' },
-    { key: 'description', label: 'Description',
+    { key: 'start_date', label: t('memo.colStart', { defaultValue: 'Start' }), render: (row) => row.start_date ? formatDate(row.start_date) : '-' },
+    { key: 'end_date',   label: t('memo.colEnd', { defaultValue: 'End' }),   render: (row) => row.end_date   ? formatDate(row.end_date)   : '-' },
+    { key: 'description', label: t('memo.colDescription', { defaultValue: 'Description' }),
       render: (row) => <span className="text-sm truncate max-w-[200px] block">{row.description || '-'}</span> },
   ];
 
   const orderSlipColumns = [
-    { key: 'date_ad', label: 'Date', render: (row) => (
+    { key: 'date_ad', label: t('memo.colDate', { defaultValue: 'Date' }), render: (row) => (
       <div className="text-xs"><div>{formatDate(row.date_ad)}</div><div className="text-muted-foreground">{row.date_bs}</div></div>
     )},
-    { key: 'client_name', label: 'Client',
+    { key: 'client_name', label: t('memo.colClient', { defaultValue: 'Client' }),
       filterValue: colFilters.client_name, onFilterChange: v => setCol('client_name', v),
       render: (row) => <span className="font-medium">{row.client_name}</span> },
-    { key: 'client_contact', label: 'Contact' },
-    { key: 'delivery_date', label: 'Delivery Date', render: (row) => row.delivery_date ? formatDate(row.delivery_date) : '-' },
-    { key: 'description', label: 'Description',
+    { key: 'client_contact', label: t('memo.colContact', { defaultValue: 'Contact' }) },
+    { key: 'delivery_date', label: t('memo.deliveryDate', { defaultValue: 'Delivery Date' }), render: (row) => row.delivery_date ? formatDate(row.delivery_date) : '-' },
+    { key: 'description', label: t('memo.colDescription', { defaultValue: 'Description' }),
       render: (row) => <span className="text-sm truncate max-w-[200px] block">{row.description || '-'}</span> },
-    { key: 'amount', label: 'Amount',
+    { key: 'amount', label: t('memo.colAmount', { defaultValue: 'Amount' }),
       render: (row) => <span className="font-mono">{row.amount ? `NPR ${row.amount.toLocaleString()}` : '-'}</span> },
   ];
 
   const extraWorkColumns = [
-    { key: 'date_ad', label: 'Date', render: (row) => (
+    { key: 'date_ad', label: t('memo.colDate', { defaultValue: 'Date' }), render: (row) => (
       <div className="text-xs"><div>{formatDate(row.date_ad)}</div><div className="text-muted-foreground">{row.date_bs}</div></div>
     )},
-    { key: 'client_name', label: 'Client',
+    { key: 'client_name', label: t('memo.colClient', { defaultValue: 'Client' }),
       filterValue: colFilters.client_name, onFilterChange: v => setCol('client_name', v),
       render: (row) => <span className="font-medium">{row.client_name}</span> },
-    { key: 'client_contact', label: 'Contact' },
-    { key: 'due_date', label: 'Due Date', render: (row) => row.due_date ? formatDate(row.due_date) : '-' },
-    { key: 'description', label: 'Description',
+    { key: 'client_contact', label: t('memo.colContact', { defaultValue: 'Contact' }) },
+    { key: 'due_date', label: t('memo.dueDate', { defaultValue: 'Due Date' }), render: (row) => row.due_date ? formatDate(row.due_date) : '-' },
+    { key: 'description', label: t('memo.colDescription', { defaultValue: 'Description' }),
       render: (row) => <span className="text-sm truncate max-w-[200px] block">{row.description || '-'}</span> },
-    { key: 'amount', label: 'Amount',
+    { key: 'amount', label: t('memo.colAmount', { defaultValue: 'Amount' }),
       render: (row) => <span className="font-mono">{row.amount ? `NPR ${row.amount.toLocaleString()}` : '-'}</span> },
   ];
 
   const supportingDocColumns = [
-    { key: 'date_ad', label: 'Date', render: (row) => (
+    { key: 'date_ad', label: t('memo.colDate', { defaultValue: 'Date' }), render: (row) => (
       <div className="text-xs"><div>{formatDate(row.date_ad)}</div><div className="text-muted-foreground">{row.date_bs}</div></div>
     )},
-    { key: 'doc_type', label: 'Type',
+    { key: 'doc_type', label: t('memo.colType', { defaultValue: 'Type' }),
       render: (row) => row.doc_type ? <span className="capitalize">{row.doc_type}</span> : '-' },
-    { key: 'linked_reference', label: 'Linked Ref',
+    { key: 'linked_reference', label: t('memo.colLinkedRef', { defaultValue: 'Linked Ref' }),
       render: (row) => <span className="font-mono">{row.linked_reference || '-'}</span> },
-    { key: 'description', label: 'Description',
+    { key: 'description', label: t('memo.colDescription', { defaultValue: 'Description' }),
       render: (row) => <span className="text-sm truncate max-w-[200px] block">{row.description || '-'}</span> },
-    { key: 'document_url', label: 'File',
+    { key: 'document_url', label: t('memo.colFile', { defaultValue: 'File' }),
       render: (row) => row.document_url ? (
         <a href={row.document_url} target="_blank" rel="noopener noreferrer"
            className="text-primary hover:underline flex items-center gap-1">
-          <ExternalLink className="w-3 h-3" />View
+          <ExternalLink className="w-3 h-3" />{t('memo.view', { defaultValue: 'View' })}
         </a>
       ) : '-' },
   ];
@@ -404,17 +418,17 @@ export default function Memo() {
   return (
     <div className="space-y-6 animate-fade-in">
       <PageHeader
-        title="Memo"
-        subtitle="Document records and scanned files"
+        title={t('memo.title', { defaultValue: 'Memo' })}
+        subtitle={t('memo.subtitle', { defaultValue: 'Document records and scanned files' })}
         searchValue={search}
         onSearchChange={setSearch}
         onAdd={() => setShowAdd(true)}
-        addLabel="Add Document"
+        addLabel={t('memo.addDocument', { defaultValue: 'Add Document' })}
         onDelete={() => {
-          if (!selectedDoc) { alert('Please select a document to delete'); return; }
+          if (!selectedDoc) { alert(t('memo.selectDocumentToDelete', { defaultValue: 'Please select a document to delete' })); return; }
           setShowDeleteDialog(true);
         }}
-        deleteLabel="Delete Selected"
+        deleteLabel={t('memo.deleteSelected', { defaultValue: 'Delete Selected' })}
       />
 
       {/* Quotation summary tiles */}
@@ -425,7 +439,7 @@ export default function Memo() {
               <p className="text-xl font-bold">
                 {documents.filter(q => q.category === 'quotation' && q.status === remark).length}
               </p>
-              <p className="text-[10px] text-muted-foreground mt-0.5">{remark}</p>
+              <p className="text-[10px] text-muted-foreground mt-0.5">{remarkLabel(remark)}</p>
             </div>
           ))}
         </div>
@@ -434,7 +448,7 @@ export default function Memo() {
       {/* Tab navigation */}
       <Tabs value={activeTab} onValueChange={v => { setActiveTab(v); setColFilters({ client_name: '', reference_id: '', status: '' }); }}>
         <TabsList className="flex-wrap">
-          {CATEGORIES.map(c => (
+          {categories.map(c => (
             <TabsTrigger key={c.value} value={c.value}>{c.label}</TabsTrigger>
           ))}
         </TabsList>
@@ -442,11 +456,11 @@ export default function Memo() {
           {filteredDocs.length === 0 ? (
             <EmptyState
               icon={FileText}
-              title="No documents yet"
-              description="Add your first document record for this category."
+              title={t('memo.noDocumentsYet', { defaultValue: 'No documents yet' })}
+              description={t('memo.addFirstDocumentDescription', { defaultValue: 'Add your first document record for this category.' })}
               action={
                 <Button onClick={() => setShowAdd(true)}>
-                  <Plus className="w-4 h-4 mr-2" />Add First Record
+                  <Plus className="w-4 h-4 mr-2" />{t('memo.addFirstRecord', { defaultValue: 'Add First Record' })}
                 </Button>
               }
             />
@@ -454,7 +468,10 @@ export default function Memo() {
             <DataTable
               columns={columnsByTab[activeTab]}
               data={filteredDocs}
-              emptyMessage={`No ${CATEGORIES.find(c => c.value === activeTab)?.label || 'documents'} yet`}
+              emptyMessage={t('memo.noCategoryYet', {
+                category: categories.find(c => c.value === activeTab)?.label || t('memo.documents', { defaultValue: 'documents' }),
+                defaultValue: 'No {{category}} yet',
+              })}
               onRowClick={setSelectedDoc}
             />
           )}
@@ -464,20 +481,20 @@ export default function Memo() {
       {/* ── Delete dialog ──────────────────────────────────────────────────── */}
       <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
         <DialogContent className="max-w-sm">
-          <DialogHeader><DialogTitle>Delete Document?</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{t('memo.deleteDocumentTitle', { defaultValue: 'Delete Document?' })}</DialogTitle></DialogHeader>
           <p className="text-sm text-muted-foreground">
-            Are you sure you want to delete{' '}
-            <strong>{selectedDoc?.client_name || selectedDoc?.vendor_name || 'this document'}</strong>?{' '}
-            This action cannot be undone.
+            {t('memo.deleteConfirmPrefix', { defaultValue: 'Are you sure you want to delete' })}{' '}
+            <strong>{selectedDoc?.client_name || selectedDoc?.vendor_name || t('memo.thisDocument', { defaultValue: 'this document' })}</strong>?{' '}
+            {t('memo.actionCannotBeUndone', { defaultValue: 'This action cannot be undone.' })}
           </p>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowDeleteDialog(false)}>Cancel</Button>
+            <Button variant="outline" onClick={() => setShowDeleteDialog(false)}>{t('memo.cancel', { defaultValue: 'Cancel' })}</Button>
             <Button variant="destructive" onClick={async () => {
               await api.Memo.delete(selectedDoc.id);
               setSelectedDoc(null);
               setShowDeleteDialog(false);
               await loadData();
-            }}>Delete</Button>
+            }}>{t('memo.delete', { defaultValue: 'Delete' })}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -492,7 +509,7 @@ export default function Memo() {
           <DialogHeader className="mb-1">
             <DialogTitle className="flex items-center gap-2 text-base font-semibold">
               <FileText className="w-4 h-4 text-violet-500" />
-              Add Document Record
+              {t('memo.addDocumentRecord', { defaultValue: 'Add Document Record' })}
             </DialogTitle>
           </DialogHeader>
 
@@ -505,18 +522,18 @@ export default function Memo() {
               className="space-y-3 overflow-y-auto pr-1"
             >
               <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-                <FileText className="w-3.5 h-3.5" />Document Info
+                <FileText className="w-3.5 h-3.5" />{t('memo.documentInfo', { defaultValue: 'Document Info' })}
               </p>
 
               {/* Category */}
               <div className="space-y-1.5">
-                <Label className="text-xs font-medium">Category</Label>
+                <Label className="text-xs font-medium">{t('memo.category', { defaultValue: 'Category' })}</Label>
                 <div className="relative">
                   <Layers className="input-icon" />
                   <Select value={form.category} onValueChange={v => setForm(prev => ({ ...prev, category: v }))}>
                     <SelectTrigger className="pl-8 h-9 text-sm"><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      {CATEGORIES.map(c => (
+                      {categories.map(c => (
                         <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
                       ))}
                     </SelectContent>
@@ -526,7 +543,7 @@ export default function Memo() {
 
               {/* Date */}
               <div className="space-y-1.5">
-                <Label className="text-xs font-medium">Date *</Label>
+                <Label className="text-xs font-medium">{t('memo.dateRequired', { defaultValue: 'Date *' })}</Label>
                 <div className="relative">
                   <Calendar className="input-icon" />
                   <Input
@@ -537,7 +554,7 @@ export default function Memo() {
                   />
                 </div>
                 {form.date_ad && (
-                  <p className="text-xs text-muted-foreground">BS: {adToBs(new Date(form.date_ad)).formatted}</p>
+                  <p className="text-xs text-muted-foreground">{t('memo.bsDatePrefix', { defaultValue: 'BS:' })} {adToBs(new Date(form.date_ad)).formatted}</p>
                 )}
               </div>
 
@@ -545,11 +562,11 @@ export default function Memo() {
               {['purchase_bill', 'sales_bill', 'quotation'].includes(form.category) && (
                 <div className="space-y-1.5">
                   <Label className="text-xs font-medium">
-                    {form.category === 'purchase_bill' ? 'Bill Number' : form.category === 'sales_bill' ? 'Invoice Number' : 'Reference No.'}
+                    {form.category === 'purchase_bill' ? t('memo.billNumber', { defaultValue: 'Bill Number' }) : form.category === 'sales_bill' ? t('memo.invoiceNumber', { defaultValue: 'Invoice Number' }) : t('memo.referenceNo', { defaultValue: 'Reference No.' })}
                   </Label>
                   {f(
                     form.category === 'purchase_bill' ? 'bill_number' : form.category === 'sales_bill' ? 'invoice_number' : 'reference_id',
-                    form.category === 'purchase_bill' ? 'e.g. BILL-001' : form.category === 'sales_bill' ? 'e.g. INV-001' : 'e.g. QT-001',
+                    form.category === 'purchase_bill' ? t('memo.billNumberPlaceholder', { defaultValue: 'e.g. BILL-001' }) : form.category === 'sales_bill' ? t('memo.invoiceNumberPlaceholder', { defaultValue: 'e.g. INV-001' }) : t('memo.referenceNoPlaceholder', { defaultValue: 'e.g. QT-001' }),
                     'text', Hash
                   )}
                 </div>
@@ -558,7 +575,7 @@ export default function Memo() {
               {/* Amount with NPR prefix */}
               {!['job_card', 'supporting_doc'].includes(form.category) && (
                 <div className="space-y-1.5">
-                  <Label className="text-xs font-medium">Amount</Label>
+                  <Label className="text-xs font-medium">{t('memo.amount', { defaultValue: 'Amount' })}</Label>
                   <div className="flex items-stretch">
                     <span className="inline-flex items-center px-3 bg-muted text-xs font-medium border border-r-0 border-input rounded-l-md text-muted-foreground select-none">
                       NPR
@@ -584,11 +601,11 @@ export default function Memo() {
             >
               <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
                 {form.category === 'purchase_bill' ? (
-                  <><Building2 className="w-3.5 h-3.5" />Vendor Details</>
+                  <><Building2 className="w-3.5 h-3.5" />{t('memo.vendorDetails', { defaultValue: 'Vendor Details' })}</>
                 ) : form.category === 'supporting_doc' ? (
-                  <><Link2 className="w-3.5 h-3.5" />Document Details</>
+                  <><Link2 className="w-3.5 h-3.5" />{t('memo.documentDetails', { defaultValue: 'Document Details' })}</>
                 ) : (
-                  <><User className="w-3.5 h-3.5" />Party Details</>
+                  <><User className="w-3.5 h-3.5" />{t('memo.partyDetails', { defaultValue: 'Party Details' })}</>
                 )}
               </p>
 
@@ -596,16 +613,16 @@ export default function Memo() {
               {form.category === 'purchase_bill' && (
                 <>
                   <div className="space-y-1.5">
-                    <Label className="text-xs font-medium">Vendor Name *</Label>
-                    {f('vendor_name', 'Vendor / Supplier name', 'text', Building2)}
+                    <Label className="text-xs font-medium">{t('memo.vendorNameRequired', { defaultValue: 'Vendor Name *' })}</Label>
+                    {f('vendor_name', t('memo.vendorSupplierNamePlaceholder', { defaultValue: 'Vendor / Supplier name' }), 'text', Building2)}
                   </div>
                   <div className="space-y-1.5">
-                    <Label className="text-xs font-medium">Vendor Contact</Label>
-                    {f('vendor_contact', 'Phone / Email', 'text', Phone)}
+                    <Label className="text-xs font-medium">{t('memo.vendorContact', { defaultValue: 'Vendor Contact' })}</Label>
+                    {f('vendor_contact', t('memo.phoneEmailPlaceholder', { defaultValue: 'Phone / Email' }), 'text', Phone)}
                   </div>
                   <div className="space-y-1.5">
-                    <Label className="text-xs font-medium">Vendor PAN</Label>
-                    {f('vendor_pan', 'PAN number', 'text', Hash)}
+                    <Label className="text-xs font-medium">{t('memo.vendorPan', { defaultValue: 'Vendor PAN' })}</Label>
+                    {f('vendor_pan', t('memo.panNumberPlaceholder', { defaultValue: 'PAN number' }), 'text', Hash)}
                   </div>
                 </>
               )}
@@ -614,12 +631,12 @@ export default function Memo() {
               {['quotation', 'sales_bill', 'job_card', 'order_slip', 'extra_work'].includes(form.category) && (
                 <>
                   <div className="space-y-1.5">
-                    <Label className="text-xs font-medium">Client Name *</Label>
-                    {f('client_name', 'Full name', 'text', User)}
+                    <Label className="text-xs font-medium">{t('memo.clientNameRequired', { defaultValue: 'Client Name *' })}</Label>
+                    {f('client_name', t('memo.fullNamePlaceholder', { defaultValue: 'Full name' }), 'text', User)}
                   </div>
                   <div className="space-y-1.5">
-                    <Label className="text-xs font-medium">Contact</Label>
-                    {f('client_contact', 'Phone / Email', 'text', Phone)}
+                    <Label className="text-xs font-medium">{t('memo.contact', { defaultValue: 'Contact' })}</Label>
+                    {f('client_contact', t('memo.phoneEmailPlaceholder', { defaultValue: 'Phone / Email' }), 'text', Phone)}
                   </div>
                 </>
               )}
@@ -628,16 +645,16 @@ export default function Memo() {
               {form.category === 'job_card' && (
                 <>
                   <div className="space-y-1.5">
-                    <Label className="text-xs font-medium">Assigned To</Label>
-                    {f('assigned_to', 'Team member name', 'text', User)}
+                    <Label className="text-xs font-medium">{t('memo.assignedTo', { defaultValue: 'Assigned To' })}</Label>
+                    {f('assigned_to', t('memo.teamMemberNamePlaceholder', { defaultValue: 'Team member name' }), 'text', User)}
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1.5">
-                      <Label className="text-xs font-medium">Start Date</Label>
+                      <Label className="text-xs font-medium">{t('memo.startDate', { defaultValue: 'Start Date' })}</Label>
                       {f('start_date', '', 'date', Calendar)}
                     </div>
                     <div className="space-y-1.5">
-                      <Label className="text-xs font-medium">End Date</Label>
+                      <Label className="text-xs font-medium">{t('memo.endDate', { defaultValue: 'End Date' })}</Label>
                       {f('end_date', '', 'date', Calendar)}
                     </div>
                   </div>
@@ -647,7 +664,7 @@ export default function Memo() {
               {/* Order slip: delivery date */}
               {form.category === 'order_slip' && (
                 <div className="space-y-1.5">
-                  <Label className="text-xs font-medium">Delivery Date</Label>
+                  <Label className="text-xs font-medium">{t('memo.deliveryDate', { defaultValue: 'Delivery Date' })}</Label>
                   {f('delivery_date', '', 'date', Calendar)}
                 </div>
               )}
@@ -655,7 +672,7 @@ export default function Memo() {
               {/* Extra work: due date */}
               {form.category === 'extra_work' && (
                 <div className="space-y-1.5">
-                  <Label className="text-xs font-medium">Due Date</Label>
+                  <Label className="text-xs font-medium">{t('memo.dueDate', { defaultValue: 'Due Date' })}</Label>
                   {f('due_date', '', 'date', Calendar)}
                 </div>
               )}
@@ -664,16 +681,16 @@ export default function Memo() {
               {form.category === 'quotation' && (
                 <>
                   <div className="space-y-1.5">
-                    <Label className="text-xs font-medium">Valid Until</Label>
+                    <Label className="text-xs font-medium">{t('memo.validUntil', { defaultValue: 'Valid Until' })}</Label>
                     {f('valid_until', '', 'date', Calendar)}
                   </div>
                   <div className="space-y-1.5">
-                    <Label className="text-xs font-medium">Status</Label>
+                    <Label className="text-xs font-medium">{t('memo.status', { defaultValue: 'Status' })}</Label>
                     <Select value={form.status} onValueChange={v => setForm(prev => ({ ...prev, status: v }))}>
-                      <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Select status…" /></SelectTrigger>
+                      <SelectTrigger className="h-9 text-sm"><SelectValue placeholder={t('memo.selectStatusPlaceholder', { defaultValue: 'Select status…' })} /></SelectTrigger>
                       <SelectContent>
                         {CATEGORY_CONFIG.quotation.statusOptions.map(s => (
-                          <SelectItem key={s} value={s}>{s}</SelectItem>
+                          <SelectItem key={s} value={s}>{remarkLabel(s)}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
@@ -685,23 +702,23 @@ export default function Memo() {
               {form.category === 'supporting_doc' && (
                 <>
                   <div className="space-y-1.5">
-                    <Label className="text-xs font-medium">Document Type</Label>
+                    <Label className="text-xs font-medium">{t('memo.documentType', { defaultValue: 'Document Type' })}</Label>
                     <div className="relative">
                       <Tag className="input-icon" />
                       <Select value={form.doc_type} onValueChange={v => setForm(prev => ({ ...prev, doc_type: v }))}>
-                        <SelectTrigger className="pl-8 h-9 text-sm"><SelectValue placeholder="Select type" /></SelectTrigger>
+                        <SelectTrigger className="pl-8 h-9 text-sm"><SelectValue placeholder={t('memo.selectTypePlaceholder', { defaultValue: 'Select type' })} /></SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="contract">Contract</SelectItem>
-                          <SelectItem value="receipt">Receipt</SelectItem>
-                          <SelectItem value="certificate">Certificate</SelectItem>
-                          <SelectItem value="other">Other</SelectItem>
+                          <SelectItem value="contract">{t('memo.docTypeContract', { defaultValue: 'Contract' })}</SelectItem>
+                          <SelectItem value="receipt">{t('memo.docTypeReceipt', { defaultValue: 'Receipt' })}</SelectItem>
+                          <SelectItem value="certificate">{t('memo.docTypeCertificate', { defaultValue: 'Certificate' })}</SelectItem>
+                          <SelectItem value="other">{t('memo.docTypeOther', { defaultValue: 'Other' })}</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
                   </div>
                   <div className="space-y-1.5">
-                    <Label className="text-xs font-medium">Linked Reference</Label>
-                    {f('linked_reference', 'e.g. INV-001 or BILL-005', 'text', Link2)}
+                    <Label className="text-xs font-medium">{t('memo.linkedReference', { defaultValue: 'Linked Reference' })}</Label>
+                    {f('linked_reference', t('memo.linkedReferencePlaceholder', { defaultValue: 'e.g. INV-001 or BILL-005' }), 'text', Link2)}
                   </div>
                 </>
               )}
@@ -711,14 +728,14 @@ export default function Memo() {
                 <div className="space-y-1.5">
                   <Label className="text-xs font-medium flex items-center gap-1.5">
                     <FileText className="w-3.5 h-3.5 text-muted-foreground" />
-                    Description
+                    {t('memo.description', { defaultValue: 'Description' })}
                   </Label>
                   <Textarea
                     value={form.description}
                     onChange={e => setForm(prev => ({ ...prev, description: e.target.value }))}
                     rows={2}
                     className="text-sm resize-none"
-                    placeholder="Short notes…"
+                    placeholder={t('memo.shortNotesPlaceholder', { defaultValue: 'Short notes…' })}
                   />
                 </div>
               )}
@@ -727,7 +744,7 @@ export default function Memo() {
               {['purchase_bill', 'sales_bill', 'supporting_doc'].includes(form.category) && (
                 <div className="space-y-1.5">
                   <Label className="text-xs font-medium">
-                    Attach File <span className="text-muted-foreground font-normal">(optional)</span>
+                    {t('memo.attachFile', { defaultValue: 'Attach File' })} <span className="text-muted-foreground font-normal">{t('memo.optional', { defaultValue: '(optional)' })}</span>
                   </Label>
                   <Input
                     type="file"
@@ -741,7 +758,7 @@ export default function Memo() {
                   {form.document_url && (
                     <a href={form.document_url} target="_blank" rel="noopener noreferrer"
                        className="text-xs text-primary underline flex items-center gap-1">
-                      <ExternalLink className="w-3 h-3" />View attached file
+                      <ExternalLink className="w-3 h-3" />{t('memo.viewAttachedFile', { defaultValue: 'View attached file' })}
                     </a>
                   )}
                 </div>
@@ -750,8 +767,8 @@ export default function Memo() {
           </div>
 
           <DialogFooter className="pt-3 mt-2 border-t border-border/50">
-            <Button variant="outline" size="sm" onClick={() => setShowAdd(false)}>Cancel</Button>
-            <Button size="sm" onClick={addDocument}>Save Document</Button>
+            <Button variant="outline" size="sm" onClick={() => setShowAdd(false)}>{t('memo.cancel', { defaultValue: 'Cancel' })}</Button>
+            <Button size="sm" onClick={addDocument}>{t('memo.saveDocument', { defaultValue: 'Save Document' })}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

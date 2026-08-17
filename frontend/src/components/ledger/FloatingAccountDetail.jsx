@@ -1,13 +1,15 @@
 import { useState, useRef, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Printer, Share2, Save, X, Minus } from 'lucide-react';
+import { Plus, Printer, Share2, Save, X, Minus, Eye, EyeOff } from 'lucide-react';
 import { formatDate } from '@/lib/utils';
 import DataTable from '../shared/DataTable';
 
-export default function FloatingAccountDetail({ account, entries, onClose, onNewEntry, showNewEntry, setShowNewEntry, newEntry, setNewEntry, createEntry, allAccounts = [] }) {
+export default function FloatingAccountDetail({ account, entries, onClose, onNewEntry, showNewEntry, setShowNewEntry, newEntry, setNewEntry, createEntry, allAccounts = [], onToggleHidden }) {
+  const { t } = useTranslation();
   const [pos, setPos] = useState({ x: window.innerWidth / 2 - 480, y: 60 });
   const [minimized, setMinimized] = useState(false);
   const dragging = useRef(false);
@@ -85,6 +87,13 @@ export default function FloatingAccountDetail({ account, entries, onClose, onNew
               <Button variant="outline" size="sm"><Save className="w-3 h-3 mr-1" />Save</Button>
               <Button variant="outline" size="sm"><Share2 className="w-3 h-3 mr-1" />Share</Button>
               <Button variant="outline" size="sm"><Printer className="w-3 h-3 mr-1" />Print</Button>
+              {onToggleHidden && (
+                <Button variant="outline" size="sm" className={account.isHidden ? 'text-amber-600' : ''} onClick={onToggleHidden}>
+                  {account.isHidden
+                    ? <><Eye className="w-3 h-3 mr-1" />{t('ledger.unhideAccount', { defaultValue: 'Unhide Account' })}</>
+                    : <><EyeOff className="w-3 h-3 mr-1" />{t('ledger.hideAccount', { defaultValue: 'Hide Account' })}</>}
+                </Button>
+              )}
             </div>
             <Button size="sm" onClick={() => setShowNewEntry(true)}><Plus className="w-3 h-3 mr-1" />New Entry</Button>
           </div>

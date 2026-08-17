@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { motion } from 'framer-motion';
 import { api, apiAuth } from '@/api/adapter';
 import { inventoryApi } from '@/api';
@@ -51,19 +52,92 @@ const BUSINESS_LABELS = {
   location: 'Stock Location',
 };
 
-const PLACEHOLDERS = {
-  RETAIL:        { item_name: 'e.g. Sugar, Salt, Soap', description: 'Additional details', brand: 'e.g. Sunkoshi, Dabur', application: 'e.g. Daily use', supplier_name: 'e.g. Sunrise Traders' },
-  PHARMACY:      { item_name: 'e.g. Paracetamol 500mg, Amoxicillin', description: 'Dosage form, strength', brand: 'e.g. Cipla, Sun Pharma', application: 'e.g. Pain relief, Antibiotic', supplier_name: 'e.g. Mediline Pharma' },
-  ELECTRONICS:   { item_name: 'e.g. USB Cable, Power Bank', description: 'Specifications', brand: 'e.g. Samsung, Xiaomi', model_no: 'e.g. USB-C-3.0-BLK', application: 'e.g. Charging, Display', supplier_name: 'e.g. Digital World' },
-  FOOD_BEVERAGE: { item_name: 'e.g. Masala Tea, Milk Tea, Coffee', description: 'e.g. Served hot, 250ml', brand: '', model_no: '', application: '', supplier_name: 'e.g. Nepal Tea Estate' },
-  SERVICES:      { item_name: 'e.g. Consultation, Design Package', description: 'Scope of service', brand: '', model_no: '', application: 'e.g. IT Support, Accounting', supplier_name: 'e.g. TechVision Pvt. Ltd.' },
-  MANUFACTURING: { item_name: 'e.g. Raw Steel, Cotton Yarn', description: 'Grade or specification', brand: 'e.g. SAIL, Birla', model_no: 'e.g. IS:2062 Grade A', application: 'e.g. Structural frames, Weaving', supplier_name: 'e.g. Industrial Supply Co.' },
-  SCHOOL:        { item_name: 'e.g. School Bag, PE Uniform, Notebook Set', description: 'e.g. Size, color, class', brand: '', model_no: '', application: '', supplier_name: 'e.g. Local Uniform Supplier' },
-  OTHER:         { item_name: 'e.g. Item name', description: 'Additional details or notes', brand: 'e.g. Brand name', model_no: 'e.g. Model or part number', application: 'e.g. Usage or purpose', supplier_name: 'e.g. Supplier name' },
-};
-
 function getFields(businessType) {
   return FIELDS[businessType?.toUpperCase()] ?? FIELDS.OTHER;
+}
+
+function getBusinessTypeLabel(t, businessType) {
+  const labels = {
+    RETAIL: t('inventory.businessTypeRetail', { defaultValue: 'Retail' }),
+    PHARMACY: t('inventory.businessTypePharmacy', { defaultValue: 'Pharmacy' }),
+    ELECTRONICS: t('inventory.businessTypeElectronics', { defaultValue: 'Electronics' }),
+    FOOD_BEVERAGE: t('inventory.businessTypeFoodBeverage', { defaultValue: 'Tea Shop / Bakery' }),
+    SERVICES: t('inventory.businessTypeServices', { defaultValue: 'Services' }),
+    MANUFACTURING: t('inventory.businessTypeManufacturing', { defaultValue: 'Manufacturing' }),
+    SCHOOL: t('inventory.businessTypeSchool', { defaultValue: 'School Supplies' }),
+    OTHER: t('inventory.businessTypeOther', { defaultValue: 'Other' }),
+  };
+  return labels[businessType] || businessType;
+}
+
+function getPlaceholders(t, businessType) {
+  switch (businessType?.toUpperCase()) {
+    case 'RETAIL':
+      return {
+        item_name: t('inventory.placeholderRetailItemName', { defaultValue: 'e.g. Sugar, Salt, Soap' }),
+        description: t('inventory.placeholderRetailDescription', { defaultValue: 'Additional details' }),
+        brand: t('inventory.placeholderRetailBrand', { defaultValue: 'e.g. Sunkoshi, Dabur' }),
+        application: t('inventory.placeholderRetailApplication', { defaultValue: 'e.g. Daily use' }),
+        supplier_name: t('inventory.placeholderRetailSupplierName', { defaultValue: 'e.g. Sunrise Traders' }),
+      };
+    case 'PHARMACY':
+      return {
+        item_name: t('inventory.placeholderPharmacyItemName', { defaultValue: 'e.g. Paracetamol 500mg, Amoxicillin' }),
+        description: t('inventory.placeholderPharmacyDescription', { defaultValue: 'Dosage form, strength' }),
+        brand: t('inventory.placeholderPharmacyBrand', { defaultValue: 'e.g. Cipla, Sun Pharma' }),
+        application: t('inventory.placeholderPharmacyApplication', { defaultValue: 'e.g. Pain relief, Antibiotic' }),
+        supplier_name: t('inventory.placeholderPharmacySupplierName', { defaultValue: 'e.g. Mediline Pharma' }),
+      };
+    case 'ELECTRONICS':
+      return {
+        item_name: t('inventory.placeholderElectronicsItemName', { defaultValue: 'e.g. USB Cable, Power Bank' }),
+        description: t('inventory.placeholderElectronicsDescription', { defaultValue: 'Specifications' }),
+        brand: t('inventory.placeholderElectronicsBrand', { defaultValue: 'e.g. Samsung, Xiaomi' }),
+        model_no: t('inventory.placeholderElectronicsModelNo', { defaultValue: 'e.g. USB-C-3.0-BLK' }),
+        application: t('inventory.placeholderElectronicsApplication', { defaultValue: 'e.g. Charging, Display' }),
+        supplier_name: t('inventory.placeholderElectronicsSupplierName', { defaultValue: 'e.g. Digital World' }),
+      };
+    case 'FOOD_BEVERAGE':
+      return {
+        item_name: t('inventory.placeholderFoodBeverageItemName', { defaultValue: 'e.g. Masala Tea, Milk Tea, Coffee' }),
+        description: t('inventory.placeholderFoodBeverageDescription', { defaultValue: 'e.g. Served hot, 250ml' }),
+        brand: '', model_no: '', application: '',
+        supplier_name: t('inventory.placeholderFoodBeverageSupplierName', { defaultValue: 'e.g. Nepal Tea Estate' }),
+      };
+    case 'SERVICES':
+      return {
+        item_name: t('inventory.placeholderServicesItemName', { defaultValue: 'e.g. Consultation, Design Package' }),
+        description: t('inventory.placeholderServicesDescription', { defaultValue: 'Scope of service' }),
+        brand: '', model_no: '',
+        application: t('inventory.placeholderServicesApplication', { defaultValue: 'e.g. IT Support, Accounting' }),
+        supplier_name: t('inventory.placeholderServicesSupplierName', { defaultValue: 'e.g. TechVision Pvt. Ltd.' }),
+      };
+    case 'MANUFACTURING':
+      return {
+        item_name: t('inventory.placeholderManufacturingItemName', { defaultValue: 'e.g. Raw Steel, Cotton Yarn' }),
+        description: t('inventory.placeholderManufacturingDescription', { defaultValue: 'Grade or specification' }),
+        brand: t('inventory.placeholderManufacturingBrand', { defaultValue: 'e.g. SAIL, Birla' }),
+        model_no: t('inventory.placeholderManufacturingModelNo', { defaultValue: 'e.g. IS:2062 Grade A' }),
+        application: t('inventory.placeholderManufacturingApplication', { defaultValue: 'e.g. Structural frames, Weaving' }),
+        supplier_name: t('inventory.placeholderManufacturingSupplierName', { defaultValue: 'e.g. Industrial Supply Co.' }),
+      };
+    case 'SCHOOL':
+      return {
+        item_name: t('inventory.placeholderSchoolItemName', { defaultValue: 'e.g. School Bag, PE Uniform, Notebook Set' }),
+        description: t('inventory.placeholderSchoolDescription', { defaultValue: 'e.g. Size, color, class' }),
+        brand: '', model_no: '', application: '',
+        supplier_name: t('inventory.placeholderSchoolSupplierName', { defaultValue: 'e.g. Local Uniform Supplier' }),
+      };
+    default:
+      return {
+        item_name: t('inventory.placeholderOtherItemName', { defaultValue: 'e.g. Item name' }),
+        description: t('inventory.placeholderOtherDescription', { defaultValue: 'Additional details or notes' }),
+        brand: t('inventory.placeholderOtherBrand', { defaultValue: 'e.g. Brand name' }),
+        model_no: t('inventory.placeholderOtherModelNo', { defaultValue: 'e.g. Model or part number' }),
+        application: t('inventory.placeholderOtherApplication', { defaultValue: 'e.g. Usage or purpose' }),
+        supplier_name: t('inventory.placeholderOtherSupplierName', { defaultValue: 'e.g. Supplier name' }),
+      };
+  }
 }
 
 const EMPTY_FORM = {
@@ -74,6 +148,7 @@ const EMPTY_FORM = {
 };
 
 export default function Inventory() {
+  const { t } = useTranslation();
   const { canEdit, canDelete } = useRole();
   const companyId = getActiveCompanyId();
   const [items, setItems] = useState([]);
@@ -107,7 +182,7 @@ export default function Inventory() {
   const f = isOtherType && !showExtraFields
     ? { brand: false, modelNo: false, application: false, expiry: false, aging: false, location: false }
     : getFields(company?.business_type);
-  const p = PLACEHOLDERS[company?.business_type?.toUpperCase()] ?? PLACEHOLDERS.OTHER;
+  const p = getPlaceholders(t, company?.business_type);
 
   async function handleImageUpload(e) {
     const file = e.target.files?.[0];
@@ -144,13 +219,13 @@ export default function Inventory() {
       setPassword('');
       setShowConfirmDialog(true);
     } catch {
-      alert('Invalid password or authentication failed');
+      alert(t('inventory.invalidPasswordAlert', { defaultValue: 'Invalid password or authentication failed' }));
       setPassword('');
     }
   };
 
   const handleUpdateClick = () => {
-    if (!selectedItem) { alert('Please select an item from the table first by clicking on a row.'); return; }
+    if (!selectedItem) { alert(t('inventory.selectRowFirstAlert', { defaultValue: 'Please select an item from the table first by clicking on a row.' })); return; }
     setUpdateForm({
       unit_selling_price: selectedItem.unit_selling_price || 0,
       unit_purchase_price: selectedItem.unit_purchase_price || 0,
@@ -167,7 +242,7 @@ export default function Inventory() {
       setUpdatePassword('');
       setShowUpdateDialog(true);
     } catch {
-      alert('Invalid password or authentication failed');
+      alert(t('inventory.invalidPasswordAlert', { defaultValue: 'Invalid password or authentication failed' }));
       setUpdatePassword('');
     }
   };
@@ -187,7 +262,7 @@ export default function Inventory() {
     if (updateForm.unit_purchase_price !== '') payload.unit_purchase_price = updateForm.unit_purchase_price;
     if (updateForm.stock_location) payload.stock_location = updateForm.stock_location;
     if (updateForm.image_url) payload.image_url = updateForm.image_url;
-    if (Object.keys(payload).length === 0) { alert('Update at least one field before saving.'); return; }
+    if (Object.keys(payload).length === 0) { alert(t('inventory.updateAtLeastOneFieldAlert', { defaultValue: 'Update at least one field before saving.' })); return; }
     await api.InventoryItem.update(selectedItem.id, payload);
     setShowUpdateDialog(false);
     setSelectedItem(null);
@@ -203,7 +278,7 @@ export default function Inventory() {
   };
 
   async function handleAdjustClick() {
-    if (!selectedItem) { alert('Please select an item from the table first.'); return; }
+    if (!selectedItem) { alert(t('inventory.selectItemFirstAlert', { defaultValue: 'Please select an item from the table first.' })); return; }
     setAdjForm({ type: 'ADDITION', quantity: '', reason: '' });
     setShowAdjustDialog(true);
   }
@@ -221,14 +296,14 @@ export default function Inventory() {
       setSelectedItem(null);
       loadItems();
     } catch (err) {
-      alert(err?.response?.data?.message || 'Adjustment failed');
+      alert(err?.response?.data?.message || t('inventory.adjustmentFailedAlert', { defaultValue: 'Adjustment failed' }));
     } finally {
       setAdjSubmitting(false);
     }
   }
 
   async function handleViewLog() {
-    if (!selectedItem) { alert('Please select an item from the table first.'); return; }
+    if (!selectedItem) { alert(t('inventory.selectItemFirstAlert', { defaultValue: 'Please select an item from the table first.' })); return; }
     try {
       const res = await inventoryApi.getAdjustments(selectedItem.id);
       const data = res?.data?.data ?? res?.data ?? [];
@@ -276,12 +351,12 @@ export default function Inventory() {
   );
 
   const columns = [
-    { key: 'item_name', label: 'Name', render: (row) => <span className="font-medium max-w-[200px] truncate block">{row.item_name || '—'}</span> },
-    ...(f.brand ? [{ key: 'brand', label: 'Brand' }] : []),
-    ...(f.modelNo ? [{ key: 'model_no', label: 'Model No.' }] : []),
-    { key: 'description', label: 'Details', render: (row) => <span className="max-w-[200px] truncate block text-sm">{row.description || '—'}</span> },
-    ...(f.application ? [{ key: 'application', label: 'Usage' }] : []),
-    { key: 'quantity', label: 'Qty', render: (row) => {
+    { key: 'item_name', label: t('inventory.colName', { defaultValue: 'Name' }), render: (row) => <span className="font-medium max-w-[200px] truncate block">{row.item_name || '—'}</span> },
+    ...(f.brand ? [{ key: 'brand', label: t('inventory.colBrand', { defaultValue: 'Brand' }) }] : []),
+    ...(f.modelNo ? [{ key: 'model_no', label: t('inventory.colModelNo', { defaultValue: 'Model No.' }) }] : []),
+    { key: 'description', label: t('inventory.colDetails', { defaultValue: 'Details' }), render: (row) => <span className="max-w-[200px] truncate block text-sm">{row.description || '—'}</span> },
+    ...(f.application ? [{ key: 'application', label: t('inventory.colUsage', { defaultValue: 'Usage' }) }] : []),
+    { key: 'quantity', label: t('inventory.colQty', { defaultValue: 'Qty' }), render: (row) => {
       const isLow = (row.quantity || 0) <= (row.low_stock_threshold || 5);
       return (
         <div className="flex items-center gap-1.5">
@@ -291,9 +366,9 @@ export default function Inventory() {
         </div>
       );
     }},
-    { key: 'unit_selling_price', label: 'Selling Price', render: (row) => <span className="font-mono">NPR {(row.unit_selling_price || 0).toLocaleString()}</span> },
-    ...(f.location ? [{ key: 'stock_location', label: 'Location' }] : []),
-    ...(f.aging ? [{ key: 'aging_days', label: 'Aging', render: (row) => {
+    { key: 'unit_selling_price', label: t('inventory.colSellingPrice', { defaultValue: 'Selling Price' }), render: (row) => <span className="font-mono">NPR {(row.unit_selling_price || 0).toLocaleString()}</span> },
+    ...(f.location ? [{ key: 'stock_location', label: t('inventory.colLocation', { defaultValue: 'Location' }) }] : []),
+    ...(f.aging ? [{ key: 'aging_days', label: t('inventory.colAging', { defaultValue: 'Aging' }), render: (row) => {
       if (!row.date_of_purchase) return <span className="text-muted-foreground">-</span>;
       const days = Math.floor((new Date() - new Date(row.date_of_purchase)) / (1000 * 60 * 60 * 24));
       const isAged = days >= (row.aging_days || 90);
@@ -308,32 +383,32 @@ export default function Inventory() {
   return (
     <div className="space-y-6 animate-fade-in">
       <PageHeader
-        title={company?.business_type?.toUpperCase() === 'SCHOOL' ? 'Supplies' : 'Inventory'}
-        subtitle={`${items.length} items · ${lowStockCount} low stock alerts`}
+        title={company?.business_type?.toUpperCase() === 'SCHOOL' ? t('inventory.titleSupplies', { defaultValue: 'Supplies' }) : t('inventory.titleInventory', { defaultValue: 'Inventory' })}
+        subtitle={t('inventory.subtitle', { count: items.length, lowStock: lowStockCount, defaultValue: '{{count}} items · {{lowStock}} low stock alerts' })}
         onAdd={() => { setShowExtraFields(false); setShowAdd(true); }}
-        addLabel="Add Stock"
+        addLabel={t('inventory.addStock', { defaultValue: 'Add Stock' })}
       >
         {canEdit && (
           <Button onClick={() => setImportOpen(true)} variant="outline" className="gap-2">
-            <Upload className="w-4 h-4" />Import
+            <Upload className="w-4 h-4" />{t('inventory.import', { defaultValue: 'Import' })}
           </Button>
         )}
         {canEdit && (
           <Button onClick={handleAdjustClick} variant="outline" className="gap-2" disabled={!selectedItem}>
-            <ArrowUpDown className="w-4 h-4" />Adjust Stock
+            <ArrowUpDown className="w-4 h-4" />{t('inventory.adjustStock', { defaultValue: 'Adjust Stock' })}
           </Button>
         )}
         <Button onClick={handleViewLog} variant="ghost" className="gap-2" disabled={!selectedItem}>
-          <History className="w-4 h-4" />Log
+          <History className="w-4 h-4" />{t('inventory.log', { defaultValue: 'Log' })}
         </Button>
         {canEdit && (
           <Button onClick={handleUpdateClick} variant="outline" className="gap-2">
-            <Tag className="w-4 h-4" />Update
+            <Tag className="w-4 h-4" />{t('inventory.update', { defaultValue: 'Update' })}
           </Button>
         )}
         {canDelete && (
           <Button onClick={handleDeleteClick} variant="destructive" className="gap-2" disabled={!selectedItem}>
-            <Trash2 className="w-4 h-4" />Delete
+            <Trash2 className="w-4 h-4" />{t('inventory.delete', { defaultValue: 'Delete' })}
           </Button>
         )}
       </PageHeader>
@@ -342,7 +417,7 @@ export default function Inventory() {
         open={importOpen}
         onClose={() => setImportOpen(false)}
         entity="inventory"
-        title="Import Inventory Items"
+        title={t('inventory.importDialogTitle', { defaultValue: 'Import Inventory Items' })}
         fields={INVENTORY_FIELDS}
         onDone={loadItems}
       />
@@ -351,14 +426,14 @@ export default function Inventory() {
         <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-center gap-3">
           <AlertTriangle className="w-5 h-5 text-red-500 shrink-0" />
           <div>
-            <p className="text-sm font-medium text-red-800">{lowStockCount} item(s) are running low on stock</p>
-            <p className="text-xs text-red-600">Review your inventory and reorder as needed</p>
+            <p className="text-sm font-medium text-red-800">{t('inventory.lowStockBanner', { count: lowStockCount, defaultValue: '{{count}} item(s) are running low on stock' })}</p>
+            <p className="text-xs text-red-600">{t('inventory.lowStockBannerHint', { defaultValue: 'Review your inventory and reorder as needed' })}</p>
           </div>
         </div>
       )}
 
       {items.length === 0 ? (
-        <EmptyState icon={Package} title="No inventory items yet" description="Add your first stock item to start tracking your inventory." action={<Button onClick={() => { setShowExtraFields(false); setShowAdd(true); }}>Add Stock</Button>} />
+        <EmptyState icon={Package} title={t('inventory.emptyTitle', { defaultValue: 'No inventory items yet' })} description={t('inventory.emptyDescription', { defaultValue: 'Add your first stock item to start tracking your inventory.' })} action={<Button onClick={() => { setShowExtraFields(false); setShowAdd(true); }}>{t('inventory.addStock', { defaultValue: 'Add Stock' })}</Button>} />
       ) : (
       <DataTable
         columns={columns}
@@ -366,37 +441,37 @@ export default function Inventory() {
         onRowClick={setSelectedItem}
         selectedId={selectedItem?.id}
         filterRow={isSchoolType ? null : <>
-          {f.brand && <td className="px-2 py-1"><Input placeholder="Brand" value={filters.brand} onChange={e => setFilter('brand', e.target.value)} className="h-7 text-xs w-full" /></td>}
-          {f.modelNo && <td className="px-2 py-1"><Input placeholder="Model No." value={filters.model_no} onChange={e => setFilter('model_no', e.target.value)} className="h-7 text-xs w-full" /></td>}
-          <td className="px-2 py-1"><Input placeholder="Description" value={filters.description} onChange={e => setFilter('description', e.target.value)} className="h-7 text-xs w-full" /></td>
-          {f.application && <td className="px-2 py-1"><Input placeholder="Usage" value={filters.application} onChange={e => setFilter('application', e.target.value)} className="h-7 text-xs w-full" /></td>}
-          <td className="px-2 py-1"><SmartNumberInput placeholder="Min Qty" value={filters.qty_min} onChange={e => setFilter('qty_min', e.target.value)} className="h-7 text-xs w-full" /></td>
-          <td className="px-2 py-1"><SmartNumberInput placeholder="Min Price" value={filters.price_min} onChange={e => setFilter('price_min', e.target.value)} className="h-7 text-xs w-full" /></td>
-          {f.location && <td className="px-2 py-1"><Input placeholder="Location" value={filters.stock_location} onChange={e => setFilter('stock_location', e.target.value)} className="h-7 text-xs w-full" /></td>}
+          {f.brand && <td className="px-2 py-1"><Input placeholder={t('inventory.colBrand', { defaultValue: 'Brand' })} value={filters.brand} onChange={e => setFilter('brand', e.target.value)} className="h-7 text-xs w-full" /></td>}
+          {f.modelNo && <td className="px-2 py-1"><Input placeholder={t('inventory.colModelNo', { defaultValue: 'Model No.' })} value={filters.model_no} onChange={e => setFilter('model_no', e.target.value)} className="h-7 text-xs w-full" /></td>}
+          <td className="px-2 py-1"><Input placeholder={t('inventory.filterDescription', { defaultValue: 'Description' })} value={filters.description} onChange={e => setFilter('description', e.target.value)} className="h-7 text-xs w-full" /></td>
+          {f.application && <td className="px-2 py-1"><Input placeholder={t('inventory.colUsage', { defaultValue: 'Usage' })} value={filters.application} onChange={e => setFilter('application', e.target.value)} className="h-7 text-xs w-full" /></td>}
+          <td className="px-2 py-1"><SmartNumberInput placeholder={t('inventory.filterMinQty', { defaultValue: 'Min Qty' })} value={filters.qty_min} onChange={e => setFilter('qty_min', e.target.value)} className="h-7 text-xs w-full" /></td>
+          <td className="px-2 py-1"><SmartNumberInput placeholder={t('inventory.filterMinPrice', { defaultValue: 'Min Price' })} value={filters.price_min} onChange={e => setFilter('price_min', e.target.value)} className="h-7 text-xs w-full" /></td>
+          {f.location && <td className="px-2 py-1"><Input placeholder={t('inventory.colLocation', { defaultValue: 'Location' })} value={filters.stock_location} onChange={e => setFilter('stock_location', e.target.value)} className="h-7 text-xs w-full" /></td>}
           {f.aging && <td className="px-2 py-1"><div className="flex items-center gap-1">
-            <SmartNumberInput placeholder="Min aging days" value={filters.date_from} onChange={e => setFilter('date_from', e.target.value)} className="h-7 text-xs w-full" />
+            <SmartNumberInput placeholder={t('inventory.filterMinAgingDays', { defaultValue: 'Min aging days' })} value={filters.date_from} onChange={e => setFilter('date_from', e.target.value)} className="h-7 text-xs w-full" />
             {hasFilters && <Button variant="outline" size="sm" className="h-7 text-xs shrink-0" onClick={() => setFilters({ brand: '', model_no: '', description: '', application: '', qty_min: '', price_min: '', stock_location: '', date_from: '' })}>✕</Button>}
           </div></td>}
         </>}
-        emptyMessage="No inventory items yet. Click 'Add Stock' to add items."
+        emptyMessage={t('inventory.dataTableEmptyMessage', { defaultValue: "No inventory items yet. Click 'Add Stock' to add items." })}
       />
       )}
 
       {/* Update Password Dialog */}
       <Dialog open={showUpdatePasswordDialog} onOpenChange={setShowUpdatePasswordDialog}>
         <DialogContent className="max-w-md">
-          <DialogHeader><DialogTitle>Verify Your Account</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{t('inventory.verifyAccountTitle', { defaultValue: 'Verify Your Account' })}</DialogTitle></DialogHeader>
           <div className="space-y-4">
-            <p className="text-sm text-muted-foreground">Enter your account password to proceed with updating.</p>
+            <p className="text-sm text-muted-foreground">{t('inventory.verifyPasswordUpdateHint', { defaultValue: 'Enter your account password to proceed with updating.' })}</p>
             <div>
-              <Label>Password</Label>
+              <Label>{t('inventory.password', { defaultValue: 'Password' })}</Label>
               <Input type="password" value={updatePassword} onChange={e => setUpdatePassword(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && handleUpdatePasswordSubmit()} placeholder="Enter your password" autoFocus />
+                onKeyDown={e => e.key === 'Enter' && handleUpdatePasswordSubmit()} placeholder={t('inventory.enterYourPassword', { defaultValue: 'Enter your password' })} autoFocus />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => { setShowUpdatePasswordDialog(false); setUpdatePassword(''); }}>Cancel</Button>
-            <Button onClick={handleUpdatePasswordSubmit}>Verify</Button>
+            <Button variant="outline" onClick={() => { setShowUpdatePasswordDialog(false); setUpdatePassword(''); }}>{t('inventory.cancel', { defaultValue: 'Cancel' })}</Button>
+            <Button onClick={handleUpdatePasswordSubmit}>{t('inventory.verify', { defaultValue: 'Verify' })}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -408,7 +483,7 @@ export default function Inventory() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Tag className="w-5 h-5 text-primary" />
-              Update Item — {selectedItem?.item_name || selectedItem?.description}
+              {t('inventory.updateItemTitle', { name: selectedItem?.item_name || selectedItem?.description, defaultValue: 'Update Item — {{name}}' })}
             </DialogTitle>
           </DialogHeader>
           <motion.div
@@ -419,10 +494,10 @@ export default function Inventory() {
           >
             {/* Image upload */}
             <div>
-              <Label className="text-sm font-medium mb-2 block">Product Image</Label>
+              <Label className="text-sm font-medium mb-2 block">{t('inventory.productImage', { defaultValue: 'Product Image' })}</Label>
               {updateForm.image_url ? (
                 <div className="relative w-24 h-24">
-                  <img src={updateForm.image_url} alt="preview" className="w-24 h-24 rounded-lg object-cover border shadow-sm" />
+                  <img src={updateForm.image_url} alt={t('inventory.imagePreviewAlt', { defaultValue: 'preview' })} className="w-24 h-24 rounded-lg object-cover border shadow-sm" />
                   <button type="button" onClick={() => setUpdateForm(f => ({ ...f, image_url: '' }))}
                     className="absolute -top-2 -right-2 bg-destructive text-destructive-foreground rounded-full w-6 h-6 flex items-center justify-center shadow-md">
                     <X className="w-3 h-3" />
@@ -431,7 +506,7 @@ export default function Inventory() {
               ) : (
                 <label className="flex flex-col items-center justify-center w-24 h-24 border-2 border-dashed border-muted-foreground/25 rounded-lg cursor-pointer hover:border-primary/50 hover:bg-primary/5 transition-colors">
                   <ImagePlus className="w-5 h-5 text-muted-foreground mb-1" />
-                  <span className="text-xs text-muted-foreground text-center">Upload image</span>
+                  <span className="text-xs text-muted-foreground text-center">{t('inventory.uploadImage', { defaultValue: 'Upload image' })}</span>
                   <input type="file" accept="image/*" className="hidden" onChange={handleUpdateImageUpload} disabled={uploadingUpdateImage} />
                 </label>
               )}
@@ -439,7 +514,7 @@ export default function Inventory() {
 
             {/* Purchase Price */}
             <div>
-              <Label className="text-sm font-medium mb-1.5 block">Purchase Price</Label>
+              <Label className="text-sm font-medium mb-1.5 block">{t('inventory.purchasePrice', { defaultValue: 'Purchase Price' })}</Label>
               <div className="flex items-stretch">
                 <span className="flex items-center px-2.5 text-xs font-bold text-muted-foreground bg-muted border border-r-0 border-input rounded-l-md select-none shrink-0">NPR</span>
                 <SmartNumberInput
@@ -453,7 +528,7 @@ export default function Inventory() {
 
             {/* Selling Price */}
             <div>
-              <Label className="text-sm font-medium mb-1.5 block">Selling Price</Label>
+              <Label className="text-sm font-medium mb-1.5 block">{t('inventory.sellingPrice', { defaultValue: 'Selling Price' })}</Label>
               <div className="flex items-stretch">
                 <span className="flex items-center px-2.5 text-xs font-bold text-muted-foreground bg-muted border border-r-0 border-input rounded-l-md select-none shrink-0">NPR</span>
                 <SmartNumberInput
@@ -465,7 +540,7 @@ export default function Inventory() {
               </div>
               {updateForm.unit_purchase_price > 0 && updateForm.unit_selling_price > 0 && (
                 <div className="flex items-center gap-1.5 text-xs mt-1">
-                  <span className="text-muted-foreground">Margin:</span>
+                  <span className="text-muted-foreground">{t('inventory.margin', { defaultValue: 'Margin:' })}</span>
                   <span className={`font-semibold px-1.5 py-0.5 rounded ${
                     ((updateForm.unit_selling_price - updateForm.unit_purchase_price) / updateForm.unit_purchase_price * 100) >= 0
                       ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
@@ -479,22 +554,22 @@ export default function Inventory() {
             {/* Stock Location */}
             {f.location && (
               <div>
-                <Label className="text-sm font-medium mb-1.5 block">Stock Location</Label>
+                <Label className="text-sm font-medium mb-1.5 block">{t('inventory.stockLocation', { defaultValue: 'Stock Location' })}</Label>
                 <div className="relative">
                   <MapPin className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
                   <Input
                     className="pl-8 h-9 text-sm"
                     value={updateForm.stock_location}
                     onChange={e => setUpdateForm(f => ({ ...f, stock_location: e.target.value }))}
-                    placeholder="e.g. Shelf A-3"
+                    placeholder={t('inventory.placeholderShelfLocation', { defaultValue: 'e.g. Shelf A-3' })}
                   />
                 </div>
               </div>
             )}
           </motion.div>
           <DialogFooter className="border-t pt-4">
-            <Button variant="outline" onClick={() => setShowUpdateDialog(false)}>Cancel</Button>
-            <Button onClick={handleUpdateSubmit} className="gap-2"><Tag className="w-4 h-4" />Save Changes</Button>
+            <Button variant="outline" onClick={() => setShowUpdateDialog(false)}>{t('inventory.cancel', { defaultValue: 'Cancel' })}</Button>
+            <Button onClick={handleUpdateSubmit} className="gap-2"><Tag className="w-4 h-4" />{t('inventory.saveChanges', { defaultValue: 'Save Changes' })}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -502,18 +577,18 @@ export default function Inventory() {
       {/* Delete Password Dialog */}
       <Dialog open={showPasswordDialog} onOpenChange={setShowPasswordDialog}>
         <DialogContent className="max-w-md">
-          <DialogHeader><DialogTitle>Verify Your Account</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{t('inventory.verifyAccountTitle', { defaultValue: 'Verify Your Account' })}</DialogTitle></DialogHeader>
           <div className="space-y-4">
-            <p className="text-sm text-muted-foreground">Enter your account password to proceed with deletion.</p>
+            <p className="text-sm text-muted-foreground">{t('inventory.verifyPasswordDeleteHint', { defaultValue: 'Enter your account password to proceed with deletion.' })}</p>
             <div>
-              <Label>Password</Label>
+              <Label>{t('inventory.password', { defaultValue: 'Password' })}</Label>
               <Input type="password" value={password} onChange={e => setPassword(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && handlePasswordSubmit()} placeholder="Enter your password" autoFocus />
+                onKeyDown={e => e.key === 'Enter' && handlePasswordSubmit()} placeholder={t('inventory.enterYourPassword', { defaultValue: 'Enter your password' })} autoFocus />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => { setShowPasswordDialog(false); setPassword(''); }}>Cancel</Button>
-            <Button onClick={handlePasswordSubmit}>Verify</Button>
+            <Button variant="outline" onClick={() => { setShowPasswordDialog(false); setPassword(''); }}>{t('inventory.cancel', { defaultValue: 'Cancel' })}</Button>
+            <Button onClick={handlePasswordSubmit}>{t('inventory.verify', { defaultValue: 'Verify' })}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -521,12 +596,12 @@ export default function Inventory() {
       {/* Confirm Delete Dialog */}
       <Dialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
         <DialogContent className="max-w-md">
-          <DialogHeader><DialogTitle>Confirm Deletion</DialogTitle></DialogHeader>
-          <p className="text-sm">Are you sure you want to delete <span className="font-semibold">{selectedItem?.item_name || selectedItem?.description}</span>?</p>
-          <p className="text-xs text-red-600 mt-1">This action cannot be undone.</p>
+          <DialogHeader><DialogTitle>{t('inventory.confirmDeletionTitle', { defaultValue: 'Confirm Deletion' })}</DialogTitle></DialogHeader>
+          <p className="text-sm">{t('inventory.confirmDeletePrefix', { defaultValue: 'Are you sure you want to delete' })} <span className="font-semibold">{selectedItem?.item_name || selectedItem?.description}</span>{t('inventory.confirmDeleteSuffix', { defaultValue: '?' })}</p>
+          <p className="text-xs text-red-600 mt-1">{t('inventory.actionCannotBeUndone', { defaultValue: 'This action cannot be undone.' })}</p>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowConfirmDialog(false)}>No, Cancel</Button>
-            <Button variant="destructive" onClick={handleConfirmDelete}>Yes, Delete</Button>
+            <Button variant="outline" onClick={() => setShowConfirmDialog(false)}>{t('inventory.noCancel', { defaultValue: 'No, Cancel' })}</Button>
+            <Button variant="destructive" onClick={handleConfirmDelete}>{t('inventory.yesDelete', { defaultValue: 'Yes, Delete' })}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -538,7 +613,7 @@ export default function Inventory() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <ArrowUpDown className="w-5 h-5 text-primary" />
-              Adjust Stock — {selectedItem?.item_name || selectedItem?.description}
+              {t('inventory.adjustStockTitle', { name: selectedItem?.item_name || selectedItem?.description, defaultValue: 'Adjust Stock — {{name}}' })}
             </DialogTitle>
           </DialogHeader>
           <motion.div
@@ -549,18 +624,18 @@ export default function Inventory() {
           >
             {/* Current quantity badge */}
             <div className="bg-secondary rounded-lg px-4 py-2 text-sm flex justify-between">
-              <span className="text-muted-foreground">Current Quantity</span>
+              <span className="text-muted-foreground">{t('inventory.currentQuantity', { defaultValue: 'Current Quantity' })}</span>
               <span className="font-semibold">{selectedItem?.quantity ?? 0} {selectedItem?.unit}</span>
             </div>
 
             {/* Adjustment Type chips */}
             <div>
-              <Label>Adjustment Type</Label>
+              <Label>{t('inventory.adjustmentType', { defaultValue: 'Adjustment Type' })}</Label>
               <div className="grid grid-cols-3 gap-2 mt-1">
                 {[
-                  { v: 'ADDITION',    label: '+ Add',     color: 'border-green-400 text-green-700', activeColor: 'bg-green-50 border-green-500' },
-                  { v: 'SUBTRACTION', label: '− Remove',  color: 'border-red-400 text-red-700',   activeColor: 'bg-red-50 border-red-500' },
-                  { v: 'RECOUNT',     label: '↺ Recount', color: 'border-blue-400 text-blue-700', activeColor: 'bg-blue-50 border-blue-500' },
+                  { v: 'ADDITION',    label: '+ ' + t('inventory.add', { defaultValue: 'Add' }),     color: 'border-green-400 text-green-700', activeColor: 'bg-green-50 border-green-500' },
+                  { v: 'SUBTRACTION', label: '− ' + t('inventory.remove', { defaultValue: 'Remove' }),  color: 'border-red-400 text-red-700',   activeColor: 'bg-red-50 border-red-500' },
+                  { v: 'RECOUNT',     label: '↺ ' + t('inventory.recount', { defaultValue: 'Recount' }), color: 'border-blue-400 text-blue-700', activeColor: 'bg-blue-50 border-blue-500' },
                 ].map(({ v, label, color, activeColor }) => (
                   <button
                     key={v}
@@ -577,7 +652,7 @@ export default function Inventory() {
             {/* Quantity input */}
             <div>
               <Label>
-                {adjForm.type === 'RECOUNT' ? 'New Quantity' : 'Quantity to ' + (adjForm.type === 'ADDITION' ? 'Add' : 'Remove')} *
+                {adjForm.type === 'RECOUNT' ? t('inventory.newQuantity', { defaultValue: 'New Quantity' }) : (adjForm.type === 'ADDITION' ? t('inventory.quantityToAdd', { defaultValue: 'Quantity to Add' }) : t('inventory.quantityToRemove', { defaultValue: 'Quantity to Remove' }))} *
               </Label>
               <div className="relative mt-1">
                 <Hash className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
@@ -590,7 +665,7 @@ export default function Inventory() {
               </div>
               {adjForm.quantity && adjForm.type !== 'RECOUNT' && (
                 <p className="text-xs text-muted-foreground mt-1">
-                  New quantity will be:{' '}
+                  {t('inventory.newQuantityWillBe', { defaultValue: 'New quantity will be:' })}{' '}
                   <strong>
                     {adjForm.type === 'ADDITION'
                       ? (selectedItem?.quantity || 0) + parseFloat(adjForm.quantity || 0)
@@ -602,13 +677,13 @@ export default function Inventory() {
 
             {/* Reason */}
             <div>
-              <Label>Reason *</Label>
+              <Label>{t('inventory.reason', { defaultValue: 'Reason' })} *</Label>
               <div className="relative mt-1">
                 <MessageSquare className="absolute left-2.5 top-2.5 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
                 <Textarea
                   className="pl-8 text-sm"
                   rows={2}
-                  placeholder="e.g. Physical stock count, damaged goods, returned items..."
+                  placeholder={t('inventory.placeholderAdjustmentReason', { defaultValue: 'e.g. Physical stock count, damaged goods, returned items...' })}
                   value={adjForm.reason}
                   onChange={e => setAdjForm({ ...adjForm, reason: e.target.value })}
                 />
@@ -616,12 +691,12 @@ export default function Inventory() {
             </div>
           </motion.div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowAdjustDialog(false)}>Cancel</Button>
+            <Button variant="outline" onClick={() => setShowAdjustDialog(false)}>{t('inventory.cancel', { defaultValue: 'Cancel' })}</Button>
             <Button
               onClick={submitAdjustment}
               disabled={adjSubmitting || !adjForm.quantity || !adjForm.reason.trim()}
             >
-              {adjSubmitting ? 'Saving...' : 'Save Adjustment'}
+              {adjSubmitting ? t('inventory.saving', { defaultValue: 'Saving...' }) : t('inventory.saveAdjustment', { defaultValue: 'Save Adjustment' })}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -633,12 +708,12 @@ export default function Inventory() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <History className="w-4 h-4" />
-              Adjustment Log — {selectedItem?.item_name || selectedItem?.description}
+              {t('inventory.adjustmentLogTitle', { name: selectedItem?.item_name || selectedItem?.description, defaultValue: 'Adjustment Log — {{name}}' })}
             </DialogTitle>
           </DialogHeader>
           <div className="flex-1 overflow-y-auto">
             {adjLog.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-8">No adjustments recorded yet.</p>
+              <p className="text-sm text-muted-foreground text-center py-8">{t('inventory.noAdjustmentsRecorded', { defaultValue: 'No adjustments recorded yet.' })}</p>
             ) : (
               <div className="space-y-2">
                 {adjLog.map((entry, idx) => (
@@ -654,7 +729,7 @@ export default function Inventory() {
                     <div className="flex-1 min-w-0">
                       <p className="text-xs text-muted-foreground truncate">{entry.reason}</p>
                       <p className="text-xs text-muted-foreground mt-0.5">
-                        Before: {entry.quantityBefore} → After: {entry.quantityAfter}
+                        {t('inventory.beforeAfter', { before: entry.quantityBefore, after: entry.quantityAfter, defaultValue: 'Before: {{before}} → After: {{after}}' })}
                         {entry.createdAt && ` · ${new Date(entry.createdAt).toLocaleDateString()}`}
                       </p>
                     </div>
@@ -664,7 +739,7 @@ export default function Inventory() {
             )}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowAdjLogDialog(false)}>Close</Button>
+            <Button variant="outline" onClick={() => setShowAdjLogDialog(false)}>{t('inventory.close', { defaultValue: 'Close' })}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -676,14 +751,14 @@ export default function Inventory() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Package className="w-5 h-5 text-primary" />
-              Add New Inventory Item
+              {t('inventory.addNewItemTitle', { defaultValue: 'Add New Inventory Item' })}
             </DialogTitle>
             {company?.business_type && (
               <p className="text-xs text-muted-foreground">
-                Fields shown for <span className="font-medium">
-                  {({ RETAIL: 'Retail', PHARMACY: 'Pharmacy', ELECTRONICS: 'Electronics', FOOD_BEVERAGE: 'Tea Shop / Bakery', SERVICES: 'Services', MANUFACTURING: 'Manufacturing', SCHOOL: 'School Supplies', OTHER: 'Other' })[company.business_type] || company.business_type}
-                </span> businesses.
-                Change in <a href="/settings" className="text-primary underline">Settings</a> to adjust.
+                {t('inventory.fieldsShownForPrefix', { defaultValue: 'Fields shown for' })} <span className="font-medium">
+                  {getBusinessTypeLabel(t, company.business_type)}
+                </span> {t('inventory.fieldsShownForSuffix', { defaultValue: 'businesses.' })}
+                {' '}{t('inventory.changeInSettingsPrefix', { defaultValue: 'Change in' })} <a href="/settings" className="text-primary underline">{t('inventory.settingsLink', { defaultValue: 'Settings' })}</a> {t('inventory.changeInSettingsSuffix', { defaultValue: 'to adjust.' })}
               </p>
             )}
           </DialogHeader>
@@ -694,10 +769,10 @@ export default function Inventory() {
             <div className="overflow-y-auto space-y-4 pr-2">
               {/* Image upload */}
               <div>
-                <Label className="text-sm font-medium mb-2 block">Image</Label>
+                <Label className="text-sm font-medium mb-2 block">{t('inventory.image', { defaultValue: 'Image' })}</Label>
                 {form.image_url ? (
                   <div className="relative w-32 h-32">
-                    <img src={form.image_url} alt="preview" className="w-32 h-32 rounded-lg object-cover border shadow-sm" />
+                    <img src={form.image_url} alt={t('inventory.imagePreviewAlt', { defaultValue: 'preview' })} className="w-32 h-32 rounded-lg object-cover border shadow-sm" />
                     <button type="button" onClick={() => setForm(f => ({ ...f, image_url: '' }))}
                       className="absolute -top-2 -right-2 bg-destructive text-destructive-foreground rounded-full w-6 h-6 flex items-center justify-center shadow-md">
                       <X className="w-3 h-3" />
@@ -706,7 +781,7 @@ export default function Inventory() {
                 ) : (
                   <label className="flex flex-col items-center justify-center w-32 h-32 border-2 border-dashed border-muted-foreground/25 rounded-lg cursor-pointer hover:border-primary/50 hover:bg-primary/5 transition-colors">
                     <ImagePlus className="w-6 h-6 text-muted-foreground mb-1" />
-                    <span className="text-xs text-muted-foreground text-center">Click to upload</span>
+                    <span className="text-xs text-muted-foreground text-center">{t('inventory.clickToUpload', { defaultValue: 'Click to upload' })}</span>
                     <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} disabled={uploadingImage} />
                   </label>
                 )}
@@ -714,11 +789,11 @@ export default function Inventory() {
 
               {/* Basic Information */}
               <div className="space-y-3">
-                <h4 className="text-sm font-medium border-b pb-1">Basic Information</h4>
+                <h4 className="text-sm font-medium border-b pb-1">{t('inventory.basicInformation', { defaultValue: 'Basic Information' })}</h4>
 
                 {/* Item Name */}
                 <div>
-                  <Label className="text-sm">Item Name *</Label>
+                  <Label className="text-sm">{t('inventory.itemName', { defaultValue: 'Item Name' })} *</Label>
                   <div className="relative mt-1">
                     <Tag className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
                     <Input
@@ -732,7 +807,7 @@ export default function Inventory() {
 
                 {/* Description */}
                 <div>
-                  <Label className="text-sm">Description <span className="text-muted-foreground text-xs">(optional)</span></Label>
+                  <Label className="text-sm">{t('inventory.colDetails', { defaultValue: 'Description' })} <span className="text-muted-foreground text-xs">{t('inventory.optional', { defaultValue: '(optional)' })}</span></Label>
                   <div className="relative mt-1">
                     <FileText className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
                     <Input
@@ -747,14 +822,14 @@ export default function Inventory() {
                 {/* Brand */}
                 {f.brand && (
                   <div>
-                    <Label className="text-sm">Brand <span className="text-muted-foreground text-xs">(optional)</span></Label>
+                    <Label className="text-sm">{t('inventory.colBrand', { defaultValue: 'Brand' })} <span className="text-muted-foreground text-xs">{t('inventory.optional', { defaultValue: '(optional)' })}</span></Label>
                     <div className="relative mt-1">
                       <Award className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
                       <Input
                         className="pl-8 h-9 text-sm"
                         value={form.brand}
                         onChange={e => setForm({ ...form, brand: e.target.value })}
-                        placeholder={p.brand || 'e.g. Brand name'}
+                        placeholder={p.brand || t('inventory.placeholderOtherBrand', { defaultValue: 'e.g. Brand name' })}
                       />
                     </div>
                   </div>
@@ -763,14 +838,14 @@ export default function Inventory() {
                 {/* Model / Part No */}
                 {f.modelNo && (
                   <div>
-                    <Label className="text-sm">Model / Part No. <span className="text-muted-foreground text-xs">(optional)</span></Label>
+                    <Label className="text-sm">{t('inventory.modelPartNo', { defaultValue: 'Model / Part No.' })} <span className="text-muted-foreground text-xs">{t('inventory.optional', { defaultValue: '(optional)' })}</span></Label>
                     <div className="relative mt-1">
                       <Hash className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
                       <Input
                         className="pl-8 h-9 text-sm"
                         value={form.model_no}
                         onChange={e => setForm({ ...form, model_no: e.target.value })}
-                        placeholder={p.model_no || 'e.g. USB-C-3.0'}
+                        placeholder={p.model_no || t('inventory.placeholderModelNoFallback', { defaultValue: 'e.g. USB-C-3.0' })}
                       />
                     </div>
                   </div>
@@ -779,14 +854,14 @@ export default function Inventory() {
                 {/* Application */}
                 {f.application && (
                   <div>
-                    <Label className="text-sm">Usage / Purpose <span className="text-muted-foreground text-xs">(optional)</span></Label>
+                    <Label className="text-sm">{t('inventory.usagePurpose', { defaultValue: 'Usage / Purpose' })} <span className="text-muted-foreground text-xs">{t('inventory.optional', { defaultValue: '(optional)' })}</span></Label>
                     <div className="relative mt-1">
                       <Layers className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
                       <Input
                         className="pl-8 h-9 text-sm"
                         value={form.application}
                         onChange={e => setForm({ ...form, application: e.target.value })}
-                        placeholder={p.application || 'e.g. Usage or purpose'}
+                        placeholder={p.application || t('inventory.placeholderOtherApplication', { defaultValue: 'e.g. Usage or purpose' })}
                       />
                     </div>
                   </div>
@@ -794,14 +869,14 @@ export default function Inventory() {
 
                 {/* Supplier Name */}
                 <div>
-                  <Label className="text-sm">Supplier Name <span className="text-muted-foreground text-xs">(optional)</span></Label>
+                  <Label className="text-sm">{t('inventory.supplierName', { defaultValue: 'Supplier Name' })} <span className="text-muted-foreground text-xs">{t('inventory.optional', { defaultValue: '(optional)' })}</span></Label>
                   <div className="relative mt-1">
                     <Truck className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
                     <Input
                       className="pl-8 h-9 text-sm"
                       value={form.supplier_name}
                       onChange={e => setForm({ ...form, supplier_name: e.target.value })}
-                      placeholder={p.supplier_name || 'e.g. ABC Traders'}
+                      placeholder={p.supplier_name || t('inventory.placeholderSupplierNameFallback', { defaultValue: 'e.g. ABC Traders' })}
                     />
                   </div>
                 </div>
@@ -813,7 +888,7 @@ export default function Inventory() {
                     onClick={() => setShowExtraFields(true)}
                     className="text-xs text-primary underline underline-offset-2 hover:text-primary/80 transition-colors"
                   >
-                    + Show additional fields (brand, model, usage, expiry…)
+                    {t('inventory.showAdditionalFields', { defaultValue: '+ Show additional fields (brand, model, usage, expiry…)' })}
                   </button>
                 )}
               </div>
@@ -822,11 +897,11 @@ export default function Inventory() {
             {/* RIGHT column — Pricing & Stock */}
             <div className="overflow-y-auto space-y-4 pr-2">
               <div className="space-y-3">
-                <h4 className="text-sm font-medium border-b pb-1">Quantity & Pricing</h4>
+                <h4 className="text-sm font-medium border-b pb-1">{t('inventory.quantityAndPricing', { defaultValue: 'Quantity & Pricing' })}</h4>
 
                 {/* Quantity */}
                 <div>
-                  <Label className="text-sm">Quantity</Label>
+                  <Label className="text-sm">{t('inventory.quantity', { defaultValue: 'Quantity' })}</Label>
                   <div className="relative mt-1">
                     <Package className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
                     <SmartNumberInput
@@ -840,19 +915,19 @@ export default function Inventory() {
 
                 {/* Unit */}
                 <div>
-                  <Label className="text-sm">Unit</Label>
+                  <Label className="text-sm">{t('inventory.unit', { defaultValue: 'Unit' })}</Label>
                   {!form.unit || UNITS.includes(form.unit) ? (
                     <Select value={form.unit} onValueChange={v => setForm({ ...form, unit: v === '__custom__' ? '__custom__' : v })}>
-                      <SelectTrigger className="mt-1 h-9 text-sm"><SelectValue placeholder="Select unit" /></SelectTrigger>
+                      <SelectTrigger className="mt-1 h-9 text-sm"><SelectValue placeholder={t('inventory.selectUnit', { defaultValue: 'Select unit' })} /></SelectTrigger>
                       <SelectContent>
-                        {UNITS.map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}
-                        <SelectItem value="__custom__">Custom...</SelectItem>
+                        {UNITS.map(u => <SelectItem key={u} value={u}>{t(`inventory.unit${u}`, { defaultValue: u })}</SelectItem>)}
+                        <SelectItem value="__custom__">{t('inventory.customEllipsis', { defaultValue: 'Custom...' })}</SelectItem>
                       </SelectContent>
                     </Select>
                   ) : (
                     <div className="flex gap-2 mt-1">
                       <Input value={form.unit === '__custom__' ? '' : form.unit}
-                        onChange={e => setForm({ ...form, unit: e.target.value })} placeholder="Custom unit" autoFocus className="h-9 text-sm" />
+                        onChange={e => setForm({ ...form, unit: e.target.value })} placeholder={t('inventory.customUnit', { defaultValue: 'Custom unit' })} autoFocus className="h-9 text-sm" />
                       <Button type="button" variant="outline" size="sm" onClick={() => setForm({ ...form, unit: 'Piece' })}>↩</Button>
                     </div>
                   )}
@@ -860,7 +935,7 @@ export default function Inventory() {
 
                 {/* Buy Price */}
                 <div>
-                  <Label className="text-sm">Purchase Price</Label>
+                  <Label className="text-sm">{t('inventory.purchasePrice', { defaultValue: 'Purchase Price' })}</Label>
                   <div className="flex items-stretch mt-1">
                     <span className="flex items-center px-2.5 text-xs font-bold text-muted-foreground bg-muted border border-r-0 border-input rounded-l-md select-none shrink-0">NPR</span>
                     <SmartNumberInput
@@ -874,7 +949,7 @@ export default function Inventory() {
 
                 {/* Sell Price */}
                 <div>
-                  <Label className="text-sm">Selling Price</Label>
+                  <Label className="text-sm">{t('inventory.sellingPrice', { defaultValue: 'Selling Price' })}</Label>
                   <div className="flex items-stretch mt-1">
                     <span className="flex items-center px-2.5 text-xs font-bold text-muted-foreground bg-muted border border-r-0 border-input rounded-l-md select-none shrink-0">NPR</span>
                     <SmartNumberInput
@@ -886,7 +961,7 @@ export default function Inventory() {
                   </div>
                   {form.unit_purchase_price > 0 && form.unit_selling_price > 0 && (
                     <div className="flex items-center gap-1.5 text-xs mt-1">
-                      <span className="text-muted-foreground">Margin:</span>
+                      <span className="text-muted-foreground">{t('inventory.margin', { defaultValue: 'Margin:' })}</span>
                       <span className={`font-semibold px-1.5 py-0.5 rounded ${
                         ((form.unit_selling_price - form.unit_purchase_price) / form.unit_purchase_price * 100) >= 0
                           ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
@@ -899,7 +974,7 @@ export default function Inventory() {
 
                 {/* Low Stock Threshold */}
                 <div>
-                  <Label className="text-sm">Low Stock Alert</Label>
+                  <Label className="text-sm">{t('inventory.lowStockAlert', { defaultValue: 'Low Stock Alert' })}</Label>
                   <div className="relative mt-1">
                     <AlertTriangle className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
                     <SmartNumberInput
@@ -914,14 +989,14 @@ export default function Inventory() {
                 {/* Stock Location */}
                 {f.location && (
                   <div>
-                    <Label className="text-sm">Stock Location <span className="text-muted-foreground text-xs">(optional)</span></Label>
+                    <Label className="text-sm">{t('inventory.stockLocation', { defaultValue: 'Stock Location' })} <span className="text-muted-foreground text-xs">{t('inventory.optional', { defaultValue: '(optional)' })}</span></Label>
                     <div className="relative mt-1">
                       <MapPin className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
                       <Input
                         className="pl-8 h-9 text-sm"
                         value={form.stock_location}
                         onChange={e => setForm({ ...form, stock_location: e.target.value })}
-                        placeholder="e.g. Shelf A-3"
+                        placeholder={t('inventory.placeholderShelfLocation', { defaultValue: 'e.g. Shelf A-3' })}
                       />
                     </div>
                   </div>
@@ -930,7 +1005,7 @@ export default function Inventory() {
                 {/* Expiry Date */}
                 {f.expiry && (
                   <div>
-                    <Label className="text-sm">Expiry Date <span className="text-muted-foreground text-xs">(optional)</span></Label>
+                    <Label className="text-sm">{t('inventory.expiryDate', { defaultValue: 'Expiry Date' })} <span className="text-muted-foreground text-xs">{t('inventory.optional', { defaultValue: '(optional)' })}</span></Label>
                     <div className="relative mt-1">
                       <Calendar className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
                       <Input
@@ -946,7 +1021,7 @@ export default function Inventory() {
                 {/* Aging Alert */}
                 {f.aging && (
                   <div>
-                    <Label className="text-sm">Aging Alert (Days) <span className="text-muted-foreground text-xs">(flag slow-moving stock)</span></Label>
+                    <Label className="text-sm">{t('inventory.agingAlertDays', { defaultValue: 'Aging Alert (Days)' })} <span className="text-muted-foreground text-xs">{t('inventory.flagSlowMovingStock', { defaultValue: '(flag slow-moving stock)' })}</span></Label>
                     <div className="relative mt-1">
                       <Clock className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
                       <SmartNumberInput
@@ -962,7 +1037,7 @@ export default function Inventory() {
                 {/* Expiry Alert Days */}
                 {f.expiry && (
                   <div>
-                    <Label className="text-sm">Alert Before Expiry (Days)</Label>
+                    <Label className="text-sm">{t('inventory.alertBeforeExpiryDays', { defaultValue: 'Alert Before Expiry (Days)' })}</Label>
                     <div className="relative mt-1">
                       <AlertTriangle className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
                       <SmartNumberInput
@@ -979,9 +1054,9 @@ export default function Inventory() {
           </div>
 
           <DialogFooter className="border-t pt-4">
-            <Button variant="outline" onClick={() => setShowAdd(false)}>Cancel</Button>
+            <Button variant="outline" onClick={() => setShowAdd(false)}>{t('inventory.cancel', { defaultValue: 'Cancel' })}</Button>
             <Button onClick={addItem} disabled={!form.item_name} className="gap-2">
-              <Package className="w-4 h-4" />Add Item
+              <Package className="w-4 h-4" />{t('inventory.addItem', { defaultValue: 'Add Item' })}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { taskApi, salesApi, purchaseApi, clientApi, vendorApi } from '@/api';
 import { getActiveCompanyId } from '@/lib/companyContext';
 import PageHeader from '../components/shared/PageHeader';
@@ -57,10 +58,46 @@ const EMPTY_FORM = {
 };
 
 const COLUMNS = [
-  { key: 'Pending', label: 'Pending', dotColor: 'bg-gray-400' },
-  { key: 'In Progress', label: 'In Progress', dotColor: 'bg-blue-500' },
-  { key: 'Done', label: 'Done', dotColor: 'bg-green-500' },
+  { key: 'Pending', dotColor: 'bg-gray-400' },
+  { key: 'In Progress', dotColor: 'bg-blue-500' },
+  { key: 'Done', dotColor: 'bg-green-500' },
 ];
+
+// ─── i18n label helpers ──────────────────────────────────────────────────────
+// These take `t` as a plain argument (not a hook call), so they're safe to
+// call from anywhere, including outside component bodies.
+
+function categoryLabel(t, category) {
+  const map = {
+    General: t('workflow.categoryGeneral', { defaultValue: 'General' }),
+    Finance: t('workflow.categoryFinance', { defaultValue: 'Finance' }),
+    HR: t('workflow.categoryHr', { defaultValue: 'HR' }),
+    Operations: t('workflow.categoryOperations', { defaultValue: 'Operations' }),
+    Marketing: t('workflow.categoryMarketing', { defaultValue: 'Marketing' }),
+    Sales: t('workflow.categorySales', { defaultValue: 'Sales' }),
+    Admin: t('workflow.categoryAdmin', { defaultValue: 'Admin' }),
+    Legal: t('workflow.categoryLegal', { defaultValue: 'Legal' }),
+  };
+  return map[category] || category;
+}
+
+function priorityLabel(t, priority) {
+  const map = {
+    High: t('workflow.priorityHigh', { defaultValue: 'High' }),
+    Medium: t('workflow.priorityMedium', { defaultValue: 'Medium' }),
+    Low: t('workflow.priorityLow', { defaultValue: 'Low' }),
+  };
+  return map[priority] || priority;
+}
+
+function statusLabel(t, status) {
+  const map = {
+    Pending: t('workflow.columnPending', { defaultValue: 'Pending' }),
+    'In Progress': t('workflow.columnInProgress', { defaultValue: 'In Progress' }),
+    Done: t('workflow.columnDone', { defaultValue: 'Done' }),
+  };
+  return map[status] || status;
+}
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -79,6 +116,7 @@ function isOverdue(dateStr) {
 // ─── KanbanCard ──────────────────────────────────────────────────────────────
 
 function KanbanCard({ task, onClick }) {
+  const { t } = useTranslation();
   const overdue = isOverdue(task.due_date);
 
   return (
@@ -97,12 +135,12 @@ function KanbanCard({ task, onClick }) {
         <div className="flex flex-wrap gap-1 mb-2">
           {task.category && (
             <span className={cn('text-xs px-1.5 py-0.5 rounded-md font-medium', CATEGORY_COLORS[task.category] || CATEGORY_COLORS.General)}>
-              {task.category}
+              {categoryLabel(t, task.category)}
             </span>
           )}
           {task.priority && (
             <span className={cn('text-xs px-1.5 py-0.5 rounded-md font-medium', PRIORITY_BADGE[task.priority] || '')}>
-              {task.priority}
+              {priorityLabel(t, task.priority)}
             </span>
           )}
         </div>
@@ -111,7 +149,7 @@ function KanbanCard({ task, onClick }) {
         {task.due_date && (
           <div className={cn('flex items-center gap-1 text-xs mb-1.5', overdue ? 'text-red-500 font-medium' : 'text-muted-foreground')}>
             <Calendar className="w-3 h-3 shrink-0" />
-            <span>{formatDate(task.due_date)}{overdue ? ' · Overdue' : ''}</span>
+            <span>{formatDate(task.due_date)}{overdue ? ` · ${t('workflow.overdue', { defaultValue: 'Overdue' })}` : ''}</span>
           </div>
         )}
 
@@ -137,6 +175,7 @@ function KanbanCard({ task, onClick }) {
 // ─── KanbanColumn ─────────────────────────────────────────────────────────────
 
 function KanbanColumn({ title, dotColor, tasks, onCardClick, onAddNew }) {
+  const { t } = useTranslation();
   return (
     <div className="flex-1 min-w-0">
       <div className="flex items-center justify-between mb-3 px-1">
@@ -154,7 +193,7 @@ function KanbanColumn({ title, dotColor, tasks, onCardClick, onAddNew }) {
 
       <div className="space-y-2 min-h-[200px] bg-muted/20 rounded-lg p-2">
         {tasks.length === 0 ? (
-          <div className="text-center py-8 text-muted-foreground text-xs">No tasks</div>
+          <div className="text-center py-8 text-muted-foreground text-xs">{t('workflow.noTasks', { defaultValue: 'No tasks' })}</div>
         ) : (
           tasks.map(task => (
             <KanbanCard key={task.id} task={task} onClick={onCardClick} />
@@ -173,6 +212,7 @@ const EMPTY_CLIENT = { name: '', phone: '', email: '', address: '' };
 const EMPTY_VENDOR = { name: '', phone: '', email: '', address: '' };
 
 function SlideOutPanel({ task, onClose, onSave }) {
+  const { t } = useTranslation();
   const [editing, setEditing] = useState(null);
   const [saving, setSaving] = useState(false);
   const { toast } = useToast();
@@ -243,9 +283,16 @@ function SlideOutPanel({ task, onClose, onSave }) {
         labor_items: [],
       });
       setSalesDialog(false);
-      toast({ title: 'Sales bill created', description: `Bill for "${salesForm.client_name}" created.` });
+      toast({
+        title: t('workflow.salesBillCreatedTitle', { defaultValue: 'Sales bill created' }),
+        description: t('workflow.salesBillCreatedDesc', { defaultValue: 'Bill for "{{name}}" created.', name: salesForm.client_name }),
+      });
     } catch {
-      toast({ title: 'Error', description: 'Could not create sales bill.', variant: 'destructive' });
+      toast({
+        title: t('workflow.error', { defaultValue: 'Error' }),
+        description: t('workflow.couldNotCreateSalesBill', { defaultValue: 'Could not create sales bill.' }),
+        variant: 'destructive',
+      });
     } finally {
       setQaSubmitting(false);
     }
@@ -268,9 +315,16 @@ function SlideOutPanel({ task, onClose, onSave }) {
         labor_items: [],
       });
       setPurchaseDialog(false);
-      toast({ title: 'Purchase created', description: `Purchase from "${purchaseForm.vendor_name}" created.` });
+      toast({
+        title: t('workflow.purchaseCreatedTitle', { defaultValue: 'Purchase created' }),
+        description: t('workflow.purchaseCreatedDesc', { defaultValue: 'Purchase from "{{name}}" created.', name: purchaseForm.vendor_name }),
+      });
     } catch {
-      toast({ title: 'Error', description: 'Could not create purchase.', variant: 'destructive' });
+      toast({
+        title: t('workflow.error', { defaultValue: 'Error' }),
+        description: t('workflow.couldNotCreatePurchase', { defaultValue: 'Could not create purchase.' }),
+        variant: 'destructive',
+      });
     } finally {
       setQaSubmitting(false);
     }
@@ -282,9 +336,16 @@ function SlideOutPanel({ task, onClose, onSave }) {
       const companyId = getActiveCompanyId();
       await clientApi.create({ ...clientForm, companyId });
       setClientDialog(false);
-      toast({ title: 'Client added', description: `"${clientForm.name}" added as a client.` });
+      toast({
+        title: t('workflow.clientAddedTitle', { defaultValue: 'Client added' }),
+        description: t('workflow.clientAddedDesc', { defaultValue: '"{{name}}" added as a client.', name: clientForm.name }),
+      });
     } catch {
-      toast({ title: 'Error', description: 'Could not add client.', variant: 'destructive' });
+      toast({
+        title: t('workflow.error', { defaultValue: 'Error' }),
+        description: t('workflow.couldNotAddClient', { defaultValue: 'Could not add client.' }),
+        variant: 'destructive',
+      });
     } finally {
       setQaSubmitting(false);
     }
@@ -296,9 +357,16 @@ function SlideOutPanel({ task, onClose, onSave }) {
       const companyId = getActiveCompanyId();
       await vendorApi.create({ ...vendorForm, companyId });
       setVendorDialog(false);
-      toast({ title: 'Vendor added', description: `"${vendorForm.name}" added as a vendor.` });
+      toast({
+        title: t('workflow.vendorAddedTitle', { defaultValue: 'Vendor added' }),
+        description: t('workflow.vendorAddedDesc', { defaultValue: '"{{name}}" added as a vendor.', name: vendorForm.name }),
+      });
     } catch {
-      toast({ title: 'Error', description: 'Could not add vendor.', variant: 'destructive' });
+      toast({
+        title: t('workflow.error', { defaultValue: 'Error' }),
+        description: t('workflow.couldNotAddVendor', { defaultValue: 'Could not add vendor.' }),
+        variant: 'destructive',
+      });
     } finally {
       setQaSubmitting(false);
     }
@@ -315,7 +383,7 @@ function SlideOutPanel({ task, onClose, onSave }) {
         {/* Header */}
         <div className="flex items-start justify-between p-5 border-b border-border shrink-0">
           <div className="flex-1 pr-4">
-            <p className="text-xs font-medium text-muted-foreground mb-1 uppercase tracking-wide">Task Detail</p>
+            <p className="text-xs font-medium text-muted-foreground mb-1 uppercase tracking-wide">{t('workflow.taskDetail', { defaultValue: 'Task Detail' })}</p>
             <h2 className="font-bold text-base leading-snug">{editing.title}</h2>
           </div>
           <Button variant="ghost" size="icon" className="w-8 h-8 shrink-0" onClick={onClose}>
@@ -330,7 +398,7 @@ function SlideOutPanel({ task, onClose, onSave }) {
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label className="text-xs font-medium flex items-center gap-1.5">
-                <Clock className="w-3 h-3" /> Status
+                <Clock className="w-3 h-3" /> {t('workflow.status', { defaultValue: 'Status' })}
               </Label>
               <Select
                 value={editing.status}
@@ -340,16 +408,16 @@ function SlideOutPanel({ task, onClose, onSave }) {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="Pending">Pending</SelectItem>
-                  <SelectItem value="In Progress">In Progress</SelectItem>
-                  <SelectItem value="Done">Done</SelectItem>
+                  <SelectItem value="Pending">{statusLabel(t, 'Pending')}</SelectItem>
+                  <SelectItem value="In Progress">{statusLabel(t, 'In Progress')}</SelectItem>
+                  <SelectItem value="Done">{statusLabel(t, 'Done')}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
             <div className="space-y-1.5">
               <Label className="text-xs font-medium flex items-center gap-1.5">
-                <AlertCircle className="w-3 h-3" /> Priority
+                <AlertCircle className="w-3 h-3" /> {t('workflow.priority', { defaultValue: 'Priority' })}
               </Label>
               <Select
                 value={editing.priority}
@@ -359,9 +427,9 @@ function SlideOutPanel({ task, onClose, onSave }) {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="High">High</SelectItem>
-                  <SelectItem value="Medium">Medium</SelectItem>
-                  <SelectItem value="Low">Low</SelectItem>
+                  <SelectItem value="High">{priorityLabel(t, 'High')}</SelectItem>
+                  <SelectItem value="Medium">{priorityLabel(t, 'Medium')}</SelectItem>
+                  <SelectItem value="Low">{priorityLabel(t, 'Low')}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -370,17 +438,17 @@ function SlideOutPanel({ task, onClose, onSave }) {
           {/* Category */}
           <div className="space-y-1.5">
             <Label className="text-xs font-medium flex items-center gap-1.5">
-              <Tag className="w-3 h-3" /> Category
+              <Tag className="w-3 h-3" /> {t('workflow.category', { defaultValue: 'Category' })}
             </Label>
             <span className={cn('inline-block text-xs px-2.5 py-1 rounded-md font-medium', CATEGORY_COLORS[editing.category] || CATEGORY_COLORS.General)}>
-              {editing.category || 'General'}
+              {categoryLabel(t, editing.category || 'General')}
             </span>
           </div>
 
           {/* Due date */}
           <div className="space-y-1.5">
             <Label className="text-xs font-medium flex items-center gap-1.5">
-              <Calendar className="w-3 h-3" /> Due Date
+              <Calendar className="w-3 h-3" /> {t('workflow.dueDate', { defaultValue: 'Due Date' })}
             </Label>
             <Input
               type="date"
@@ -389,18 +457,18 @@ function SlideOutPanel({ task, onClose, onSave }) {
               onChange={e => setEditing(ed => ({ ...ed, due_date: e.target.value }))}
             />
             {editing.due_date && isOverdue(editing.due_date) && (
-              <p className="text-xs text-red-500 font-medium">This task is overdue.</p>
+              <p className="text-xs text-red-500 font-medium">{t('workflow.taskOverdue', { defaultValue: 'This task is overdue.' })}</p>
             )}
           </div>
 
           {/* Assigned to */}
           <div className="space-y-1.5">
             <Label className="text-xs font-medium flex items-center gap-1.5">
-              <User className="w-3 h-3" /> Assigned To
+              <User className="w-3 h-3" /> {t('workflow.assignedTo', { defaultValue: 'Assigned To' })}
             </Label>
             <Input
               className="h-9 text-sm"
-              placeholder="Name or email..."
+              placeholder={t('workflow.nameOrEmailPlaceholder', { defaultValue: 'Name or email...' })}
               value={editing.assigned_to || ''}
               onChange={e => setEditing(ed => ({ ...ed, assigned_to: e.target.value }))}
             />
@@ -408,11 +476,11 @@ function SlideOutPanel({ task, onClose, onSave }) {
 
           {/* Description */}
           <div className="space-y-1.5">
-            <Label className="text-xs font-medium">Description</Label>
+            <Label className="text-xs font-medium">{t('workflow.description', { defaultValue: 'Description' })}</Label>
             <Textarea
               className="text-sm resize-none"
               rows={4}
-              placeholder="Add details about this task..."
+              placeholder={t('workflow.addDetailsPlaceholder', { defaultValue: 'Add details about this task...' })}
               value={editing.description || ''}
               onChange={e => setEditing(ed => ({ ...ed, description: e.target.value }))}
             />
@@ -420,7 +488,7 @@ function SlideOutPanel({ task, onClose, onSave }) {
 
           {/* Quick Actions */}
           <div className="space-y-2">
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Quick Actions</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{t('workflow.quickActions', { defaultValue: 'Quick Actions' })}</p>
             <div className="grid grid-cols-2 gap-2">
               <Button
                 variant="outline"
@@ -429,7 +497,7 @@ function SlideOutPanel({ task, onClose, onSave }) {
                 onClick={openSalesDialog}
               >
                 <Plus className="w-3 h-3 shrink-0 text-muted-foreground" />
-                Create Sales Bill
+                {t('workflow.createSalesBill', { defaultValue: 'Create Sales Bill' })}
               </Button>
               <Button
                 variant="outline"
@@ -438,7 +506,7 @@ function SlideOutPanel({ task, onClose, onSave }) {
                 onClick={openPurchaseDialog}
               >
                 <Plus className="w-3 h-3 shrink-0 text-muted-foreground" />
-                Create Purchase
+                {t('workflow.createPurchase', { defaultValue: 'Create Purchase' })}
               </Button>
               <Button
                 variant="outline"
@@ -447,7 +515,7 @@ function SlideOutPanel({ task, onClose, onSave }) {
                 onClick={openClientDialog}
               >
                 <Plus className="w-3 h-3 shrink-0 text-muted-foreground" />
-                Add Client
+                {t('workflow.addClient', { defaultValue: 'Add Client' })}
               </Button>
               <Button
                 variant="outline"
@@ -456,7 +524,7 @@ function SlideOutPanel({ task, onClose, onSave }) {
                 onClick={openVendorDialog}
               >
                 <Plus className="w-3 h-3 shrink-0 text-muted-foreground" />
-                Add Vendor
+                {t('workflow.addVendor', { defaultValue: 'Add Vendor' })}
               </Button>
             </div>
           </div>
@@ -466,7 +534,7 @@ function SlideOutPanel({ task, onClose, onSave }) {
         <div className="p-5 border-t border-border shrink-0">
           <Button className="w-full gap-2" onClick={handleSave} disabled={saving}>
             <CheckCircle2 className="w-4 h-4" />
-            {saving ? 'Saving…' : 'Save Changes'}
+            {saving ? t('workflow.saving', { defaultValue: 'Saving…' }) : t('workflow.saveChanges', { defaultValue: 'Save Changes' })}
           </Button>
         </div>
       </div>
@@ -478,21 +546,21 @@ function SlideOutPanel({ task, onClose, onSave }) {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <FileText className="w-5 h-5 text-amber-500" />
-              Create Sales Bill
+              {t('workflow.createSalesBill', { defaultValue: 'Create Sales Bill' })}
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-3 mt-2">
             <div className="space-y-1.5">
-              <Label className="text-xs font-medium">Client Name <span className="text-red-500">*</span></Label>
+              <Label className="text-xs font-medium">{t('workflow.clientName', { defaultValue: 'Client Name' })} <span className="text-red-500">*</span></Label>
               <Input
                 className="h-9 text-sm"
-                placeholder="Client name..."
+                placeholder={t('workflow.clientNamePlaceholder', { defaultValue: 'Client name...' })}
                 value={salesForm.client_name}
                 onChange={e => setSalesForm(f => ({ ...f, client_name: e.target.value }))}
               />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs font-medium">Invoice Number</Label>
+              <Label className="text-xs font-medium">{t('workflow.invoiceNumber', { defaultValue: 'Invoice Number' })}</Label>
               <Input
                 className="h-9 text-sm"
                 placeholder="INV-001..."
@@ -501,7 +569,7 @@ function SlideOutPanel({ task, onClose, onSave }) {
               />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs font-medium">Date</Label>
+              <Label className="text-xs font-medium">{t('workflow.date', { defaultValue: 'Date' })}</Label>
               <Input
                 type="date"
                 className="h-9 text-sm"
@@ -510,7 +578,7 @@ function SlideOutPanel({ task, onClose, onSave }) {
               />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs font-medium">Amount</Label>
+              <Label className="text-xs font-medium">{t('workflow.amount', { defaultValue: 'Amount' })}</Label>
               <Input
                 type="number"
                 className="h-9 text-sm"
@@ -520,20 +588,20 @@ function SlideOutPanel({ task, onClose, onSave }) {
               />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs font-medium">Notes</Label>
+              <Label className="text-xs font-medium">{t('workflow.notes', { defaultValue: 'Notes' })}</Label>
               <Textarea
                 className="text-sm resize-none"
                 rows={3}
-                placeholder="Notes..."
+                placeholder={t('workflow.notesPlaceholder', { defaultValue: 'Notes...' })}
                 value={salesForm.notes}
                 onChange={e => setSalesForm(f => ({ ...f, notes: e.target.value }))}
               />
             </div>
           </div>
           <DialogFooter className="mt-4">
-            <Button variant="outline" onClick={() => setSalesDialog(false)}>Cancel</Button>
+            <Button variant="outline" onClick={() => setSalesDialog(false)}>{t('workflow.cancel', { defaultValue: 'Cancel' })}</Button>
             <Button onClick={handleCreateSales} disabled={!salesForm.client_name.trim() || qaSubmitting}>
-              {qaSubmitting ? 'Creating…' : 'Create Bill'}
+              {qaSubmitting ? t('workflow.creating', { defaultValue: 'Creating…' }) : t('workflow.createBill', { defaultValue: 'Create Bill' })}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -546,21 +614,21 @@ function SlideOutPanel({ task, onClose, onSave }) {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <FileText className="w-5 h-5 text-amber-500" />
-              Create Purchase
+              {t('workflow.createPurchase', { defaultValue: 'Create Purchase' })}
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-3 mt-2">
             <div className="space-y-1.5">
-              <Label className="text-xs font-medium">Vendor Name <span className="text-red-500">*</span></Label>
+              <Label className="text-xs font-medium">{t('workflow.vendorName', { defaultValue: 'Vendor Name' })} <span className="text-red-500">*</span></Label>
               <Input
                 className="h-9 text-sm"
-                placeholder="Vendor name..."
+                placeholder={t('workflow.vendorNamePlaceholder', { defaultValue: 'Vendor name...' })}
                 value={purchaseForm.vendor_name}
                 onChange={e => setPurchaseForm(f => ({ ...f, vendor_name: e.target.value }))}
               />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs font-medium">Order Number</Label>
+              <Label className="text-xs font-medium">{t('workflow.orderNumber', { defaultValue: 'Order Number' })}</Label>
               <Input
                 className="h-9 text-sm"
                 placeholder="PO-001..."
@@ -569,7 +637,7 @@ function SlideOutPanel({ task, onClose, onSave }) {
               />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs font-medium">Date</Label>
+              <Label className="text-xs font-medium">{t('workflow.date', { defaultValue: 'Date' })}</Label>
               <Input
                 type="date"
                 className="h-9 text-sm"
@@ -578,7 +646,7 @@ function SlideOutPanel({ task, onClose, onSave }) {
               />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs font-medium">Amount</Label>
+              <Label className="text-xs font-medium">{t('workflow.amount', { defaultValue: 'Amount' })}</Label>
               <Input
                 type="number"
                 className="h-9 text-sm"
@@ -588,20 +656,20 @@ function SlideOutPanel({ task, onClose, onSave }) {
               />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs font-medium">Notes</Label>
+              <Label className="text-xs font-medium">{t('workflow.notes', { defaultValue: 'Notes' })}</Label>
               <Textarea
                 className="text-sm resize-none"
                 rows={3}
-                placeholder="Notes..."
+                placeholder={t('workflow.notesPlaceholder', { defaultValue: 'Notes...' })}
                 value={purchaseForm.notes}
                 onChange={e => setPurchaseForm(f => ({ ...f, notes: e.target.value }))}
               />
             </div>
           </div>
           <DialogFooter className="mt-4">
-            <Button variant="outline" onClick={() => setPurchaseDialog(false)}>Cancel</Button>
+            <Button variant="outline" onClick={() => setPurchaseDialog(false)}>{t('workflow.cancel', { defaultValue: 'Cancel' })}</Button>
             <Button onClick={handleCreatePurchase} disabled={!purchaseForm.vendor_name.trim() || qaSubmitting}>
-              {qaSubmitting ? 'Creating…' : 'Create Purchase'}
+              {qaSubmitting ? t('workflow.creating', { defaultValue: 'Creating…' }) : t('workflow.createPurchase', { defaultValue: 'Create Purchase' })}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -614,21 +682,21 @@ function SlideOutPanel({ task, onClose, onSave }) {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <User className="w-5 h-5 text-amber-500" />
-              Add Client
+              {t('workflow.addClient', { defaultValue: 'Add Client' })}
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-3 mt-2">
             <div className="space-y-1.5">
-              <Label className="text-xs font-medium">Name <span className="text-red-500">*</span></Label>
+              <Label className="text-xs font-medium">{t('workflow.name', { defaultValue: 'Name' })} <span className="text-red-500">*</span></Label>
               <Input
                 className="h-9 text-sm"
-                placeholder="Client name..."
+                placeholder={t('workflow.clientNamePlaceholder', { defaultValue: 'Client name...' })}
                 value={clientForm.name}
                 onChange={e => setClientForm(f => ({ ...f, name: e.target.value }))}
               />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs font-medium">Phone</Label>
+              <Label className="text-xs font-medium">{t('workflow.phone', { defaultValue: 'Phone' })}</Label>
               <Input
                 className="h-9 text-sm"
                 placeholder="+977..."
@@ -637,7 +705,7 @@ function SlideOutPanel({ task, onClose, onSave }) {
               />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs font-medium">Email</Label>
+              <Label className="text-xs font-medium">{t('workflow.email', { defaultValue: 'Email' })}</Label>
               <Input
                 type="email"
                 className="h-9 text-sm"
@@ -647,19 +715,19 @@ function SlideOutPanel({ task, onClose, onSave }) {
               />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs font-medium">Address</Label>
+              <Label className="text-xs font-medium">{t('workflow.address', { defaultValue: 'Address' })}</Label>
               <Input
                 className="h-9 text-sm"
-                placeholder="Address..."
+                placeholder={t('workflow.addressPlaceholder', { defaultValue: 'Address...' })}
                 value={clientForm.address}
                 onChange={e => setClientForm(f => ({ ...f, address: e.target.value }))}
               />
             </div>
           </div>
           <DialogFooter className="mt-4">
-            <Button variant="outline" onClick={() => setClientDialog(false)}>Cancel</Button>
+            <Button variant="outline" onClick={() => setClientDialog(false)}>{t('workflow.cancel', { defaultValue: 'Cancel' })}</Button>
             <Button onClick={handleCreateClient} disabled={!clientForm.name.trim() || qaSubmitting}>
-              {qaSubmitting ? 'Adding…' : 'Add Client'}
+              {qaSubmitting ? t('workflow.adding', { defaultValue: 'Adding…' }) : t('workflow.addClient', { defaultValue: 'Add Client' })}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -672,21 +740,21 @@ function SlideOutPanel({ task, onClose, onSave }) {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <User className="w-5 h-5 text-amber-500" />
-              Add Vendor
+              {t('workflow.addVendor', { defaultValue: 'Add Vendor' })}
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-3 mt-2">
             <div className="space-y-1.5">
-              <Label className="text-xs font-medium">Name <span className="text-red-500">*</span></Label>
+              <Label className="text-xs font-medium">{t('workflow.name', { defaultValue: 'Name' })} <span className="text-red-500">*</span></Label>
               <Input
                 className="h-9 text-sm"
-                placeholder="Vendor name..."
+                placeholder={t('workflow.vendorNamePlaceholder', { defaultValue: 'Vendor name...' })}
                 value={vendorForm.name}
                 onChange={e => setVendorForm(f => ({ ...f, name: e.target.value }))}
               />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs font-medium">Phone</Label>
+              <Label className="text-xs font-medium">{t('workflow.phone', { defaultValue: 'Phone' })}</Label>
               <Input
                 className="h-9 text-sm"
                 placeholder="+977..."
@@ -695,7 +763,7 @@ function SlideOutPanel({ task, onClose, onSave }) {
               />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs font-medium">Email</Label>
+              <Label className="text-xs font-medium">{t('workflow.email', { defaultValue: 'Email' })}</Label>
               <Input
                 type="email"
                 className="h-9 text-sm"
@@ -705,19 +773,19 @@ function SlideOutPanel({ task, onClose, onSave }) {
               />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs font-medium">Address</Label>
+              <Label className="text-xs font-medium">{t('workflow.address', { defaultValue: 'Address' })}</Label>
               <Input
                 className="h-9 text-sm"
-                placeholder="Address..."
+                placeholder={t('workflow.addressPlaceholder', { defaultValue: 'Address...' })}
                 value={vendorForm.address}
                 onChange={e => setVendorForm(f => ({ ...f, address: e.target.value }))}
               />
             </div>
           </div>
           <DialogFooter className="mt-4">
-            <Button variant="outline" onClick={() => setVendorDialog(false)}>Cancel</Button>
+            <Button variant="outline" onClick={() => setVendorDialog(false)}>{t('workflow.cancel', { defaultValue: 'Cancel' })}</Button>
             <Button onClick={handleCreateVendor} disabled={!vendorForm.name.trim() || qaSubmitting}>
-              {qaSubmitting ? 'Adding…' : 'Add Vendor'}
+              {qaSubmitting ? t('workflow.adding', { defaultValue: 'Adding…' }) : t('workflow.addVendor', { defaultValue: 'Add Vendor' })}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -729,12 +797,13 @@ function SlideOutPanel({ task, onClose, onSave }) {
 // ─── NewTaskDialog ────────────────────────────────────────────────────────────
 
 const PRIORITY_CHIPS = [
-  { v: 'High',   label: '●●● High',   act: 'border-red-500 bg-red-50 text-red-700 border-2',      cls: 'border-red-300 text-red-600 border opacity-75' },
-  { v: 'Medium', label: '●● Medium',  act: 'border-amber-500 bg-amber-50 text-amber-800 border-2', cls: 'border-amber-400 text-amber-700 border opacity-75' },
-  { v: 'Low',    label: '● Low',      act: 'border-green-500 bg-green-50 text-green-700 border-2', cls: 'border-green-400 text-green-600 border opacity-75' },
+  { v: 'High',   dots: '●●●', act: 'border-red-500 bg-red-50 text-red-700 border-2',      cls: 'border-red-300 text-red-600 border opacity-75' },
+  { v: 'Medium', dots: '●●',  act: 'border-amber-500 bg-amber-50 text-amber-800 border-2', cls: 'border-amber-400 text-amber-700 border opacity-75' },
+  { v: 'Low',    dots: '●',   act: 'border-green-500 bg-green-50 text-green-700 border-2', cls: 'border-green-400 text-green-600 border opacity-75' },
 ];
 
 function NewTaskDialog({ open, onOpenChange, onCreated }) {
+  const { t } = useTranslation();
   const [form, setForm] = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
   const { toast } = useToast();
@@ -763,9 +832,16 @@ function NewTaskDialog({ open, onOpenChange, onCreated }) {
       onCreated(created);
       setForm(EMPTY_FORM);
       onOpenChange(false);
-      toast({ title: 'Task created', description: `"${form.title}" added to ${form.status}.` });
+      toast({
+        title: t('workflow.taskCreatedTitle', { defaultValue: 'Task created' }),
+        description: t('workflow.taskCreatedDesc', { defaultValue: '"{{title}}" added to {{status}}.', title: form.title, status: statusLabel(t, form.status) }),
+      });
     } catch {
-      toast({ title: 'Error', description: 'Could not create task.', variant: 'destructive' });
+      toast({
+        title: t('workflow.error', { defaultValue: 'Error' }),
+        description: t('workflow.couldNotCreateTask', { defaultValue: 'Could not create task.' }),
+        variant: 'destructive',
+      });
     } finally {
       setSaving(false);
     }
@@ -778,7 +854,7 @@ function NewTaskDialog({ open, onOpenChange, onCreated }) {
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <CheckCircle2 className="w-5 h-5 text-amber-500" />
-            New Task
+            {t('workflow.newTask', { defaultValue: 'New Task' })}
           </DialogTitle>
         </DialogHeader>
 
@@ -791,17 +867,17 @@ function NewTaskDialog({ open, onOpenChange, onCreated }) {
             className="space-y-3 overflow-y-auto pr-1"
           >
             <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-              <CheckCircle2 className="w-3.5 h-3.5" />Task Details
+              <CheckCircle2 className="w-3.5 h-3.5" />{t('workflow.taskDetailsSection', { defaultValue: 'Task Details' })}
             </p>
 
             {/* Title */}
             <div className="space-y-1.5">
-              <Label className="text-xs font-medium">Title <span className="text-red-500">*</span></Label>
+              <Label className="text-xs font-medium">{t('workflow.titleLabel', { defaultValue: 'Title' })} <span className="text-red-500">*</span></Label>
               <div className="relative">
                 <Pencil className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
                 <Input
                   className="pl-8 h-9 text-sm"
-                  placeholder="What needs to be done?"
+                  placeholder={t('workflow.whatNeedsDone', { defaultValue: 'What needs to be done?' })}
                   value={form.title}
                   onChange={e => setField('title', e.target.value)}
                 />
@@ -810,13 +886,13 @@ function NewTaskDialog({ open, onOpenChange, onCreated }) {
 
             {/* Description */}
             <div className="space-y-1.5">
-              <Label className="text-xs font-medium">Description</Label>
+              <Label className="text-xs font-medium">{t('workflow.description', { defaultValue: 'Description' })}</Label>
               <div className="relative">
                 <FileText className="absolute left-2.5 top-3 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
                 <Textarea
                   className="pl-8 text-sm resize-none"
                   rows={3}
-                  placeholder="Optional details..."
+                  placeholder={t('workflow.optionalDetails', { defaultValue: 'Optional details...' })}
                   value={form.description}
                   onChange={e => setField('description', e.target.value)}
                 />
@@ -825,7 +901,7 @@ function NewTaskDialog({ open, onOpenChange, onCreated }) {
 
             {/* Priority chips */}
             <div className="space-y-1.5">
-              <Label className="text-xs font-medium">Priority</Label>
+              <Label className="text-xs font-medium">{t('workflow.priority', { defaultValue: 'Priority' })}</Label>
               <div className="grid grid-cols-3 gap-2">
                 {PRIORITY_CHIPS.map(p => (
                   <button
@@ -834,7 +910,7 @@ function NewTaskDialog({ open, onOpenChange, onCreated }) {
                     onClick={() => setField('priority', p.v)}
                     className={`sel-chip text-xs ${form.priority === p.v ? p.act : p.cls}`}
                   >
-                    {p.label}
+                    {p.dots} {priorityLabel(t, p.v)}
                   </button>
                 ))}
               </div>
@@ -849,12 +925,12 @@ function NewTaskDialog({ open, onOpenChange, onCreated }) {
             className="space-y-3 overflow-y-auto pr-1"
           >
             <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-              <User className="w-3.5 h-3.5" />Assignment
+              <User className="w-3.5 h-3.5" />{t('workflow.assignment', { defaultValue: 'Assignment' })}
             </p>
 
             {/* Due Date */}
             <div className="space-y-1.5">
-              <Label className="text-xs font-medium">Due Date</Label>
+              <Label className="text-xs font-medium">{t('workflow.dueDate', { defaultValue: 'Due Date' })}</Label>
               <div className="relative">
                 <Calendar className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
                 <Input
@@ -868,12 +944,12 @@ function NewTaskDialog({ open, onOpenChange, onCreated }) {
 
             {/* Assigned To */}
             <div className="space-y-1.5">
-              <Label className="text-xs font-medium">Assigned To</Label>
+              <Label className="text-xs font-medium">{t('workflow.assignedTo', { defaultValue: 'Assigned To' })}</Label>
               <div className="relative">
                 <User className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
                 <Input
                   className="pl-8 h-9 text-sm"
-                  placeholder="Name or email..."
+                  placeholder={t('workflow.nameOrEmailPlaceholder', { defaultValue: 'Name or email...' })}
                   value={form.assigned_to}
                   onChange={e => setField('assigned_to', e.target.value)}
                 />
@@ -882,13 +958,13 @@ function NewTaskDialog({ open, onOpenChange, onCreated }) {
 
             {/* Category */}
             <div className="space-y-1.5">
-              <Label className="text-xs font-medium">Category</Label>
+              <Label className="text-xs font-medium">{t('workflow.category', { defaultValue: 'Category' })}</Label>
               <div className="relative">
                 <Tag className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none z-10" />
                 <Select value={form.category} onValueChange={v => setField('category', v)}>
                   <SelectTrigger className="pl-8 h-9 text-sm"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {CATEGORIES.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                    {CATEGORIES.map(c => <SelectItem key={c} value={c}>{categoryLabel(t, c)}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
@@ -896,15 +972,15 @@ function NewTaskDialog({ open, onOpenChange, onCreated }) {
 
             {/* Status */}
             <div className="space-y-1.5">
-              <Label className="text-xs font-medium">Status</Label>
+              <Label className="text-xs font-medium">{t('workflow.status', { defaultValue: 'Status' })}</Label>
               <div className="relative">
                 <Clock className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none z-10" />
                 <Select value={form.status} onValueChange={v => setField('status', v)}>
                   <SelectTrigger className="pl-8 h-9 text-sm"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="Pending">Pending</SelectItem>
-                    <SelectItem value="In Progress">In Progress</SelectItem>
-                    <SelectItem value="Done">Done</SelectItem>
+                    <SelectItem value="Pending">{statusLabel(t, 'Pending')}</SelectItem>
+                    <SelectItem value="In Progress">{statusLabel(t, 'In Progress')}</SelectItem>
+                    <SelectItem value="Done">{statusLabel(t, 'Done')}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -913,7 +989,7 @@ function NewTaskDialog({ open, onOpenChange, onCreated }) {
             {/* Attachments */}
             <div className="space-y-1.5">
               <Label className="text-xs font-medium flex items-center gap-1.5">
-                <Paperclip className="w-3.5 h-3.5" /> Attachments
+                <Paperclip className="w-3.5 h-3.5" /> {t('workflow.attachments', { defaultValue: 'Attachments' })}
               </Label>
               <FileAttachmentZone
                 value={form.attachments}
@@ -924,9 +1000,9 @@ function NewTaskDialog({ open, onOpenChange, onCreated }) {
         </div>
 
         <DialogFooter className="mt-2">
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>{t('workflow.cancel', { defaultValue: 'Cancel' })}</Button>
           <Button onClick={handleCreate} disabled={!form.title.trim() || saving}>
-            {saving ? 'Creating…' : 'Create Task'}
+            {saving ? t('workflow.creating', { defaultValue: 'Creating…' }) : t('workflow.createTask', { defaultValue: 'Create Task' })}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -937,6 +1013,7 @@ function NewTaskDialog({ open, onOpenChange, onCreated }) {
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function Workflow() {
+  const { t } = useTranslation();
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedTask, setSelectedTask] = useState(null);
@@ -953,7 +1030,11 @@ export default function Workflow() {
       const res = await taskApi.list();
       setTasks(res.data || []);
     } catch {
-      toast({ title: 'Error', description: 'Could not load tasks.', variant: 'destructive' });
+      toast({
+        title: t('workflow.error', { defaultValue: 'Error' }),
+        description: t('workflow.couldNotLoadTasks', { defaultValue: 'Could not load tasks.' }),
+        variant: 'destructive',
+      });
     } finally {
       setLoading(false);
     }
@@ -971,9 +1052,16 @@ export default function Workflow() {
       const saved = res.data ?? edited;
       applyTaskUpdate(saved);
       setSelectedTask(null);
-      toast({ title: 'Task updated', description: `"${saved.title}" saved.` });
+      toast({
+        title: t('workflow.taskUpdatedTitle', { defaultValue: 'Task updated' }),
+        description: t('workflow.taskSavedDesc', { defaultValue: '"{{title}}" saved.', title: saved.title }),
+      });
     } catch {
-      toast({ title: 'Error', description: 'Could not save task.', variant: 'destructive' });
+      toast({
+        title: t('workflow.error', { defaultValue: 'Error' }),
+        description: t('workflow.couldNotSaveTask', { defaultValue: 'Could not save task.' }),
+        variant: 'destructive',
+      });
     }
   }
 
@@ -992,12 +1080,12 @@ export default function Workflow() {
   return (
     <div className="p-6 space-y-4">
       <PageHeader
-        title="Workflow"
-        subtitle="Track tasks and projects across your team"
+        title={t('workflow.pageTitle', { defaultValue: 'Workflow' })}
+        subtitle={t('workflow.pageSubtitle', { defaultValue: 'Track tasks and projects across your team' })}
       >
         <Button onClick={() => setShowNewDialog(true)} className="gap-2">
           <Plus className="w-4 h-4" />
-          New Task
+          {t('workflow.newTask', { defaultValue: 'New Task' })}
         </Button>
       </PageHeader>
 
@@ -1006,11 +1094,11 @@ export default function Workflow() {
       ) : tasks.length === 0 ? (
         <EmptyState
           icon={CheckCircle2}
-          title="No tasks yet"
-          description="Create your first task to start managing work across your team."
+          title={t('workflow.noTasksYet', { defaultValue: 'No tasks yet' })}
+          description={t('workflow.noTasksYetHint', { defaultValue: 'Create your first task to start managing work across your team.' })}
           action={
             <Button onClick={() => setShowNewDialog(true)} className="gap-2">
-              <Plus className="w-4 h-4" /> New Task
+              <Plus className="w-4 h-4" /> {t('workflow.newTask', { defaultValue: 'New Task' })}
             </Button>
           }
         />
@@ -1024,7 +1112,7 @@ export default function Workflow() {
             return (
               <KanbanColumn
                 key={col.key}
-                title={col.label}
+                title={statusLabel(t, col.key)}
                 dotColor={col.dotColor}
                 tasks={colTasks}
                 onCardClick={setSelectedTask}
