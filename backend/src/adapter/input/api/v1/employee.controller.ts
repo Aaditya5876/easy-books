@@ -5,6 +5,10 @@ import { Roles } from '../../../../modules/decorators/roles.decorator';
 import { ZodValidationPipe } from '../../../../modules/pipes/zod-validation.pipe';
 import { CreateEmployeeSchema, UpdateEmployeeSchema, CreateEmployeeDTO, UpdateEmployeeDTO } from '@easy-books/shared';
 
+// Deliberately NOT gated by @RequiresModule('HRMS') — there is no separate
+// "Teacher" model in the schema, School reuses Employee directly for class-
+// teacher/subject-teacher assignment (see school pages that read this API).
+// Disabling HRMS must not remove the ability to see/assign teachers.
 @ApiTags('Employees')
 @ApiBearerAuth()
 @Controller('api/v1/employees')

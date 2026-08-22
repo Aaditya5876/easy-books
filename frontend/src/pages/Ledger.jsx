@@ -13,7 +13,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Badge } from "@/components/ui/badge";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter
 } from "@/components/ui/dialog";
@@ -42,7 +41,7 @@ export default function Ledger() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('purchase');
   const [search, setSearch] = useState('');
-  const [colFilters, setColFilters] = useState({ account_name: '', contact_name: '', status: '' });
+  const [colFilters, setColFilters] = useState({ account_name: '', contact_name: '' });
   const setCol = (key, val) => setColFilters(f => ({ ...f, [key]: val }));
   const [showNewAccount, setShowNewAccount] = useState(false);
   const [selectedAccount, setSelectedAccount] = useState(null); // single click — selection only
@@ -174,7 +173,6 @@ export default function Ledger() {
       opening_balance: 0,
       current_balance: 0,
       fiscal_year: '2081/2082',
-      is_active: true,
     });
     setNewAccount({
       account_name: '', contact_name: '', contact_phone: '',
@@ -221,8 +219,7 @@ export default function Ledger() {
     (a.account_name?.toLowerCase().includes(search.toLowerCase()) ||
      a.contact_name?.toLowerCase().includes(search.toLowerCase())) &&
     (!colFilters.account_name || a.account_name?.toLowerCase().includes(colFilters.account_name.toLowerCase())) &&
-    (!colFilters.contact_name || a.contact_name?.toLowerCase().includes(colFilters.contact_name.toLowerCase())) &&
-    (!colFilters.status || (colFilters.status === 'active' ? a.is_active : !a.is_active))
+    (!colFilters.contact_name || a.contact_name?.toLowerCase().includes(colFilters.contact_name.toLowerCase()))
   );
 
   // When ADMIN searches and gets no results, offer hidden account lookup
@@ -242,11 +239,6 @@ export default function Ledger() {
       <span className={row.current_balance >= 0 ? 'text-green-600 font-semibold' : 'text-red-600 font-semibold'}>
         NPR {(row.current_balance || 0).toLocaleString()}
       </span>
-    )},
-    { key: 'is_active', label: t('ledger.status', { defaultValue: 'Status' }), filterValue: colFilters.status, onFilterChange: v => setCol('status', v), filterPlaceholder: 'active/inactive', render: (row) => (
-      <Badge variant={row.is_active ? 'default' : 'secondary'}>
-        {row.is_active ? t('ledger.active', { defaultValue: 'Active' }) : t('ledger.inactive', { defaultValue: 'Inactive' })}
-      </Badge>
     )},
   ];
 

@@ -4,6 +4,10 @@ import { NotificationServiceImpl } from '../../../../application/services/notifi
 
 // No class-level @Roles(...) — every authenticated user reads their own inbox;
 // which roles ever receive a row is decided inside NotificationServiceImpl.notifyRole.
+// Also NOT gated by @RequiresModule('COMMUNICATION') — the in-app bell/inbox is
+// foundational infra (low-stock alerts, leave requests, fee payments, payroll
+// all notify through it) like Identity/Admin, not an optional Communication
+// feature on its own. Only Memo and future broadcast/notice features are.
 @ApiTags('Notifications')
 @ApiBearerAuth()
 @Controller('api/v1/notifications')

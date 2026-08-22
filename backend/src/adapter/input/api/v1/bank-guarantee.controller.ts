@@ -2,10 +2,12 @@ import { Controller, Get, Post, Patch, Body, Param, Query } from '@nestjs/common
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { BankGuaranteeServiceImpl } from '../../../../application/services/bank-guarantee.service.impl';
 import { Roles } from '../../../../modules/decorators/roles.decorator';
+import { RequiresModule } from '../../../../modules/decorators/requires-module.decorator';
 
 @ApiTags('Bank Guarantees')
 @ApiBearerAuth()
 @Roles('ACCOUNTANT', 'ADMIN')
+@RequiresModule('FINANCE')
 @Controller('api/v1/bank-guarantees')
 export class BankGuaranteeController {
   constructor(private readonly service: BankGuaranteeServiceImpl) {}

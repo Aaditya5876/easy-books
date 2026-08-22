@@ -272,6 +272,7 @@ export default function SchoolDashboard() {
       const academics = await schoolAnalyticsApi.academics().then(r => r.data).catch(() => null);
 
       const res = await aiApi.classInsights({
+        companyId,
         classData: {
           totalStudents: data.totalStudents,
           totalClasses: data.totalClasses,

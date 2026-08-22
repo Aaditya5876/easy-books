@@ -2,10 +2,12 @@ import { Controller, Get, Post, Param, Body, Query } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { FixedAssetServiceImpl } from '../../../../application/services/fixed-asset.service.impl';
 import { Roles } from '../../../../modules/decorators/roles.decorator';
+import { RequiresModule } from '../../../../modules/decorators/requires-module.decorator';
 
 @ApiTags('Fixed Assets')
 @ApiBearerAuth()
 @Roles('ACCOUNTANT', 'ADMIN')
+@RequiresModule('FINANCE')
 @Controller('api/v1/fixed-assets')
 export class FixedAssetController {
   constructor(private readonly service: FixedAssetServiceImpl) {}

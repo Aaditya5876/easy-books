@@ -34,8 +34,8 @@ const navSections = [
     // keep STAFF from seeing a dead link.
     minRole: 'accountant',
     items: [
-      { icon: BookOpen, label: 'Ledger', path: '/ledger' },
-      { icon: ArrowLeftRight, label: 'Transactions', path: '/transactions' },
+      { icon: BookOpen, label: 'Ledger', path: '/ledger', module: 'FINANCE' },
+      { icon: ArrowLeftRight, label: 'Transactions', path: '/transactions', module: 'FINANCE' },
     ]
   },
   {
@@ -45,7 +45,7 @@ const navSections = [
     items: [
       { icon: Users, label: 'Vendors', path: '/vendors' },
       { icon: UserCheck, label: 'Clients', path: '/clients' },
-      { icon: Package, label: 'Inventory', path: '/inventory' },
+      { icon: Package, label: 'Inventory', path: '/inventory', module: 'INVENTORY' },
       { icon: ShoppingCart, label: 'Purchase', path: '/purchase' },
       { icon: Receipt, label: 'Sales', path: '/sales' },
       { icon: ClipboardList, label: 'Quotations', path: '/quotations' },
@@ -64,8 +64,8 @@ const navSections = [
     labelColor: 'text-violet-400',
     activeClass: 'bg-violet-600 text-white shadow-sm shadow-violet-900/30',
     items: [
-      { icon: FileText, label: 'Memo', path: '/memo' },
-      { icon: MessageSquare, label: 'Communication', path: '/communication' },
+      { icon: FileText, label: 'Memo', path: '/memo', module: 'COMMUNICATION' },
+      { icon: MessageSquare, label: 'Communication', path: '/communication', module: 'COMMUNICATION' },
       { icon: FileSpreadsheet, label: 'Templates', path: '/templates' },
     ]
   },
@@ -76,9 +76,9 @@ const navSections = [
     // visible to ACCOUNTANT + ADMIN
     minRole: 'accountant',
     items: [
-      { icon: UserCircle, label: 'Employees', path: '/employees' },
-      { icon: CalendarCheck, label: 'Attendance', path: '/attendance' },
-      { icon: Banknote, label: 'Payroll', path: '/payroll' },
+      { icon: UserCircle, label: 'Employees', path: '/employees', module: 'HRMS' },
+      { icon: CalendarCheck, label: 'Attendance', path: '/attendance', module: 'HRMS' },
+      { icon: Banknote, label: 'Payroll', path: '/payroll', module: 'HRMS' },
     ]
   },
   {
@@ -143,8 +143,8 @@ const schoolNavSections = [
       { icon: DollarSign, label: 'Fees', path: '/fees' },
       // Ledger/Transactions endpoints are ACCOUNTANT/ADMIN-only on the backend —
       // keep STAFF from seeing a dead link (Fees stays open to STAFF for front-desk use).
-      { icon: BookOpen, label: 'Ledger', path: '/ledger', minRole: 'accountant' },
-      { icon: ArrowLeftRight, label: 'Transactions', path: '/transactions', minRole: 'accountant' },
+      { icon: BookOpen, label: 'Ledger', path: '/ledger', minRole: 'accountant', module: 'FINANCE' },
+      { icon: ArrowLeftRight, label: 'Transactions', path: '/transactions', minRole: 'accountant', module: 'FINANCE' },
     ]
   },
   {
@@ -152,9 +152,10 @@ const schoolNavSections = [
     labelColor: 'text-amber-400',
     activeClass: 'bg-amber-600 text-white shadow-sm shadow-amber-900/30',
     items: [
+      // Notices stays ungated — it's SMS's own notice board, not the shared Communication module.
       { icon: Megaphone, label: 'Notices', path: '/notices', roles: ['TEACHER', 'LIBRARIAN'] },
-      { icon: MessageSquare, label: 'Communication', path: '/communication' },
-      { icon: FileText, label: 'Memo', path: '/memo' },
+      { icon: MessageSquare, label: 'Communication', path: '/communication', module: 'COMMUNICATION' },
+      { icon: FileText, label: 'Memo', path: '/memo', module: 'COMMUNICATION' },
     ]
   },
   {
@@ -173,8 +174,8 @@ const schoolNavSections = [
     activeClass: 'bg-sky-600 text-white shadow-sm shadow-sky-900/30',
     minRole: 'accountant',
     items: [
-      { icon: CalendarCheck, label: 'Staff Attendance', path: '/attendance' },
-      { icon: Banknote, label: 'Payroll', path: '/payroll' },
+      { icon: CalendarCheck, label: 'Staff Attendance', path: '/attendance', module: 'HRMS' },
+      { icon: Banknote, label: 'Payroll', path: '/payroll', module: 'HRMS' },
     ]
   },
   {
@@ -197,6 +198,10 @@ export default function SidebarNav({ collapsed, onToggle }) {
   const { prefs } = usePreferences();
   const { user } = useAuth();
   const isSchool = user?.defaultCompany?.businessType === 'SCHOOL';
+  // Empty/missing enabledModules = unrestricted (legacy/full-access plan) —
+  // mirrors ModuleAccessGuard's backend behavior for the same field.
+  const enabledModules = user?.defaultCompany?.enabledModules || [];
+  const isModuleEnabled = (moduleKey) => !moduleKey || enabledModules.length === 0 || enabledModules.includes(moduleKey);
   const [expandedSections, setExpandedSections] = useState(
     Array(Math.max(navSections.length, schoolNavSections.length)).fill(true)
   );
@@ -228,6 +233,7 @@ export default function SidebarNav({ collapsed, onToggle }) {
       items: section.items.filter(item => {
         if (item.minRole === 'admin' && !isAdmin) return false;
         if (item.minRole === 'accountant' && !canViewPayroll) return false;
+        if (!isModuleEnabled(item.module)) return false;
         return !restrictedRole || item.roles?.includes(role);
       }),
     }))

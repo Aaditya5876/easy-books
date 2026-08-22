@@ -37,6 +37,7 @@ function HomeworkDialog({ open, onClose, initial, classes, subjects, companyId }
     setAiLoading(true);
     try {
       const res = await aiApi.homeworkDescription({
+        companyId,
         subject: subjectName || 'General',
         topic: form.title,
         className: className || 'students',

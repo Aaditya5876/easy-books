@@ -37,4 +37,14 @@ export class AttendanceServiceImpl {
     if (!existing) throw new NotFoundException('Attendance record not found');
     return this.prisma.attendance.delete({ where: { id } });
   }
+
+  // Read-only aggregate for reporting dashboards (e.g. school ops report) —
+  // callers should use this instead of querying the Attendance table directly.
+  async getStatusBreakdown(companyId: string, since: Date) {
+    return this.prisma.attendance.groupBy({
+      by: ['status'],
+      where: { companyId, date: { gte: since } },
+      _count: true,
+    });
+  }
 }

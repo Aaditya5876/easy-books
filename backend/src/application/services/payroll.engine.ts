@@ -86,6 +86,31 @@ export class PayrollEngineService {
     return { queued: employees.length };
   }
 
+  // Used only by the nightly automation cron (ScheduledTasksService), which needs the
+  // actual per-employee results (not just a queued count) to report what it did. Waits
+  // on each queued job via Bull's job.finished() rather than duplicating the queue path.
+  async processMonthlyPayrollAwaited(
+    companyId: string,
+    month: string,
+  ): Promise<{ queued: number; results: PayrollResult[] }> {
+    const employees = await this.prisma.employee.findMany({
+      where: { companyId, status: 'ACTIVE' },
+    });
+
+    const jobs = await Promise.all(
+      employees.map((emp) =>
+        this.payrollQueue.add('process-employee-payroll', { companyId, employeeId: emp.id, month }),
+      ),
+    );
+
+    const settled = await Promise.allSettled(jobs.map((job) => job.finished()));
+    const results = settled
+      .filter((r): r is PromiseFulfilledResult<PayrollResult> => r.status === 'fulfilled')
+      .map((r) => r.value);
+
+    return { queued: employees.length, results };
+  }
+
   async calculateEmployeePayroll(companyId: string, employeeId: string, month: string): Promise<PayrollResult> {
     const [employee, settings] = await Promise.all([
       this.prisma.employee.findFirst({ where: { id: employeeId, companyId } }),

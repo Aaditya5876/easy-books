@@ -140,10 +140,17 @@ function PaymentDialog({ open, onClose, invoice }) {
   const [bankAccountId, setBankAccountId] = useState('');
   const [errors, setErrors] = useState({});
 
+  // Bank Transfer always names a real bank account. eSewa/Khalti don't require
+  // one — the money can stay wallet-to-wallet with no bank involved at all —
+  // but the field still shows for them in case the admin wants to record
+  // which account a settlement eventually landed in.
+  const showBankAccount = method === 'BANK' || method === 'ESEWA' || method === 'KHALTI';
+  const requireBankAccount = method === 'BANK';
+
   const { data: bankAccounts = [] } = useQuery({
     queryKey: ['bank-accounts'],
     queryFn: () => bankAccountApi.list().then(r => r.data),
-    enabled: open && method === 'BANK',
+    enabled: open && showBankAccount,
   });
 
   const remaining = invoice ? Number(invoice.totalAmount) - Number(invoice.paidAmount) : 0;
@@ -169,14 +176,14 @@ function PaymentDialog({ open, onClose, invoice }) {
     const errs = {};
     if (!amt || amt <= 0) errs.amount = t('fees.enterValidPaymentAmount', { defaultValue: 'Enter a valid payment amount' });
     else if (amt > remaining) errs.amount = t('fees.cannotExceedRemaining', { defaultValue: 'Cannot exceed remaining amount: Rs. {{amount}}', amount: remaining.toFixed(2) });
-    if (method === 'BANK' && !bankAccountId) errs.bankAccountId = t('fees.selectBankAccount', { defaultValue: 'Select which bank account received this payment' });
+    if (requireBankAccount && !bankAccountId) errs.bankAccountId = t('fees.selectBankAccount', { defaultValue: 'Select which bank account received this payment' });
     if (Object.keys(errs).length) {
       setErrors(errs);
       toast.error(Object.values(errs)[0]);
       return;
     }
     setErrors({});
-    pay.mutate({ amount: amt, method, notes, bankAccountId: method === 'BANK' ? bankAccountId : undefined });
+    pay.mutate({ amount: amt, method, notes, bankAccountId: showBankAccount ? (bankAccountId || undefined) : undefined });
   }
 
   return (
@@ -214,9 +221,11 @@ function PaymentDialog({ open, onClose, invoice }) {
               <option value="KHALTI">Khalti</option>
             </select>
           </div>
-          {method === 'BANK' && (
+          {showBankAccount && (
             <div className="space-y-1.5">
-              <Label>{t('fees.bankAccount', { defaultValue: 'Bank Account *' })}</Label>
+              <Label>{requireBankAccount
+                ? t('fees.bankAccount', { defaultValue: 'Bank Account *' })
+                : t('fees.bankAccountOptional', { defaultValue: 'Bank Account (optional)' })}</Label>
               <select className="w-full border rounded-md px-3 py-2 text-sm bg-background" value={bankAccountId} onChange={e => { setBankAccountId(e.target.value); if (errors.bankAccountId) setErrors(er => ({ ...er, bankAccountId: undefined })); }}>
                 <option value="">{t('fees.chooseBankAccount', { defaultValue: 'Choose bank account…' })}</option>
                 {bankAccounts.map(b => (
@@ -227,11 +236,24 @@ function PaymentDialog({ open, onClose, invoice }) {
               {bankAccounts.length === 0 && (
                 <p className="text-xs text-muted-foreground">{t('fees.noBankAccountsHint', { defaultValue: 'No bank accounts yet — add one in Transactions → Bank tab.' })}</p>
               )}
+              {!requireBankAccount && (
+                <p className="text-xs text-muted-foreground">
+                  {t('fees.walletSettlementHint', { defaultValue: 'Only if this {{method}} payment already settled into one of your bank accounts — leave blank if it\'s still sitting as wallet balance.', method: method === 'ESEWA' ? 'eSewa' : 'Khalti' })}
+                </p>
+              )}
             </div>
           )}
           <div className="space-y-1.5">
             <Label>{t('fees.notes', { defaultValue: 'Notes' })}</Label>
-            <Input placeholder={t('fees.notesPlaceholder', { defaultValue: 'Cheque no. / reference…' })} value={notes} onChange={e => setNotes(e.target.value)} />
+            <Input
+              placeholder={
+                method === 'ESEWA' || method === 'KHALTI'
+                  ? t('fees.notesPlaceholderWallet', { defaultValue: 'Payer phone number / transaction ID…' })
+                  : t('fees.notesPlaceholder', { defaultValue: 'Cheque no. / reference…' })
+              }
+              value={notes}
+              onChange={e => setNotes(e.target.value)}
+            />
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose}>{t('fees.cancel', { defaultValue: 'Cancel' })}</Button>

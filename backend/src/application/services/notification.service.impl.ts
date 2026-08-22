@@ -9,6 +9,7 @@ interface NotifyPayload {
   link?: string;
   referenceType?: string;
   referenceId?: string;
+  details?: unknown;
 }
 
 @Injectable()
@@ -32,6 +33,7 @@ export class NotificationServiceImpl {
         link: payload.link,
         referenceType: payload.referenceType,
         referenceId: payload.referenceId,
+        details: payload.details as any,
       })),
     });
   }

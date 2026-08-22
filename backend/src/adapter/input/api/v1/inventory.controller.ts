@@ -2,11 +2,13 @@ import { Controller, Get, Post, Put, Delete, Body, Param, Query, Patch } from '@
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { InventoryServiceImpl } from '../../../../application/services/inventory.service.impl';
 import { Roles } from '../../../../modules/decorators/roles.decorator';
+import { RequiresModule } from '../../../../modules/decorators/requires-module.decorator';
 import { ZodValidationPipe } from '../../../../modules/pipes/zod-validation.pipe';
 import { CreateInventoryItemSchema, UpdateInventoryItemSchema, CreateInventoryItemDTO, UpdateInventoryItemDTO } from '@easy-books/shared';
 
 @ApiTags('Inventory')
 @ApiBearerAuth()
+@RequiresModule('INVENTORY')
 @Controller('api/v1/inventory')
 export class InventoryController {
   constructor(private readonly service: InventoryServiceImpl) {}

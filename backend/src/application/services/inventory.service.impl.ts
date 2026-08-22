@@ -1,7 +1,10 @@
 import { Injectable, NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../core/db/psql/prisma.client';
 import { CreateInventoryItemDTO, UpdateInventoryItemDTO, adToBs } from '@easy-books/shared';
 import { NotificationServiceImpl } from './notification.service.impl';
+
+type Tx = Prisma.TransactionClient;
 
 interface AdjustInventoryInput {
   adjustmentType: 'ADDITION' | 'SUBTRACTION' | 'RECOUNT';
@@ -120,6 +123,44 @@ export class InventoryServiceImpl {
     await this.maybeNotifyLowStock(companyId, item, quantityBefore, quantityAfter);
 
     return adjustment;
+  }
+
+  // Tx-aware stock decrement for another module billing against inventory as
+  // part of its own atomic operation (e.g. a fee invoice selling a uniform) —
+  // this is the boundary other modules must call through instead of writing
+  // to InventoryItem/InventoryAdjustment directly, so Inventory stays the only
+  // place that knows how stock accounting works.
+  async decrementForReferenceTx(
+    tx: Tx,
+    companyId: string,
+    itemId: string,
+    qty: number,
+    reason: string,
+  ) {
+    if (!(qty > 0)) throw new BadRequestException('Quantity must be greater than zero');
+
+    const item = await tx.inventoryItem.findFirst({ where: { id: itemId, companyId, deletedAt: null } });
+    if (!item) throw new NotFoundException('Inventory item not found');
+
+    const quantityBefore = Number(item.quantity);
+    const quantityAfter = quantityBefore - qty;
+    if (quantityAfter < 0) throw new BadRequestException(`Not enough stock for "${item.itemName}" — only ${quantityBefore} left`);
+
+    await tx.inventoryItem.update({ where: { id: item.id }, data: { quantity: quantityAfter } });
+    await tx.inventoryAdjustment.create({
+      data: {
+        companyId,
+        inventoryItemId: item.id,
+        adjustmentType: 'SUBTRACTION',
+        quantityBefore,
+        quantityChange: -qty,
+        quantityAfter,
+        reason,
+        dateAd: new Date(),
+      },
+    });
+
+    return { item, quantityBefore, quantityAfter };
   }
 
   async getAdjustments(id: string, companyId: string) {

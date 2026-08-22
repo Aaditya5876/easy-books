@@ -2,12 +2,14 @@ import { Controller, Get, Post, Put, Delete, Body, Param, Query, Req } from '@ne
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { LedgerAccountServiceImpl } from '../../../../application/services/ledger-account.service.impl';
 import { Roles } from '../../../../modules/decorators/roles.decorator';
+import { RequiresModule } from '../../../../modules/decorators/requires-module.decorator';
 import { ZodValidationPipe } from '../../../../modules/pipes/zod-validation.pipe';
 import { CreateLedgerAccountSchema, UpdateLedgerAccountSchema, CreateLedgerAccountDTO, UpdateLedgerAccountDTO } from '@easy-books/shared';
 
 @ApiTags('Ledger Accounts')
 @ApiBearerAuth()
 @Roles('ACCOUNTANT', 'ADMIN')
+@RequiresModule('FINANCE')
 @Controller('api/v1/ledger/accounts')
 export class LedgerAccountController {
   constructor(private readonly service: LedgerAccountServiceImpl) {}

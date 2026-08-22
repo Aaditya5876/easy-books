@@ -326,7 +326,7 @@ export class SchoolFinanceService {
 
     const students = await this.prisma.student.findMany({
       where: { companyId, status: 'ACTIVE', ...(classId ? { classId } : {}) },
-      select: { id: true },
+      select: { id: true, name: true },
     });
 
     const existing = await this.prisma.feeInvoice.findMany({
@@ -338,6 +338,7 @@ export class SchoolFinanceService {
     let created = 0;
     let skippedExisting = 0;
     let skippedEmpty = 0;
+    const createdDetails: { studentName: string; amount: number }[] = [];
 
     for (const s of students) {
       if (alreadyBilled.has(s.id)) { skippedExisting++; continue; }
@@ -372,9 +373,10 @@ export class SchoolFinanceService {
       }
 
       created++;
+      createdDetails.push({ studentName: s.name, amount: profile.monthlyTotal });
     }
 
-    return { created, skippedExisting, skippedEmpty, students: students.length };
+    return { created, skippedExisting, skippedEmpty, students: students.length, createdDetails };
   }
 
   // The moment an invoice is generated (whether from a manual billing run or
@@ -384,6 +386,11 @@ export class SchoolFinanceService {
   // recordPayment()/postFeePayment() below then just clears Fee Receivable via
   // Cash/Bank when payment actually happens — it does NOT credit Income again,
   // otherwise every fee would be counted twice.
+  //
+  // Posts through the shared LedgerPostingService primitive (one DR/CR pair per
+  // fee head, paired against Fee Receivable) instead of writing ledger rows
+  // directly — keeps this in sync with every other module's postings and gets
+  // race-safe balance updates (reads happen inside the same DB transaction).
   private async postFeeInvoiceAccrual(companyId: string, invoiceId: string) {
     const invoice = await this.prisma.feeInvoice.findUnique({
       where: { id: invoiceId },
@@ -394,52 +401,41 @@ export class SchoolFinanceService {
     const total = Number(invoice.totalAmount);
     if (total <= 0) return; // fully covered by scholarship — nothing to accrue
 
-    const date = new Date(invoice.createdAt);
-    const dateBs = adToBs(date);
+    const dateAd = invoice.createdAt.toISOString();
     const desc = `Fee billed — ${invoice.student?.name ?? 'Student'} (${invoice.month})`;
 
     // Net per income head — a scholarship line against a specific head reduces
     // that head's net (rare case: net could even be negative for a head with a
-    // large targeted scholarship, handled as a debit to that Income account).
+    // large targeted scholarship, posted as a debit to that Income account).
     const byHead = new Map<string, number>();
     for (const item of invoice.items) {
       const accName = `${item.feeHead?.name ?? 'General Fee'} Income`;
       byHead.set(accName, round2((byHead.get(accName) ?? 0) + Number(item.amount)));
     }
 
-    const receivable = await this.getOrCreateAccount(companyId, 'Fee Receivable', 'ASSET');
-    const ops: any[] = [
-      this.prisma.ledgerEntry.create({
-        data: {
-          companyId, accountId: receivable.id, dateAd: date, dateBs,
-          description: desc, debit: total, credit: 0,
-          balance: Number(receivable.currentBalance) + total,
-          referenceType: 'FEE_INVOICE', referenceId: invoice.id, isAutoPosted: true,
-        },
-      }),
-      this.prisma.ledgerAccount.update({ where: { id: receivable.id }, data: { currentBalance: { increment: total } } }),
-    ];
+    const receivable = await this.posting.getOrCreateSystemAccount(companyId, 'Fee Receivable', 'ASSET');
+    const headLegs = await Promise.all(
+      [...byHead.entries()]
+        .filter(([, netAmt]) => Math.abs(netAmt) >= 0.005)
+        .map(async ([accName, netAmt]) => ({
+          netAmt,
+          account: await this.posting.getOrCreateSystemAccount(companyId, accName, 'INCOME'),
+        })),
+    );
 
-    for (const [accName, netAmt] of byHead) {
-      if (Math.abs(netAmt) < 0.005) continue;
-      const account = await this.getOrCreateAccount(companyId, accName, 'INCOME');
-      const debit = netAmt < 0 ? -netAmt : 0;
-      const credit = netAmt > 0 ? netAmt : 0;
-      const delta = credit - debit; // INCOME is credit-normal
-      ops.push(
-        this.prisma.ledgerEntry.create({
-          data: {
-            companyId, accountId: account.id, dateAd: date, dateBs,
-            description: desc, debit, credit,
-            balance: Number(account.currentBalance) + delta,
-            referenceType: 'FEE_INVOICE', referenceId: invoice.id, isAutoPosted: true,
-          },
-        }),
-        this.prisma.ledgerAccount.update({ where: { id: account.id }, data: { currentBalance: { increment: delta } } }),
-      );
-    }
-
-    await this.prisma.$transaction(ops);
+    await this.prisma.$transaction(async (tx) => {
+      for (const { account, netAmt } of headLegs) {
+        const legAccounts = netAmt > 0
+          ? { debitAccountId: receivable.id, creditAccountId: account.id }
+          : { debitAccountId: account.id, creditAccountId: receivable.id };
+        await this.posting.postManualJournalEntryTx(tx, companyId, {
+          ...legAccounts,
+          amount: Math.abs(netAmt),
+          dateAd, description: desc,
+          referenceType: 'FEE_INVOICE', referenceId: invoice.id,
+        });
+      }
+    });
   }
 
   // ── Payments & Receipts ──────────────────────────────────────────────────────
@@ -472,9 +468,17 @@ export class SchoolFinanceService {
 
     const method = ['CASH', 'BANK', 'ESEWA', 'KHALTI'].includes(body.method ?? '') ? body.method! : 'CASH';
 
+    // BANK always names a real bank account — that's what "bank transfer" means.
+    // ESEWA/KHALTI don't: the money can stay wallet-to-wallet with no bank
+    // involved at all, or later get withdrawn to a bank — that's a separate,
+    // unrelated event, not something this one payment record can know. So a
+    // bank account is optional for wallet methods, never required.
     let bankAccount: { id: string } | null = null;
     if (method === 'BANK') {
       if (!body.bankAccountId) throw new BadRequestException('Select which bank account received this payment');
+      bankAccount = await this.prisma.bankAccount.findFirst({ where: { id: body.bankAccountId, companyId }, select: { id: true } });
+      if (!bankAccount) throw new BadRequestException('Bank account not found');
+    } else if ((method === 'ESEWA' || method === 'KHALTI') && body.bankAccountId) {
       bankAccount = await this.prisma.bankAccount.findFirst({ where: { id: body.bankAccountId, companyId }, select: { id: true } });
       if (!bankAccount) throw new BadRequestException('Bank account not found');
     }
@@ -498,7 +502,7 @@ export class SchoolFinanceService {
             companyId,
             bankAccountId: bankAccount.id,
             dateAd: new Date(),
-            type: 'BANK' as any,
+            type: (method === 'BANK' ? 'BANK' : 'QR') as any,
             category: 'INCOME' as any,
             amount,
             description: `Fee payment — ${invoice.student?.name ?? 'Student'} (Invoice ${invoice.month})`,
@@ -558,11 +562,13 @@ export class SchoolFinanceService {
     return invoice;
   }
 
-  // DR Cash/Bank · CR each head's income account, allocated across invoice items
   // DR Cash/Bank · CR Fee Receivable — the actual cash receipt, clearing the
   // receivable that postFeeInvoiceAccrual() already created when the invoice
   // was generated. This must NOT credit Income again (that already happened at
   // billing time) — otherwise every fee would be counted twice.
+  //
+  // A single balanced DR/CR pair, so this maps directly onto the shared
+  // LedgerPostingService entry point instead of hand-writing ledger rows.
   private async postFeePayment(companyId: string, paymentId: string, studentName: string) {
     const payment = await this.prisma.feePayment.findUnique({
       where: { id: paymentId },
@@ -570,50 +576,22 @@ export class SchoolFinanceService {
     });
     if (!payment) return;
 
-    const amount = Number(payment.amount);
-    const date = new Date(payment.paidAt);
-    const dateBs = adToBs(date);
     const drAccountName = payment.method === 'CASH' ? 'Cash in Hand' : 'Bank Account';
     const desc = `Fee receipt ${payment.receiptNo} — ${studentName} (${payment.invoice.month})`;
 
     const [drAccount, receivable] = await Promise.all([
-      this.getOrCreateAccount(companyId, drAccountName, 'ASSET'),
-      this.getOrCreateAccount(companyId, 'Fee Receivable', 'ASSET'),
+      this.posting.getOrCreateSystemAccount(companyId, drAccountName, 'ASSET'),
+      this.posting.getOrCreateSystemAccount(companyId, 'Fee Receivable', 'ASSET'),
     ]);
 
-    await this.prisma.$transaction([
-      this.prisma.ledgerEntry.create({
-        data: {
-          companyId, accountId: drAccount.id, dateAd: date, dateBs,
-          description: desc, debit: amount, credit: 0,
-          balance: Number(drAccount.currentBalance) + amount,
-          referenceType: 'FEE_PAYMENT', referenceId: payment.id, isAutoPosted: true,
-        },
-      }),
-      this.prisma.ledgerAccount.update({
-        where: { id: drAccount.id },
-        data: { currentBalance: { increment: amount } },
-      }),
-      this.prisma.ledgerEntry.create({
-        data: {
-          companyId, accountId: receivable.id, dateAd: date, dateBs,
-          description: desc, debit: 0, credit: amount,
-          balance: Number(receivable.currentBalance) - amount,
-          referenceType: 'FEE_PAYMENT', referenceId: payment.id, isAutoPosted: true,
-        },
-      }),
-      this.prisma.ledgerAccount.update({
-        where: { id: receivable.id },
-        data: { currentBalance: { decrement: amount } },
-      }),
-    ]);
-  }
-
-  private async getOrCreateAccount(companyId: string, accountName: string, accountType: string) {
-    const existing = await this.prisma.ledgerAccount.findFirst({ where: { companyId, accountName } });
-    if (existing) return existing;
-    return this.prisma.ledgerAccount.create({
-      data: { companyId, accountName, accountType: accountType as any, isSystem: true },
+    await this.posting.postManualJournalEntry(companyId, {
+      debitAccountId: drAccount.id,
+      creditAccountId: receivable.id,
+      amount: Number(payment.amount),
+      dateAd: payment.paidAt.toISOString(),
+      description: desc,
+      referenceType: 'FEE_PAYMENT',
+      referenceId: payment.id,
     });
   }
 

@@ -2,6 +2,7 @@ import { Injectable, NotFoundException, BadRequestException } from '@nestjs/comm
 import { PrismaService } from '../../../core/db/psql/prisma.client';
 import { SmsService } from './sms.service';
 import { AiService } from './ai.service';
+import { InventoryServiceImpl } from './inventory.service.impl';
 
 // Forms send whole entity objects (with id/relations/_count) and bare "YYYY-MM-DD"
 // strings; Prisma rejects unknown keys and date-only strings. Whitelist + coerce here
@@ -27,6 +28,7 @@ export class SchoolService {
     private readonly prisma: PrismaService,
     private readonly sms: SmsService,
     private readonly ai: AiService,
+    private readonly inventory: InventoryServiceImpl,
   ) {}
 
   // ── Dashboard ────────────────────────────────────────────────────────────────
@@ -590,24 +592,10 @@ export class SchoolService {
         if (!row.inventoryItemId) continue;
         const qty = row.quantity ?? 0;
         if (qty <= 0) throw new BadRequestException('Quantity is required for inventory items');
-        const item = await tx.inventoryItem.findFirst({ where: { id: row.inventoryItemId, companyId: data.companyId, deletedAt: null } });
-        if (!item) throw new NotFoundException('Inventory item not found');
-        const quantityBefore = Number(item.quantity);
-        const quantityAfter = quantityBefore - qty;
-        if (quantityAfter < 0) throw new BadRequestException(`Not enough stock for "${item.itemName}" — only ${quantityBefore} left`);
-        await tx.inventoryItem.update({ where: { id: item.id }, data: { quantity: quantityAfter } });
-        await tx.inventoryAdjustment.create({
-          data: {
-            companyId: data.companyId,
-            inventoryItemId: item.id,
-            adjustmentType: 'SUBTRACTION',
-            quantityBefore,
-            quantityChange: -qty,
-            quantityAfter,
-            reason: `Billed on fee invoice (${data.month || ''})`.trim(),
-            dateAd: new Date(),
-          },
-        });
+        await this.inventory.decrementForReferenceTx(
+          tx, data.companyId, row.inventoryItemId, qty,
+          `Billed on fee invoice (${data.month || ''})`.trim(),
+        );
       }
 
       return tx.feeInvoice.create({

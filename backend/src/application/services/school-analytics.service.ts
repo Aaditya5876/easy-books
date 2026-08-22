@@ -1,5 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../core/db/psql/prisma.client';
+import { AttendanceServiceImpl } from './attendance.service.impl';
+import { PayrollServiceImpl } from './payroll.service.impl';
 
 const PASS_PCT = 40;
 
@@ -21,7 +23,11 @@ const classLabel = (c?: { name: string; section: string | null } | null) =>
 
 @Injectable()
 export class SchoolAnalyticsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly attendance: AttendanceServiceImpl,
+    private readonly payroll: PayrollServiceImpl,
+  ) {}
 
   // ── Dashboard extras — merged into GET school/dashboard ─────────────────────
 
@@ -373,11 +379,11 @@ export class SchoolAnalyticsService {
   async operationsReport(companyId: string, startDate?: string, endDate?: string) {
     const now = new Date();
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-    const whereClause: any = { companyId };
+    let createdAtRange: { gte?: Date; lte?: Date } | undefined;
     if (startDate || endDate) {
-      whereClause.createdAt = {} as any;
-      if (startDate) whereClause.createdAt.gte = new Date(`${startDate}T00:00:00`);
-      if (endDate) whereClause.createdAt.lte = new Date(`${endDate}T23:59:59.999`);
+      createdAtRange = {};
+      if (startDate) createdAtRange.gte = new Date(`${startDate}T00:00:00`);
+      if (endDate) createdAtRange.lte = new Date(`${endDate}T23:59:59.999`);
     }
 
     const [topBooksRaw, overdueIssues, fines, rooms, activeAllocations, routes, staffAttendance, payrollRaw] = await Promise.all([
@@ -390,8 +396,8 @@ export class SchoolAnalyticsService {
         where: { companyId },
         select: { routeName: true, vehicleNumber: true, _count: { select: { studentTransports: { where: { isActive: true } } } } },
       }),
-      this.prisma.attendance.groupBy({ by: ['status'], where: { companyId, date: { gte: monthStart } }, _count: true }),
-      this.prisma.payroll.groupBy({ by: ['month'], where: whereClause, _sum: { netSalary: true }, _min: { createdAt: true } }),
+      this.attendance.getStatusBreakdown(companyId, monthStart),
+      this.payroll.getMonthlyTotals(companyId, createdAtRange),
     ]);
 
     const books = await this.prisma.book.findMany({

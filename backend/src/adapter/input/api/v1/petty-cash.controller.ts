@@ -2,10 +2,12 @@ import { Controller, Get, Post, Delete, Body, Param, Query } from '@nestjs/commo
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { PettyCashServiceImpl } from '../../../../application/services/petty-cash.service.impl';
 import { Roles } from '../../../../modules/decorators/roles.decorator';
+import { RequiresModule } from '../../../../modules/decorators/requires-module.decorator';
 
 @ApiTags('Petty Cash')
 @ApiBearerAuth()
 @Roles('ACCOUNTANT', 'ADMIN')
+@RequiresModule('FINANCE')
 @Controller('api/v1/petty-cash')
 export class PettyCashController {
   constructor(private readonly service: PettyCashServiceImpl) {}

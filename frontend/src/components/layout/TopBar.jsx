@@ -7,6 +7,7 @@ import {
   Search, Bell, Settings, LogOut, Building2, ChevronDown, Plus, Menu,
   Wrench, Calculator, RefreshCw, CalendarDays, UserCircle, CalendarCheck,
   UsersRound, Banknote, Sun, Moon, X, Package, Users, UserCheck, Globe,
+  Sparkles,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { toggleLanguage } from '@/i18n';
@@ -16,6 +17,7 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
   DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { getActiveCompanyId, setActiveCompanyId } from '@/lib/companyContext';
 import { getTodayBS } from '@/lib/nepaliDate';
@@ -38,6 +40,7 @@ export default function TopBar({ onMobileMenuToggle, onToolOpen }) {
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [notifLoading, setNotifLoading] = useState(false);
+  const [autoDetail, setAutoDetail] = useState(null);
 
   useEffect(() => {
     loadData();
@@ -106,6 +109,10 @@ export default function TopBar({ onMobileMenuToggle, onToolOpen }) {
 
   function handleNotificationClick(n) {
     if (!n.isRead) markNotificationRead(n.id);
+    if (n.type === 'SYSTEM_AUTOMATION') {
+      setAutoDetail(n);
+      return;
+    }
     if (n.link) navigate(n.link);
   }
 
@@ -145,6 +152,7 @@ export default function TopBar({ onMobileMenuToggle, onToolOpen }) {
     FEE_PAYMENT: { Icon: Banknote, bg: 'bg-green-50', color: 'text-green-500' },
     LEAVE_REQUEST: { Icon: CalendarCheck, bg: 'bg-blue-50', color: 'text-blue-500' },
     PAYROLL_PAID: { Icon: Banknote, bg: 'bg-green-50', color: 'text-green-500' },
+    SYSTEM_AUTOMATION: { Icon: Sparkles, bg: 'bg-violet-50', color: 'text-violet-500' },
   };
 
   function timeAgo(iso) {
@@ -160,6 +168,7 @@ export default function TopBar({ onMobileMenuToggle, onToolOpen }) {
   const todayBS = getTodayBS();
 
   return (
+    <>
     <header
       className="h-16 backdrop-blur-xl bg-card/80 border-b border-border/60 flex items-center justify-between px-4 lg:px-6 shrink-0 sticky top-0 z-30"
       style={prefs.topbarColor ? { backgroundColor: prefs.topbarColor } : undefined}
@@ -428,5 +437,44 @@ export default function TopBar({ onMobileMenuToggle, onToolOpen }) {
         </DropdownMenu>
       </div>
     </header>
+
+    {/* Nightly automation detail — shown when a SYSTEM_AUTOMATION notification is clicked */}
+    <Dialog open={!!autoDetail} onOpenChange={(open) => !open && setAutoDetail(null)}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Sparkles className="w-4 h-4 text-violet-500" />
+            {autoDetail?.title || 'Nightly automation completed'}
+          </DialogTitle>
+        </DialogHeader>
+        {autoDetail?.details?.runAt && (
+          <p className="text-xs text-muted-foreground -mt-2">
+            Ran {new Date(autoDetail.details.runAt).toLocaleString()}
+            {autoDetail.details.month ? ` · Month: ${autoDetail.details.month}` : ''}
+          </p>
+        )}
+        <div className="max-h-96 overflow-y-auto space-y-4 mt-1">
+          {(autoDetail?.details?.updates ?? []).map((group, i) => (
+            <div key={i}>
+              <p className="text-sm font-semibold mb-1.5">{group.label}</p>
+              <div className="border border-border rounded-lg divide-y divide-border overflow-hidden">
+                {group.items.map((item, j) => (
+                  <div key={j} className="flex items-center justify-between px-3 py-1.5 text-sm">
+                    <span className="text-foreground">{item.name}</span>
+                    {item.amount != null && (
+                      <span className="text-muted-foreground font-mono text-xs">NPR {Number(item.amount).toLocaleString()}</span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+          {(!autoDetail?.details?.updates || autoDetail.details.updates.length === 0) && (
+            <p className="text-sm text-muted-foreground">{autoDetail?.message}</p>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }

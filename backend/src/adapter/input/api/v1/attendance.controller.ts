@@ -2,12 +2,16 @@ import { Controller, Get, Post, Put, Delete, Body, Param, Query } from '@nestjs/
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { AttendanceServiceImpl } from '../../../../application/services/attendance.service.impl';
 import { Roles } from '../../../../modules/decorators/roles.decorator';
+import { RequiresModule } from '../../../../modules/decorators/requires-module.decorator';
 import { ZodValidationPipe } from '../../../../modules/pipes/zod-validation.pipe';
 import { CreateAttendanceSchema, UpdateAttendanceSchema, CreateAttendanceDTO, UpdateAttendanceDTO } from '@easy-books/shared';
 
+// Staff/employee attendance only — Student attendance is a wholly separate
+// model & controller (see school.controller.ts), unaffected by this gate.
 @ApiTags('Attendance')
 @ApiBearerAuth()
 @Roles('ACCOUNTANT', 'ADMIN')
+@RequiresModule('HRMS')
 @Controller('api/v1/attendance')
 export class AttendanceController {
   constructor(private readonly service: AttendanceServiceImpl) {}

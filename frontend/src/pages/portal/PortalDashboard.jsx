@@ -127,16 +127,23 @@ export default function PortalDashboard() {
   return (
     <div className="p-5 md:p-7 space-y-6 max-w-7xl mx-auto">
 
-      {/* Greeting */}
-      <motion.div initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
-        <h1 className="text-2xl md:text-3xl font-bold text-slate-900">
-          {greeting}{student?.name ? `, ${student.name.split(' ')[0]}` : ''} 👋
-        </h1>
-        <p className="text-slate-500 text-sm mt-1">
-          {student?.class
-            ? `${student.class.name}${student.class.section ? ` · ${t('portal.section', { defaultValue: 'Section {{section}}', section: student.class.section })}` : ''}`
-            : t('portal.academicOverview', { defaultValue: 'Your academic overview' })}
-        </p>
+      {/* Hero greeting banner */}
+      <motion.div
+        initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}
+        className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-blue-600 via-blue-600 to-indigo-700 px-6 py-7 md:px-8 md:py-8 shadow-lg shadow-blue-900/10"
+      >
+        <div className="absolute -right-10 -top-16 w-56 h-56 rounded-full bg-white/10 blur-2xl" />
+        <div className="absolute -left-6 bottom-0 w-40 h-40 rounded-full bg-white/10 blur-2xl" />
+        <div className="relative z-10">
+          <h1 className="text-2xl md:text-3xl font-bold text-white">
+            {greeting}{student?.name ? `, ${student.name.split(' ')[0]}` : ''} 👋
+          </h1>
+          <p className="text-blue-100 text-sm mt-1.5">
+            {student?.class
+              ? `${student.class.name}${student.class.section ? ` · ${t('portal.section', { defaultValue: 'Section {{section}}', section: student.class.section })}` : ''}`
+              : t('portal.academicOverview', { defaultValue: 'Your academic overview' })}
+          </p>
+        </div>
       </motion.div>
 
       {/* Stat cards */}
@@ -152,15 +159,15 @@ export default function PortalDashboard() {
             <motion.div key={card.key} variants={cardVariants}>
               <Link to={card.link}>
                 <motion.div
+                  whileHover={{ y: -2 }}
                   whileTap={{ scale: 0.96 }}
-                  className="rounded-2xl p-4 cursor-pointer border border-white shadow-sm"
-                  style={{ background: card.bg }}
+                  className="rounded-2xl p-4 cursor-pointer border border-slate-100 shadow-sm hover:shadow-md transition-shadow bg-white"
                 >
                   <div
-                    className="w-9 h-9 rounded-xl flex items-center justify-center mb-3"
-                    style={{ background: card.color + '22' }}
+                    className="w-10 h-10 rounded-xl flex items-center justify-center mb-3 shadow-sm"
+                    style={{ background: `linear-gradient(135deg, ${card.color}22, ${card.color}11)` }}
                   >
-                    <Icon className="w-4.5 h-4.5" style={{ color: card.color }} />
+                    <Icon className="w-5 h-5" style={{ color: card.color }} />
                   </div>
                   <p className="text-2xl font-bold text-slate-900">
                     <CountUp to={statValues[card.key]} suffix={statSuffix[card.key]} />
@@ -173,8 +180,12 @@ export default function PortalDashboard() {
         })}
       </motion.div>
 
-      {/* Detail sections */}
+      {/* Detail sections — two independent columns, each hugging its own content height.
+          Deliberately NOT one CSS grid of siblings: a grid pairs items into rows by index
+          and stretches the shorter cell to match its taller row-mate, which is exactly
+          what left a big empty gap under a short card like "Latest Result" before. */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-start">
+        <div className="space-y-5">
 
         {/* Pending fees */}
         {pendingFees.length > 0 && (
@@ -289,7 +300,9 @@ export default function PortalDashboard() {
             </motion.div>
           </motion.div>
         )}
+        </div>
 
+        <div className="space-y-5">
         {/* Latest exam result */}
         {latestExam && (
           <motion.div
@@ -348,6 +361,7 @@ export default function PortalDashboard() {
             </motion.div>
           </motion.div>
         )}
+        </div>
       </div>
 
       {/* All clear */}

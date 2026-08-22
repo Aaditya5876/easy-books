@@ -1,11 +1,13 @@
 import { Controller, Post, Body, Param, Req, ForbiddenException } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { Roles } from '../../../../modules/decorators/roles.decorator';
+import { RequiresModule } from '../../../../modules/decorators/requires-module.decorator';
 import { BulkImportService } from '../../../../application/services/bulk-import.service';
 
 @ApiTags('Bulk Import')
 @ApiBearerAuth()
 @Roles('STAFF', 'ACCOUNTANT', 'ADMIN')
+@RequiresModule('BULK_IMPORT')
 @Controller('api/v1/bulk')
 export class BulkImportController {
   constructor(private readonly service: BulkImportService) {}

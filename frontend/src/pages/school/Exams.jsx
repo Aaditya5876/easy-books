@@ -315,6 +315,7 @@ function ViewReportCardDialog({ open, onClose, studentId, examName }) {
     setAiLoading(true);
     try {
       const res = await aiApi.reportCardComment({
+        companyId,
         studentName: cardData.student?.name,
         examResults: cardData.results?.map(r => ({
           subject: r.subject?.name || 'Subject',

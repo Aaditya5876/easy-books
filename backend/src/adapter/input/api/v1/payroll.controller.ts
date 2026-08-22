@@ -2,9 +2,11 @@ import { Controller, Get, Post, Patch, Body, Param, Query } from '@nestjs/common
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { PayrollEngineService } from '../../../../application/services/payroll.engine';
 import { Roles } from '../../../../modules/decorators/roles.decorator';
+import { RequiresModule } from '../../../../modules/decorators/requires-module.decorator';
 
 @ApiTags('Payroll')
 @ApiBearerAuth()
+@RequiresModule('HRMS')
 @Controller('api/v1/payroll')
 export class PayrollController {
   constructor(private readonly engine: PayrollEngineService) {}

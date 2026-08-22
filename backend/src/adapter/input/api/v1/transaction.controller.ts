@@ -2,12 +2,14 @@ import { Controller, Get, Post, Put, Delete, Body, Param, Query } from '@nestjs/
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { TransactionServiceImpl } from '../../../../application/services/transaction.service.impl';
 import { Roles } from '../../../../modules/decorators/roles.decorator';
+import { RequiresModule } from '../../../../modules/decorators/requires-module.decorator';
 import { ZodValidationPipe } from '../../../../modules/pipes/zod-validation.pipe';
 import { CreateTransactionSchema, UpdateTransactionSchema, CreateTransactionDTO, UpdateTransactionDTO } from '@easy-books/shared';
 
 @ApiTags('Transactions')
 @ApiBearerAuth()
 @Roles('ACCOUNTANT', 'ADMIN')
+@RequiresModule('FINANCE')
 @Controller('api/v1/transactions')
 export class TransactionController {
   constructor(private readonly service: TransactionServiceImpl) {}

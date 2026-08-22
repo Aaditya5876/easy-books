@@ -69,6 +69,7 @@ function NoticeDialog({ open, onClose, notice }) {
     setAiLoading(true);
     try {
       const res = await aiApi.generateNotice({
+        companyId: companyId(),
         topic: form.title,
         targetAudience: form.targetAudience,
         tone: 'formal',

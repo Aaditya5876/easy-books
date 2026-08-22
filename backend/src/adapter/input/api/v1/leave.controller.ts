@@ -2,9 +2,11 @@ import { Controller, Get, Post, Put, Delete, Patch, Body, Param, Query, Request 
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { LeaveServiceImpl } from '../../../../application/services/leave.service.impl';
 import { Roles } from '../../../../modules/decorators/roles.decorator';
+import { RequiresModule } from '../../../../modules/decorators/requires-module.decorator';
 
 @ApiTags('Leave')
 @ApiBearerAuth()
+@RequiresModule('HRMS')
 @Controller('api/v1/leave')
 export class LeaveController {
   constructor(private readonly service: LeaveServiceImpl) {}
