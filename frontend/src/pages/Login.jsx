@@ -180,7 +180,7 @@ export default function Login() {
     if (regForm.password.length < 8) { setError(t('auth.passwordMinLength', { defaultValue: 'Password must be at least 8 characters' })); return; }
     setLoading(true);
     try {
-      const { confirmPassword, otherBusinessDesc, ...payload } = regForm;
+      const { confirmPassword: _confirmPassword, otherBusinessDesc, ...payload } = regForm;
       if (payload.businessType === 'OTHER' && otherBusinessDesc.trim()) {
         payload.businessType = otherBusinessDesc.trim();
       }

@@ -24,8 +24,6 @@ import EmptyState from '../components/EmptyState';
 import { SmartNumberInput } from "@/components/ui/smart-number-input";
 import { FileAttachmentZone } from "@/components/ui/file-attachment-zone";
 
-const UNITS = ['Piece', 'Set', 'Liter', 'ml', 'Kg', 'gm', 'NOS'];
-
 const EMPTY_FORM = {
   client_name: '', client_contact: '', client_address: '', client_pan: '',
   invoice_number: '', is_vat: false, payment_type: 'cash',

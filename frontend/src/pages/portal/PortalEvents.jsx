@@ -6,6 +6,7 @@ import { CalendarDays } from 'lucide-react';
 import { pageVariants, containerVariants, itemVariants } from '@/lib/portalAnimations';
 import PortalFilterSelect from '@/components/portal/PortalFilterSelect';
 import PortalPagination from '@/components/portal/PortalPagination';
+import PortalPageHeader from '@/components/portal/PortalPageHeader';
 import { useTranslation } from 'react-i18next';
 
 const EVENT_TYPE_CONFIG = {
@@ -55,19 +56,14 @@ export default function PortalEvents() {
 
   return (
     <motion.div variants={pageVariants} initial="initial" animate="animate" exit="exit" className="p-5 md:p-7 space-y-4 max-w-7xl mx-auto">
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div className="flex items-center gap-3">
-          <h1 className="text-2xl font-bold text-slate-900">{t('portal.schoolEvents', { defaultValue: 'School Events' })}</h1>
-          {events.length > 0 && (
-            <span className="text-xs font-semibold px-2.5 py-1 bg-blue-100 text-blue-700 rounded-full">
-              {t('portal.nEvents', { defaultValue: '{{count}} events', count: events.length })}
-            </span>
-          )}
-        </div>
-        {typeOptions.length > 2 && (
+      <PortalPageHeader
+        icon={CalendarDays}
+        title={t('portal.schoolEvents', { defaultValue: 'School Events' })}
+        badge={events.length > 0 ? t('portal.nEvents', { defaultValue: '{{count}} events', count: events.length }) : null}
+        action={typeOptions.length > 2 && (
           <PortalFilterSelect value={type} onChange={setTypeFiltered} options={typeOptions} />
         )}
-      </div>
+      />
 
       {isLoading ? (
         <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center text-slate-400 text-sm">{t('portal.loading', { defaultValue: 'Loading…' })}</div>

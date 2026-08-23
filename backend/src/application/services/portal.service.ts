@@ -88,6 +88,16 @@ export class PortalService {
     });
   }
 
+  // Deliberately minimal fields — a parent scanning to pay only needs the
+  // bank name and the QR itself, never the account number, balance, or the
+  // bank's own online-banking login stored on this record.
+  async getPaymentQrCodes(companyId: string) {
+    return this.prisma.bankAccount.findMany({
+      where: { companyId, qrCodeUrl: { not: null } },
+      select: { id: true, bankName: true, qrCodeUrl: true },
+    });
+  }
+
   getFeeReceipt(invoiceId: string, studentId: string, companyId: string) {
     return this.finance.getFeeReceipt(companyId, invoiceId, studentId);
   }

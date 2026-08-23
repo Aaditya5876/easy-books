@@ -1,13 +1,15 @@
 import { useEffect, useState } from 'react';
 import { useOutlet, Link, useLocation, useNavigate } from 'react-router-dom';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   LayoutDashboard, CalendarCheck, DollarSign, Trophy,
   ClipboardList, Megaphone, Clock, LogOut, BookOpen,
-  FolderOpen, GraduationCap, CalendarDays,
+  FolderOpen, GraduationCap, CalendarDays, Bell,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useTranslation } from 'react-i18next';
+import { portalApi } from '@/api';
 
 const NAV = [
   { icon: LayoutDashboard, label: 'Home',           labelKey: 'portal.home',          path: '/portal',                 color: '#3B82F6' },
@@ -26,6 +28,98 @@ function isActive(item, pathname) {
   return item.path === '/portal'
     ? pathname === '/portal'
     : pathname.startsWith(item.path);
+}
+
+function timeAgo(iso) {
+  const diffMs = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diffMs / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  return `${Math.floor(hrs / 24)}d ago`;
+}
+
+function NotificationBell({ isMobile = false }) {
+  const { t } = useTranslation();
+  const navigate = useNavigate();
+  const qc = useQueryClient();
+  const [open, setOpen] = useState(false);
+
+  const { data: unreadCount = 0 } = useQuery({
+    queryKey: ['portal-notifications-unread'],
+    queryFn: () => portalApi.notificationsUnreadCount().then(r => r.data),
+    refetchInterval: 60000,
+  });
+
+  const { data: notifications = [] } = useQuery({
+    queryKey: ['portal-notifications'],
+    queryFn: () => portalApi.notifications().then(r => r.data),
+    enabled: open,
+  });
+
+  async function handleClick(n) {
+    if (!n.isRead) {
+      await portalApi.markNotificationRead(n.id);
+      qc.invalidateQueries({ queryKey: ['portal-notifications-unread'] });
+      qc.invalidateQueries({ queryKey: ['portal-notifications'] });
+    }
+    setOpen(false);
+    if (n.link) navigate(n.link);
+  }
+
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className={cn(
+          'relative flex items-center justify-center rounded-xl transition-colors',
+          isMobile ? 'w-9 h-9 text-slate-600 hover:bg-slate-100' : 'w-9 h-9 text-slate-400 hover:text-white hover:bg-slate-800'
+        )}
+      >
+        <Bell className="w-4.5 h-4.5" />
+        {unreadCount > 0 && (
+          <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 rounded-full bg-rose-500 text-white text-[9px] font-bold flex items-center justify-center">
+            {unreadCount > 9 ? '9+' : unreadCount}
+          </span>
+        )}
+      </button>
+
+      {open && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+          <div className={cn(
+            'absolute z-50 mt-2 w-80 max-h-96 overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-xl',
+            isMobile ? 'right-0' : 'left-0'
+          )}>
+            <div className="px-4 py-3 border-b border-slate-100">
+              <p className="text-sm font-semibold text-slate-900">{t('portal.notifications', { defaultValue: 'Notifications' })}</p>
+            </div>
+            {notifications.length === 0 ? (
+              <p className="text-sm text-slate-400 text-center py-8">{t('portal.noNotificationsYet', { defaultValue: 'No notifications yet' })}</p>
+            ) : (
+              <div className="divide-y divide-slate-100">
+                {notifications.map(n => (
+                  <button
+                    key={n.id}
+                    onClick={() => handleClick(n)}
+                    className="w-full text-left px-4 py-3 hover:bg-slate-50 transition-colors flex items-start gap-2"
+                  >
+                    {!n.isRead && <span className="w-1.5 h-1.5 rounded-full bg-blue-500 mt-1.5 shrink-0" />}
+                    <div className={cn('min-w-0', n.isRead && 'ml-3.5')}>
+                      <p className="text-sm font-medium text-slate-800 truncate">{n.title}</p>
+                      <p className="text-xs text-slate-500 mt-0.5 line-clamp-2">{n.message}</p>
+                      <p className="text-[10px] text-slate-400 mt-1">{timeAgo(n.createdAt)}</p>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  );
 }
 
 export default function PortalLayout() {
@@ -65,7 +159,7 @@ export default function PortalLayout() {
           <div className="w-8 h-8 rounded-xl bg-blue-500 flex items-center justify-center shadow-lg shadow-blue-500/30">
             <BookOpen className="w-4 h-4 text-white" />
           </div>
-          <div>
+          <div className="flex-1 min-w-0">
             <p className="text-sm font-bold text-white leading-none">EasyBooks</p>
             <p className="text-[10px] text-slate-400 mt-0.5">
               {portalType === 'STUDENT'
@@ -73,6 +167,7 @@ export default function PortalLayout() {
                 : t('portal.parentPortal', { defaultValue: 'Parent Portal' })}
             </p>
           </div>
+          <NotificationBell />
         </div>
 
         {/* Student card */}
@@ -152,8 +247,19 @@ export default function PortalLayout() {
         </div>
       </aside>
 
+      {/* ── Mobile top bar (sidebar is hidden on mobile — this is the only place for the bell) ── */}
+      <div className="md:hidden fixed top-0 left-0 right-0 z-30 h-14 bg-white border-b border-slate-100 flex items-center justify-between px-4">
+        <div className="flex items-center gap-2">
+          <div className="w-7 h-7 rounded-lg bg-blue-500 flex items-center justify-center shrink-0">
+            <BookOpen className="w-3.5 h-3.5 text-white" />
+          </div>
+          <p className="text-sm font-bold text-slate-900">EasyBooks</p>
+        </div>
+        <NotificationBell isMobile />
+      </div>
+
       {/* ── Main ── */}
-      <main className="flex-1 md:ml-64 min-h-screen pb-20 md:pb-0">
+      <main className="flex-1 md:ml-64 min-h-screen pb-20 md:pb-0 pt-14 md:pt-0">
         <AnimatePresence mode="wait">
           <motion.div
             key={location.pathname}

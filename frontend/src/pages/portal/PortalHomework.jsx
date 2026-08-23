@@ -6,6 +6,7 @@ import { ClipboardList } from 'lucide-react';
 import { pageVariants, containerVariants, itemVariants } from '@/lib/portalAnimations';
 import PortalFilterSelect from '@/components/portal/PortalFilterSelect';
 import PortalPagination from '@/components/portal/PortalPagination';
+import PortalPageHeader from '@/components/portal/PortalPageHeader';
 import { useTranslation } from 'react-i18next';
 
 const SUBJECT_COLORS = ['#3B82F6','#10B981','#8B5CF6','#F97316','#F43F5E','#14B8A6','#F59E0B','#6366F1'];
@@ -56,16 +57,11 @@ export default function PortalHomework() {
 
   return (
     <motion.div variants={pageVariants} initial="initial" animate="animate" exit="exit" className="p-5 md:p-7 space-y-4 max-w-7xl mx-auto">
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div className="flex items-center gap-3">
-          <h1 className="text-2xl font-bold text-slate-900">{t('portal.homework', { defaultValue: 'Homework' })}</h1>
-          {homework.length > 0 && (
-            <span className="text-xs font-semibold px-2.5 py-1 bg-orange-100 text-orange-700 rounded-full">
-              {t('portal.nAssigned', { defaultValue: '{{count}} assigned', count: homework.length })}
-            </span>
-          )}
-        </div>
-        {homework.length > 0 && (
+      <PortalPageHeader
+        icon={ClipboardList}
+        title={t('portal.homework', { defaultValue: 'Homework' })}
+        badge={homework.length > 0 ? t('portal.nAssigned', { defaultValue: '{{count}} assigned', count: homework.length }) : null}
+        action={homework.length > 0 && (
           <div className="flex items-center gap-2">
             <PortalFilterSelect value={status} onChange={setStatusFiltered} options={[
               { value: 'all', label: t('portal.allStatuses', { defaultValue: 'All' }) },
@@ -77,7 +73,7 @@ export default function PortalHomework() {
             )}
           </div>
         )}
-      </div>
+      />
 
       {isLoading ? (
         <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center text-slate-400 text-sm">{t('portal.loading', { defaultValue: 'Loading…' })}</div>

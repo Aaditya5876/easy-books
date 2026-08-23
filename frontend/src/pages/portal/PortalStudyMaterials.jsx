@@ -7,6 +7,7 @@ import { BookOpen, Download } from 'lucide-react';
 import { pageVariants, containerVariants, itemVariants } from '@/lib/portalAnimations';
 import PortalFilterSelect from '@/components/portal/PortalFilterSelect';
 import PortalPagination from '@/components/portal/PortalPagination';
+import PortalPageHeader from '@/components/portal/PortalPageHeader';
 import { useTranslation } from 'react-i18next';
 
 const FILE_TYPE_ICONS = { pdf: '📄', doc: '📝', docx: '📝', image: '🖼️', other: '📎' };
@@ -56,19 +57,14 @@ export default function PortalStudyMaterials() {
 
   return (
     <motion.div variants={pageVariants} initial="initial" animate="animate" exit="exit" className="p-5 md:p-7 space-y-4 max-w-7xl mx-auto">
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div className="flex items-center gap-3">
-          <h1 className="text-2xl font-bold text-slate-900">{t('portal.studyMaterials', { defaultValue: 'Study Materials' })}</h1>
-          {materials.length > 0 && (
-            <span className="text-xs font-semibold px-2.5 py-1 bg-blue-100 text-blue-700 rounded-full">
-              {t('portal.nFiles', { defaultValue: '{{count}} files', count: materials.length })}
-            </span>
-          )}
-        </div>
-        {subjectOptions.length > 2 && (
+      <PortalPageHeader
+        icon={BookOpen}
+        title={t('portal.studyMaterials', { defaultValue: 'Study Materials' })}
+        badge={materials.length > 0 ? t('portal.nFiles', { defaultValue: '{{count}} files', count: materials.length }) : null}
+        action={subjectOptions.length > 2 && (
           <PortalFilterSelect value={subject} onChange={setSubjectFiltered} options={subjectOptions} />
         )}
-      </div>
+      />
 
       {isLoading ? (
         <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center text-slate-400 text-sm">{t('portal.loading', { defaultValue: 'Loading…' })}</div>

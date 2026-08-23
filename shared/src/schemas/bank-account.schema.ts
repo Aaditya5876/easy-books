@@ -8,6 +8,7 @@ export const CreateBankAccountSchema = z.object({
   branch: z.string().optional(),
   currentBalance: z.number().default(0),
   portalUrl: z.string().url().optional(),
+  qrCodeUrl: z.string().optional(), // relative /uploads/... path from the upload endpoint, not a full URL
 });
 
 export const UpdateBankAccountSchema = CreateBankAccountSchema.omit({ companyId: true }).partial();

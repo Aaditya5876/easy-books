@@ -16,7 +16,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog';
 import { CalendarCheck, Plus, Pencil, Trash2 } from 'lucide-react';
-import { adToBs, bsToAd, formatBsDate } from '@/lib/nepaliDate';
+import { adToBs, bsToAd } from '@/lib/nepaliDate';
 import { toast } from 'sonner';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, getDay, isSameDay } from 'date-fns';
 
@@ -42,11 +42,10 @@ const eventTypeLabel = (t, type) =>
 
 const companyId = () => localStorage.getItem('easybooks_active_company') || '';
 
-function EventDialog({ open, onClose, event, mode = 'AD', monthKey }) {
+function EventDialog({ open, onClose, event, mode = 'AD' }) {
   const { t } = useTranslation();
   const qc = useQueryClient();
   const isEdit = !!event;
-  const queryKey = ['school-events', monthKey];
   const [form, setForm] = useState({
     title: event?.title || '',
     description: event?.description || '',
@@ -360,7 +359,6 @@ export default function Events({ mode: propMode = 'AD' }) {
           onClose={() => setDialog({ open: false, event: null })}
           event={dialog.event}
           mode={mode}
-          monthKey={monthKey}
         />
       )}
     </div>

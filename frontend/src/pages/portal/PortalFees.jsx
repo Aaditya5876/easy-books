@@ -2,12 +2,14 @@ import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import { portalApi } from '@/api';
-import { DollarSign, Loader2, Printer, Receipt } from 'lucide-react';
+import { DollarSign, Loader2, Printer, Receipt, QrCode } from 'lucide-react';
 import { toast } from 'sonner';
+import apiClient from '@/api/client';
 import { printFeeReceipt } from '@/lib/printFeeReceipt';
 import { pageVariants, containerVariants, cardVariants, itemVariants } from '@/lib/portalAnimations';
 import PortalFilterSelect from '@/components/portal/PortalFilterSelect';
 import PortalPagination from '@/components/portal/PortalPagination';
+import PortalPageHeader from '@/components/portal/PortalPageHeader';
 import { useTranslation } from 'react-i18next';
 
 const STATUS_CONFIG = {
@@ -33,12 +35,21 @@ function submitEsewaForm(paymentUrl, formFields) {
   form.submit();
 }
 
+function resolveFileUrl(url = '') {
+  return url.startsWith('http') ? url : `${apiClient.defaults.baseURL}${url}`;
+}
+
 export default function PortalFees() {
   const { t } = useTranslation();
   const [payingId, setPayingId] = useState(null);
   const [printingId, setPrintingId] = useState(null);
   const [status, setStatus] = useState('all');
   const [page, setPage] = useState(1);
+
+  const { data: qrCodes = [] } = useQuery({
+    queryKey: ['portal-payment-qr-codes'],
+    queryFn: () => portalApi.paymentQrCodes().then(r => r.data),
+  });
 
   const { data: fees = [], isLoading } = useQuery({
     queryKey: ['portal-fees'],
@@ -92,9 +103,10 @@ export default function PortalFees() {
 
   return (
     <motion.div variants={pageVariants} initial="initial" animate="animate" exit="exit" className="p-5 md:p-7 space-y-5 max-w-7xl mx-auto">
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        <h1 className="text-2xl font-bold text-slate-900">{t('portal.feeInvoices', { defaultValue: 'Fee Invoices' })}</h1>
-        {fees.length > 0 && (
+      <PortalPageHeader
+        icon={DollarSign}
+        title={t('portal.feeInvoices', { defaultValue: 'Fee Invoices' })}
+        action={fees.length > 0 && (
           <PortalFilterSelect value={status} onChange={setStatusFiltered} options={[
             { value: 'all', label: t('portal.allStatuses', { defaultValue: 'All' }) },
             { value: 'PENDING', label: t('portal.pending', { defaultValue: 'Pending' }) },
@@ -102,7 +114,7 @@ export default function PortalFees() {
             { value: 'PAID', label: t('portal.paid', { defaultValue: 'Paid' }) },
           ]} />
         )}
-      </div>
+      />
 
       {fees.length > 0 && (
         <motion.div variants={containerVariants} initial="initial" animate="animate" className="grid grid-cols-3 md:max-w-xl gap-3">
@@ -116,6 +128,30 @@ export default function PortalFees() {
               <p className="text-xs text-slate-500 mt-0.5 font-medium">{s.label}</p>
             </motion.div>
           ))}
+        </motion.div>
+      )}
+
+      {qrCodes.length > 0 && totalDue > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35 }}
+          className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden"
+        >
+          <div className="px-5 py-3.5 border-b border-slate-100 flex items-center gap-2">
+            <QrCode className="w-4 h-4 text-blue-500" />
+            <h2 className="text-sm font-semibold text-slate-900">{t('portal.scanToPay', { defaultValue: 'Scan to Pay' })}</h2>
+          </div>
+          <div className="p-5 flex flex-wrap gap-5">
+            {qrCodes.map(q => (
+              <div key={q.id} className="flex flex-col items-center gap-2">
+                <img
+                  src={resolveFileUrl(q.qrCodeUrl)}
+                  alt={`${q.bankName} QR`}
+                  className="w-32 h-32 rounded-xl border border-slate-200 object-cover"
+                />
+                <p className="text-xs font-medium text-slate-600">{q.bankName}</p>
+              </div>
+            ))}
+          </div>
         </motion.div>
       )}
 

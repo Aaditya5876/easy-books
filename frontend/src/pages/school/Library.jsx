@@ -163,7 +163,7 @@ function IssueDialog({ open, onClose, books, companyId }) {
   );
 }
 
-function ReturnDialog({ open, onClose, issue: issueRecord, companyId }) {
+function ReturnDialog({ open, onClose, issue: issueRecord }) {
   const { t } = useTranslation();
   const qc = useQueryClient();
   const [fine, setFine] = useState(0);
@@ -393,7 +393,7 @@ export default function Library() {
         <IssueDialog open={issueDialog} onClose={() => setIssueDialog(false)} books={books} companyId={companyId} />
       )}
       {returnDialog && (
-        <ReturnDialog open={!!returnDialog} onClose={() => setReturnDialog(null)} issue={returnDialog} companyId={companyId} />
+        <ReturnDialog open={!!returnDialog} onClose={() => setReturnDialog(null)} issue={returnDialog} />
       )}
     </div>
   );

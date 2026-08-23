@@ -11,7 +11,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SmartNumberInput } from "@/components/ui/smart-number-input";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter
@@ -41,15 +40,6 @@ const FIELDS = {
   MANUFACTURING:{ brand: true,  modelNo: true,  application: true,  expiry: false, aging: true,  location: true },
   SCHOOL:       { brand: false, modelNo: false, application: false, expiry: false, aging: false, location: true },
   OTHER:        { brand: true,  modelNo: true,  application: true,  expiry: true,  aging: true,  location: true },
-};
-
-const BUSINESS_LABELS = {
-  brand: 'Brand',
-  modelNo: 'Model / Part Number',
-  application: 'Usage / Purpose',
-  expiry: 'Expiry Information',
-  aging: 'Aging Alert (Days)',
-  location: 'Stock Location',
 };
 
 function getFields(businessType) {

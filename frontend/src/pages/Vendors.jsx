@@ -19,7 +19,7 @@ import {
 import PageLoader from '../components/PageLoader';
 import EmptyState from '../components/EmptyState';
 import {
-  Users, Building2, Phone, Mail, MapPin, Hash, Wallet, CreditCard, FileText, Truck, User, Upload
+  Users, Building2, Phone, Mail, MapPin, Hash, FileText, Truck, User, Upload
 } from 'lucide-react';
 import { useRole } from "@/lib/useRole";
 import BulkImportDialog from '../components/shared/BulkImportDialog';

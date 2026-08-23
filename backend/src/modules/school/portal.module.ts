@@ -6,12 +6,17 @@ import { PortalService } from '../../application/services/portal.service';
 import { PaymentService } from '../../application/services/payment.service';
 import { SchoolFinanceService } from '../../application/services/school-finance.service';
 import { LedgerPostingService } from '../../application/services/ledger-posting.service';
+import { PortalNotificationService } from '../../application/services/portal-notification.service';
+import { SmsService } from '../../application/services/sms.service';
 import { PortalGuard } from '../guards/portal.guard';
 import { NotificationModule } from '../communication/notification.module';
 
 @Module({
   imports: [JwtModule.register({}), NotificationModule],
   controllers: [PortalController],
-  providers: [PrismaService, PortalService, PaymentService, SchoolFinanceService, LedgerPostingService, PortalGuard],
+  providers: [
+    PrismaService, PortalService, PaymentService, SchoolFinanceService, LedgerPostingService,
+    PortalNotificationService, SmsService, PortalGuard,
+  ],
 })
 export class PortalModule {}

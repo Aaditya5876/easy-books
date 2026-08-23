@@ -120,11 +120,16 @@ export class TransactionServiceImpl {
 
     const isIncome = dto.category === 'INCOME';
     const isCredit = dto.type === 'CREDIT';
+    // WALLET (eSewa/Khalti/other) is deliberately its own pool of money, not
+    // "Bank Account" — it isn't settled into a real bank until someone
+    // actually withdraws it, so mixing it into the bank balance would be wrong.
     const paymentAccountName = dto.type === 'CASH'
       ? 'Cash in Hand'
-      : dto.type === 'BANK' || dto.type === 'QR' || dto.type === 'CHEQUE'
-        ? 'Bank Account'
-        : 'Cash in Hand';
+      : dto.type === 'WALLET'
+        ? 'Digital Wallet'
+        : dto.type === 'BANK' || dto.type === 'CHEQUE'
+          ? 'Bank Account'
+          : 'Cash in Hand';
 
     const cashOrBankAccount = await this.ledgerPosting.getOrCreateSystemAccount(
       dto.companyId,

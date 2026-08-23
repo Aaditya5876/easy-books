@@ -10,6 +10,7 @@ import { AiService } from '../../application/services/ai.service';
 import { InventoryServiceImpl } from '../../application/services/inventory.service.impl';
 import { AttendanceServiceImpl } from '../../application/services/attendance.service.impl';
 import { PayrollServiceImpl } from '../../application/services/payroll.service.impl';
+import { PortalNotificationService } from '../../application/services/portal-notification.service';
 import { NotificationModule } from '../communication/notification.module';
 
 @Module({
@@ -18,7 +19,7 @@ import { NotificationModule } from '../communication/notification.module';
   providers: [
     PrismaService, SchoolService, SchoolAnalyticsService, SchoolFinanceService,
     LedgerPostingService, SmsService, AiService, InventoryServiceImpl,
-    AttendanceServiceImpl, PayrollServiceImpl,
+    AttendanceServiceImpl, PayrollServiceImpl, PortalNotificationService,
   ],
   exports: [SchoolFinanceService],
 })

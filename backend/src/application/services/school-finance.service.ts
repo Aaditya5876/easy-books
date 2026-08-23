@@ -2,6 +2,8 @@ import { Injectable, NotFoundException, BadRequestException } from '@nestjs/comm
 import { PrismaService } from '../../../core/db/psql/prisma.client';
 import { LedgerPostingService } from './ledger-posting.service';
 import { NotificationServiceImpl } from './notification.service.impl';
+import { PortalNotificationService } from './portal-notification.service';
+import { SmsService } from './sms.service';
 import { adToBs } from '@easy-books/shared';
 
 const DEFAULT_FEE_HEADS = [
@@ -31,6 +33,8 @@ export class SchoolFinanceService {
     private readonly prisma: PrismaService,
     private readonly posting: LedgerPostingService,
     private readonly notifications: NotificationServiceImpl,
+    private readonly portalNotifications: PortalNotificationService,
+    private readonly sms: SmsService,
   ) {}
 
   // ── Fee Heads ────────────────────────────────────────────────────────────────
@@ -326,8 +330,9 @@ export class SchoolFinanceService {
 
     const students = await this.prisma.student.findMany({
       where: { companyId, status: 'ACTIVE', ...(classId ? { classId } : {}) },
-      select: { id: true, name: true },
+      select: { id: true, name: true, guardianPhone: true },
     });
+    const company = await this.prisma.company.findUnique({ where: { id: companyId }, select: { name: true } });
 
     const existing = await this.prisma.feeInvoice.findMany({
       where: { companyId, month, studentId: { in: students.map(s => s.id) } },
@@ -374,6 +379,28 @@ export class SchoolFinanceService {
 
       created++;
       createdDetails.push({ studentName: s.name, amount: profile.monthlyTotal });
+
+      // Free channel — always fires, no cost. SMS below is the paid channel,
+      // best-effort so a missing phone / SMS-provider hiccup never blocks billing.
+      try {
+        await this.portalNotifications.notifyStudent(companyId, s.id, {
+          title: 'Fee invoice ready',
+          message: `Your fee invoice for ${month} is ready — Rs. ${profile.monthlyTotal}, due ${dueDate || 'in 10 days'}.`,
+          link: '/portal/fees',
+          referenceType: 'FEE_INVOICE',
+          referenceId: invoice.id,
+        });
+      } catch (err) {
+        console.error('Portal notification failed:', (err as Error).message);
+      }
+
+      if (s.guardianPhone) {
+        try {
+          await this.sms.sendFeeReminder(s.name, s.guardianPhone, profile.monthlyTotal, month, company?.name);
+        } catch (err) {
+          console.error('Fee-ready SMS failed:', (err as Error).message);
+        }
+      }
     }
 
     return { created, skippedExisting, skippedEmpty, students: students.length, createdDetails };
@@ -487,6 +514,11 @@ export class SchoolFinanceService {
     const newPaid = round2(Number(invoice.paidAmount) + amount);
     const status = newPaid >= Number(invoice.totalAmount) ? 'PAID' : 'PARTIAL';
 
+    // Every fee payment gets a Transaction row, regardless of method — so it
+    // shows up on the Transactions page without anyone having to dig into a
+    // Ledger system account to confirm a payment actually happened. Only a
+    // real linked bank account's balance moves; Cash and unsettled wallet
+    // payments still get a Transaction, just with no bankAccountId attached.
     const payment = await this.prisma.$transaction(async (tx) => {
       const created = await tx.feePayment.create({
         data: { companyId, invoiceId, receiptNo, amount, method, bankAccountId: bankAccount?.id, notes: body.notes || null },
@@ -497,21 +529,21 @@ export class SchoolFinanceService {
       });
       if (bankAccount) {
         await tx.bankAccount.update({ where: { id: bankAccount.id }, data: { currentBalance: { increment: amount } } });
-        await tx.transaction.create({
-          data: {
-            companyId,
-            bankAccountId: bankAccount.id,
-            dateAd: new Date(),
-            type: (method === 'BANK' ? 'BANK' : 'QR') as any,
-            category: 'INCOME' as any,
-            amount,
-            description: `Fee payment — ${invoice.student?.name ?? 'Student'} (Invoice ${invoice.month})`,
-            referenceType: 'FEE_PAYMENT',
-            referenceId: created.id,
-            status: 'COMPLETED' as any,
-          },
-        });
       }
+      await tx.transaction.create({
+        data: {
+          companyId,
+          bankAccountId: bankAccount?.id,
+          dateAd: new Date(),
+          type: (method === 'CASH' ? 'CASH' : bankAccount ? 'BANK' : 'WALLET') as any,
+          category: 'INCOME' as any,
+          amount,
+          description: `Fee payment — ${invoice.student?.name ?? 'Student'} (Invoice ${invoice.month})`,
+          referenceType: 'FEE_PAYMENT',
+          referenceId: created.id,
+          status: 'COMPLETED' as any,
+        },
+      });
       return created;
     });
 
@@ -576,7 +608,20 @@ export class SchoolFinanceService {
     });
     if (!payment) return;
 
-    const drAccountName = payment.method === 'CASH' ? 'Cash in Hand' : 'Bank Account';
+    // Cash is Cash. A real linked bank account (BANK, or ESEWA/KHALTI already
+    // settled to one) is genuinely "Bank Account" money. An ESEWA/KHALTI
+    // payment with no bank account is still sitting as wallet balance — not
+    // the same pool of money as a bank account — so it gets its own account
+    // instead of being mislabeled as "Bank Account".
+    const drAccountName = payment.method === 'CASH'
+      ? 'Cash in Hand'
+      : payment.bankAccountId
+        ? 'Bank Account'
+        : payment.method === 'ESEWA'
+          ? 'eSewa Wallet'
+          : payment.method === 'KHALTI'
+            ? 'Khalti Wallet'
+            : 'Bank Account';
     const desc = `Fee receipt ${payment.receiptNo} — ${studentName} (${payment.invoice.month})`;
 
     const [drAccount, receivable] = await Promise.all([

@@ -8,7 +8,7 @@ import { Plus, Printer, Share2, Save, X, Minus, Eye, EyeOff } from 'lucide-react
 import { formatDate } from '@/lib/utils';
 import DataTable from '../shared/DataTable';
 
-export default function FloatingAccountDetail({ account, entries, onClose, onNewEntry, showNewEntry, setShowNewEntry, newEntry, setNewEntry, createEntry, allAccounts = [], onToggleHidden }) {
+export default function FloatingAccountDetail({ account, entries, onClose, showNewEntry, setShowNewEntry, newEntry, setNewEntry, createEntry, allAccounts = [], onToggleHidden }) {
   const { t } = useTranslation();
   const [pos, setPos] = useState({ x: window.innerWidth / 2 - 480, y: 60 });
   const [minimized, setMinimized] = useState(false);

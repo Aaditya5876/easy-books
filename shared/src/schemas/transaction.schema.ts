@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-export const TransactionTypeEnum = z.enum(['CASH', 'BANK', 'QR', 'CHEQUE', 'CREDIT']);
+export const TransactionTypeEnum = z.enum(['CASH', 'BANK', 'WALLET', 'CHEQUE', 'CREDIT']);
 export const TransactionCategoryEnum = z.enum(['INCOME', 'EXPENSE', 'TRANSFER', 'INVESTMENT', 'HAND_OUTS']);
 export const TransactionStatusEnum = z.enum(['PENDING', 'COMPLETED', 'CANCELLED']);
 

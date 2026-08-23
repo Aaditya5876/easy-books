@@ -55,7 +55,7 @@ enum PaymentMethod {
 enum TransactionType {
   CASH
   BANK
-  QR
+  WALLET // eSewa, Khalti, or any other digital wallet not yet settled to a bank account
   CHEQUE
   CREDIT
 }
@@ -278,6 +278,7 @@ model Company {
   studentScholarships  StudentScholarship[]
   feePackages          FeePackage[]
   notifications        Notification[]
+  portalNotifications  PortalNotification[]
 
   @@map("companies")
 }
@@ -461,6 +462,7 @@ model BankAccount {
   branch         String?
   currentBalance Decimal  @default(0) @db.Decimal(14, 2)
   portalUrl      String?
+  qrCodeUrl      String? // scan-to-pay QR image (eSewa/Khalti/bank QR) shown to payers, e.g. in the parent portal
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
@@ -1065,17 +1067,40 @@ model Student {
   packageId String?
   package   FeePackage? @relation(fields: [packageId], references: [id])
 
-  feeInvoices        FeeInvoice[]
-  examResults        ExamResult[]
-  studentAttendances StudentAttendance[]
-  bookIssues         BookIssue[]
-  hostelAllocations  HostelAllocation[]
-  studentTransports  StudentTransport[]
-  portalUsers        PortalUser[]
-  scholarships       StudentScholarship[]
+  feeInvoices          FeeInvoice[]
+  examResults          ExamResult[]
+  studentAttendances   StudentAttendance[]
+  bookIssues           BookIssue[]
+  hostelAllocations    HostelAllocation[]
+  studentTransports    StudentTransport[]
+  portalUsers          PortalUser[]
+  scholarships         StudentScholarship[]
+  portalNotifications  PortalNotification[]
 
   @@unique([companyId, rollNumber])
   @@map("students")
+}
+
+// Parent/student-portal-facing notifications — separate from the staff
+// `Notification` model (that one is keyed to User, portal users aren't Users).
+// Free to create — no SMS cost — so this is the "always on" channel; SMS is
+// the opt-in-cost channel for the same events (see SchoolFinanceService.billingRun).
+model PortalNotification {
+  id            String   @id @default(uuid())
+  companyId     String
+  company       Company  @relation(fields: [companyId], references: [id])
+  studentId     String
+  student       Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  title         String
+  message       String
+  link          String?
+  referenceType String?
+  referenceId   String?
+  isRead        Boolean  @default(false)
+  createdAt     DateTime @default(now())
+
+  @@index([studentId, isRead])
+  @@map("portal_notifications")
 }
 
 model Subject {

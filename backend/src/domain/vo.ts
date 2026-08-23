@@ -30,14 +30,14 @@ export enum PaymentMethod {
   CASH = 'CASH',
   BANK_TRANSFER = 'BANK_TRANSFER',
   CHEQUE = 'CHEQUE',
-  QR = 'QR',
+  WALLET = 'WALLET',
   CREDIT = 'CREDIT',
 }
 
 export enum TransactionType {
   CASH = 'CASH',
   BANK = 'BANK',
-  QR = 'QR',
+  WALLET = 'WALLET',
   CHEQUE = 'CHEQUE',
   CREDIT = 'CREDIT',
 }

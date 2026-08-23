@@ -17,7 +17,7 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
   DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { getActiveCompanyId, setActiveCompanyId } from '@/lib/companyContext';
 import { getTodayBS } from '@/lib/nepaliDate';
@@ -91,20 +91,20 @@ export default function TopBar({ onMobileMenuToggle, onToolOpen }) {
       ]);
       setNotifications(listRes?.data?.items ?? []);
       setUnreadCount(countRes?.data ?? 0);
-    } catch (_) {}
+    } catch {}
     setNotifLoading(false);
   }
 
   async function markNotificationRead(id) {
     setNotifications(ns => ns.map(n => n.id === id ? { ...n, isRead: true } : n));
     setUnreadCount(c => Math.max(0, c - 1));
-    try { await notificationsApi.markRead(id); } catch (_) {}
+    try { await notificationsApi.markRead(id); } catch {}
   }
 
   async function markAllNotificationsRead() {
     setNotifications(ns => ns.map(n => ({ ...n, isRead: true })));
     setUnreadCount(0);
-    try { await notificationsApi.markAllRead(); } catch (_) {}
+    try { await notificationsApi.markAllRead(); } catch {}
   }
 
   function handleNotificationClick(n) {
@@ -234,12 +234,18 @@ export default function TopBar({ onMobileMenuToggle, onToolOpen }) {
             <DropdownMenuItem onClick={() => onToolOpen?.('calculator')}>
               <Calculator className="w-4 h-4 mr-2" />Calculator
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => onToolOpen?.('currency')}>
-              <RefreshCw className="w-4 h-4 mr-2" />Currency Converter
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => onToolOpen?.('calendar')}>
-              <CalendarDays className="w-4 h-4 mr-2" />Calendar
-            </DropdownMenuItem>
+            {/* Currency Converter and generic Calendar are business-only tools —
+                schools have their own dedicated Calendar and Events module. */}
+            {activeCompany?.businessType !== 'SCHOOL' && (
+              <>
+                <DropdownMenuItem onClick={() => onToolOpen?.('currency')}>
+                  <RefreshCw className="w-4 h-4 mr-2" />Currency Converter
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => onToolOpen?.('calendar')}>
+                  <CalendarDays className="w-4 h-4 mr-2" />Calendar
+                </DropdownMenuItem>
+              </>
+            )}
           </DropdownMenuContent>
         </DropdownMenu>
 
@@ -473,6 +479,13 @@ export default function TopBar({ onMobileMenuToggle, onToolOpen }) {
             <p className="text-sm text-muted-foreground">{autoDetail?.message}</p>
           )}
         </div>
+        {autoDetail?.link && (
+          <DialogFooter>
+            <Button onClick={() => { navigate(autoDetail.link); setAutoDetail(null); }}>
+              Go to related page
+            </Button>
+          </DialogFooter>
+        )}
       </DialogContent>
     </Dialog>
     </>

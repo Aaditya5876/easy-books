@@ -110,15 +110,6 @@ const remarkColors = {
   Billed:      'bg-purple-100 text-purple-700',
 };
 
-// ─── Small helper: section divider label ─────────────────────────────────────
-function SectionLabel({ children }) {
-  return (
-    <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground border-b pb-1 mt-1">
-      {children}
-    </h4>
-  );
-}
-
 // ─── Main component ───────────────────────────────────────────────────────────
 export default function Memo() {
   const { t } = useTranslation();

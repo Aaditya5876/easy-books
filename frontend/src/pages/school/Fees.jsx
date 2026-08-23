@@ -2,7 +2,7 @@ import { useState, useEffect, Fragment } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, Pencil, Trash2, DollarSign, CheckCircle, Printer, Users, Sparkles, ChevronDown, ChevronRight, ChevronLeft, Receipt, Search } from 'lucide-react';
-import { feesApi, classesApi, aiApi, schoolFinanceApi, inventoryApi, bankAccountApi } from '@/api';
+import { feesApi, classesApi, schoolFinanceApi, inventoryApi, bankAccountApi } from '@/api';
 import StudentFeeProfileTab from './fees/StudentFeeProfileTab';
 import FeeHeadsTab from './fees/FeeHeadsTab';
 import FeePackagesTab from './fees/FeePackagesTab';
@@ -352,7 +352,7 @@ let rowSeq = 0;
 const newFeeRow = () => ({ key: ++rowSeq, kind: 'FEE', description: '', amount: '', feeHeadId: '' });
 const newItemRow = () => ({ key: ++rowSeq, kind: 'ITEM', inventoryItemId: '', quantity: '1', description: '' });
 
-function NewInvoiceDialog({ open, onClose, classes, companyId }) {
+function NewInvoiceDialog({ open, onClose, companyId }) {
   const { t } = useTranslation();
   const qc = useQueryClient();
   const [studentId, setStudentId] = useState('');
@@ -499,87 +499,6 @@ function NewInvoiceDialog({ open, onClose, classes, companyId }) {
             <Button type="submit" disabled={save.isPending}>{save.isPending ? t('fees.creating', { defaultValue: 'Creating…' }) : t('fees.createInvoice', { defaultValue: 'Create Invoice' })}</Button>
           </DialogFooter>
         </form>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-// ── Bulk Invoice Dialog ───────────────────────────────────────────────────────
-
-function BulkInvoiceDialog({ open, onClose, classes, companyId }) {
-  const { t } = useTranslation();
-  const qc = useQueryClient();
-  const [classId, setClassId] = useState('');
-  const [month, setMonth] = useState('');
-  const [selectedStructures, setSelectedStructures] = useState([]);
-
-  const { data: structures = [] } = useQuery({
-    queryKey: ['fee-structures', companyId, classId],
-    queryFn: () => feesApi.listStructures(classId || undefined).then(r => r.data),
-    enabled: !!companyId,
-  });
-
-  const generate = useMutation({
-    mutationFn: () => feesApi.generateBulk({ companyId, classId, month, feeStructureIds: selectedStructures }),
-    onSuccess: (r) => {
-      qc.invalidateQueries({ queryKey: ['fee-invoices'] });
-      qc.invalidateQueries({ queryKey: ['school-dashboard'] });
-      toast.success(t('fees.bulkCreatedResult', { defaultValue: 'Created {{created}} invoices. {{skipped}} already existed.', created: r.data.created, skipped: r.data.skipped }));
-      onClose();
-    },
-    onError: (e) => toast.error(e.response?.data?.message || t('fees.failedToGenerateInvoices', { defaultValue: 'Failed to generate invoices' })),
-  });
-
-  const toggleStructure = (id) => setSelectedStructures(p => p.includes(id) ? p.filter(s => s !== id) : [...p, id]);
-
-  return (
-    <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-md">
-        <DialogHeader><DialogTitle>{t('fees.generateBulkInvoices', { defaultValue: 'Generate Bulk Invoices' })}</DialogTitle></DialogHeader>
-        <div className="space-y-4 pt-2">
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1">
-              <Label>{t('fees.classRequiredLabel', { defaultValue: 'Class *' })}</Label>
-              <select className="w-full border rounded-md px-3 py-2 text-sm bg-background"
-                value={classId} onChange={e => setClassId(e.target.value)}>
-                <option value="">{t('fees.selectEllipsis', { defaultValue: 'Select…' })}</option>
-                {classes.map(c => <option key={c.id} value={c.id}>{c.name}{c.section ? ` (${c.section})` : ''}</option>)}
-              </select>
-            </div>
-            <div className="space-y-1">
-              <Label>{t('fees.monthPeriodLabel', { defaultValue: 'Month / Period *' })}</Label>
-              <Input placeholder={t('fees.monthPlaceholder', { defaultValue: 'e.g. 2081-Bhadra' })} value={month} onChange={e => setMonth(e.target.value)} />
-            </div>
-          </div>
-          <div className="space-y-1">
-            <Label>{t('fees.feeTypesToInclude', { defaultValue: 'Fee Types to Include *' })}</Label>
-            <div className="border rounded-md divide-y max-h-48 overflow-y-auto">
-              {structures.length === 0 ? (
-                <div className="px-3 py-4 text-sm text-muted-foreground text-center">{t('fees.noStructuresForClass', { defaultValue: 'No fee structures found for this class' })}</div>
-              ) : structures.map(s => (
-                <label key={s.id} className="flex items-center gap-3 px-3 py-2 hover:bg-muted cursor-pointer">
-                  <input type="checkbox" checked={selectedStructures.includes(s.id)} onChange={() => toggleStructure(s.id)} />
-                  <span className="flex-1 text-sm">{s.name}</span>
-                  <span className="text-sm font-medium">Rs. {Number(s.amount).toLocaleString('en-NP')}</span>
-                </label>
-              ))}
-            </div>
-          </div>
-          {selectedStructures.length > 0 && structures.filter(s => selectedStructures.includes(s.id)).length > 0 && (
-            <div className="text-sm bg-muted rounded-md px-3 py-2">
-              {t('fees.totalPerStudent', { defaultValue: 'Total per student:' })} <strong>Rs. {structures.filter(s => selectedStructures.includes(s.id)).reduce((sum, s) => sum + Number(s.amount), 0).toLocaleString('en-NP')}</strong>
-            </div>
-          )}
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose}>{t('fees.cancel', { defaultValue: 'Cancel' })}</Button>
-          <Button
-            onClick={() => generate.mutate()}
-            disabled={generate.isPending || !classId || !month || selectedStructures.length === 0}
-          >
-            {generate.isPending ? t('fees.generating', { defaultValue: 'Generating…' }) : t('fees.generateInvoices', { defaultValue: 'Generate Invoices' })}
-          </Button>
-        </DialogFooter>
       </DialogContent>
     </Dialog>
   );
@@ -969,7 +888,6 @@ export default function Fees() {
         <NewInvoiceDialog
           open={invoiceDialog}
           onClose={() => setInvoiceDialog(false)}
-          classes={classes}
           companyId={companyId}
         />
       )}

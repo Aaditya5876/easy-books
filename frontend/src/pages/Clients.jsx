@@ -10,7 +10,6 @@ import { Input } from "@/components/ui/input";
 import { SmartNumberInput } from "@/components/ui/smart-number-input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Badge } from "@/components/ui/badge";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter
 } from "@/components/ui/dialog";
@@ -20,7 +19,7 @@ import {
 import PageLoader from '../components/PageLoader';
 import EmptyState from '../components/EmptyState';
 import {
-  UserCheck, Building2, Phone, Mail, MapPin, Hash, Wallet, CreditCard, FileText, Truck, User, Upload
+  UserCheck, Building2, Phone, Mail, MapPin, Hash, FileText, User, Upload
 } from 'lucide-react';
 import { useRole } from "@/lib/useRole";
 import BulkImportDialog from '../components/shared/BulkImportDialog';

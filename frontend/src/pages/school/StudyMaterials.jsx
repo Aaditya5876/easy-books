@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Trash2, FileText, Download, BookOpen, Filter } from 'lucide-react';
+import { Plus, Trash2, Download, BookOpen } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { studyMaterialsApi, classesApi, subjectsApi, uploadApi } from '@/api';
 import apiClient from '@/api/client';
@@ -64,7 +64,7 @@ function UploadDialog({ open, onClose, classes, subjects, companyId }) {
       const fileUrl = res.data?.url || res.data?.fileUrl || res.data?.path;
       if (!fileUrl) throw new Error('No URL returned from upload');
       save.mutate({ ...form, companyId, fileUrl, fileType: getFileType(fileUrl) });
-    } catch (err) {
+    } catch {
       toast.error(t('materials.fileUploadFailed', { defaultValue: 'File upload failed' }));
     } finally {
       setUploading(false);

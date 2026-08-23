@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { api } from '@/api/adapter';
+import { uploadApi } from '@/api';
 import { getActiveCompanyId } from '@/lib/companyContext';
 import { adToBs } from '@/lib/nepaliDate';
 import { formatDate } from '@/lib/utils';
@@ -38,7 +39,7 @@ const PAY_METHODS = [
   { id: 'cash',   emoji: '💵' },
   { id: 'bank',   emoji: '🏦' },
   { id: 'cheque', emoji: '📋' },
-  { id: 'qr',     emoji: '📱' },
+  { id: 'wallet', emoji: '📱' },
   { id: 'credit', emoji: '🧾' },
 ];
 
@@ -47,33 +48,6 @@ const PAY_METHODS = [
 // logic below — these two helpers are the only place the wire format is converted.
 const toApiEnum = (v) => (v || '').toUpperCase().replace(/-/g, '_');
 const fromApiEnum = (v) => (v || '').toLowerCase().replace(/_/g, '-');
-
-// The "other side" of every manual transaction's double entry is resolved automatically
-// from the payment method instead of asking the user to pick a ledger account for it —
-// these are the same system account names LedgerPostingService auto-creates for Sales/
-// Purchase postings, so a Transactions-page entry lands on the exact same accounts.
-const SYSTEM_ACCOUNT_DEFS = {
-  cash:            { name: 'Cash in Hand',        type: 'ASSET' },
-  bank:            { name: 'Bank Account',        type: 'ASSET' },
-  payable:         { name: 'Accounts Payable',    type: 'LIABILITY' },
-  receivable:      { name: 'Accounts Receivable', type: 'ASSET' },
-  salesRevenue:    { name: 'Sales Revenue',       type: 'INCOME' },
-  purchaseExpense: { name: 'Purchase Expenses',   type: 'EXPENSE' },
-};
-
-function findSystemAccount(accounts, key) {
-  const name = SYSTEM_ACCOUNT_DEFS[key].name.toLowerCase();
-  return accounts.find(a => (a.account_name || a.accountName || '').toLowerCase() === name);
-}
-
-// cash/bank/qr/cheque settle through Cash or Bank; credit settles later through the
-// income/expense category itself (Sales Revenue / Purchase Expenses), since the debt
-// side is what the user picks in the Ledger Account field for a credit entry.
-function counterAccountKey(payMethod, category) {
-  if (payMethod === 'cash') return 'cash';
-  if (payMethod === 'credit') return category === 'income' ? 'salesRevenue' : 'purchaseExpense';
-  return 'bank'; // bank, qr, cheque
-}
 
 // Cheques and credit entries aren't settled yet when recorded — default them to
 // Pending so they don't move Cash/Bank balances until marked Completed later.
@@ -104,9 +78,10 @@ export default function Transactions() {
   const [bankForm, setBankForm] = useState({
     bank_name: '', account_number: '', account_type: 'current',
     branch: '', current_balance: 0,
-    portal_url: '', portal_username: '', portal_password: '',
+    portal_url: '', portal_username: '', portal_password: '', qr_code_url: '',
   });
   const [showPassword, setShowPassword] = useState(false);
+  const [uploadingQr, setUploadingQr] = useState(false);
   const [form, setForm] = useState({
     account_type: 'purchase', category: 'expense', status: defaultStatusForMethod('cash'), amount: 0, description: '',
     bank_name: '', bank_account_number: '', cheque_number: '', cheque_date: '',
@@ -145,37 +120,32 @@ export default function Transactions() {
     setBankForm({
       bank_name: '', account_number: '', account_type: 'current',
       branch: '', current_balance: 0,
-      portal_url: '', portal_username: '', portal_password: '',
+      portal_url: '', portal_username: '', portal_password: '', qr_code_url: '',
     });
     setShowAddBank(false);
     setActiveBankId(acct.id);
     loadData();
   }
 
+  async function handleQrUpload(file) {
+    if (!file) return;
+    setUploadingQr(true);
+    try {
+      const res = await uploadApi.upload(file);
+      const url = res.data?.url;
+      if (!url) throw new Error('No URL returned from upload');
+      setBankForm(f => ({ ...f, qr_code_url: url }));
+    } catch (err) {
+      alert(err?.response?.data?.message || t('transactions.qrUploadFailed', { defaultValue: 'QR upload failed' }));
+    } finally {
+      setUploadingQr(false);
+    }
+  }
+
   async function deleteBankAccount(id) {
     await api.BankAccount.delete(id);
     setActiveBankId(null);
     loadData();
-  }
-
-  // Lazily creates whichever system ledger accounts (Cash in Hand, Bank Account,
-  // Accounts Payable/Receivable, Sales Revenue, Purchase Expenses) don't exist yet for
-  // this company, so the auto-resolved "other side" of an entry always has somewhere to post.
-  async function ensureSystemAccounts(accounts) {
-    const missing = Object.values(SYSTEM_ACCOUNT_DEFS).filter(
-      def => !accounts.some(a => (a.account_name || a.accountName || '').toLowerCase() === def.name.toLowerCase())
-    );
-    if (missing.length === 0) return accounts;
-    await Promise.all(missing.map(def => api.LedgerAccount.create({
-      company_id: companyId, account_name: def.name, account_type: def.type, opening_balance: 0,
-    })));
-    const refreshed = await api.LedgerAccount.filter({ company_id: companyId });
-    setLedgerAccounts(refreshed);
-    return refreshed;
-  }
-
-  function findLedgerAccountByType(accounts, type) {
-    return accounts.find(a => (a.account_type || a.accountType || '').toLowerCase() === type);
   }
 
   async function selectPayMethod(id) {
@@ -292,7 +262,7 @@ export default function Transactions() {
     .reduce((sum, t) => sum + (t.category === 'income' ? (t.amount || 0) : -(t.amount || 0)), 0);
   const bankTotal = bankAccounts.reduce((sum, b) => sum + (b.current_balance || 0), 0);
 
-  const typeIcons = { cash: Banknote, bank: CreditCard, qr: QrCode, cheque: FileCheck, credit: Receipt };
+  const typeIcons = { cash: Banknote, bank: CreditCard, wallet: QrCode, cheque: FileCheck, credit: Receipt };
 
   // Display-label lookups for values that come from the wire-format enums (see
   // toApiEnum/fromApiEnum above) — the enums themselves stay untranslated since
@@ -300,7 +270,7 @@ export default function Transactions() {
   const tabLabels = {
     cash: t('transactions.tabCash', { defaultValue: 'Cash' }),
     bank: t('transactions.tabBank', { defaultValue: 'Bank' }),
-    qr: t('transactions.tabQr', { defaultValue: 'QR' }),
+    wallet: t('transactions.tabWallet', { defaultValue: 'Wallet' }),
     cheque: t('transactions.tabCheque', { defaultValue: 'Cheque' }),
     credit: t('transactions.tabCredit', { defaultValue: 'Credit' }),
   };
@@ -308,7 +278,7 @@ export default function Transactions() {
     cash: t('transactions.payMethodCash', { defaultValue: 'Cash' }),
     bank: t('transactions.payMethodBank', { defaultValue: 'Bank Transfer' }),
     cheque: t('transactions.payMethodCheque', { defaultValue: 'Cheque' }),
-    qr: t('transactions.payMethodQr', { defaultValue: 'QR / UPI' }),
+    wallet: t('transactions.payMethodWallet', { defaultValue: 'Wallet (eSewa / Khalti)' }),
     credit: t('transactions.payMethodCredit', { defaultValue: 'Credit' }),
   };
   const accountTypeChipLabels = {
@@ -443,7 +413,7 @@ export default function Transactions() {
           selectPayMethod(
             activeTab === 'bank' ? 'bank' :
             activeTab === 'cheque' ? 'cheque' :
-            activeTab === 'qr' ? 'qr' :
+            activeTab === 'wallet' ? 'wallet' :
             activeTab === 'credit' ? 'credit' : 'cash'
           );
           setShowNew(true);
@@ -493,7 +463,7 @@ export default function Transactions() {
           <TabsTrigger value="all">{t('transactions.tabAll', { defaultValue: 'All' })}</TabsTrigger>
           <TabsTrigger value="cash">{tabLabels.cash}</TabsTrigger>
           <TabsTrigger value="bank">{tabLabels.bank}</TabsTrigger>
-          <TabsTrigger value="qr">{tabLabels.qr}</TabsTrigger>
+          <TabsTrigger value="wallet">{tabLabels.wallet}</TabsTrigger>
           <TabsTrigger value="cheque">{tabLabels.cheque}</TabsTrigger>
           <TabsTrigger value="credit">{tabLabels.credit}</TabsTrigger>
         </TabsList>
@@ -645,6 +615,47 @@ export default function Transactions() {
                           value={bankForm.current_balance}
                           onChange={e => setBankForm({ ...bankForm, current_balance: parseFloat(e.target.value) || 0 })}
                         />
+                      </div>
+                    </div>
+
+                    {/* Payment QR code — shown to payers (e.g. parent portal) to scan-and-pay */}
+                    <div>
+                      <Label className="text-xs font-medium">{t('transactions.paymentQrCode', { defaultValue: 'Payment QR Code' })}</Label>
+                      <div className="mt-1 flex items-center gap-3">
+                        {bankForm.qr_code_url ? (
+                          <img src={bankForm.qr_code_url} alt="Payment QR" className="w-16 h-16 rounded-md border border-border object-cover" />
+                        ) : (
+                          <div className="w-16 h-16 rounded-md border border-dashed border-border flex items-center justify-center text-muted-foreground shrink-0">
+                            <QrCode className="w-6 h-6" />
+                          </div>
+                        )}
+                        <div className="flex-1">
+                          <input
+                            type="file"
+                            accept="image/*"
+                            id="bank-qr-upload"
+                            className="hidden"
+                            onChange={e => handleQrUpload(e.target.files?.[0])}
+                          />
+                          <label htmlFor="bank-qr-upload">
+                            <Button type="button" variant="outline" size="sm" disabled={uploadingQr} asChild>
+                              <span>{uploadingQr
+                                ? t('transactions.uploadingEllipsis', { defaultValue: 'Uploading…' })
+                                : bankForm.qr_code_url
+                                  ? t('transactions.replaceQrCode', { defaultValue: 'Replace QR' })
+                                  : t('transactions.uploadQrCode', { defaultValue: 'Upload QR image' })}</span>
+                            </Button>
+                          </label>
+                          {bankForm.qr_code_url && (
+                            <button
+                              type="button"
+                              onClick={() => setBankForm({ ...bankForm, qr_code_url: '' })}
+                              className="ml-2 text-xs text-muted-foreground hover:text-destructive"
+                            >
+                              {t('transactions.remove', { defaultValue: 'Remove' })}
+                            </button>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </motion.div>
@@ -869,9 +880,10 @@ export default function Transactions() {
               </div>
 
               {/* Debit / Credit — every transaction posts a balanced double-entry pair.
-                  The "other side" (Cash/Bank, or Sales Revenue/Purchase Expenses for
-                  Credit) is resolved automatically from the Payment Method — see
-                  counterAccountKey() — so only the category/debt side needs picking here. */}
+                  The "other side" (Cash/Bank/Wallet, or Sales Revenue/Purchase Expenses
+                  for Credit) is resolved automatically server-side from the Payment
+                  Method — see TransactionServiceImpl.resolveTransactionAccounts on the
+                  backend — so only the category/debt side needs picking here. */}
               <div className="pt-1 border-t">
                 <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground pt-2 pb-1">{t('transactions.debitAndCredit', { defaultValue: 'Debit & Credit' })}</p>
                 <p className="text-xs text-muted-foreground mb-2">{debitCreditSummary}</p>
@@ -986,7 +998,7 @@ export default function Transactions() {
               </div>
 
               {/* Conditional fields */}
-              {(payMethod === 'bank' || payMethod === 'qr') && (
+              {(payMethod === 'bank' || payMethod === 'wallet') && (
                 <div className="space-y-3 pt-1">
                   {bankAccounts.length > 0 && (
                     <div>

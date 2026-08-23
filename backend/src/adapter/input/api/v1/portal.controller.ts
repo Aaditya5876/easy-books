@@ -1,9 +1,10 @@
-import { Controller, Post, Get, Body, Req, UseGuards, Query, Param } from '@nestjs/common';
+import { Controller, Post, Get, Patch, Body, Req, UseGuards, Query, Param } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { PortalUserType } from '@prisma/client';
 import { Public } from '../../../../modules/decorators/public.decorator';
 import { PortalService } from '../../../../application/services/portal.service';
 import { PaymentService } from '../../../../application/services/payment.service';
+import { PortalNotificationService } from '../../../../application/services/portal-notification.service';
 import { PortalGuard } from '../../../../modules/guards/portal.guard';
 import { PortalRoles } from '../../../../modules/decorators/portal-roles.decorator';
 import { Roles } from '../../../../modules/decorators/roles.decorator';
@@ -14,6 +15,7 @@ export class PortalController {
   constructor(
     private readonly portalService: PortalService,
     private readonly paymentService: PaymentService,
+    private readonly portalNotifications: PortalNotificationService,
   ) {}
 
   @Public()
@@ -52,6 +54,13 @@ export class PortalController {
   @Get('fees')
   fees(@Req() req: any) {
     return this.portalService.getFees(req.portalUser.studentId, req.portalUser.companyId);
+  }
+
+  @Public()
+  @UseGuards(PortalGuard)
+  @Get('payment-qr-codes')
+  paymentQrCodes(@Req() req: any) {
+    return this.portalService.getPaymentQrCodes(req.portalUser.companyId);
   }
 
   @Public()
@@ -108,6 +117,34 @@ export class PortalController {
   @Get('events')
   events(@Req() req: any) {
     return this.portalService.getEvents(req.portalUser.companyId);
+  }
+
+  @Public()
+  @UseGuards(PortalGuard)
+  @Get('notifications')
+  notifications(@Req() req: any) {
+    return this.portalNotifications.listForStudent(req.portalUser.studentId, req.portalUser.companyId);
+  }
+
+  @Public()
+  @UseGuards(PortalGuard)
+  @Get('notifications/unread-count')
+  notificationsUnreadCount(@Req() req: any) {
+    return this.portalNotifications.getUnreadCount(req.portalUser.studentId, req.portalUser.companyId);
+  }
+
+  @Public()
+  @UseGuards(PortalGuard)
+  @Patch('notifications/:id/read')
+  markNotificationRead(@Param('id') id: string, @Req() req: any) {
+    return this.portalNotifications.markRead(id, req.portalUser.studentId);
+  }
+
+  @Public()
+  @UseGuards(PortalGuard)
+  @Patch('notifications/mark-all-read')
+  markAllNotificationsRead(@Req() req: any) {
+    return this.portalNotifications.markAllRead(req.portalUser.studentId, req.portalUser.companyId);
   }
 
   // ── Payment — eSewa ────────────────────────────────────────────────────────

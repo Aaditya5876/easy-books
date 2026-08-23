@@ -8,12 +8,11 @@ import {
 import { getActiveCompanyId } from '@/lib/companyContext';
 import {
   TrendingUp, TrendingDown, ShoppingCart, Wallet, Building2,
-  Package, AlertTriangle, CheckCircle2, Clock, XCircle,
+  Package, CheckCircle2,
   ChevronDown, ChevronUp, BarChart2, ClipboardList,
   Activity, FileText, CreditCard, AlertCircle,
 } from 'lucide-react';
 import PageLoader from '../components/PageLoader';
-import { Button } from '@/components/ui/button';
 import {
   BarChart, Bar, AreaChart, Area,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,

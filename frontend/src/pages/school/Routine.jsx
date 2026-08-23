@@ -154,7 +154,7 @@ export default function Routine() {
     addClass.mutate();
   };
 
-  const { data: entries = [], isLoading } = useQuery({
+  const { data: entries = [] } = useQuery({
     queryKey: ['timetable', classId],
     queryFn: () => timetableApi.get(classId).then(r => r.data),
     enabled: !!classId,
@@ -170,8 +170,6 @@ export default function Routine() {
   const grid = {};
   WORK_DAYS.forEach(d => { grid[d] = {}; });
   entries.forEach(e => { grid[e.dayOfWeek] = { ...grid[e.dayOfWeek], [e.periodNumber]: e }; });
-
-  const selectedClass = classes.find(c => c.id === classId);
 
   return (
     <div className="p-6 space-y-6">

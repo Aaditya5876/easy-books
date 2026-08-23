@@ -3,8 +3,6 @@ import { useTranslation } from 'react-i18next';
 import { api } from '@/api/adapter';
 import { ledgerApi } from '@/api';
 import { getActiveCompanyId } from '@/lib/companyContext';
-import { adToBs } from '@/lib/nepaliDate';
-import { formatDate } from '@/lib/utils';
 import PageHeader from '../components/shared/PageHeader';
 import DataTable from '../components/shared/DataTable';
 import PageLoader from '../components/PageLoader';
@@ -16,7 +14,7 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter
 } from "@/components/ui/dialog";
-import { BookOpen, Plus, User, Phone, Hash, MapPin, FileText, Wallet, EyeOff, Eye, Lock, Trash2 } from 'lucide-react';
+import { BookOpen, Plus, User, Phone, Hash, MapPin, FileText, Wallet, EyeOff, Eye, Lock } from 'lucide-react';
 import { motion } from 'framer-motion';
 import FloatingAccountDetail from '../components/ledger/FloatingAccountDetail';
 import EmptyState from '../components/EmptyState';
@@ -242,23 +240,36 @@ export default function Ledger() {
     )},
   ];
 
-  const entryColumns = [
-    { key: 'date_ad', label: t('ledger.dateAD', { defaultValue: 'Date (AD)' }), render: (row) => row.date_ad ? formatDate(row.date_ad) : '-' },
-    { key: 'date_bs', label: t('ledger.dateBS', { defaultValue: 'Date (BS)' }), render: (row) => row.date_bs || '-' },
-    { key: 'description', label: t('ledger.description', { defaultValue: 'Description' }) },
-    { key: 'reference_id', label: t('ledger.referenceNo', { defaultValue: 'Reference No.' }), render: (row) => (
-      row.reference_id ? <span className="text-xs text-muted-foreground font-mono">{row.reference_id}</span> : null
+  // System accounts never have a contact/phone (they're not party accounts) —
+  // showing those two always-empty columns was just noise. Simpler: name + balance.
+  const systemAccountColumns = [
+    { key: 'account_name', label: t('ledger.accountName', { defaultValue: 'Account Name' }), filterValue: colFilters.account_name, onFilterChange: v => setCol('account_name', v), render: (row) => (
+      <span className="font-medium text-foreground">{row.account_name}</span>
     )},
-    { key: 'debit', label: t('ledger.debit', { defaultValue: 'Debit' }), render: (row) => (
-      row.debit ? <span className="text-red-600 font-mono">NPR {row.debit.toLocaleString()}</span> : null
-    )},
-    { key: 'credit', label: t('ledger.credit', { defaultValue: 'Credit' }), render: (row) => (
-      row.credit ? <span className="text-green-600 font-mono">NPR {row.credit.toLocaleString()}</span> : null
-    )},
-    { key: 'balance', label: t('ledger.balance', { defaultValue: 'Balance' }), render: (row) => (
-      <span className="font-mono font-medium">NPR {Math.abs(row.balance || 0).toLocaleString()}</span>
+    { key: 'current_balance', label: t('ledger.balance', { defaultValue: 'Balance' }), render: (row) => (
+      <span className={row.current_balance >= 0 ? 'text-green-600 font-semibold' : 'text-red-600 font-semibold'}>
+        NPR {(row.current_balance || 0).toLocaleString()}
+      </span>
     )},
   ];
+
+  // A flat list of ~20 auto-created accounts is overwhelming — group them the
+  // way an accountant actually thinks about a chart of accounts.
+  const ACCOUNT_TYPE_ORDER = ['ASSET', 'LIABILITY', 'EQUITY', 'INCOME', 'EXPENSE'];
+  const ACCOUNT_TYPE_LABELS = {
+    ASSET: t('ledger.typeAssets', { defaultValue: 'Assets' }),
+    LIABILITY: t('ledger.typeLiabilities', { defaultValue: 'Liabilities' }),
+    EQUITY: t('ledger.typeEquity', { defaultValue: 'Equity' }),
+    INCOME: t('ledger.typeIncome', { defaultValue: 'Income' }),
+    EXPENSE: t('ledger.typeExpenses', { defaultValue: 'Expenses' }),
+  };
+  const systemAccountGroups = ACCOUNT_TYPE_ORDER
+    .map(type => ({
+      type,
+      label: ACCOUNT_TYPE_LABELS[type],
+      accounts: filteredAccounts.filter(a => (a.account_type || '').toUpperCase() === type),
+    }))
+    .filter(g => g.accounts.length > 0);
 
   if (loading) return <PageLoader />;
 
@@ -309,6 +320,24 @@ export default function Ledger() {
               }}>
                 <Lock className="w-3.5 h-3.5" /> {t('ledger.searchHiddenAccounts', { defaultValue: 'Search Hidden Accounts' })}
               </Button>
+            </div>
+          ) : activeTab === 'system' ? (
+            <div className="space-y-5">
+              {systemAccountGroups.map(group => (
+                <div key={group.type}>
+                  <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2 px-1">
+                    {group.label} <span className="text-muted-foreground/60 font-normal normal-case">({group.accounts.length})</span>
+                  </h3>
+                  <DataTable
+                    columns={systemAccountColumns}
+                    data={group.accounts}
+                    selectedId={selectedAccount?.id}
+                    onRowClick={(row) => setSelectedAccount(row)}
+                    onRowDoubleClick={(row) => setShowAccountDetail(row)}
+                    onRowContextMenu={isAdmin ? (row, e) => setContextMenu({ x: e.clientX, y: e.clientY, account: row }) : undefined}
+                  />
+                </div>
+              ))}
             </div>
           ) : (
             <DataTable
