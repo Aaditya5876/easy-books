@@ -325,17 +325,26 @@ export class SchoolFinanceService {
   // ── Billing Run ──────────────────────────────────────────────────────────────
   // Walks every active student's fee profile and creates line-itemed invoices.
 
-  async billingRun(companyId: string, month: string, classId?: string, dueDate?: string) {
-    if (!month?.trim()) throw new BadRequestException('Billing month is required');
+  // month is optional — when omitted (the Fee page no longer collects free-text
+  // month), it's derived from invoiceDate using the same BS year-month
+  // conversion the nightly cron already uses, so a manual run and an
+  // auto-billed run land in the same bucket and "already billed" dedup
+  // (below) works correctly regardless of which path created an invoice.
+  //
+  // autoRelease only ever comes from the nightly cron (ScheduledTasksService),
+  // gated by Company.autoInvoiceRelease — a human-triggered run (the Fee page
+  // button) always leaves invoices unreleased, requiring an explicit Release
+  // action (releaseInvoiceById/releaseBulk below).
+  async billingRun(companyId: string, month?: string, classId?: string, dueDate?: string, invoiceDate?: string, autoRelease = false) {
+    const resolvedMonth = month?.trim() || adToBs(invoiceDate ? new Date(invoiceDate) : new Date()).split('-').slice(0, 2).join('-');
 
     const students = await this.prisma.student.findMany({
       where: { companyId, status: 'ACTIVE', ...(classId ? { classId } : {}) },
       select: { id: true, name: true, guardianPhone: true },
     });
-    const company = await this.prisma.company.findUnique({ where: { id: companyId }, select: { name: true } });
 
     const existing = await this.prisma.feeInvoice.findMany({
-      where: { companyId, month, studentId: { in: students.map(s => s.id) } },
+      where: { companyId, month: resolvedMonth, studentId: { in: students.map(s => s.id) } },
       select: { studentId: true },
     });
     const alreadyBilled = new Set(existing.map(e => e.studentId));
@@ -354,9 +363,11 @@ export class SchoolFinanceService {
         data: {
           companyId,
           studentId: s.id,
-          month,
-          description: `Monthly fees — ${month}`,
+          invoiceNo: await this.nextInvoiceNo(companyId),
+          month: resolvedMonth,
+          description: `Monthly fees — ${resolvedMonth}`,
           totalAmount: profile.monthlyTotal,
+          invoiceDate: invoiceDate ? new Date(invoiceDate) : new Date(),
           dueDate: dueDate ? new Date(dueDate) : new Date(Date.now() + 10 * 86_400_000),
           status: 'PENDING',
           items: {
@@ -380,30 +391,70 @@ export class SchoolFinanceService {
       created++;
       createdDetails.push({ studentName: s.name, amount: profile.monthlyTotal });
 
-      // Free channel — always fires, no cost. SMS below is the paid channel,
-      // best-effort so a missing phone / SMS-provider hiccup never blocks billing.
-      try {
-        await this.portalNotifications.notifyStudent(companyId, s.id, {
-          title: 'Fee invoice ready',
-          message: `Your fee invoice for ${month} is ready — Rs. ${profile.monthlyTotal}, due ${dueDate || 'in 10 days'}.`,
-          link: '/portal/fees',
-          referenceType: 'FEE_INVOICE',
-          referenceId: invoice.id,
-        });
-      } catch (err) {
-        console.error('Portal notification failed:', (err as Error).message);
-      }
-
-      if (s.guardianPhone) {
-        try {
-          await this.sms.sendFeeReminder(s.name, s.guardianPhone, profile.monthlyTotal, month, company?.name);
-        } catch (err) {
-          console.error('Fee-ready SMS failed:', (err as Error).message);
-        }
+      if (autoRelease) {
+        await this.releaseInvoice(companyId, invoice.id);
       }
     }
 
     return { created, skippedExisting, skippedEmpty, students: students.length, createdDetails };
+  }
+
+  // ── Invoice Release ──────────────────────────────────────────────────────────
+  // Marks an invoice releasedAt=now and fires the same portal notification +
+  // SMS reminder that used to happen unconditionally at creation time. Portal
+  // visibility (PortalService.getFees) is gated on releasedAt, so an invoice a
+  // human hasn't released yet — or that auto-billing left unreleased because
+  // Company.autoInvoiceRelease is off — simply doesn't show up for the student.
+  private async releaseInvoice(companyId: string, invoiceId: string) {
+    const invoice = await this.prisma.feeInvoice.findFirst({
+      where: { id: invoiceId, companyId },
+      include: { student: { select: { id: true, name: true, guardianPhone: true } } },
+    });
+    if (!invoice || !invoice.student || invoice.releasedAt) return;
+
+    await this.prisma.feeInvoice.update({ where: { id: invoiceId }, data: { releasedAt: new Date() } });
+
+    const amount = Number(invoice.totalAmount);
+    const dueDateLabel = invoice.dueDate ? invoice.dueDate.toDateString() : 'in 10 days';
+
+    // Free channel — always fires, no cost. SMS below is the paid channel,
+    // best-effort so a missing phone / SMS-provider hiccup never blocks release.
+    try {
+      await this.portalNotifications.notifyStudent(companyId, invoice.student.id, {
+        title: 'Fee invoice ready',
+        message: `Your fee invoice for ${invoice.month} is ready — Rs. ${amount}, due ${dueDateLabel}.`,
+        link: '/portal/fees',
+        referenceType: 'FEE_INVOICE',
+        referenceId: invoice.id,
+      });
+    } catch (err) {
+      console.error('Portal notification failed:', (err as Error).message);
+    }
+
+    if (invoice.student.guardianPhone) {
+      try {
+        const company = await this.prisma.company.findUnique({ where: { id: companyId }, select: { name: true } });
+        await this.sms.sendFeeReminder(invoice.student.name, invoice.student.guardianPhone, amount, invoice.month, company?.name);
+      } catch (err) {
+        console.error('Fee-ready SMS failed:', (err as Error).message);
+      }
+    }
+  }
+
+  async releaseInvoiceById(companyId: string, invoiceId: string) {
+    const invoice = await this.prisma.feeInvoice.findFirst({ where: { id: invoiceId, companyId }, select: { id: true, releasedAt: true } });
+    if (!invoice) throw new NotFoundException('Invoice not found');
+    if (invoice.releasedAt) throw new BadRequestException('Invoice already released');
+    await this.releaseInvoice(companyId, invoiceId);
+    return { released: true };
+  }
+
+  async releaseBulk(companyId: string) {
+    const invoices = await this.prisma.feeInvoice.findMany({ where: { companyId, releasedAt: null }, select: { id: true } });
+    for (const inv of invoices) {
+      await this.releaseInvoice(companyId, inv.id);
+    }
+    return { released: invoices.length };
   }
 
   // The moment an invoice is generated (whether from a manual billing run or
@@ -428,7 +479,7 @@ export class SchoolFinanceService {
     const total = Number(invoice.totalAmount);
     if (total <= 0) return; // fully covered by scholarship — nothing to accrue
 
-    const dateAd = invoice.createdAt.toISOString();
+    const dateAd = invoice.invoiceDate.toISOString();
     const desc = `Fee billed — ${invoice.student?.name ?? 'Student'} (${invoice.month})`;
 
     // Net per income head — a scholarship line against a specific head reduces
@@ -463,6 +514,22 @@ export class SchoolFinanceService {
         });
       }
     });
+  }
+
+  // ── Invoice Numbering ────────────────────────────────────────────────────────
+
+  private async nextInvoiceNo(companyId: string): Promise<string> {
+    const bsYear = (adToBs(new Date()) || '').split('-')[0] || String(new Date().getFullYear());
+    const company = await this.prisma.company.findUnique({
+      where: { id: companyId },
+      select: { feeInvoiceSequence: true, feeInvoiceYear: true },
+    });
+    const seq = company?.feeInvoiceYear === bsYear ? (company.feeInvoiceSequence ?? 0) + 1 : 1;
+    await this.prisma.company.update({
+      where: { id: companyId },
+      data: { feeInvoiceSequence: seq, feeInvoiceYear: bsYear },
+    });
+    return `INV-${bsYear}-${String(seq).padStart(4, '0')}`;
   }
 
   // ── Payments & Receipts ──────────────────────────────────────────────────────
@@ -568,6 +635,18 @@ export class SchoolFinanceService {
       console.error('Notification dispatch failed:', (err as Error).message);
     }
 
+    try {
+      await this.portalNotifications.notifyStudent(companyId, invoice.studentId, {
+        title: 'Fee receipt ready',
+        message: `Payment of Rs. ${amount} received — Receipt ${payment.receiptNo}.`,
+        link: '/portal/fees',
+        referenceType: 'FEE_PAYMENT',
+        referenceId: payment.id,
+      });
+    } catch (err) {
+      console.error('Portal receipt notification failed:', (err as Error).message);
+    }
+
     return { ...payment, invoiceStatus: status };
   }
 
@@ -585,7 +664,12 @@ export class SchoolFinanceService {
         student: {
           include: { class: { select: { name: true, section: true } } },
         },
-        company: { select: { name: true, address: true, phone: true, email: true } },
+        company: {
+          select: {
+            name: true, address: true, phone: true, email: true,
+            bankAccounts: { where: { qrCodeUrl: { not: null } }, select: { bankName: true, accountNumber: true, qrCodeUrl: true } },
+          },
+        },
         items: { include: { feeHead: { select: { name: true } }, inventoryItem: { select: { itemName: true, unit: true } } } },
         payments: { orderBy: { paidAt: 'asc' } },
       },

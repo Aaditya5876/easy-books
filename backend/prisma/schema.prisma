@@ -217,6 +217,14 @@ model Company {
   sequenceFiscalYear String? // tracks fiscal year for sequence reset, e.g. "2081-82"
   feeReceiptSequence Int      @default(0)
   feeReceiptYear     String? // BS year the receipt sequence belongs to, e.g. "2083"
+  feeInvoiceSequence Int      @default(0)
+  feeInvoiceYear     String? // BS year the fee invoice sequence belongs to, e.g. "2083"
+  // Nightly 1AM automation checklist (ScheduledTasksService.runMonthlyAutomation) —
+  // default true so existing companies see no behavior change until they opt out.
+  autoFeeBilling     Boolean  @default(true) // schools: auto-generate monthly fee invoices
+  autoInvoiceRelease Boolean  @default(true) // schools: auto-release those invoices to the student portal
+  autoPayroll        Boolean  @default(true) // auto-process monthly payroll
+  autoReconciliation Boolean  @default(true) // daily reconciliation summary notification
   // Which optional shared modules this company's plan includes, e.g.
   // ["FINANCE", "HRMS", "COMMUNICATION", "INVENTORY", "AI", "BULK_IMPORT"].
   // Empty = unrestricted (legacy/full-access) — enforced by ModuleAccessGuard,
@@ -1184,22 +1192,26 @@ model FeeInvoice {
   company     Company          @relation(fields: [companyId], references: [id])
   studentId   String
   student     Student          @relation(fields: [studentId], references: [id])
+  invoiceNo   String? // "INV-<BSyear>-NNNN" — assigned at creation, null on invoices created before this field existed
   month       String // "2081-Bhadra" or "Term 1 2081"
   description String?
   totalAmount Decimal          @db.Decimal(12, 2)
   paidAmount  Decimal          @default(0) @db.Decimal(12, 2)
   discount    Decimal          @default(0) @db.Decimal(12, 2)
   fine        Decimal          @default(0) @db.Decimal(12, 2)
+  invoiceDate DateTime         @default(now()) // school sets this — when the bill was issued, distinct from dueDate/createdAt
   dueDate     DateTime?
   paidDate    DateTime?
   status      FeeInvoiceStatus @default(PENDING)
   notes       String?
+  releasedAt  DateTime? // null = not yet visible/notified in the student portal — set by an explicit Release action
   createdAt   DateTime         @default(now())
   updatedAt   DateTime         @updatedAt
 
   items    FeeInvoiceItem[]
   payments FeePayment[]
 
+  @@unique([companyId, invoiceNo])
   @@map("fee_invoices")
 }
 

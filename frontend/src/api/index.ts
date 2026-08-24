@@ -294,6 +294,10 @@ export const feesApi = {
     apiClient.get(`/api/v1/school/fee-invoices/${id}/receipt`, { params: { companyId: companyId() } }),
   sendFeeReminderSms: (invoiceId: string) =>
     apiClient.post(`/api/v1/school/sms/fee-reminder/${invoiceId}`, { companyId: companyId() }),
+  release: (id: string) =>
+    apiClient.patch(`/api/v1/school/fee-invoices/${id}/release`, {}, { params: { companyId: companyId() } }),
+  releaseBulk: () =>
+    apiClient.post('/api/v1/school/fee-invoices/release-bulk', { companyId: companyId() }),
 };
 
 export const examResultsApi = {
@@ -342,7 +346,7 @@ export const schoolFinanceApi = {
   assignPackage: (studentId: string, packageId: string | null) =>
     apiClient.patch(`/api/v1/school/students/${studentId}/package`, { packageId }, { params: { companyId: companyId() } }),
 
-  billingRun: (data: { month: string; classId?: string; dueDate?: string }) =>
+  billingRun: (data: { classId?: string; dueDate?: string; invoiceDate?: string }) =>
     apiClient.post('/api/v1/school/billing-run', { ...data, companyId: companyId() }),
 
   listInvoicePayments: (invoiceId: string) =>

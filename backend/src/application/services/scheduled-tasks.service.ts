@@ -33,15 +33,22 @@ export class ScheduledTasksService {
   @Cron(CronExpression.EVERY_DAY_AT_1AM)
   async runMonthlyAutomation() {
     const currentBsMonth = adToBs(new Date()).split('-').slice(0, 2).join('-');
-    const companies = await this.prisma.company.findMany({ select: { id: true, name: true, businessType: true } });
+    const companies = await this.prisma.company.findMany({
+      select: {
+        id: true, name: true, businessType: true,
+        autoFeeBilling: true, autoInvoiceRelease: true, autoPayroll: true, autoReconciliation: true,
+      },
+    });
 
     for (const company of companies) {
       const updates: Array<{ label: string; items: { name: string; amount?: number }[] }> = [];
       let link: string | undefined;
 
-      if (company.businessType === 'SCHOOL') {
+      if (company.businessType === 'SCHOOL' && company.autoFeeBilling) {
         try {
-          const result = await this.schoolFinance.billingRun(company.id, currentBsMonth);
+          const result = await this.schoolFinance.billingRun(
+            company.id, currentBsMonth, undefined, undefined, undefined, company.autoInvoiceRelease,
+          );
           if (result.created > 0) {
             this.logger.log(`Auto-billed ${result.created} student(s) for "${company.name}" — ${currentBsMonth}`);
             updates.push({
@@ -55,33 +62,37 @@ export class ScheduledTasksService {
         }
       }
 
-      try {
-        const result = await this.payrollEngine.processMonthlyPayrollAwaited(company.id, currentBsMonth);
-        if (result.queued > 0) {
-          this.logger.log(`Auto-processed payroll for ${result.results.length}/${result.queued} employee(s) — "${company.name}" — ${currentBsMonth}`);
-          if (result.results.length > 0) {
-            updates.push({
-              label: `${result.results.length} payslip(s) processed for ${currentBsMonth}`,
-              items: result.results.map((r) => ({ name: r.employeeName, amount: r.netSalary })),
-            });
-            link = link ?? '/payroll';
+      if (company.autoPayroll) {
+        try {
+          const result = await this.payrollEngine.processMonthlyPayrollAwaited(company.id, currentBsMonth);
+          if (result.queued > 0) {
+            this.logger.log(`Auto-processed payroll for ${result.results.length}/${result.queued} employee(s) — "${company.name}" — ${currentBsMonth}`);
+            if (result.results.length > 0) {
+              updates.push({
+                label: `${result.results.length} payslip(s) processed for ${currentBsMonth}`,
+                items: result.results.map((r) => ({ name: r.employeeName, amount: r.netSalary })),
+              });
+              link = link ?? '/payroll';
+            }
           }
+        } catch (err) {
+          this.logger.error(`Auto payroll processing failed for "${company.name}": ${(err as Error).message}`);
         }
-      } catch (err) {
-        this.logger.error(`Auto payroll processing failed for "${company.name}": ${(err as Error).message}`);
       }
 
-      try {
-        const recon = await this.runDailyReconciliation(company.id, company.businessType);
-        if (recon) {
-          updates.push(recon.update);
-          // An imbalance is the most urgent thing in this whole notification —
-          // it always wins the link, overriding fee/payroll links above.
-          if (recon.imbalance) link = '/ledger';
-          else link = link ?? '/transactions';
+      if (company.autoReconciliation) {
+        try {
+          const recon = await this.runDailyReconciliation(company.id, company.businessType);
+          if (recon) {
+            updates.push(recon.update);
+            // An imbalance is the most urgent thing in this whole notification —
+            // it always wins the link, overriding fee/payroll links above.
+            if (recon.imbalance) link = '/ledger';
+            else link = link ?? '/transactions';
+          }
+        } catch (err) {
+          this.logger.error(`Daily reconciliation failed for "${company.name}": ${(err as Error).message}`);
         }
-      } catch (err) {
-        this.logger.error(`Daily reconciliation failed for "${company.name}": ${(err as Error).message}`);
       }
 
       if (updates.length > 0) {

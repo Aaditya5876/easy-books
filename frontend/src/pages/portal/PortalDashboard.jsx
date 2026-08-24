@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { animate } from 'framer-motion';
 import { portalApi } from '@/api';
-import { CalendarCheck, DollarSign, ClipboardList, AlertCircle, ChevronRight, Trophy, Megaphone, Clock } from 'lucide-react';
+import { CalendarCheck, DollarSign, ClipboardList, AlertCircle, ChevronRight, Trophy, Megaphone, Clock, CalendarClock, PartyPopper } from 'lucide-react';
 import { containerVariants, cardVariants, itemVariants } from '@/lib/portalAnimations';
 import { useTranslation } from 'react-i18next';
 
@@ -91,9 +91,30 @@ export default function PortalDashboard() {
     enabled: !!student?.classId,
   });
 
+  const { data: examSchedule = [] } = useQuery({
+    queryKey: ['portal-exam-schedule', student?.classId],
+    queryFn: () => portalApi.examSchedule(student?.classId).then(r => r.data),
+    enabled: !!student?.classId,
+  });
+
+  const { data: events = [] } = useQuery({
+    queryKey: ['portal-events'],
+    queryFn: () => portalApi.events().then(r => r.data),
+  });
+
   const pendingFees  = fees.filter(f => f.status === 'PENDING' || f.status === 'PARTIAL');
   const overdueHw    = homework.filter(h => new Date(h.dueDate) < new Date());
   const fmtAmt = (n) => `Rs. ${Number(n).toLocaleString('en-NP')}`;
+
+  const now = new Date();
+  const upcomingExams = examSchedule
+    .filter(e => new Date(e.examDate) >= now)
+    .sort((a, b) => new Date(a.examDate) - new Date(b.examDate))
+    .slice(0, 4);
+  const upcomingEvents = events
+    .filter(e => new Date(e.startDate) >= now)
+    .sort((a, b) => new Date(a.startDate) - new Date(b.startDate))
+    .slice(0, 4);
 
   const latestExam = results.reduce((latest, r) => (
     !latest || new Date(r.examDate) > new Date(latest.examDate) ? r : latest
@@ -303,6 +324,65 @@ export default function PortalDashboard() {
         </div>
 
         <div className="space-y-5">
+        {/* Upcoming exams */}
+        {upcomingExams.length > 0 && (
+          <motion.div
+            variants={cardVariants}
+            initial="initial"
+            animate="animate"
+            className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm"
+          >
+            <div className="px-5 py-3.5 flex items-center justify-between border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <CalendarClock className="w-4 h-4 text-indigo-500" />
+                <h2 className="text-sm font-semibold text-slate-900">{t('portal.upcomingExams', { defaultValue: 'Upcoming Exams' })}</h2>
+              </div>
+            </div>
+            <motion.div className="divide-y divide-slate-100" variants={containerVariants} initial="initial" animate="animate">
+              {upcomingExams.map(e => (
+                <motion.div key={e.id} variants={itemVariants} className="px-5 py-3 flex items-center justify-between gap-4">
+                  <div>
+                    <p className="text-sm font-medium text-slate-800">{e.examName}</p>
+                    {e.subject?.name && <p className="text-xs text-slate-400">{e.subject.name}</p>}
+                  </div>
+                  <span className="text-xs px-2.5 py-1 rounded-full shrink-0 font-medium bg-indigo-50 text-indigo-700 tabular-nums">
+                    {new Date(e.examDate).toLocaleDateString('en-NP', { day: 'numeric', month: 'short' })}
+                  </span>
+                </motion.div>
+              ))}
+            </motion.div>
+          </motion.div>
+        )}
+
+        {/* Upcoming events */}
+        {upcomingEvents.length > 0 && (
+          <motion.div
+            variants={cardVariants}
+            initial="initial"
+            animate="animate"
+            className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm"
+          >
+            <div className="px-5 py-3.5 flex items-center justify-between border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <PartyPopper className="w-4 h-4 text-amber-500" />
+                <h2 className="text-sm font-semibold text-slate-900">{t('portal.upcomingEvents', { defaultValue: 'Upcoming Events' })}</h2>
+              </div>
+            </div>
+            <motion.div className="divide-y divide-slate-100" variants={containerVariants} initial="initial" animate="animate">
+              {upcomingEvents.map(e => (
+                <motion.div key={e.id} variants={itemVariants} className="px-5 py-3 flex items-center justify-between gap-4">
+                  <div>
+                    <p className="text-sm font-medium text-slate-800">{e.title}</p>
+                  </div>
+                  <span className="text-xs px-2.5 py-1 rounded-full shrink-0 font-medium bg-amber-50 text-amber-700 tabular-nums">
+                    {new Date(e.startDate).toLocaleDateString('en-NP', { day: 'numeric', month: 'short' })}
+                  </span>
+                </motion.div>
+              ))}
+            </motion.div>
+          </motion.div>
+        )}
+
         {/* Latest exam result */}
         {latestExam && (
           <motion.div
@@ -365,7 +445,7 @@ export default function PortalDashboard() {
       </div>
 
       {/* All clear */}
-      {pendingFees.length === 0 && homework.length === 0 && todaysRoutine.length === 0 && recentNotices.length === 0 && !latestExam && attendance && (
+      {pendingFees.length === 0 && homework.length === 0 && todaysRoutine.length === 0 && recentNotices.length === 0 && !latestExam && upcomingExams.length === 0 && upcomingEvents.length === 0 && attendance && (
         <motion.div
           variants={cardVariants}
           initial="initial"

@@ -1,7 +1,7 @@
 import { useState, useEffect, Fragment } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Pencil, Trash2, DollarSign, CheckCircle, Printer, Users, Sparkles, ChevronDown, ChevronRight, ChevronLeft, Receipt, Search } from 'lucide-react';
+import { Plus, Pencil, Trash2, DollarSign, CheckCircle, Printer, Users, Sparkles, ChevronDown, ChevronRight, ChevronLeft, Receipt, Search, FileText, Send } from 'lucide-react';
 import { feesApi, classesApi, schoolFinanceApi, inventoryApi, bankAccountApi } from '@/api';
 import StudentFeeProfileTab from './fees/StudentFeeProfileTab';
 import FeeHeadsTab from './fees/FeeHeadsTab';
@@ -17,6 +17,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { printFeeReceipt } from '@/lib/printFeeReceipt';
+import { printFeeInvoice } from '@/lib/printFeeInvoice';
 
 // ── Fee Structure Dialog ──────────────────────────────────────────────────────
 
@@ -271,17 +272,16 @@ function PaymentDialog({ open, onClose, invoice }) {
 // Generates line-itemed invoices from every student's fee profile
 // (class fees + bus/hostel auto-fees + package + scholarships).
 
-function BillingRunDialog({ open, onClose, classes }) {
+function BillingRunDialog({ open, onClose, classes, invoiceDate }) {
   const { t } = useTranslation();
   const qc = useQueryClient();
-  const [form, setForm] = useState({ month: '', classId: '', dueDate: '' });
-  const [errors, setErrors] = useState({});
+  const [form, setForm] = useState({ classId: '', dueDate: '' });
 
   const run = useMutation({
     mutationFn: () => schoolFinanceApi.billingRun({
-      month: form.month.trim(),
       classId: form.classId || undefined,
       dueDate: form.dueDate || undefined,
+      invoiceDate: invoiceDate || undefined,
     }),
     onSuccess: (res) => {
       const { created, skippedExisting, skippedEmpty } = res.data;
@@ -298,12 +298,6 @@ function BillingRunDialog({ open, onClose, classes }) {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (!form.month.trim()) {
-      const msg = t('fees.monthRequired', { defaultValue: 'Month is required' });
-      setErrors({ month: msg });
-      return toast.error(msg);
-    }
-    setErrors({});
     run.mutate();
   };
 
@@ -314,14 +308,9 @@ function BillingRunDialog({ open, onClose, classes }) {
           <DialogTitle>{t('fees.billingRun', { defaultValue: 'Monthly Billing Run' })}</DialogTitle>
         </DialogHeader>
         <p className="text-xs text-muted-foreground -mt-1">
-          {t('fees.billingRunHint', { defaultValue: 'Creates one itemized invoice per student from their fee profile — class fees, bus & hostel (auto-detected), package and scholarships. Students already billed for this month are skipped.' })}
+          {t('fees.billingRunHint', { defaultValue: 'Creates one itemized invoice per student from their fee profile — class fees, bus & hostel (auto-detected), package and scholarships. Students already billed for this month are skipped. Uses the Invoice Date set on the Fee Invoices page to determine the billing month.' })}
         </p>
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-1.5">
-            <Label>{t('fees.monthPeriodLabel', { defaultValue: 'Month / Period *' })}</Label>
-            <Input placeholder={t('fees.monthPlaceholder', { defaultValue: 'e.g. 2081-Bhadra' })} value={form.month} onChange={e => { setForm(f => ({ ...f, month: e.target.value })); if (errors.month) setErrors({}); }} />
-            {errors.month && <p className="text-xs text-red-600">{errors.month}</p>}
-          </div>
           <div className="space-y-1.5">
             <Label>{t('fees.classOptional', { defaultValue: 'Class (optional — blank = whole school)' })}</Label>
             <select className="w-full border rounded-md px-3 py-2 text-sm bg-background" value={form.classId} onChange={e => setForm(f => ({ ...f, classId: e.target.value }))}>
@@ -357,6 +346,7 @@ function NewInvoiceDialog({ open, onClose, companyId }) {
   const qc = useQueryClient();
   const [studentId, setStudentId] = useState('');
   const [month, setMonth] = useState('');
+  const [invoiceDate, setInvoiceDate] = useState(() => format(new Date(), 'yyyy-MM-dd'));
   const [rows, setRows] = useState([newFeeRow()]);
   const [errors, setErrors] = useState({});
 
@@ -424,7 +414,7 @@ function NewInvoiceDialog({ open, onClose, companyId }) {
       return { description: r.description.trim(), amount: parseFloat(r.amount) || 0, feeHeadId: r.feeHeadId || undefined };
     });
 
-    save.mutate({ studentId, month, items, companyId });
+    save.mutate({ studentId, month, invoiceDate, items, companyId });
   }
 
   return (
@@ -445,6 +435,11 @@ function NewInvoiceDialog({ open, onClose, companyId }) {
             <Label>{t('fees.monthPeriodLabel', { defaultValue: 'Month / Period *' })}</Label>
             <Input placeholder={t('fees.monthPlaceholderLong', { defaultValue: 'e.g. 2081-Bhadra or Term 1 2081' })} value={month} onChange={e => { setMonth(e.target.value); if (errors.month) setErrors(er => ({ ...er, month: undefined })); }} />
             {errors.month && <p className="text-xs text-red-600">{errors.month}</p>}
+          </div>
+          <div className="space-y-1.5">
+            <Label>{t('fees.invoiceDate', { defaultValue: 'Invoice Date' })}</Label>
+            <input type="date" value={invoiceDate} onChange={e => setInvoiceDate(e.target.value)}
+              className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm" />
           </div>
 
           <div className="space-y-2">
@@ -530,6 +525,7 @@ export default function Fees() {
   const [bulkDialog, setBulkDialog] = useState(false);
   const [payDialog, setPayDialog] = useState(null);
   const [expandedId, setExpandedId] = useState(null);
+  const [invoiceDate, setInvoiceDate] = useState(() => format(new Date(), 'yyyy-MM-dd'));
 
   useEffect(() => {
     const timer = setTimeout(() => setInvoiceSearch(invoiceSearchInput.trim()), 300);
@@ -572,6 +568,21 @@ export default function Fees() {
     onError: (err) => toast.error(err?.response?.data?.message || t('fees.failedToDelete', { defaultValue: 'Failed to delete' })),
   });
 
+  const releaseOne = useMutation({
+    mutationFn: (id) => feesApi.release(id),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['fee-invoices'] }); toast.success(t('fees.invoiceReleased', { defaultValue: 'Invoice released to student portal' })); },
+    onError: (err) => toast.error(err?.response?.data?.message || t('fees.failedToRelease', { defaultValue: 'Failed to release invoice' })),
+  });
+
+  const releaseBulk = useMutation({
+    mutationFn: () => feesApi.releaseBulk(),
+    onSuccess: (res) => {
+      qc.invalidateQueries({ queryKey: ['fee-invoices'] });
+      toast.success(t('fees.invoicesReleased', { defaultValue: '{{count}} invoice(s) released to student portal', count: res.data.released }));
+    },
+    onError: (err) => toast.error(err?.response?.data?.message || t('fees.failedToRelease', { defaultValue: 'Failed to release invoice' })),
+  });
+
   const classLabel = (id) => {
     const c = classes.find(c => c.id === id);
     return c ? `${c.name}${c.section ? ` (${c.section})` : ''}` : t('fees.allClasses', { defaultValue: 'All Classes' });
@@ -600,10 +611,18 @@ export default function Fees() {
           )}
           {tab === 'invoices' && (
             <>
-              <Button variant="outline" onClick={() => setBulkDialog(true)}>
+              <div className="flex flex-col gap-1">
+                <Label className="text-xs text-muted-foreground">{t('fees.invoiceDate', { defaultValue: 'Invoice Date' })}</Label>
+                <input type="date" value={invoiceDate} onChange={e => setInvoiceDate(e.target.value)}
+                  className="flex h-9 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm" />
+              </div>
+              <Button variant="outline" onClick={() => releaseBulk.mutate()} disabled={releaseBulk.isPending} className="self-end">
+                <Send className="w-4 h-4 mr-2" /> {t('fees.releaseInvoices', { defaultValue: 'Release Invoices' })}
+              </Button>
+              <Button variant="outline" onClick={() => setBulkDialog(true)} className="self-end">
                 <Users className="w-4 h-4 mr-2" /> {t('fees.billingRun', { defaultValue: 'Monthly Billing Run' })}
               </Button>
-              <Button onClick={() => setInvoiceDialog(true)}>
+              <Button onClick={() => setInvoiceDialog(true)} className="self-end">
                 <Plus className="w-4 h-4 mr-2" /> {t('fees.newInvoice', { defaultValue: 'New Invoice' })}
               </Button>
             </>
@@ -676,6 +695,7 @@ export default function Fees() {
                     <tr>
                       <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('fees.student', { defaultValue: 'Student' })}</th>
                       <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('fees.month', { defaultValue: 'Month' })}</th>
+                      <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('fees.invoiceDate', { defaultValue: 'Invoice Date' })}</th>
                       <th className="text-right px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('fees.total', { defaultValue: 'Total' })}</th>
                       <th className="text-right px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('fees.paid', { defaultValue: 'Paid' })}</th>
                       <th className="text-right px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('fees.due', { defaultValue: 'Due' })}</th>
@@ -693,20 +713,34 @@ export default function Fees() {
                           <td className="px-5 py-3 font-medium">
                             <span className="inline-flex items-center gap-1.5">
                               {isExpanded ? <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" /> : <ChevronRight className="w-3.5 h-3.5 text-muted-foreground" />}
-                              {inv.student?.name ?? '—'}
+                              <span>
+                                {inv.student?.name ?? '—'}
+                                {inv.invoiceNo && <span className="block text-xs font-normal text-muted-foreground">{inv.invoiceNo}</span>}
+                              </span>
                             </span>
                           </td>
                           <td className="px-5 py-3 text-muted-foreground">{inv.month}</td>
+                          <td className="px-5 py-3 text-muted-foreground">{inv.invoiceDate ? format(new Date(inv.invoiceDate), 'dd MMM yyyy') : '—'}</td>
                           <td className="px-5 py-3 text-right tabular-nums">Rs. {Number(inv.totalAmount).toLocaleString('en-NP', { minimumFractionDigits: 2 })}</td>
                           <td className="px-5 py-3 text-right tabular-nums text-emerald-700">Rs. {Number(inv.paidAmount).toLocaleString('en-NP', { minimumFractionDigits: 2 })}</td>
                           <td className="px-5 py-3 text-right tabular-nums text-amber-700">Rs. {due.toLocaleString('en-NP', { minimumFractionDigits: 2 })}</td>
                           <td className="px-5 py-3">
-                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_BADGE[inv.status] || ''}`}>
-                              {STATUS_LABEL[inv.status] || inv.status}
-                            </span>
+                            <div className="flex flex-col items-start gap-1">
+                              <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_BADGE[inv.status] || ''}`}>
+                                {STATUS_LABEL[inv.status] || inv.status}
+                              </span>
+                              <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${inv.releasedAt ? 'bg-blue-50 text-blue-700' : 'bg-slate-100 text-slate-500'}`}>
+                                {inv.releasedAt ? t('fees.released', { defaultValue: 'Released' }) : t('fees.notReleased', { defaultValue: 'Not Released' })}
+                              </span>
+                            </div>
                           </td>
                           <td className="px-5 py-3" onClick={e => e.stopPropagation()}>
                             <div className="flex gap-1 flex-wrap">
+                              {!inv.releasedAt && (
+                                <Button size="sm" variant="outline" className="text-blue-600 hover:bg-blue-50" disabled={releaseOne.isPending} onClick={() => releaseOne.mutate(inv.id)} title={t('fees.release', { defaultValue: 'Release to student portal' })}>
+                                  <Send className="w-3.5 h-3.5 mr-1" /> {t('fees.release', { defaultValue: 'Release' })}
+                                </Button>
+                              )}
                               {inv.status !== 'PAID' && inv.status !== 'WAIVED' && (
                                 <Button size="sm" variant="outline" onClick={() => setPayDialog(inv)}>
                                   <CheckCircle className="w-3.5 h-3.5 mr-1" /> {t('fees.pay', { defaultValue: 'Pay' })}
@@ -725,6 +759,11 @@ export default function Fees() {
                                 </Button>
                               )}
                               <Button size="sm" variant="ghost" onClick={() => {
+                                feesApi.receipt(inv.id).then(r => printFeeInvoice(r.data)).catch(() => toast.error(t('fees.couldNotLoadInvoice', { defaultValue: 'Could not load invoice' })));
+                              }} title={t('fees.printInvoice', { defaultValue: 'Print Invoice' })}>
+                                <FileText className="w-3.5 h-3.5" />
+                              </Button>
+                              <Button size="sm" variant="ghost" onClick={() => {
                                 feesApi.receipt(inv.id).then(r => printFeeReceipt(r.data)).catch(() => toast.error(t('fees.couldNotLoadReceipt', { defaultValue: 'Could not load receipt' })));
                               }} title={t('fees.printReceipt', { defaultValue: 'Print Receipt' })}>
                                 <Printer className="w-3.5 h-3.5" />
@@ -734,7 +773,7 @@ export default function Fees() {
                         </tr>
                         {isExpanded && (
                           <tr className="bg-muted/20">
-                            <td colSpan={7} className="px-8 py-4">
+                            <td colSpan={8} className="px-8 py-4">
                               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <div>
                                   <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
@@ -873,6 +912,7 @@ export default function Fees() {
           open={bulkDialog}
           onClose={() => setBulkDialog(false)}
           classes={classes}
+          invoiceDate={invoiceDate}
         />
       )}
       {structureDialog && (

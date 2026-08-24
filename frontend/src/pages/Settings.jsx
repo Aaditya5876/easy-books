@@ -2,7 +2,8 @@ import { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
 import { api } from '@/api/adapter';
-import { usersApi, companyApi, recycleBinApi } from '@/api';
+import { usersApi, companyApi, recycleBinApi, bankAccountApi, uploadApi } from '@/api';
+import apiClient from '@/api/client';
 import { useAuth } from '@/lib/AuthContext';
 import { useRole } from "@/lib/useRole";
 import { usePreferences } from '@/lib/PreferencesContext';
@@ -20,7 +21,7 @@ import {
 import {
   Building2, Plus, Trash2, Save, ImagePlus, X, UserPlus, Copy, Check, Shield,
   Phone, Mail, MapPin, Hash, User, Palette, Type, Bell, RotateCcw, Upload,
-  Recycle, RotateCw, Lock, AlertTriangle, Clock
+  Recycle, RotateCw, Lock, AlertTriangle, Clock, Zap, QrCode
 } from 'lucide-react';
 
 const SIDEBAR_PALETTE = ['#1e293b', '#1e3a5f', '#14532d', '#4c1d95', '#881337', '#7c2d12'];
@@ -140,6 +141,17 @@ export default function Settings() {
   const [prefsSaving, setPrefsSaving] = useState(false);
   const [prefsSaved, setPrefsSaved] = useState(false);
 
+  const [automation, setAutomation] = useState({
+    autoFeeBilling: true, autoInvoiceRelease: true, autoPayroll: true, autoReconciliation: true,
+  });
+  const [automationSaving, setAutomationSaving] = useState(false);
+  const [automationSaved, setAutomationSaved] = useState(false);
+  const [bankAccounts, setBankAccounts] = useState([]);
+  const [qrUploadingId, setQrUploadingId] = useState(null);
+  const [showAddBank, setShowAddBank] = useState(false);
+  const [bankForm, setBankForm] = useState({ bankName: '', accountNumber: '', accountType: '', branch: '', currentBalance: '' });
+  const [addBankSaving, setAddBankSaving] = useState(false);
+
   useEffect(() => { loadCompanies(); }, []);
 
   async function loadCompanies() {
@@ -154,7 +166,79 @@ export default function Settings() {
       abbreviation: active?.abbreviation || '',
       workingDaysPerMonth: payrollRes?.data?.workingDaysPerMonth ?? 26,
     });
+    setAutomation({
+      autoFeeBilling: active?.auto_fee_billing ?? true,
+      autoInvoiceRelease: active?.auto_invoice_release ?? true,
+      autoPayroll: active?.auto_payroll ?? true,
+      autoReconciliation: active?.auto_reconciliation ?? true,
+    });
     setLoading(false);
+  }
+
+  async function loadBankAccounts() {
+    if (!activeCompanyId) return;
+    try {
+      const res = await bankAccountApi.list();
+      setBankAccounts(res.data ?? []);
+    } catch {
+      setBankAccounts([]);
+    }
+  }
+
+  async function saveAutomation() {
+    if (!activeCompanyId) return;
+    setAutomationSaving(true);
+    try {
+      await companyApi.update(activeCompanyId, automation);
+      setAutomationSaved(true);
+      setTimeout(() => setAutomationSaved(false), 2000);
+    } catch {
+      alert(t('settings.failedSaveAutomation', { defaultValue: 'Failed to save automation settings' }));
+    } finally {
+      setAutomationSaving(false);
+    }
+  }
+
+  function resolveFileUrl(url = '') {
+    return url.startsWith('http') ? url : `${apiClient.defaults.baseURL}${url}`;
+  }
+
+  async function handleQrUpload(bankAccountId, e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setQrUploadingId(bankAccountId);
+    try {
+      const uploadRes = await uploadApi.upload(file);
+      await bankAccountApi.update(bankAccountId, { qrCodeUrl: uploadRes.data.url });
+      await loadBankAccounts();
+    } catch {
+      alert(t('settings.failedUploadQr', { defaultValue: 'Failed to upload QR code' }));
+    } finally {
+      setQrUploadingId(null);
+    }
+  }
+
+  async function handleAddBank(e) {
+    e.preventDefault();
+    if (!activeCompanyId || !bankForm.bankName.trim() || !bankForm.accountNumber.trim()) return;
+    setAddBankSaving(true);
+    try {
+      await bankAccountApi.create({
+        companyId: activeCompanyId,
+        bankName: bankForm.bankName.trim(),
+        accountNumber: bankForm.accountNumber.trim(),
+        accountType: bankForm.accountType.trim() || undefined,
+        branch: bankForm.branch.trim() || undefined,
+        currentBalance: bankForm.currentBalance ? Number(bankForm.currentBalance) : 0,
+      });
+      setShowAddBank(false);
+      setBankForm({ bankName: '', accountNumber: '', accountType: '', branch: '', currentBalance: '' });
+      await loadBankAccounts();
+    } catch (err) {
+      alert(err?.response?.data?.message || t('settings.failedAddBank', { defaultValue: 'Failed to add bank account' }));
+    } finally {
+      setAddBankSaving(false);
+    }
   }
 
   async function loadUsers() {
@@ -369,6 +453,7 @@ export default function Settings() {
           <TabsTrigger value="companies">{t('settings.tabCompanies', { defaultValue: 'Companies' })}</TabsTrigger>
           <TabsTrigger value="users" onClick={loadUsers}>{t('settings.tabUsers', { defaultValue: 'Users' })}</TabsTrigger>
           <TabsTrigger value="preferences">{t('settings.tabPreferences', { defaultValue: 'Preferences' })}</TabsTrigger>
+          <TabsTrigger value="automation" onClick={loadBankAccounts}>{t('settings.tabAutomation', { defaultValue: 'Automation' })}</TabsTrigger>
           {isAdmin && (
             <TabsTrigger value="recycle-bin" className="gap-1.5">
               <Recycle className="w-3.5 h-3.5" />{t('settings.tabRecycleBin', { defaultValue: 'Recycle Bin' })}
@@ -751,6 +836,98 @@ export default function Settings() {
           </div>
         </TabsContent>
 
+        {/* ── Automation Tab ─────────────────────────────────────────────── */}
+        <TabsContent value="automation" className="mt-4 space-y-6">
+          <div className="bg-card rounded-xl border p-5 space-y-1">
+            <h3 className="font-semibold flex items-center gap-1.5"><Zap className="w-4 h-4 text-primary" />{t('settings.automationTitle', { defaultValue: 'Nightly Automation (runs at 1 AM)' })}</h3>
+            <p className="text-sm text-muted-foreground">{t('settings.automationSubtitle', { defaultValue: 'Turn off anything you\'d rather trigger manually.' })}</p>
+          </div>
+
+          <div className="bg-card rounded-xl border p-5 space-y-1 divide-y divide-border/50">
+            {[
+              ...(isSchool ? [
+                { key: 'autoFeeBilling', label: t('settings.autoFeeBillingLabel', { defaultValue: 'Auto Fee Billing' }), desc: t('settings.autoFeeBillingDesc', { defaultValue: 'Automatically generate monthly fee invoices for every active student' }) },
+                { key: 'autoInvoiceRelease', label: t('settings.autoInvoiceReleaseLabel', { defaultValue: 'Auto-Release Invoices' }), desc: t('settings.autoInvoiceReleaseDesc', { defaultValue: 'Immediately release auto-billed invoices to the student portal (notifies students). If off, invoices are created but held for manual review/release.' }) },
+              ] : []),
+              { key: 'autoPayroll', label: t('settings.autoPayrollLabel', { defaultValue: 'Auto Payroll Processing' }), desc: t('settings.autoPayrollDesc', { defaultValue: 'Automatically process monthly payroll for all employees' }) },
+              { key: 'autoReconciliation', label: t('settings.autoReconciliationLabel', { defaultValue: 'Daily Reconciliation Summary' }), desc: t('settings.autoReconciliationDesc', { defaultValue: 'Nightly summary of income, expenses, overdue invoices and ledger balance sent to admins' }) },
+            ].map(item => (
+              <div key={item.key} className="flex items-start justify-between gap-4 py-3 first:pt-0 last:pb-0">
+                <div>
+                  <p className="text-sm font-medium">{item.label}</p>
+                  <p className="text-xs text-muted-foreground">{item.desc}</p>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={automation[item.key]}
+                  onClick={() => setAutomation(a => ({ ...a, [item.key]: !a[item.key] }))}
+                  className={`relative shrink-0 w-10 h-5 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 ${
+                    automation[item.key] ? 'bg-primary' : 'bg-muted'
+                  }`}
+                >
+                  <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-transform ${
+                    automation[item.key] ? 'translate-x-5' : 'translate-x-0'
+                  }`} />
+                </button>
+              </div>
+            ))}
+            <div className="pt-4 flex items-center gap-3">
+              <Button onClick={saveAutomation} disabled={automationSaving}>
+                <Save className="w-4 h-4 mr-1.5" />
+                {automationSaving ? t('settings.saving', { defaultValue: 'Saving…' }) : t('settings.saveChanges', { defaultValue: 'Save Changes' })}
+              </Button>
+              {automationSaved && <span className="text-sm text-emerald-600 flex items-center gap-1"><Check className="w-4 h-4" />{t('settings.saved', { defaultValue: 'Saved' })}</span>}
+            </div>
+          </div>
+
+          <div className="bg-card rounded-xl border p-5 space-y-4">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h3 className="font-semibold flex items-center gap-1.5"><QrCode className="w-4 h-4 text-primary" />{t('settings.paymentQrTitle', { defaultValue: 'Payment QR Codes' })}</h3>
+                <p className="text-sm text-muted-foreground">{t('settings.paymentQrSubtitle', { defaultValue: 'Upload a photo of your eSewa, Khalti or bank QR code — it will print on every fee invoice so parents can scan to pay.' })}</p>
+              </div>
+              <Button size="sm" variant="outline" onClick={() => setShowAddBank(true)} className="shrink-0">
+                <Plus className="w-3.5 h-3.5 mr-1" />{t('settings.addBank', { defaultValue: 'Add Bank' })}
+              </Button>
+            </div>
+            {bankAccounts.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-4">{t('settings.noBankAccountsYet', { defaultValue: 'No bank accounts set up yet.' })}</p>
+            ) : (
+              <div className="grid gap-3">
+                {bankAccounts.map(b => (
+                  <div key={b.id} className="flex items-center justify-between gap-4 border rounded-lg p-3">
+                    <div className="flex items-center gap-3">
+                      {b.qrCodeUrl ? (
+                        <img src={resolveFileUrl(b.qrCodeUrl)} alt={b.bankName} className="w-14 h-14 object-contain border rounded-md p-1" />
+                      ) : (
+                        <div className="w-14 h-14 rounded-md border border-dashed flex items-center justify-center text-muted-foreground">
+                          <QrCode className="w-5 h-5" />
+                        </div>
+                      )}
+                      <div>
+                        <p className="text-sm font-medium">{b.bankName}</p>
+                        <p className="text-xs text-muted-foreground">{b.accountNumber}</p>
+                      </div>
+                    </div>
+                    <label className="cursor-pointer">
+                      <input type="file" accept="image/*" className="hidden" disabled={qrUploadingId === b.id} onChange={e => handleQrUpload(b.id, e)} />
+                      <span className="inline-flex items-center gap-1.5 text-sm border rounded-md px-3 py-1.5 hover:bg-secondary">
+                        <Upload className="w-3.5 h-3.5" />
+                        {qrUploadingId === b.id
+                          ? t('settings.uploading', { defaultValue: 'Uploading…' })
+                          : b.qrCodeUrl
+                            ? t('settings.replaceQr', { defaultValue: 'Replace' })
+                            : t('settings.uploadQr', { defaultValue: 'Upload QR' })}
+                      </span>
+                    </label>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </TabsContent>
+
         {/* ── Recycle Bin Tab ────────────────────────────────────────────── */}
         <TabsContent value="recycle-bin" className="mt-4 space-y-4">
           {!binAccessGranted ? (
@@ -905,6 +1082,45 @@ export default function Settings() {
           )}
         </TabsContent>
       </Tabs>
+
+      {/* ── Add Bank Account Dialog ───────────────────────────────────────── */}
+      <Dialog open={showAddBank} onOpenChange={v => { setShowAddBank(v); if (!v) setBankForm({ bankName: '', accountNumber: '', accountType: '', branch: '', currentBalance: '' }); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>{t('settings.addBankAccount', { defaultValue: 'Add Bank Account' })}</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleAddBank} className="space-y-4 pt-2">
+            <div className="space-y-1.5">
+              <Label>{t('settings.bankNameLabel', { defaultValue: 'Bank / Wallet Name *' })}</Label>
+              <Input placeholder={t('settings.bankNamePlaceholder', { defaultValue: 'e.g. eSewa, Khalti, Nabil Bank' })} value={bankForm.bankName} onChange={e => setBankForm(f => ({ ...f, bankName: e.target.value }))} required />
+            </div>
+            <div className="space-y-1.5">
+              <Label>{t('settings.accountNumberLabel', { defaultValue: 'Account / Wallet Number *' })}</Label>
+              <Input value={bankForm.accountNumber} onChange={e => setBankForm(f => ({ ...f, accountNumber: e.target.value }))} required />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>{t('settings.accountTypeLabel', { defaultValue: 'Account Type' })}</Label>
+                <Input placeholder={t('settings.accountTypePlaceholder', { defaultValue: 'Savings, Current…' })} value={bankForm.accountType} onChange={e => setBankForm(f => ({ ...f, accountType: e.target.value }))} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>{t('settings.branchLabel', { defaultValue: 'Branch' })}</Label>
+                <Input value={bankForm.branch} onChange={e => setBankForm(f => ({ ...f, branch: e.target.value }))} />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label>{t('settings.openingBalanceLabel', { defaultValue: 'Opening Balance' })}</Label>
+              <Input type="number" step="0.01" placeholder="0.00" value={bankForm.currentBalance} onChange={e => setBankForm(f => ({ ...f, currentBalance: e.target.value }))} />
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setShowAddBank(false)}>{t('settings.cancel', { defaultValue: 'Cancel' })}</Button>
+              <Button type="submit" disabled={addBankSaving}>
+                {addBankSaving ? t('settings.saving', { defaultValue: 'Saving…' }) : t('settings.addBank', { defaultValue: 'Add Bank' })}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       {/* ── Add Company Dialog ────────────────────────────────────────────── */}
       <Dialog open={showAddCompany} onOpenChange={setShowAddCompany}>

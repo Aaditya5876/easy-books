@@ -347,6 +347,19 @@ export class SchoolController {
     return this.finance.listPayments(companyId, id);
   }
 
+  @Patch('fee-invoices/:id/release')
+  @Roles('ADMIN', 'ACCOUNTANT')
+  @ApiQuery({ name: 'companyId', required: true })
+  releaseInvoice(@Param('id') id: string, @Query('companyId') companyId: string) {
+    return this.finance.releaseInvoiceById(companyId, id);
+  }
+
+  @Post('fee-invoices/release-bulk')
+  @Roles('ADMIN', 'ACCOUNTANT')
+  releaseBulkInvoices(@Body() body: { companyId: string }) {
+    return this.finance.releaseBulk(body.companyId);
+  }
+
   // ── Fee Heads ─────────────────────────────────────────────────────────────────
 
   @Get('fee-heads')
@@ -440,8 +453,10 @@ export class SchoolController {
 
   @Post('billing-run')
   @Roles('ADMIN', 'ACCOUNTANT')
-  billingRun(@Body() body: { companyId: string; month: string; classId?: string; dueDate?: string }) {
-    return this.finance.billingRun(body.companyId, body.month, body.classId, body.dueDate);
+  billingRun(@Body() body: { companyId: string; month?: string; classId?: string; dueDate?: string; invoiceDate?: string }) {
+    // Manual, button-triggered run — never auto-releases (autoRelease stays
+    // false); only the nightly cron (ScheduledTasksService) can pass that.
+    return this.finance.billingRun(body.companyId, body.month, body.classId, body.dueDate, body.invoiceDate);
   }
 
   @Get('fee-invoices/:id/receipt')

@@ -3,11 +3,13 @@ import { PrismaService } from '../../../core/db/psql/prisma.client';
 import { SmsService } from './sms.service';
 import { AiService } from './ai.service';
 import { InventoryServiceImpl } from './inventory.service.impl';
+import { PortalNotificationService } from './portal-notification.service';
+import { adToBs } from '@easy-books/shared';
 
 // Forms send whole entity objects (with id/relations/_count) and bare "YYYY-MM-DD"
 // strings; Prisma rejects unknown keys and date-only strings. Whitelist + coerce here
 // so every create/update accepts what the UI actually sends.
-const DATE_KEYS = new Set(['startDate', 'endDate', 'dueDate', 'examDate', 'dateOfBirth', 'admissionDate', 'expiresAt']);
+const DATE_KEYS = new Set(['startDate', 'endDate', 'dueDate', 'invoiceDate', 'examDate', 'dateOfBirth', 'admissionDate', 'expiresAt']);
 
 function clean(data: any, allowed: string[], intKeys: string[] = []) {
   const out: any = {};
@@ -29,6 +31,7 @@ export class SchoolService {
     private readonly sms: SmsService,
     private readonly ai: AiService,
     private readonly inventory: InventoryServiceImpl,
+    private readonly portalNotifications: PortalNotificationService,
   ) {}
 
   // ── Dashboard ────────────────────────────────────────────────────────────────
@@ -572,7 +575,7 @@ export class SchoolService {
   }
 
   async createFeeInvoice(body: any) {
-    const data = clean(body, ['companyId', 'studentId', 'month', 'description', 'paidAmount', 'discount', 'fine', 'dueDate', 'status', 'notes']);
+    const data = clean(body, ['companyId', 'studentId', 'month', 'description', 'paidAmount', 'discount', 'fine', 'invoiceDate', 'dueDate', 'status', 'notes']);
     const rows: Array<{ description: string; amount: number; feeHeadId?: string | null; inventoryItemId?: string | null; quantity?: number | null }> =
       Array.isArray(body.items) && body.items.length
         ? body.items.map((it: any) => ({
@@ -586,6 +589,7 @@ export class SchoolService {
         : [{ description: data.description || 'Fee', amount: Number(body.totalAmount), feeHeadId: body.feeHeadId || null }];
 
     const totalAmount = rows.reduce((sum, r) => sum + r.amount, 0);
+    const invoiceNo = await this.nextInvoiceNo(data.companyId);
 
     return this.prisma.$transaction(async (tx) => {
       for (const row of rows) {
@@ -599,10 +603,24 @@ export class SchoolService {
       }
 
       return tx.feeInvoice.create({
-        data: { ...data, totalAmount, items: { create: rows } },
+        data: { ...data, invoiceNo, totalAmount, items: { create: rows } },
         include: { items: { include: { feeHead: { select: { name: true } }, inventoryItem: { select: { itemName: true, unit: true } } } } },
       });
     });
+  }
+
+  private async nextInvoiceNo(companyId: string): Promise<string> {
+    const bsYear = (adToBs(new Date()) || '').split('-')[0] || String(new Date().getFullYear());
+    const company = await this.prisma.company.findUnique({
+      where: { id: companyId },
+      select: { feeInvoiceSequence: true, feeInvoiceYear: true },
+    });
+    const seq = company?.feeInvoiceYear === bsYear ? (company.feeInvoiceSequence ?? 0) + 1 : 1;
+    await this.prisma.company.update({
+      where: { id: companyId },
+      data: { feeInvoiceSequence: seq, feeInvoiceYear: bsYear },
+    });
+    return `INV-${bsYear}-${String(seq).padStart(4, '0')}`;
   }
 
   async generateBulkInvoices(companyId: string, classId: string, month: string, feeStructureIds: string[]) {
@@ -864,7 +882,31 @@ export class SchoolService {
 
   async createNotice(body: any) {
     const data = clean(body, ['companyId', 'title', 'content', 'targetAudience', 'isPublished', 'expiresAt']);
-    return this.prisma.schoolNotice.create({ data: { ...data, publishedAt: new Date() } });
+    const notice = await this.prisma.schoolNotice.create({ data: { ...data, publishedAt: new Date() } });
+
+    // Best-effort — a notification failure must never block the notice itself
+    // from being created. TEACHERS-only notices don't reach the student portal.
+    if (notice.isPublished && notice.targetAudience !== 'TEACHERS') {
+      try {
+        const students = await this.prisma.student.findMany({
+          where: { companyId: data.companyId, status: 'ACTIVE' },
+          select: { id: true },
+        });
+        for (const s of students) {
+          await this.portalNotifications.notifyStudent(data.companyId, s.id, {
+            title: 'New notice published',
+            message: notice.title,
+            link: '/portal/notices',
+            referenceType: 'SCHOOL_NOTICE',
+            referenceId: notice.id,
+          });
+        }
+      } catch (err) {
+        console.error('Notice portal notification failed:', (err as Error).message);
+      }
+    }
+
+    return notice;
   }
 
   async updateNotice(id: string, companyId: string, body: any) {

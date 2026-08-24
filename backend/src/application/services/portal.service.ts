@@ -82,7 +82,7 @@ export class PortalService {
 
   async getFees(studentId: string, companyId: string) {
     return this.prisma.feeInvoice.findMany({
-      where: { studentId, companyId },
+      where: { studentId, companyId, releasedAt: { not: null } },
       include: { payments: { orderBy: { paidAt: 'desc' } } },
       orderBy: { createdAt: 'desc' },
     });
