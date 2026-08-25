@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import { portalApi } from '@/api';
@@ -19,12 +19,14 @@ function subjectColor(name = '') {
 
 export default function PortalExamSchedule() {
   const { t } = useTranslation();
-  const [student, setStudent] = useState(null);
   const [status, setStatus] = useState('all');
   const [page, setPage] = useState(1);
-  useEffect(() => {
-    try { setStudent(JSON.parse(localStorage.getItem('portal_student') || 'null')); } catch {}
-  }, []);
+
+  // Live, not the localStorage snapshot cached at login — see PortalStudyMaterials.jsx.
+  const { data: student } = useQuery({
+    queryKey: ['portal-me'],
+    queryFn: () => portalApi.me().then(r => r.data),
+  });
 
   const { data: schedule = [], isLoading } = useQuery({
     queryKey: ['portal-exam-schedule', student?.classId],

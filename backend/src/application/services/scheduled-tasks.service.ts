@@ -4,6 +4,7 @@ import { PrismaService } from '../../../core/db/psql/prisma.client';
 import { SchoolFinanceService } from './school-finance.service';
 import { PayrollEngineService } from './payroll.engine';
 import { NotificationServiceImpl } from './notification.service.impl';
+import { PortalNotificationService } from './portal-notification.service';
 import { adToBs } from '@easy-books/shared';
 
 // Fully automatic monthly fee billing + payroll — no button click required.
@@ -28,12 +29,14 @@ export class ScheduledTasksService {
     private readonly schoolFinance: SchoolFinanceService,
     private readonly payrollEngine: PayrollEngineService,
     private readonly notifications: NotificationServiceImpl,
+    private readonly portalNotifications: PortalNotificationService,
   ) {}
 
   @Cron(CronExpression.EVERY_DAY_AT_1AM)
   async runMonthlyAutomation() {
     const currentBsMonth = adToBs(new Date()).split('-').slice(0, 2).join('-');
     const companies = await this.prisma.company.findMany({
+      where: { isActive: true },
       select: {
         id: true, name: true, businessType: true,
         autoFeeBilling: true, autoInvoiceRelease: true, autoPayroll: true, autoReconciliation: true,
@@ -59,6 +62,14 @@ export class ScheduledTasksService {
           }
         } catch (err) {
           this.logger.error(`Auto fee billing failed for "${company.name}": ${(err as Error).message}`);
+        }
+      }
+
+      if (company.businessType === 'SCHOOL') {
+        try {
+          await this.runLibraryDueSoonReminders(company.id);
+        } catch (err) {
+          this.logger.error(`Library due-date reminders failed for "${company.name}": ${(err as Error).message}`);
         }
       }
 
@@ -108,6 +119,41 @@ export class ScheduledTasksService {
         } catch (err) {
           this.logger.error(`Failed to notify admins for "${company.name}": ${(err as Error).message}`);
         }
+      }
+    }
+  }
+
+  // Nudges a student 3 days before a borrowed library book is due — a fun,
+  // kid-friendly reminder rather than a stern overdue notice. Only fires for
+  // issues linked to a real student (studentId) — staff borrowers (memberName
+  // only, no studentId) aren't portal users and have nothing to notify.
+  private async runLibraryDueSoonReminders(companyId: string) {
+    const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const threeDaysStart = new Date(todayStart.getTime() + 3 * 86_400_000);
+    const threeDaysEnd = new Date(threeDaysStart.getTime() + 86_400_000);
+
+    const dueSoon = await this.prisma.bookIssue.findMany({
+      where: {
+        companyId, status: 'ISSUED', returnDate: null,
+        studentId: { not: null },
+        dueDate: { gte: threeDaysStart, lt: threeDaysEnd },
+      },
+      include: { book: { select: { title: true } } },
+    });
+
+    for (const issue of dueSoon) {
+      try {
+        // No student-portal library page exists yet to deep-link to — omit `link`
+        // rather than pointing at a route that 404s.
+        await this.portalNotifications.notifyStudent(companyId, issue.studentId!, {
+          title: '📚 Your book is due soon!',
+          message: `Just a friendly reminder — "${issue.book.title}" is due back in 3 days. Hope you're enjoying it! Don't forget to return it on time. 🌟`,
+          referenceType: 'BOOK_ISSUE',
+          referenceId: issue.id,
+        });
+      } catch (err) {
+        this.logger.error(`Library reminder notification failed for issue ${issue.id}: ${(err as Error).message}`);
       }
     }
   }

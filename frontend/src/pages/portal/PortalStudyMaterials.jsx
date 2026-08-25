@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import { portalApi } from '@/api';
@@ -26,12 +26,16 @@ function subjectColor(name = '') {
 
 export default function PortalStudyMaterials() {
   const { t } = useTranslation();
-  const [student, setStudent] = useState(null);
   const [subject, setSubject] = useState('all');
   const [page, setPage] = useState(1);
-  useEffect(() => {
-    try { setStudent(JSON.parse(localStorage.getItem('portal_student') || 'null')); } catch {}
-  }, []);
+
+  // Live, not the localStorage snapshot cached at login — that goes stale the
+  // moment a student's class is reassigned, silently showing the wrong class's
+  // materials until they log out and back in.
+  const { data: student } = useQuery({
+    queryKey: ['portal-me'],
+    queryFn: () => portalApi.me().then(r => r.data),
+  });
 
   const { data: materials = [], isLoading } = useQuery({
     queryKey: ['portal-study-materials', student?.classId],

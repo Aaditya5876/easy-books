@@ -773,51 +773,79 @@ export default function Fees() {
                         </tr>
                         {isExpanded && (
                           <tr className="bg-muted/20">
-                            <td colSpan={8} className="px-8 py-4">
-                              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <div>
-                                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
-                                    {t('fees.lineItems', { defaultValue: 'What this invoice covers' })}
-                                  </p>
-                                  {(inv.items ?? []).length === 0 ? (
-                                    <p className="text-sm text-muted-foreground">{inv.description || '—'}</p>
-                                  ) : (
-                                    <div className="space-y-1">
-                                      {inv.items.map(item => (
-                                        <div key={item.id} className="flex justify-between text-sm">
-                                          <span>
-                                            {item.description}
-                                            {item.feeHead ? <span className="text-xs text-muted-foreground ml-1">· {item.feeHead.name}</span> : null}
-                                            {item.inventoryItem ? <span className="text-xs text-muted-foreground ml-1">· {item.quantity} {item.inventoryItem.unit}</span> : null}
-                                          </span>
-                                          <span className={`tabular-nums ${Number(item.amount) < 0 ? 'text-emerald-600' : ''}`}>
-                                            {Number(item.amount) < 0 ? '− ' : ''}Rs. {Math.abs(Number(item.amount)).toLocaleString('en-NP', { minimumFractionDigits: 2 })}
-                                          </span>
-                                        </div>
-                                      ))}
-                                    </div>
-                                  )}
+                            <td colSpan={8} className="px-6 py-5">
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="bg-background rounded-xl border border-border shadow-sm overflow-hidden">
+                                  <div className="flex items-center gap-2 px-4 py-2.5 border-b border-border bg-muted/40">
+                                    <FileText className="w-3.5 h-3.5 text-primary" />
+                                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                                      {t('fees.lineItems', { defaultValue: 'What this invoice covers' })}
+                                    </p>
+                                  </div>
+                                  <div className="p-4">
+                                    {(inv.items ?? []).length === 0 ? (
+                                      <p className="text-sm text-muted-foreground">{inv.description || '—'}</p>
+                                    ) : (
+                                      <div className="divide-y divide-border/60">
+                                        {inv.items.map(item => (
+                                          <div key={item.id} className="flex justify-between items-center text-sm py-2 first:pt-0 last:pb-0">
+                                            <span>
+                                              {item.description}
+                                              {item.feeHead ? <span className="text-xs text-muted-foreground ml-1">· {item.feeHead.name}</span> : null}
+                                              {item.inventoryItem ? <span className="text-xs text-muted-foreground ml-1">· {item.quantity} {item.inventoryItem.unit}</span> : null}
+                                            </span>
+                                            <span className={`tabular-nums font-medium ${Number(item.amount) < 0 ? 'text-emerald-600' : ''}`}>
+                                              {Number(item.amount) < 0 ? '− ' : ''}Rs. {Math.abs(Number(item.amount)).toLocaleString('en-NP', { minimumFractionDigits: 2 })}
+                                            </span>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </div>
                                 </div>
-                                <div>
-                                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
-                                    {t('fees.paymentHistory', { defaultValue: 'Payment history' })}
-                                  </p>
-                                  {(inv.payments ?? []).length === 0 ? (
-                                    <p className="text-sm text-muted-foreground">{t('fees.noPaymentsYet', { defaultValue: 'No payments yet' })}</p>
-                                  ) : (
-                                    <div className="space-y-1">
-                                      {inv.payments.map(p => (
-                                        <div key={p.id} className="flex justify-between items-center text-sm">
-                                          <span className="inline-flex items-center gap-1.5">
-                                            <Receipt className="w-3.5 h-3.5 text-emerald-600" />
-                                            <span className="font-mono text-xs">{p.receiptNo}</span>
-                                            <span className="text-xs text-muted-foreground">{p.method} · {format(new Date(p.paidAt), 'dd MMM yyyy')}</span>
-                                          </span>
-                                          <span className="tabular-nums text-emerald-700">Rs. {Number(p.amount).toLocaleString('en-NP', { minimumFractionDigits: 2 })}</span>
-                                        </div>
-                                      ))}
-                                    </div>
-                                  )}
+                                <div className="bg-background rounded-xl border border-border shadow-sm overflow-hidden">
+                                  <div className="flex items-center gap-2 px-4 py-2.5 border-b border-border bg-muted/40">
+                                    <Receipt className="w-3.5 h-3.5 text-emerald-600" />
+                                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                                      {t('fees.paymentHistory', { defaultValue: 'Payment history' })}
+                                    </p>
+                                  </div>
+                                  <div className="p-4">
+                                    {(inv.payments ?? []).length === 0 ? (
+                                      <p className="text-sm text-muted-foreground">{t('fees.noPaymentsYet', { defaultValue: 'No payments yet' })}</p>
+                                    ) : (
+                                      <div className="divide-y divide-border/60">
+                                        {inv.payments.map(p => (
+                                          <div key={p.id} className="flex justify-between items-center text-sm py-2 first:pt-0 last:pb-0">
+                                            <span className="inline-flex items-center gap-1.5">
+                                              <span className="w-6 h-6 rounded-full bg-emerald-50 flex items-center justify-center shrink-0">
+                                                <Receipt className="w-3 h-3 text-emerald-600" />
+                                              </span>
+                                              <span className="flex flex-col">
+                                                <span className="font-mono text-xs">{p.receiptNo}</span>
+                                                <span className="text-xs text-muted-foreground">{p.method} · {format(new Date(p.paidAt), 'dd MMM yyyy')}</span>
+                                              </span>
+                                            </span>
+                                            <span className="flex items-center gap-2">
+                                              <span className="tabular-nums font-medium text-emerald-700">Rs. {Number(p.amount).toLocaleString('en-NP', { minimumFractionDigits: 2 })}</span>
+                                              <button
+                                                onClick={() => {
+                                                  feesApi.receipt(inv.id).then(r => {
+                                                    const fullPayment = r.data.payments.find(x => x.id === p.id) || p;
+                                                    printFeeReceipt(r.data, fullPayment);
+                                                  }).catch(() => toast.error(t('fees.couldNotLoadReceipt', { defaultValue: 'Could not load receipt' })));
+                                                }}
+                                                title={t('fees.printThisReceipt', { defaultValue: 'Print this receipt' })}
+                                                className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                                              >
+                                                <Printer className="w-3.5 h-3.5" />
+                                              </button>
+                                            </span>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </div>
                                 </div>
                               </div>
                             </td>

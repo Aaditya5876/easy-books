@@ -1,4 +1,3 @@
-import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import { portalApi } from '@/api';
@@ -22,10 +21,12 @@ const today = new Date().toLocaleDateString('en-US', { weekday: 'long' }).toUppe
 
 export default function PortalTimetable() {
   const { t } = useTranslation();
-  const [student, setStudent] = useState(null);
-  useEffect(() => {
-    try { setStudent(JSON.parse(localStorage.getItem('portal_student') || 'null')); } catch {}
-  }, []);
+
+  // Live, not the localStorage snapshot cached at login — see PortalStudyMaterials.jsx.
+  const { data: student } = useQuery({
+    queryKey: ['portal-me'],
+    queryFn: () => portalApi.me().then(r => r.data),
+  });
 
   const { data: timetable = [], isLoading } = useQuery({
     queryKey: ['portal-timetable', student?.classId],

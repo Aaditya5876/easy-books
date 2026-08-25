@@ -152,10 +152,11 @@ const schoolNavSections = [
     labelColor: 'text-amber-400',
     activeClass: 'bg-amber-600 text-white shadow-sm shadow-amber-900/30',
     items: [
-      // Notices stays ungated — it's SMS's own notice board, not the shared Communication module.
+      // Notices is SMS's own notice board — the shared Communication/Memo modules
+      // (client/vendor task tracking, quotation/bill filing) don't reach students
+      // or parents and are deliberately excluded here; both stay intact for
+      // business companies via the non-school sidebar/routes.
       { icon: Megaphone, label: 'Notices', path: '/notices', roles: ['TEACHER', 'LIBRARIAN'] },
-      { icon: MessageSquare, label: 'Communication', path: '/communication', module: 'COMMUNICATION' },
-      { icon: FileText, label: 'Memo', path: '/memo', module: 'COMMUNICATION' },
     ]
   },
   {

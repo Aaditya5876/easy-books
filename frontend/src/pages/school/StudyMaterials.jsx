@@ -4,6 +4,7 @@ import { Plus, Trash2, Download, BookOpen } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { studyMaterialsApi, classesApi, subjectsApi, uploadApi } from '@/api';
 import apiClient from '@/api/client';
+import StaffCombobox from '@/components/shared/StaffCombobox';
 import { getActiveCompanyId } from '@/lib/companyContext';
 import { filterSubjectsByClass } from '@/lib/subjectFilter';
 import { useRole } from '@/lib/useRole';
@@ -103,7 +104,7 @@ function UploadDialog({ open, onClose, classes, subjects, companyId }) {
           </div>
           <div className="space-y-1.5">
             <Label>{t('materials.uploadedBy', { defaultValue: 'Uploaded By' })}</Label>
-            <Input placeholder={t('materials.uploadedByPlaceholder', { defaultValue: 'Teacher name' })} value={form.uploadedBy} onChange={e => set('uploadedBy', e.target.value)} />
+            <StaffCombobox displayValue={form.uploadedBy} onSelect={name => set('uploadedBy', name)} placeholder={t('materials.uploadedByPlaceholder', { defaultValue: 'Search staff…' })} />
           </div>
           <div className="space-y-1.5">
             <Label>{t('materials.file', { defaultValue: 'File *' })}</Label>

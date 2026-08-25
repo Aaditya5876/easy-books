@@ -49,7 +49,11 @@ function NotificationBell({ isMobile = false }) {
   const { data: unreadCount = 0 } = useQuery({
     queryKey: ['portal-notifications-unread'],
     queryFn: () => portalApi.notificationsUnreadCount().then(r => r.data),
-    refetchInterval: 60000,
+    // A notification usually comes from someone else's action (a teacher/admin
+    // in another session) — this poll is the only way this tab finds out.
+    // 60s felt sluggish during testing; 15s is still light for a school-sized
+    // portal and reads as close to instant.
+    refetchInterval: 15000,
   });
 
   const { data: notifications = [] } = useQuery({
@@ -65,7 +69,15 @@ function NotificationBell({ isMobile = false }) {
       qc.invalidateQueries({ queryKey: ['portal-notifications'] });
     }
     setOpen(false);
-    if (n.link) navigate(n.link);
+    if (n.link) {
+      // navigate() is a no-op if already on that route (e.g. clicking a fee
+      // notification while sitting on /portal/fees) — nothing would otherwise
+      // remount the page or refetch its data, so the new invoice/receipt just
+      // silently wouldn't appear until a manual refresh. Invalidate everything
+      // portal-side on click so the destination page is always fresh.
+      qc.invalidateQueries();
+      navigate(n.link);
+    }
   }
 
   return (
@@ -127,17 +139,22 @@ export default function PortalLayout() {
   const navigate  = useNavigate();
   const location  = useLocation();
   const outlet    = useOutlet();
-  const [student, setStudent]     = useState(null);
   const [portalType, setPortalType] = useState('PARENT');
+  const [hasToken, setHasToken] = useState(false);
 
   useEffect(() => {
     const token = localStorage.getItem('portal_token');
     if (!token) { navigate('/portal/login', { replace: true }); return; }
-    try {
-      setStudent(JSON.parse(localStorage.getItem('portal_student') || 'null'));
-      setPortalType(localStorage.getItem('portal_type') || 'PARENT');
-    } catch { navigate('/portal/login', { replace: true }); }
+    setPortalType(localStorage.getItem('portal_type') || 'PARENT');
+    setHasToken(true);
   }, [navigate]);
+
+  // Live, not the localStorage snapshot cached at login — see PortalStudyMaterials.jsx.
+  const { data: student } = useQuery({
+    queryKey: ['portal-me'],
+    queryFn: () => portalApi.me().then(r => r.data),
+    enabled: hasToken,
+  });
 
   function logout() {
     localStorage.removeItem('portal_token');

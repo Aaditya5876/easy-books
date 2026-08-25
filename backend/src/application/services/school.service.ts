@@ -826,6 +826,27 @@ export class SchoolService {
         }),
       ),
     );
+
+    // One notification per date-sheet, not per row — a date-sheet is many
+    // rows (one per subject) from a single admin action.
+    const students = await this.prisma.student.findMany({
+      where: { companyId: body.companyId, classId: body.classId, status: 'ACTIVE' },
+      select: { id: true },
+    });
+    for (const s of students) {
+      try {
+        await this.portalNotifications.notifyStudent(body.companyId, s.id, {
+          title: '📅 Exam schedule published',
+          message: `The date-sheet for "${body.examName}" is now available — check your exam dates and start preparing!`,
+          link: '/portal/exam-schedule',
+          referenceType: 'EXAM_SCHEDULE',
+          referenceId: body.classId,
+        });
+      } catch (err) {
+        console.error(`Exam schedule notification failed for student ${s.id}:`, (err as Error).message);
+      }
+    }
+
     return { created: created.length };
   }
 
@@ -854,17 +875,56 @@ export class SchoolService {
     });
   }
 
+  // A full weekly routine is built one period-cell at a time (up to ~48 calls
+  // for one class), so notifying on every upsert would spam students with
+  // dozens of pings while an admin is mid-edit. Instead, throttle: only notify
+  // once per class per 10-minute window — an admin editing a whole week's
+  // grid in one sitting produces exactly one notification, not one per cell.
+  private static readonly ROUTINE_NOTIFY_THROTTLE_MS = 10 * 60 * 1000;
+
   async upsertTimetableEntry(body: any) {
     const data = clean(
       body,
       ['companyId', 'classId', 'subjectId', 'teacherId', 'dayOfWeek', 'periodNumber', 'startTime', 'endTime', 'roomNumber'],
       ['dayOfWeek', 'periodNumber'],
     );
-    return this.prisma.timetableEntry.upsert({
+    const entry = await this.prisma.timetableEntry.upsert({
       where: { classId_dayOfWeek_periodNumber: { classId: data.classId, dayOfWeek: data.dayOfWeek, periodNumber: data.periodNumber } },
       create: data,
       update: { subjectId: data.subjectId, teacherId: data.teacherId, startTime: data.startTime, endTime: data.endTime, roomNumber: data.roomNumber },
     });
+
+    try {
+      const recent = await this.prisma.portalNotification.findFirst({
+        where: { companyId: data.companyId, referenceType: 'ROUTINE_UPDATE', referenceId: data.classId },
+        orderBy: { createdAt: 'desc' },
+        select: { createdAt: true },
+      });
+      const throttled = recent && Date.now() - recent.createdAt.getTime() < SchoolService.ROUTINE_NOTIFY_THROTTLE_MS;
+      if (!throttled) {
+        const students = await this.prisma.student.findMany({
+          where: { companyId: data.companyId, classId: data.classId, status: 'ACTIVE' },
+          select: { id: true },
+        });
+        for (const s of students) {
+          try {
+            await this.portalNotifications.notifyStudent(data.companyId, s.id, {
+              title: '🕐 Class routine updated',
+              message: 'Your class timetable has been updated — tap to see the latest schedule.',
+              link: '/portal/timetable',
+              referenceType: 'ROUTINE_UPDATE',
+              referenceId: data.classId,
+            });
+          } catch (err) {
+            console.error(`Routine notification failed for student ${s.id}:`, (err as Error).message);
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Routine notification throttle check failed:', (err as Error).message);
+    }
+
+    return entry;
   }
 
   async deleteTimetableEntry(id: string, companyId: string) {
@@ -884,15 +944,16 @@ export class SchoolService {
     const data = clean(body, ['companyId', 'title', 'content', 'targetAudience', 'isPublished', 'expiresAt']);
     const notice = await this.prisma.schoolNotice.create({ data: { ...data, publishedAt: new Date() } });
 
-    // Best-effort — a notification failure must never block the notice itself
-    // from being created. TEACHERS-only notices don't reach the student portal.
+    // Best-effort, per student — a notification failure must never block the
+    // notice itself, and one student's failure must not skip the rest of the
+    // batch. TEACHERS-only notices don't reach the student portal.
     if (notice.isPublished && notice.targetAudience !== 'TEACHERS') {
-      try {
-        const students = await this.prisma.student.findMany({
-          where: { companyId: data.companyId, status: 'ACTIVE' },
-          select: { id: true },
-        });
-        for (const s of students) {
+      const students = await this.prisma.student.findMany({
+        where: { companyId: data.companyId, status: 'ACTIVE' },
+        select: { id: true },
+      });
+      for (const s of students) {
+        try {
           await this.portalNotifications.notifyStudent(data.companyId, s.id, {
             title: 'New notice published',
             message: notice.title,
@@ -900,9 +961,9 @@ export class SchoolService {
             referenceType: 'SCHOOL_NOTICE',
             referenceId: notice.id,
           });
+        } catch (err) {
+          console.error(`Notice portal notification failed for student ${s.id}:`, (err as Error).message);
         }
-      } catch (err) {
-        console.error('Notice portal notification failed:', (err as Error).message);
       }
     }
 
@@ -968,9 +1029,30 @@ export class SchoolService {
   }
 
   async createStudyMaterial(body: any) {
-    return this.prisma.studyMaterial.create({
-      data: clean(body, ['companyId', 'title', 'fileUrl', 'fileType', 'classId', 'subjectId', 'description', 'uploadedBy']),
+    const data = clean(body, ['companyId', 'title', 'fileUrl', 'fileType', 'classId', 'subjectId', 'description', 'uploadedBy']);
+    const material = await this.prisma.studyMaterial.create({ data });
+
+    // classId is optional on this model — null means school-wide, so notify
+    // every active student rather than skipping (matches the Notices pattern).
+    const students = await this.prisma.student.findMany({
+      where: { companyId: data.companyId, status: 'ACTIVE', ...(data.classId ? { classId: data.classId } : {}) },
+      select: { id: true },
     });
+    for (const s of students) {
+      try {
+        await this.portalNotifications.notifyStudent(data.companyId, s.id, {
+          title: '📘 New study material',
+          message: `"${material.title}" has been added to your class materials — tap to view or download.`,
+          link: '/portal/study-materials',
+          referenceType: 'STUDY_MATERIAL',
+          referenceId: material.id,
+        });
+      } catch (err) {
+        console.error(`Study material notification failed for student ${s.id}:`, (err as Error).message);
+      }
+    }
+
+    return material;
   }
 
   async deleteStudyMaterial(id: string, companyId: string) {
@@ -993,9 +1075,28 @@ export class SchoolService {
   }
 
   async createHomework(body: any) {
-    return this.prisma.homework.create({
-      data: clean(body, ['companyId', 'classId', 'subjectId', 'title', 'description', 'dueDate', 'fileUrl']),
+    const data = clean(body, ['companyId', 'classId', 'subjectId', 'title', 'description', 'dueDate', 'fileUrl']);
+    const homework = await this.prisma.homework.create({ data });
+
+    const students = await this.prisma.student.findMany({
+      where: { companyId: data.companyId, classId: data.classId, status: 'ACTIVE' },
+      select: { id: true },
     });
+    for (const s of students) {
+      try {
+        await this.portalNotifications.notifyStudent(data.companyId, s.id, {
+          title: '📝 New homework assigned',
+          message: `"${homework.title}" has been assigned — due ${homework.dueDate.toLocaleDateString('en-NP', { day: 'numeric', month: 'short', year: 'numeric' })}. Don't forget to complete it on time!`,
+          link: '/portal/homework',
+          referenceType: 'HOMEWORK',
+          referenceId: homework.id,
+        });
+      } catch (err) {
+        console.error(`Homework notification failed for student ${s.id}:`, (err as Error).message);
+      }
+    }
+
+    return homework;
   }
 
   async updateHomework(id: string, companyId: string, body: any) {
@@ -1143,13 +1244,39 @@ export class SchoolService {
     if (room._count.allocations >= room.capacity) throw new BadRequestException('Room is at full capacity');
     const existing = await this.prisma.hostelAllocation.findFirst({ where: { studentId: data.studentId, companyId: data.companyId, isActive: true } });
     if (existing) throw new BadRequestException('Student already has an active hostel allocation');
-    return this.prisma.hostelAllocation.create({ data: { ...data, startDate: data.startDate ?? new Date() } });
+    const allocation = await this.prisma.hostelAllocation.create({ data: { ...data, startDate: data.startDate ?? new Date() } });
+
+    try {
+      await this.portalNotifications.notifyStudent(data.companyId, data.studentId, {
+        title: 'Hostel room assigned',
+        message: `You've been assigned to Room ${room.roomNumber}${room.floor ? ` (${room.floor})` : ''}.`,
+        referenceType: 'HOSTEL_ALLOCATION',
+        referenceId: allocation.id,
+      });
+    } catch (err) {
+      console.error('Hostel allocation notification failed:', (err as Error).message);
+    }
+
+    return allocation;
   }
 
   async deallocateStudent(id: string, companyId: string) {
-    const alloc = await this.prisma.hostelAllocation.findFirst({ where: { id, companyId } });
+    const alloc = await this.prisma.hostelAllocation.findFirst({ where: { id, companyId }, include: { room: { select: { roomNumber: true } } } });
     if (!alloc) throw new NotFoundException('Allocation not found');
-    return this.prisma.hostelAllocation.update({ where: { id }, data: { isActive: false, endDate: new Date() } });
+    const updated = await this.prisma.hostelAllocation.update({ where: { id }, data: { isActive: false, endDate: new Date() } });
+
+    try {
+      await this.portalNotifications.notifyStudent(companyId, alloc.studentId, {
+        title: 'Hostel room removed',
+        message: `You've been removed from Room ${alloc.room?.roomNumber ?? '—'}.`,
+        referenceType: 'HOSTEL_ALLOCATION',
+        referenceId: alloc.id,
+      });
+    } catch (err) {
+      console.error('Hostel deallocation notification failed:', (err as Error).message);
+    }
+
+    return updated;
   }
 
   // ── Transport ─────────────────────────────────────────────────────────────────
@@ -1205,12 +1332,39 @@ export class SchoolService {
     const data = clean(body, ['companyId', 'routeId', 'studentId', 'pickupStop']);
     const existing = await this.prisma.studentTransport.findFirst({ where: { studentId: data.studentId, companyId: data.companyId, isActive: true } });
     if (existing) throw new BadRequestException('Student is already assigned to a transport route');
-    return this.prisma.studentTransport.create({ data });
+    const route = await this.prisma.transportRoute.findFirst({ where: { id: data.routeId, companyId: data.companyId }, select: { routeName: true } });
+    const assignment = await this.prisma.studentTransport.create({ data });
+
+    try {
+      await this.portalNotifications.notifyStudent(data.companyId, data.studentId, {
+        title: 'Transport route assigned',
+        message: `You've been added to the ${route?.routeName ?? 'transport'} route${data.pickupStop ? `, pickup at ${data.pickupStop}` : ''}.`,
+        referenceType: 'TRANSPORT_ASSIGNMENT',
+        referenceId: assignment.id,
+      });
+    } catch (err) {
+      console.error('Transport assignment notification failed:', (err as Error).message);
+    }
+
+    return assignment;
   }
 
   async removeStudentTransport(id: string, companyId: string) {
-    const assignment = await this.prisma.studentTransport.findFirst({ where: { id, companyId } });
+    const assignment = await this.prisma.studentTransport.findFirst({ where: { id, companyId }, include: { route: { select: { routeName: true } } } });
     if (!assignment) throw new NotFoundException('Assignment not found');
-    return this.prisma.studentTransport.update({ where: { id }, data: { isActive: false } });
+    const updated = await this.prisma.studentTransport.update({ where: { id }, data: { isActive: false } });
+
+    try {
+      await this.portalNotifications.notifyStudent(companyId, assignment.studentId, {
+        title: 'Transport route removed',
+        message: `You've been removed from the ${assignment.route?.routeName ?? 'transport'} route.`,
+        referenceType: 'TRANSPORT_ASSIGNMENT',
+        referenceId: assignment.id,
+      });
+    } catch (err) {
+      console.error('Transport removal notification failed:', (err as Error).message);
+    }
+
+    return updated;
   }
 }

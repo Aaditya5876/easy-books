@@ -166,6 +166,9 @@ export default function Hostel() {
   const [tab, setTab] = useState('rooms');
   const [roomDialog, setRoomDialog] = useState(null);
   const [allocDialog, setAllocDialog] = useState(false);
+  const [residentSearch, setResidentSearch] = useState('');
+  const [classFilter, setClassFilter] = useState('');
+  const [roomFilter, setRoomFilter] = useState('');
 
   const { data: rooms = [], isLoading: loadingRooms } = useQuery({
     queryKey: ['hostel-rooms', companyId],
@@ -197,6 +200,16 @@ export default function Hostel() {
 
   const fmtDate = (d) => d ? new Date(d).toLocaleDateString('en-NP', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
   const fmtAmt = (n) => `Rs. ${Number(n).toLocaleString('en-NP')}`;
+  const classLabel = (a) => a.student?.class ? `${a.student.class.name}${a.student.class.section ? ` (${a.student.class.section})` : ''}` : '—';
+  const roomLabel = (a) => `${a.room?.roomNumber}${a.room?.floor ? `, ${a.room.floor}` : ''}`;
+
+  const classOptions = [...new Set(allocations.map(classLabel))].sort();
+  const roomOptions = [...new Set(allocations.map(roomLabel))].sort();
+  const filteredAllocations = allocations.filter(a =>
+    (!residentSearch || (a.student?.name || '').toLowerCase().includes(residentSearch.toLowerCase())) &&
+    (!classFilter || classLabel(a) === classFilter) &&
+    (!roomFilter || roomLabel(a) === roomFilter)
+  );
 
   return (
     <div className="p-6 space-y-5">
@@ -283,11 +296,27 @@ export default function Hostel() {
       )}
 
       {tab === 'residents' && (
-        <div className="bg-white rounded-xl border border-border overflow-hidden">
+        <>
+          {allocations.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              <Input placeholder={t('hostel.searchResidents', { defaultValue: 'Search by student name…' })} value={residentSearch} onChange={e => setResidentSearch(e.target.value)} className="max-w-xs" />
+              <select className="h-9 border rounded-md px-3 text-sm bg-background" value={classFilter} onChange={e => setClassFilter(e.target.value)}>
+                <option value="">{t('hostel.allClasses', { defaultValue: 'All Classes' })}</option>
+                {classOptions.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+              <select className="h-9 border rounded-md px-3 text-sm bg-background" value={roomFilter} onChange={e => setRoomFilter(e.target.value)}>
+                <option value="">{t('hostel.allRooms', { defaultValue: 'All Rooms' })}</option>
+                {roomOptions.map(r => <option key={r} value={r}>{r}</option>)}
+              </select>
+            </div>
+          )}
+          <div className="bg-white rounded-xl border border-border overflow-hidden">
           {loadingAllocs ? (
             <div className="p-12 text-center text-muted-foreground text-sm">{t('hostel.loading', { defaultValue: 'Loading…' })}</div>
           ) : allocations.length === 0 ? (
             <div className="p-12 text-center text-muted-foreground text-sm">{t('hostel.noResidents', { defaultValue: 'No residents currently allocated.' })}</div>
+          ) : filteredAllocations.length === 0 ? (
+            <div className="p-12 text-center text-muted-foreground text-sm">{t('hostel.noMatchingResidents', { defaultValue: 'No residents match your search/filters.' })}</div>
           ) : (
             <table className="w-full text-sm">
               <thead className="bg-muted/40 border-b border-border">
@@ -300,11 +329,11 @@ export default function Hostel() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {allocations.map(a => (
+                {filteredAllocations.map(a => (
                   <tr key={a.id} className="hover:bg-muted/20">
                     <td className="px-5 py-3 font-medium">{a.student?.name}</td>
-                    <td className="px-5 py-3 text-muted-foreground">{a.student?.class ? `${a.student.class.name}${a.student.class.section ? ` (${a.student.class.section})` : ''}` : '—'}</td>
-                    <td className="px-5 py-3">{t('hostel.roomTitle', { defaultValue: 'Room {{number}}', number: `${a.room?.roomNumber}${a.room?.floor ? `, ${a.room.floor}` : ''}` })}</td>
+                    <td className="px-5 py-3 text-muted-foreground">{classLabel(a)}</td>
+                    <td className="px-5 py-3">{t('hostel.roomTitle', { defaultValue: 'Room {{number}}', number: roomLabel(a) })}</td>
                     <td className="px-5 py-3 text-muted-foreground">{fmtDate(a.startDate)}</td>
                     <td className="px-5 py-3">
                       <button onClick={async () => {
@@ -321,7 +350,8 @@ export default function Hostel() {
               </tbody>
             </table>
           )}
-        </div>
+          </div>
+        </>
       )}
 
       {roomDialog && (

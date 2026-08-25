@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
@@ -53,11 +53,14 @@ const STAT_CARDS = [
 
 export default function PortalDashboard() {
   const { t } = useTranslation();
-  const [student, setStudent] = useState(null);
 
-  useEffect(() => {
-    try { setStudent(JSON.parse(localStorage.getItem('portal_student') || 'null')); } catch {}
-  }, []);
+  // Live, not the localStorage snapshot cached at login — a class reassignment
+  // after login would otherwise silently keep showing the old class's data
+  // until the student logs out and back in.
+  const { data: student } = useQuery({
+    queryKey: ['portal-me'],
+    queryFn: () => portalApi.me().then(r => r.data),
+  });
 
   const { data: attendance } = useQuery({
     queryKey: ['portal-attendance'],

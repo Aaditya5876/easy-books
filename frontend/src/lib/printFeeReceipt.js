@@ -1,13 +1,23 @@
 import { format } from 'date-fns';
 import QRCode from 'qrcode';
 
-export async function printFeeReceipt(inv) {
+// A receipt is proof of ONE payment, not a running "total paid so far" summary
+// — a school can take several partial payments against the same invoice, and
+// each one gets its own real receiptNo (R-<BSyear>-NNNN, from FeePayment,
+// generated at payment time). `payment` picks which one this document is for;
+// callers should always pass the specific FeePayment being printed. Falls
+// back to the invoice's latest payment if omitted, for older call sites.
+export async function printFeeReceipt(inv, payment) {
+  const pay = payment || inv.payments?.[inv.payments.length - 1];
   const w = window.open('', '_blank');
   const fmt = (n) => Number(n).toLocaleString('en-NP', { minimumFractionDigits: 2 });
   const className = inv.student?.class
     ? `${inv.student.class.name}${inv.student.class.section ? ` (${inv.student.class.section})` : ''}`
     : '—';
-  const receiptNo = inv.id.slice(-8).toUpperCase();
+  const receiptNo = pay?.receiptNo || inv.id.slice(-8).toUpperCase();
+  const amountPaid = pay ? Number(pay.amount) : Number(inv.paidAmount);
+  const paidDate = pay?.paidAt ? new Date(pay.paidAt) : new Date();
+  const balanceDue = Number(inv.totalAmount) - Number(inv.paidAmount);
 
   // Demo-only QR: encodes receipt details for quick visual verification.
   // NOT a real payment/bank QR — no gateway or bank integration is wired to it.
@@ -15,7 +25,7 @@ export async function printFeeReceipt(inv) {
     `${inv.company?.name || 'School'} — Fee Receipt`,
     `Receipt: ${receiptNo}`,
     `Student: ${inv.student?.name || '—'}`,
-    `Amount Paid: Rs. ${fmt(inv.paidAmount)}`,
+    `Amount Paid: Rs. ${fmt(amountPaid)}`,
     `Month: ${inv.month}`,
   ].join('\n');
   let qrDataUrl = '';
@@ -44,7 +54,8 @@ export async function printFeeReceipt(inv) {
     <div class="divider"></div>
     <div style="text-align:center;font-weight:bold;margin-bottom:8px">FEE RECEIPT</div>
     <div class="row"><span class="label">Receipt No:</span> <span>${receiptNo}</span></div>
-    <div class="row"><span class="label">Date:</span> <span>${format(new Date(), 'dd MMM yyyy')}</span></div>
+    <div class="row"><span class="label">Date:</span> <span>${format(paidDate, 'dd MMM yyyy')}</span></div>
+    ${pay?.method ? `<div class="row"><span class="label">Method:</span> <span>${pay.method}</span></div>` : ''}
     <div class="divider"></div>
     <div class="row"><span class="label">Student:</span> <span>${inv.student?.name || '—'}</span></div>
     <div class="row"><span class="label">Roll No:</span> <span>${inv.student?.rollNumber || '—'}</span></div>
@@ -52,10 +63,11 @@ export async function printFeeReceipt(inv) {
     <div class="row"><span class="label">Month:</span> <span>${inv.month}</span></div>
     ${inv.description ? `<div class="row"><span class="label">Description:</span> <span>${inv.description}</span></div>` : ''}
     <div class="divider"></div>
-    <div class="row"><span class="label">Total Amount:</span> <span>Rs. ${fmt(inv.totalAmount)}</span></div>
+    <div class="row total"><span>Amount Paid (this receipt):</span> <span>Rs. ${fmt(amountPaid)}</span></div>
+    <div class="row"><span class="label">Invoice Total:</span> <span>Rs. ${fmt(inv.totalAmount)}</span></div>
     ${Number(inv.discount) > 0 ? `<div class="row"><span class="label">Discount:</span> <span>- Rs. ${fmt(inv.discount)}</span></div>` : ''}
-    <div class="row total"><span>Amount Paid:</span> <span>Rs. ${fmt(inv.paidAmount)}</span></div>
-    ${Number(inv.totalAmount) - Number(inv.paidAmount) > 0 ? `<div class="row" style="color:#c00"><span>Balance Due:</span> <span>Rs. ${fmt(Number(inv.totalAmount) - Number(inv.paidAmount))}</span></div>` : ''}
+    <div class="row"><span class="label">Total Paid to Date:</span> <span>Rs. ${fmt(inv.paidAmount)}</span></div>
+    ${balanceDue > 0 ? `<div class="row" style="color:#c00"><span>Balance Due:</span> <span>Rs. ${fmt(balanceDue)}</span></div>` : ''}
     <div class="divider"></div>
     <div style="display:flex;justify-content:space-between;align-items:flex-end">
       ${qrDataUrl ? `

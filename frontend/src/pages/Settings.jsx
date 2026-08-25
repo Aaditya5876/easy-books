@@ -21,7 +21,7 @@ import {
 import {
   Building2, Plus, Trash2, Save, ImagePlus, X, UserPlus, Copy, Check, Shield,
   Phone, Mail, MapPin, Hash, User, Palette, Type, Bell, RotateCcw, Upload,
-  Recycle, RotateCw, Lock, AlertTriangle, Clock, Zap, QrCode
+  Recycle, RotateCw, Lock, AlertTriangle, Clock, Zap, QrCode, Power, PowerOff
 } from 'lucide-react';
 
 const SIDEBAR_PALETTE = ['#1e293b', '#1e3a5f', '#14532d', '#4c1d95', '#881337', '#7c2d12'];
@@ -100,6 +100,13 @@ export default function Settings() {
     const key = BUSINESS_TYPE_I18N_KEY[value];
     return key ? t(key, { defaultValue: BUSINESS_TYPE_LABELS[value] || value }) : value;
   }
+
+  // Controlled so the selected tab survives `loading` toggling (see `if (loading)
+  // return (...)` below) — every company action (add/edit/delete/deactivate) calls
+  // loadCompanies(), which flips loading true→false, unmounting and remounting an
+  // uncontrolled <Tabs defaultValue="preferences"> each time and resetting it back
+  // to Preferences. Lifting the selection into state here fixes that for all of them.
+  const [activeTab, setActiveTab] = useState('preferences');
 
   // ── Companies ─────────────────────────────────────────────────────────────
   const [companies, setCompanies] = useState([]);
@@ -271,12 +278,36 @@ export default function Settings() {
   }
 
   async function deleteCompany(id) {
-    if (!confirm(t('settings.confirmDeleteCompany', { defaultValue: 'Are you sure you want to delete this company?' }))) return;
+    // NOTE: this used to be `if (!confirm(...)) return` without an await — confirm()
+    // always returns a Promise (truthy), so that check never actually blocked anything;
+    // the delete fired immediately regardless of what the user clicked. Fixed here.
+    const ok = await confirm({
+      title: t('settings.confirmDeleteCompanyTitle', { defaultValue: 'Delete this company?' }),
+      description: t('settings.confirmDeleteCompany', { defaultValue: 'This permanently deletes the company and cannot be undone. If you just want to pause a school that stopped using EasyBooks, use Deactivate instead.' }),
+      confirmLabel: t('settings.delete', { defaultValue: 'Delete' }),
+      variant: 'destructive',
+    });
+    if (!ok) return;
     await api.Company.delete(id);
     if (getActiveCompanyId() === id) {
       const remaining = companies.filter(c => c.id !== id);
       if (remaining.length > 0) setActiveCompanyId(remaining[0].id);
     }
+    loadCompanies();
+  }
+
+  async function toggleCompanyActive(company) {
+    const activating = !company.is_active;
+    if (!activating) {
+      const ok = await confirm({
+        title: t('settings.confirmDeactivateTitle', { defaultValue: 'Deactivate this school?' }),
+        description: t('settings.confirmDeactivateDescription', { defaultValue: 'The nightly automation (fee billing, payroll, reconciliation) will stop running for this school. You can reactivate it anytime.' }),
+        confirmLabel: t('settings.deactivate', { defaultValue: 'Deactivate' }),
+        variant: 'destructive',
+      });
+      if (!ok) return;
+    }
+    await api.Company.update(company.id, { is_active: activating });
     loadCompanies();
   }
 
@@ -448,7 +479,7 @@ export default function Settings() {
     <div className="space-y-6 animate-fade-in">
       <PageHeader title={t('settings.title', { defaultValue: 'Settings' })} subtitle={t('settings.subtitle', { defaultValue: 'Manage companies, users and preferences' })} />
 
-      <Tabs defaultValue="preferences">
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList>
           <TabsTrigger value="companies">{t('settings.tabCompanies', { defaultValue: 'Companies' })}</TabsTrigger>
           <TabsTrigger value="users" onClick={loadUsers}>{t('settings.tabUsers', { defaultValue: 'Users' })}</TabsTrigger>
@@ -480,7 +511,8 @@ export default function Settings() {
                   <div>
                     <div className="flex items-center gap-2">
                       <h3 className="font-semibold">{c.name}</h3>
-                      {c.id === activeCompanyId && <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full">{t('settings.active', { defaultValue: 'Active' })}</span>}
+                      {c.id === activeCompanyId && <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full" title={t('settings.currentlyViewingHint', { defaultValue: "You're currently viewing this school" })}>{t('settings.active', { defaultValue: 'Active' })}</span>}
+                      {c.is_active === false && <span className="text-xs bg-red-50 text-red-600 px-2 py-0.5 rounded-full font-medium">{t('settings.deactivated', { defaultValue: 'Deactivated' })}</span>}
                       {c.business_type && (
                         <span className="text-xs bg-secondary text-muted-foreground px-2 py-0.5 rounded-full">
                           {businessTypeLabel(c.business_type)}
@@ -501,6 +533,13 @@ export default function Settings() {
                   )}
                   {c.id !== activeCompanyId && (
                     <Button size="sm" variant="outline" onClick={() => { setActiveCompanyId(c.id); window.location.href = '/'; }}>{t('settings.setActive', { defaultValue: 'Set Active' })}</Button>
+                  )}
+                  {canDelete && (
+                    <Button size="sm" variant="outline" onClick={() => toggleCompanyActive(c)}>
+                      {c.is_active === false
+                        ? <><Power className="w-3.5 h-3.5 mr-1.5" />{t('settings.reactivate', { defaultValue: 'Reactivate' })}</>
+                        : <><PowerOff className="w-3.5 h-3.5 mr-1.5" />{t('settings.deactivate', { defaultValue: 'Deactivate' })}</>}
+                    </Button>
                   )}
                   {canDelete && (
                     <Button size="icon" variant="ghost" onClick={() => deleteCompany(c.id)}>

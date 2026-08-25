@@ -81,8 +81,10 @@ const schoolRoutes = [
   { path: '/library', page: Library, roles: ['LIBRARIAN'] },
   { path: '/hostel', page: Hostel },
   { path: '/transport', page: Transport },
-  { path: '/communication', page: Communication },
-  { path: '/memo', page: Memo },
+  // Communication and Memo are business-ERP modules (client/vendor task
+  // tracking, quotation/bill filing) — neither reaches students or parents,
+  // and Notices already covers school announcements, so they're deliberately
+  // excluded from schoolRoutes. Both remain fully intact for business companies.
   // Shared modules — reused as-is
   { path: '/employees', page: Employees },
   { path: '/attendance', page: Attendance },

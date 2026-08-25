@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, Pencil, Trash2, BookOpen, ArrowLeftRight, Upload } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import BulkImportDialog from '@/components/shared/BulkImportDialog';
+import BorrowerCombobox from '@/components/shared/BorrowerCombobox';
 import { BOOK_FIELDS } from '@/components/shared/bulkImportFields';
 import { libraryApi } from '@/api';
 import { getActiveCompanyId } from '@/lib/companyContext';
@@ -15,7 +16,7 @@ import { toast } from 'sonner';
 
 const EMPTY_BOOK = { title: '', author: '', isbn: '', category: '', totalCopies: 1, availableCopies: 1, shelfLocation: '' };
 
-function BookDialog({ open, onClose, initial, companyId }) {
+function BookDialog({ open, onClose, initial, companyId, existingTitles }) {
   const { t } = useTranslation();
   const qc = useQueryClient();
   const isEdit = !!initial?.id;
@@ -52,7 +53,10 @@ function BookDialog({ open, onClose, initial, companyId }) {
         <form onSubmit={handleSubmit} className="space-y-4 pt-2">
           <div className="space-y-1.5">
             <Label>{t('library.titleLabel', { defaultValue: 'Title *' })}</Label>
-            <Input placeholder={t('library.titlePlaceholder', { defaultValue: 'Book title' })} value={form.title} onChange={e => { set('title', e.target.value); if (errors.title) setErrors({}); }} />
+            <Input list="library-existing-titles" placeholder={t('library.titlePlaceholder', { defaultValue: 'Book title' })} value={form.title} onChange={e => { set('title', e.target.value); if (errors.title) setErrors({}); }} />
+            <datalist id="library-existing-titles">
+              {existingTitles?.map(title => <option key={title} value={title} />)}
+            </datalist>
             {errors.title && <p className="text-xs text-red-600">{errors.title}</p>}
           </div>
           <div className="grid grid-cols-2 gap-3">
@@ -98,7 +102,7 @@ function BookDialog({ open, onClose, initial, companyId }) {
 function IssueDialog({ open, onClose, books, companyId }) {
   const { t } = useTranslation();
   const qc = useQueryClient();
-  const [form, setForm] = useState({ bookId: '', memberName: '', dueDate: '' });
+  const [form, setForm] = useState({ bookId: '', studentId: null, memberName: '', dueDate: '' });
   const [errors, setErrors] = useState({});
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
@@ -125,7 +129,7 @@ function IssueDialog({ open, onClose, books, companyId }) {
       return;
     }
     setErrors({});
-    issue.mutate({ companyId, bookId: form.bookId, memberName: form.memberName, dueDate: new Date(form.dueDate) });
+    issue.mutate({ companyId, bookId: form.bookId, studentId: form.studentId, memberName: form.memberName, dueDate: new Date(form.dueDate) });
   }
 
   return (
@@ -145,7 +149,11 @@ function IssueDialog({ open, onClose, books, companyId }) {
           </div>
           <div className="space-y-1.5">
             <Label>{t('library.issuedToLabel', { defaultValue: 'Issued To *' })}</Label>
-            <Input placeholder={t('library.issuedToPlaceholder', { defaultValue: 'Student or staff name' })} value={form.memberName} onChange={e => { set('memberName', e.target.value); if (errors.memberName) setErrors(er => ({ ...er, memberName: undefined })); }} />
+            <BorrowerCombobox
+              displayValue={form.memberName}
+              onSelect={({ studentId, memberName }) => { setForm(f => ({ ...f, studentId, memberName })); if (errors.memberName) setErrors(er => ({ ...er, memberName: undefined })); }}
+              placeholder={t('library.issuedToPlaceholder', { defaultValue: 'Search student or staff…' })}
+            />
             {errors.memberName && <p className="text-xs text-red-600">{errors.memberName}</p>}
           </div>
           <div className="space-y-1.5">
@@ -387,7 +395,13 @@ export default function Library() {
       )}
 
       {bookDialog && (
-        <BookDialog open={!!bookDialog} onClose={() => setBookDialog(null)} initial={bookDialog.mode === 'edit' ? bookDialog.book : null} companyId={companyId} />
+        <BookDialog
+          open={!!bookDialog}
+          onClose={() => setBookDialog(null)}
+          initial={bookDialog.mode === 'edit' ? bookDialog.book : null}
+          companyId={companyId}
+          existingTitles={[...new Set(books.map(b => b.title))]}
+        />
       )}
       {issueDialog && (
         <IssueDialog open={issueDialog} onClose={() => setIssueDialog(false)} books={books} companyId={companyId} />

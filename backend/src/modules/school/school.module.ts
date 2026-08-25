@@ -21,6 +21,6 @@ import { NotificationModule } from '../communication/notification.module';
     LedgerPostingService, SmsService, AiService, InventoryServiceImpl,
     AttendanceServiceImpl, PayrollServiceImpl, PortalNotificationService,
   ],
-  exports: [SchoolFinanceService],
+  exports: [SchoolFinanceService, PortalNotificationService],
 })
 export class SchoolModule {}

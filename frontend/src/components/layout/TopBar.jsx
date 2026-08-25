@@ -60,7 +60,7 @@ export default function TopBar({ onMobileMenuToggle, onToolOpen }) {
       // also role-gated to STAFF/ACCOUNTANT/ADMIN, so skip entirely for school
       // companies or for TEACHER/LIBRARIAN to avoid pointless 403s.
       const company = active || companyList[0];
-      const canSearchBusinessData = company?.businessType !== 'SCHOOL' && me?.role !== 'TEACHER' && me?.role !== 'LIBRARIAN';
+      const canSearchBusinessData = company?.business_type !== 'SCHOOL' && me?.role !== 'TEACHER' && me?.role !== 'LIBRARIAN';
       if (canSearchBusinessData) {
         Promise.all([
           api.Client.filter({ company_id: activeId }),
@@ -236,7 +236,7 @@ export default function TopBar({ onMobileMenuToggle, onToolOpen }) {
             </DropdownMenuItem>
             {/* Currency Converter and generic Calendar are business-only tools —
                 schools have their own dedicated Calendar and Events module. */}
-            {activeCompany?.businessType !== 'SCHOOL' && (
+            {activeCompany?.business_type !== 'SCHOOL' && (
               <>
                 <DropdownMenuItem onClick={() => onToolOpen?.('currency')}>
                   <RefreshCw className="w-4 h-4 mr-2" />Currency Converter
