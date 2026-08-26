@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../../../core/db/psql/prisma.client';
 import { SmsService } from './sms.service';
 import { AiService } from './ai.service';
@@ -16,6 +16,7 @@ function clean(data: any, allowed: string[], intKeys: string[] = []) {
   for (const k of allowed) {
     if (data?.[k] === undefined) continue;
     let v = data[k];
+    if (typeof v === 'string') v = v.trim();
     if (v === '') v = null;
     if (v !== null && DATE_KEYS.has(k)) v = new Date(v);
     if (v !== null && intKeys.includes(k)) v = parseInt(String(v), 10);
@@ -130,6 +131,10 @@ export class SchoolService {
 
   async createAcademicYear(body: any) {
     const data = clean(body, ['companyId', 'name', 'startDate', 'endDate', 'isCurrent']);
+    const existing = await this.prisma.academicYear.findFirst({
+      where: { companyId: data.companyId, name: { equals: data.name, mode: 'insensitive' } },
+    });
+    if (existing) throw new ConflictException(`Academic year "${data.name}" already exists`);
     if (data.isCurrent) {
       await this.prisma.academicYear.updateMany({ where: { companyId: data.companyId }, data: { isCurrent: false } });
     }
@@ -140,6 +145,12 @@ export class SchoolService {
     const year = await this.prisma.academicYear.findFirst({ where: { id, companyId } });
     if (!year) throw new NotFoundException('Academic year not found');
     const data = clean(body, ['name', 'startDate', 'endDate', 'isCurrent']);
+    if (data.name !== undefined) {
+      const existing = await this.prisma.academicYear.findFirst({
+        where: { companyId, name: { equals: data.name, mode: 'insensitive' }, id: { not: id } },
+      });
+      if (existing) throw new ConflictException(`Academic year "${data.name}" already exists`);
+    }
     if (data.isCurrent) {
       await this.prisma.academicYear.updateMany({ where: { companyId }, data: { isCurrent: false } });
     }
@@ -164,19 +175,45 @@ export class SchoolService {
     });
   }
 
-  async createClass(body: any) {
-    return this.prisma.schoolClass.create({
-      data: clean(body, ['companyId', 'name', 'section', 'classTeacherId']),
+  // Case/whitespace-insensitive duplicate guard — the DB unique index on
+  // (companyId, name, section) is case-sensitive and doesn't trim, so
+  // "Class 1"/"class 1"/"class 1 " would otherwise all slide through as
+  // distinct rows even though they're the same class to a human.
+  private async assertClassNameFree(companyId: string, name: string, section: string | null, excludeId?: string) {
+    const existing = await this.prisma.schoolClass.findFirst({
+      where: {
+        companyId,
+        name: { equals: name, mode: 'insensitive' },
+        section: section ? { equals: section, mode: 'insensitive' } : null,
+        ...(excludeId ? { id: { not: excludeId } } : {}),
+      },
     });
+    if (existing) {
+      throw new ConflictException(
+        section ? `Class "${name}" section "${section}" already exists` : `Class "${name}" already exists`,
+      );
+    }
+  }
+
+  async createClass(body: any) {
+    const data = clean(body, ['companyId', 'name', 'section', 'classTeacherId']);
+    await this.assertClassNameFree(data.companyId, data.name, data.section ?? null);
+    return this.prisma.schoolClass.create({ data });
   }
 
   async updateClass(id: string, body: any) {
     const cls = await this.prisma.schoolClass.findUnique({ where: { id } });
     if (!cls) throw new NotFoundException('Class not found');
-    return this.prisma.schoolClass.update({
-      where: { id },
-      data: clean(body, ['name', 'section', 'classTeacherId']),
-    });
+    const data = clean(body, ['name', 'section', 'classTeacherId']);
+    if (data.name !== undefined || data.section !== undefined) {
+      await this.assertClassNameFree(
+        cls.companyId,
+        data.name ?? cls.name,
+        (data.section !== undefined ? data.section : cls.section) ?? null,
+        id,
+      );
+    }
+    return this.prisma.schoolClass.update({ where: { id }, data });
   }
 
   async deleteClass(id: string, companyId: string) {
@@ -304,9 +341,20 @@ export class SchoolService {
     });
   }
 
+  // Same case/whitespace-insensitive gap as classes — the DB unique index on
+  // (companyId, name) is case-sensitive, so "English"/"english" would otherwise
+  // both be creatable as separate subjects.
+  private async assertSubjectNameFree(companyId: string, name: string, excludeId?: string) {
+    const existing = await this.prisma.subject.findFirst({
+      where: { companyId, name: { equals: name, mode: 'insensitive' }, ...(excludeId ? { id: { not: excludeId } } : {}) },
+    });
+    if (existing) throw new ConflictException(`Subject "${name}" already exists`);
+  }
+
   async createSubject(body: any) {
     const { classIds } = body;
     const data = clean(body, ['companyId', 'name', 'code', 'bookReference', 'chapters'], ['chapters']);
+    await this.assertSubjectNameFree(data.companyId, data.name);
     return this.prisma.subject.create({
       data: { ...data, classes: classIds?.length ? { create: classIds.map((classId: string) => ({ classId })) } : undefined },
       include: { classes: { include: { class: true } } },
@@ -315,7 +363,12 @@ export class SchoolService {
 
   async updateSubject(id: string, body: any) {
     const { classIds } = body;
+    const subject = await this.prisma.subject.findUnique({ where: { id } });
+    if (!subject) throw new NotFoundException('Subject not found');
     const data = clean(body, ['name', 'code', 'bookReference', 'chapters'], ['chapters']);
+    if (data.name !== undefined) {
+      await this.assertSubjectNameFree(subject.companyId, data.name, id);
+    }
     return this.prisma.$transaction(async (tx) => {
       if (classIds !== undefined) {
         await tx.subjectClass.deleteMany({ where: { subjectId: id } });
