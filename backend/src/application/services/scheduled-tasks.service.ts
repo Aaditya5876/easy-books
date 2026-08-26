@@ -40,6 +40,7 @@ export class ScheduledTasksService {
       select: {
         id: true, name: true, businessType: true,
         autoFeeBilling: true, autoInvoiceRelease: true, autoPayroll: true, autoReconciliation: true,
+        autoLibraryReminders: true,
       },
     });
 
@@ -65,7 +66,7 @@ export class ScheduledTasksService {
         }
       }
 
-      if (company.businessType === 'SCHOOL') {
+      if (company.businessType === 'SCHOOL' && company.autoLibraryReminders) {
         try {
           await this.runLibraryDueSoonReminders(company.id);
         } catch (err) {

@@ -150,6 +150,7 @@ export default function Settings() {
 
   const [automation, setAutomation] = useState({
     autoFeeBilling: true, autoInvoiceRelease: true, autoPayroll: true, autoReconciliation: true,
+    autoLibraryReminders: true,
   });
   const [automationSaving, setAutomationSaving] = useState(false);
   const [automationSaved, setAutomationSaved] = useState(false);
@@ -178,6 +179,7 @@ export default function Settings() {
       autoInvoiceRelease: active?.auto_invoice_release ?? true,
       autoPayroll: active?.auto_payroll ?? true,
       autoReconciliation: active?.auto_reconciliation ?? true,
+      autoLibraryReminders: active?.auto_library_reminders ?? true,
     });
     setLoading(false);
   }
@@ -887,6 +889,7 @@ export default function Settings() {
               ...(isSchool ? [
                 { key: 'autoFeeBilling', label: t('settings.autoFeeBillingLabel', { defaultValue: 'Auto Fee Billing' }), desc: t('settings.autoFeeBillingDesc', { defaultValue: 'Automatically generate monthly fee invoices for every active student' }) },
                 { key: 'autoInvoiceRelease', label: t('settings.autoInvoiceReleaseLabel', { defaultValue: 'Auto-Release Invoices' }), desc: t('settings.autoInvoiceReleaseDesc', { defaultValue: 'Immediately release auto-billed invoices to the student portal (notifies students). If off, invoices are created but held for manual review/release.' }) },
+                { key: 'autoLibraryReminders', label: t('settings.autoLibraryRemindersLabel', { defaultValue: 'Library Due-Date Reminders' }), desc: t('settings.autoLibraryRemindersDesc', { defaultValue: 'Nightly "book due in 3 days" reminder to students in the portal' }) },
               ] : []),
               { key: 'autoPayroll', label: t('settings.autoPayrollLabel', { defaultValue: 'Auto Payroll Processing' }), desc: t('settings.autoPayrollDesc', { defaultValue: 'Automatically process monthly payroll for all employees' }) },
               { key: 'autoReconciliation', label: t('settings.autoReconciliationLabel', { defaultValue: 'Daily Reconciliation Summary' }), desc: t('settings.autoReconciliationDesc', { defaultValue: 'Nightly summary of income, expenses, overdue invoices and ledger balance sent to admins' }) },

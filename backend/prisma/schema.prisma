@@ -225,6 +225,7 @@ model Company {
   autoInvoiceRelease Boolean  @default(true) // schools: auto-release those invoices to the student portal
   autoPayroll        Boolean  @default(true) // auto-process monthly payroll
   autoReconciliation Boolean  @default(true) // daily reconciliation summary notification
+  autoLibraryReminders Boolean @default(true) // schools: "book due in 3 days" student portal reminder
   // Which optional shared modules this company's plan includes, e.g.
   // ["FINANCE", "HRMS", "COMMUNICATION", "INVENTORY", "AI", "BULK_IMPORT"].
   // Empty = unrestricted (legacy/full-access) — enforced by ModuleAccessGuard,
