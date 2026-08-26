@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { MapContainer, TileLayer, Marker, Polyline, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import { Loader2, MapPin } from 'lucide-react';
+import { geocode } from '@/lib/nominatim';
 import 'leaflet/dist/leaflet.css';
 
 // Leaflet's default marker icon URLs break under bundlers (Vite included) —
@@ -15,22 +16,9 @@ L.Icon.Default.mergeOptions({
 });
 
 const KATHMANDU_CENTER = [27.7172, 85.3240];
-const geocodeCache = new Map();
 
-// Free, no-API-key geocoding (Nominatim) + routing (public OSRM demo). Both
-// are best-effort/demo-grade services — see the hint rendered below the map.
-async function geocode(label) {
-  const key = label.trim().toLowerCase();
-  if (geocodeCache.has(key)) return geocodeCache.get(key);
-  const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=np&email=support@geoinfosys.com.np&q=${encodeURIComponent(label)}`;
-  const res = await fetch(url);
-  if (!res.ok) throw new Error('Geocoding failed');
-  const results = await res.json();
-  const point = results[0] ? [Number(results[0].lat), Number(results[0].lon)] : null;
-  geocodeCache.set(key, point);
-  return point;
-}
-
+// Routing (public OSRM demo) — best-effort/demo-grade, see the hint rendered
+// below the map. Geocoding is shared with the stop-name autocomplete, see lib/nominatim.
 async function fetchRoutePath(points) {
   if (points.length < 2) return null;
   const coordStr = points.map(([lat, lon]) => `${lon},${lat}`).join(';');
@@ -43,13 +31,6 @@ async function fetchRoutePath(points) {
   return coords.map(([lon, lat]) => [lat, lon]);
 }
 
-// Splits "Baneshwor to Satdobato" / "Baneshwor - Satdobato" into [from, to].
-function splitRouteName(routeName) {
-  const parts = routeName.split(/\s+to\s+|\s*[-–→]\s*/i).map(s => s.trim()).filter(Boolean);
-  if (parts.length >= 2) return [parts[0], parts[parts.length - 1]];
-  return parts.length === 1 ? [parts[0]] : [];
-}
-
 function FitBounds({ points }) {
   const map = useMap();
   useEffect(() => {
@@ -60,24 +41,21 @@ function FitBounds({ points }) {
   return null;
 }
 
-// Live route preview — geocodes the route name's from/to plus every stop
-// (debounced), then asks OSRM to route *through* them in order. Routing
-// through waypoints in order is what makes stops like "Koteshwor, Balkumari"
-// naturally trace the Ring Road between them, rather than any road-selection
-// logic we'd have to hand-write.
-export default function TransportRouteMap({ routeName, stops }) {
+// Live route preview — geocodes every stop (debounced), then asks OSRM to
+// route *through* them in order. Deliberately keyed only off the Stops list,
+// not the free-text Route Name (parsing a name like "Route A — Chabahil–Baudha"
+// for endpoints was fragile — dash characters vary, and duplicated whatever
+// the admin also listed as a stop, producing garbage routes). Routing through
+// waypoints in order is what makes stops like "Koteshwor, Balkumari" naturally
+// trace the Ring Road between them, rather than any road-selection logic we'd
+// have to hand-write.
+export default function TransportRouteMap({ stops }) {
   const [status, setStatus] = useState('idle'); // idle | loading | done | error
   const [markers, setMarkers] = useState([]); // [{ label, point }]
   const [path, setPath] = useState(null);
   const debounceRef = useRef(null);
 
-  const waypointLabels = useMemo(() => {
-    const [from, to] = splitRouteName(routeName || '');
-    const cleanStops = (stops || []).map(s => s.trim()).filter(Boolean);
-    if (from && to) return [from, ...cleanStops, to];
-    if (from) return [from, ...cleanStops];
-    return cleanStops;
-  }, [routeName, stops]);
+  const waypointLabels = useMemo(() => (stops || []).map(s => s.trim()).filter(Boolean), [stops]);
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -129,7 +107,7 @@ export default function TransportRouteMap({ routeName, stops }) {
         )}
         {waypointLabels.length === 0 && (
           <div className="absolute inset-0 flex items-center justify-center bg-white/70 text-xs text-muted-foreground gap-1.5">
-            <MapPin className="w-3.5 h-3.5" /> Type a route name (e.g. "Baneshwor to Satdobato") to preview the map
+            <MapPin className="w-3.5 h-3.5" /> Add stops below to preview the route on the map
           </div>
         )}
       </div>

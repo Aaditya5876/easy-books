@@ -6,6 +6,7 @@ import { transportApi } from '@/api';
 import StudentCombobox from '@/components/shared/StudentCombobox';
 import StaffCombobox from '@/components/shared/StaffCombobox';
 import TransportRouteMap from '@/components/shared/TransportRouteMap';
+import PlaceAutocomplete from '@/components/shared/PlaceAutocomplete';
 import { getActiveCompanyId } from '@/lib/companyContext';
 import { confirm } from '@/lib/confirm';
 import { Button } from '@/components/ui/button';
@@ -65,14 +66,14 @@ function RouteDialog({ open, onClose, initial, companyId }) {
             {errors.routeName && <p className="text-xs text-red-600">{errors.routeName}</p>}
           </div>
 
-          <TransportRouteMap routeName={form.routeName} stops={form.stops} />
+          <TransportRouteMap stops={form.stops} />
 
           <div className="space-y-1.5">
             <Label>{t('transport.stops', { defaultValue: 'Stops (in order)' })}</Label>
             <div className="space-y-2">
               {form.stops.map((stop, i) => (
                 <div key={i} className="flex gap-2">
-                  <Input placeholder={t('transport.stopPlaceholder', { defaultValue: 'e.g. Koteshwor' })} value={stop} onChange={e => setStop(i, e.target.value)} />
+                  <PlaceAutocomplete placeholder={t('transport.stopPlaceholder', { defaultValue: 'e.g. Koteshwor' })} value={stop} onChange={v => setStop(i, v)} />
                   <button type="button" onClick={() => removeStop(i)} className="p-2 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600 transition-colors shrink-0">
                     <X className="w-3.5 h-3.5" />
                   </button>
@@ -82,7 +83,7 @@ function RouteDialog({ open, onClose, initial, companyId }) {
             <Button type="button" variant="outline" size="sm" onClick={addStop}>
               <Plus className="w-3.5 h-3.5 mr-1" /> {t('transport.addStop', { defaultValue: 'Add Stop' })}
             </Button>
-            <p className="text-xs text-muted-foreground">{t('transport.stopsHint', { defaultValue: 'Order matters — the map routes through these in sequence.' })}</p>
+            <p className="text-xs text-muted-foreground">{t('transport.stopsHint', { defaultValue: 'Order matters — the map routes through these in sequence. Pick a suggestion for the most accurate route.' })}</p>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
