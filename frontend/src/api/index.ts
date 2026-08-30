@@ -298,6 +298,14 @@ export const feesApi = {
     apiClient.patch(`/api/v1/school/fee-invoices/${id}/release`, {}, { params: { companyId: companyId() } }),
   releaseBulk: () =>
     apiClient.post('/api/v1/school/fee-invoices/release-bulk', { companyId: companyId() }),
+  listPendingProofs: () =>
+    apiClient.get('/api/v1/school/fee-payments/pending', { params: { companyId: companyId() } }),
+  confirmProof: (id: string) =>
+    apiClient.patch(`/api/v1/school/fee-payments/${id}/confirm`, {}, { params: { companyId: companyId() } }),
+  rejectProof: (id: string, reason: string) =>
+    apiClient.patch(`/api/v1/school/fee-payments/${id}/reject`, { reason }, { params: { companyId: companyId() } }),
+  verifyByCode: (code: string) =>
+    apiClient.get(`/api/v1/school/fee-payments/verify/${encodeURIComponent(code)}`, { params: { companyId: companyId() } }),
 };
 
 export const examResultsApi = {
@@ -514,6 +522,15 @@ export const portalApi = {
     apiClient.post(`/api/v1/portal/pay/khalti/${invoiceId}`, {}, { headers: portalHeaders() }),
   verifyKhalti: (data: { pidx: string; invoiceId: string; companyId: string }) =>
     apiClient.post('/api/v1/portal/pay/khalti/verify', data),
+  uploadProof: (file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return apiClient.post('/api/v1/portal/upload', formData, {
+      headers: { ...portalHeaders(), 'Content-Type': 'multipart/form-data' },
+    });
+  },
+  submitPaymentProof: (invoiceId: string, data: object) =>
+    apiClient.post(`/api/v1/portal/fees/${invoiceId}/payment-proof`, data, { headers: portalHeaders() }),
 };
 
 // ── AI API (admin only, requires GEMINI_API_KEY on server) ───────────────────

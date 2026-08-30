@@ -3,25 +3,11 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiConsumes } from '@nestjs/swagger';
-import { diskStorage } from 'multer';
-import { extname, join } from 'path';
-import { existsSync, mkdirSync } from 'fs';
 import { Roles } from '../../../../modules/decorators/roles.decorator';
+import { makeUploadStorage, extensionFilter } from './upload.util';
 
 const ALLOWED_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.pdf', '.doc', '.docx', '.xlsx', '.xls'];
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
-
-const uploadStorage = diskStorage({
-  destination: (_req, _file, cb) => {
-    const uploadDir = join(process.cwd(), 'uploads');
-    if (!existsSync(uploadDir)) mkdirSync(uploadDir, { recursive: true });
-    cb(null, uploadDir);
-  },
-  filename: (_req, file, cb) => {
-    const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
-    cb(null, `${uniqueSuffix}${extname(file.originalname)}`);
-  },
-});
 
 @ApiTags('Upload')
 @ApiBearerAuth()
@@ -32,15 +18,9 @@ export class UploadController {
   @ApiOperation({ summary: 'Upload a file (image or PDF) — returns permanent URL' })
   @ApiConsumes('multipart/form-data')
   @UseInterceptors(FileInterceptor('file', {
-    storage: uploadStorage,
+    storage: makeUploadStorage(),
     limits: { fileSize: MAX_FILE_SIZE },
-    fileFilter: (_req, file, cb) => {
-      const ext = extname(file.originalname).toLowerCase();
-      if (!ALLOWED_EXTENSIONS.includes(ext)) {
-        return cb(new BadRequestException(`File type ${ext} is not allowed`), false);
-      }
-      cb(null, true);
-    },
+    fileFilter: extensionFilter(ALLOWED_EXTENSIONS),
   }))
   uploadFile(@UploadedFile() file: any) {
     if (!file) throw new BadRequestException('No file provided');

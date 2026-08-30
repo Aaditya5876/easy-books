@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { motion } from 'framer-motion';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { motion, AnimatePresence } from 'framer-motion';
 import { portalApi } from '@/api';
-import { DollarSign, Loader2, Printer, Receipt, QrCode, FileText } from 'lucide-react';
+import { DollarSign, Loader2, Printer, Receipt, QrCode, FileText, Upload, X, Clock, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import apiClient from '@/api/client';
 import { printFeeReceipt } from '@/lib/printFeeReceipt';
@@ -25,13 +25,143 @@ function resolveFileUrl(url = '') {
   return url.startsWith('http') ? url : `${apiClient.defaults.baseURL}${url}`;
 }
 
+const PAYMENT_STATUS_BADGE = {
+  PENDING_REVIEW: { labelKey: 'portal.awaitingConfirmation', label: 'Awaiting confirmation', color: '#F59E0B', bg: '#FFFBEB', Icon: Clock },
+  REJECTED:       { labelKey: 'portal.proofRejected',        label: 'Rejected',              color: '#EF4444', bg: '#FEF2F2', Icon: AlertCircle },
+};
+
+function SubmitProofDialog({ invoice, dueAmount, bankAccounts, onClose, onSubmitted }) {
+  const { t } = useTranslation();
+  const [amount, setAmount] = useState(String(dueAmount));
+  const [method, setMethod] = useState('BANK');
+  const [bankAccountId, setBankAccountId] = useState(bankAccounts[0]?.id || '');
+  const [notes, setNotes] = useState('');
+  const [file, setFile] = useState(null);
+  const [preview, setPreview] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  function handleFile(f) {
+    if (!f) return;
+    setFile(f);
+    setPreview(URL.createObjectURL(f));
+  }
+
+  async function submit() {
+    const amt = Number(amount);
+    if (!(amt > 0)) return toast.error(t('portal.enterValidAmount', { defaultValue: 'Enter a valid amount' }));
+    if (method === 'BANK' && !bankAccountId) return toast.error(t('portal.selectBankAccount', { defaultValue: 'Select which account you paid to' }));
+    if (!file) return toast.error(t('portal.screenshotRequired', { defaultValue: 'Please attach a screenshot of the payment' }));
+
+    setSubmitting(true);
+    try {
+      const uploadRes = await portalApi.uploadProof(file);
+      await portalApi.submitPaymentProof(invoice.id, {
+        amount: amt,
+        method,
+        bankAccountId: method === 'BANK' ? bankAccountId : undefined,
+        proofScreenshotUrl: uploadRes.data.url,
+        notes: notes || undefined,
+      });
+      toast.success(t('portal.proofSubmitted', { defaultValue: 'Payment proof submitted — awaiting confirmation' }));
+      onSubmitted();
+    } catch (e) {
+      toast.error(e?.response?.data?.message || t('portal.proofSubmitFailed', { defaultValue: 'Could not submit payment proof' }));
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 bg-slate-900/40 flex items-center justify-center p-4" onClick={onClose}>
+      <motion.div
+        initial={{ opacity: 0, scale: 0.96 }} animate={{ opacity: 1, scale: 1 }}
+        className="bg-white rounded-2xl border border-slate-200 shadow-xl w-full max-w-sm max-h-[90vh] overflow-y-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+          <h3 className="text-sm font-semibold text-slate-900">
+            {t('portal.submitPaymentProof', { defaultValue: "I've Paid — Submit Proof" })}
+          </h3>
+          <button onClick={onClose} className="p-1 rounded hover:bg-slate-100 text-slate-400"><X className="w-4 h-4" /></button>
+        </div>
+        <div className="p-5 space-y-3.5">
+          <div>
+            <label className="text-xs font-medium text-slate-500 mb-1 block">{t('portal.amountPaid', { defaultValue: 'Amount Paid' })}</label>
+            <input
+              type="number" value={amount} onChange={(e) => setAmount(e.target.value)} max={dueAmount} min={0} step="0.01"
+              className="w-full h-9 px-3 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
+            />
+          </div>
+          <div>
+            <label className="text-xs font-medium text-slate-500 mb-1 block">{t('portal.paymentMethod', { defaultValue: 'Payment Method' })}</label>
+            <select
+              value={method} onChange={(e) => setMethod(e.target.value)}
+              className="w-full h-9 px-3 rounded-lg border border-slate-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-200"
+            >
+              <option value="BANK">{t('portal.methodBank', { defaultValue: 'Bank Transfer' })}</option>
+              <option value="ESEWA">{t('portal.methodEsewa', { defaultValue: 'eSewa' })}</option>
+              <option value="KHALTI">{t('portal.methodKhalti', { defaultValue: 'Khalti' })}</option>
+            </select>
+          </div>
+          {method === 'BANK' && (
+            <div>
+              <label className="text-xs font-medium text-slate-500 mb-1 block">{t('portal.paidToAccount', { defaultValue: 'Paid To' })}</label>
+              <select
+                value={bankAccountId} onChange={(e) => setBankAccountId(e.target.value)}
+                className="w-full h-9 px-3 rounded-lg border border-slate-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-200"
+              >
+                {bankAccounts.map(b => <option key={b.id} value={b.id}>{b.bankName}</option>)}
+              </select>
+            </div>
+          )}
+          <div>
+            <label className="text-xs font-medium text-slate-500 mb-1 block">{t('portal.referenceNotes', { defaultValue: 'Reference / Notes (optional)' })}</label>
+            <input
+              value={notes} onChange={(e) => setNotes(e.target.value)}
+              className="w-full h-9 px-3 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
+            />
+          </div>
+          <div>
+            <label className="text-xs font-medium text-slate-500 mb-1 block">{t('portal.uploadScreenshot', { defaultValue: 'Payment Screenshot' })}</label>
+            {preview ? (
+              <div className="relative">
+                <img src={preview} alt="Payment screenshot" className="w-full max-h-48 object-contain rounded-lg border border-slate-200" />
+                <button onClick={() => { setFile(null); setPreview(''); }} className="absolute top-1.5 right-1.5 p-1 rounded-full bg-white/90 border border-slate-200 text-slate-500 hover:text-slate-700">
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            ) : (
+              <label className="flex flex-col items-center justify-center gap-1.5 h-24 rounded-lg border-2 border-dashed border-slate-200 text-slate-400 hover:border-blue-300 hover:text-blue-500 cursor-pointer transition-colors">
+                <Upload className="w-5 h-5" />
+                <span className="text-xs">{t('portal.tapToUpload', { defaultValue: 'Tap to upload' })}</span>
+                <input type="file" accept="image/*" className="hidden" onChange={(e) => handleFile(e.target.files?.[0])} />
+              </label>
+            )}
+          </div>
+        </div>
+        <div className="px-5 pb-5">
+          <button
+            onClick={submit} disabled={submitting}
+            className="w-full h-10 rounded-xl text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+          >
+            {submitting && <Loader2 className="w-4 h-4 animate-spin" />}
+            {t('portal.submitProof', { defaultValue: 'Submit Proof' })}
+          </button>
+        </div>
+      </motion.div>
+    </div>
+  );
+}
+
 export default function PortalFees() {
   const { t } = useTranslation();
+  const queryClient = useQueryClient();
   const [printingId, setPrintingId] = useState(null);
   const [printingPaymentId, setPrintingPaymentId] = useState(null);
   const [viewingId, setViewingId] = useState(null);
   const [status, setStatus] = useState('all');
   const [page, setPage] = useState(1);
+  const [proofInvoice, setProofInvoice] = useState(null);
 
   const { data: qrCodes = [] } = useQuery({
     queryKey: ['portal-payment-qr-codes'],
@@ -213,33 +343,62 @@ export default function PortalFees() {
                           <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">
                             {t('portal.paymentHistory', { defaultValue: 'Payment history' })}
                           </p>
-                          {f.payments.map(p => (
-                            <div key={p.id} className="flex items-center justify-between text-xs">
-                              <span className="inline-flex items-center gap-1.5 text-slate-500">
-                                <Receipt className="w-3 h-3 text-emerald-600" />
-                                <span className="font-mono">{p.receiptNo}</span>
-                                <span>· {p.method} · {new Date(p.paidAt).toLocaleDateString('en-NP', { day: 'numeric', month: 'short' })}</span>
-                              </span>
-                              <span className="flex items-center gap-1.5">
-                                <span className="tabular-nums text-emerald-700 font-medium">{fmtAmt(p.amount)}</span>
-                                <button
-                                  onClick={() => printOnePaymentReceipt(f.id, p.id)}
-                                  disabled={printingPaymentId === p.id}
-                                  title={t('portal.printThisReceipt', { defaultValue: 'Print this receipt' })}
-                                  className="p-1 rounded hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors disabled:opacity-50"
-                                >
-                                  {printingPaymentId === p.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Printer className="w-3 h-3" />}
-                                </button>
-                              </span>
-                            </div>
-                          ))}
+                          {f.payments.map(p => {
+                            const badge = PAYMENT_STATUS_BADGE[p.status];
+                            if (badge) {
+                              return (
+                                <div key={p.id} className="text-xs">
+                                  <div className="flex items-center justify-between">
+                                    <span className="inline-flex items-center gap-1.5" style={{ color: badge.color }}>
+                                      <badge.Icon className="w-3 h-3" />
+                                      <span className="font-medium">{t(badge.labelKey, { defaultValue: badge.label })}</span>
+                                      <span className="text-slate-400">· {p.method} · {new Date(p.createdAt).toLocaleDateString('en-NP', { day: 'numeric', month: 'short' })}</span>
+                                    </span>
+                                    <span className="tabular-nums font-medium" style={{ color: badge.color }}>{fmtAmt(p.amount)}</span>
+                                  </div>
+                                  {p.status === 'REJECTED' && p.rejectionReason && (
+                                    <p className="text-slate-400 mt-0.5 pl-5">{p.rejectionReason}</p>
+                                  )}
+                                </div>
+                              );
+                            }
+                            return (
+                              <div key={p.id} className="flex items-center justify-between text-xs">
+                                <span className="inline-flex items-center gap-1.5 text-slate-500">
+                                  <Receipt className="w-3 h-3 text-emerald-600" />
+                                  <span className="font-mono">{p.receiptNo}</span>
+                                  <span>· {p.method} · {new Date(p.paidAt).toLocaleDateString('en-NP', { day: 'numeric', month: 'short' })}</span>
+                                </span>
+                                <span className="flex items-center gap-1.5">
+                                  <span className="tabular-nums text-emerald-700 font-medium">{fmtAmt(p.amount)}</span>
+                                  <button
+                                    onClick={() => printOnePaymentReceipt(f.id, p.id)}
+                                    disabled={printingPaymentId === p.id}
+                                    title={t('portal.printThisReceipt', { defaultValue: 'Print this receipt' })}
+                                    className="p-1 rounded hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors disabled:opacity-50"
+                                  >
+                                    {printingPaymentId === p.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Printer className="w-3 h-3" />}
+                                  </button>
+                                </span>
+                              </div>
+                            );
+                          })}
                         </div>
                       )}
 
                       {due > 0 && (
-                        <p className="text-xs text-slate-500 bg-slate-50 rounded-lg px-3 py-2">
-                          {t('portal.payViaQrHint', { defaultValue: 'Scan a QR above with your bank/wallet app to pay. The school will confirm your payment once received.' })}
-                        </p>
+                        <>
+                          <p className="text-xs text-slate-500 bg-slate-50 rounded-lg px-3 py-2">
+                            {t('portal.payViaQrHint', { defaultValue: 'Scan a QR above with your bank/wallet app to pay. The school will confirm your payment once received.' })}
+                          </p>
+                          <button
+                            onClick={() => setProofInvoice(f)}
+                            className="w-full h-9 mt-2 rounded-xl text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 transition-colors flex items-center justify-center gap-1.5"
+                          >
+                            <Upload className="w-3 h-3" />
+                            {t('portal.submitPaymentProofShort', { defaultValue: "I've Paid — Submit Proof" })}
+                          </button>
+                        </>
                       )}
 
                       {f.paidAmount > 0 && (
@@ -263,6 +422,18 @@ export default function PortalFees() {
           </>
         )}
       </div>
+
+      <AnimatePresence>
+        {proofInvoice && (
+          <SubmitProofDialog
+            invoice={proofInvoice}
+            dueAmount={Number(proofInvoice.totalAmount) - Number(proofInvoice.paidAmount)}
+            bankAccounts={qrCodes}
+            onClose={() => setProofInvoice(null)}
+            onSubmitted={() => { setProofInvoice(null); queryClient.invalidateQueries({ queryKey: ['portal-fees'] }); }}
+          />
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 }

@@ -1,10 +1,16 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { randomBytes } from 'crypto';
 import { PrismaService } from '../../../core/db/psql/prisma.client';
 import { LedgerPostingService } from './ledger-posting.service';
 import { NotificationServiceImpl } from './notification.service.impl';
 import { PortalNotificationService } from './portal-notification.service';
 import { SmsService } from './sms.service';
 import { adToBs } from '@easy-books/shared';
+
+// Short, QR-friendly code — not the DB id, so a scanned/printed receipt
+// doesn't leak the payment's UUID. Collisions are practically impossible at
+// this length; the unique constraint would surface one anyway.
+const randomVerificationCode = () => randomBytes(6).toString('base64url').toUpperCase();
 
 const DEFAULT_FEE_HEADS = [
   { name: 'Tuition Fee', code: 'TUI', type: 'GENERAL' },
@@ -561,57 +567,13 @@ export class SchoolFinanceService {
     if (amount > remaining) throw new BadRequestException(`Payment exceeds remaining amount: Rs. ${remaining}`);
 
     const method = ['CASH', 'BANK', 'ESEWA', 'KHALTI'].includes(body.method ?? '') ? body.method! : 'CASH';
+    const bankAccount = await this.resolveBankAccount(companyId, method, body.bankAccountId);
 
-    // BANK always names a real bank account — that's what "bank transfer" means.
-    // ESEWA/KHALTI don't: the money can stay wallet-to-wallet with no bank
-    // involved at all, or later get withdrawn to a bank — that's a separate,
-    // unrelated event, not something this one payment record can know. So a
-    // bank account is optional for wallet methods, never required.
-    let bankAccount: { id: string } | null = null;
-    if (method === 'BANK') {
-      if (!body.bankAccountId) throw new BadRequestException('Select which bank account received this payment');
-      bankAccount = await this.prisma.bankAccount.findFirst({ where: { id: body.bankAccountId, companyId }, select: { id: true } });
-      if (!bankAccount) throw new BadRequestException('Bank account not found');
-    } else if ((method === 'ESEWA' || method === 'KHALTI') && body.bankAccountId) {
-      bankAccount = await this.prisma.bankAccount.findFirst({ where: { id: body.bankAccountId, companyId }, select: { id: true } });
-      if (!bankAccount) throw new BadRequestException('Bank account not found');
-    }
-
-    const receiptNo = await this.nextReceiptNo(companyId);
-    const newPaid = round2(Number(invoice.paidAmount) + amount);
-    const status = newPaid >= Number(invoice.totalAmount) ? 'PAID' : 'PARTIAL';
-
-    // Every fee payment gets a Transaction row, regardless of method — so it
-    // shows up on the Transactions page without anyone having to dig into a
-    // Ledger system account to confirm a payment actually happened. Only a
-    // real linked bank account's balance moves; Cash and unsettled wallet
-    // payments still get a Transaction, just with no bankAccountId attached.
-    const payment = await this.prisma.$transaction(async (tx) => {
-      const created = await tx.feePayment.create({
-        data: { companyId, invoiceId, receiptNo, amount, method, bankAccountId: bankAccount?.id, notes: body.notes || null },
-      });
-      await tx.feeInvoice.update({
-        where: { id: invoiceId },
-        data: { paidAmount: newPaid, status, paidDate: status === 'PAID' ? new Date() : undefined },
-      });
-      if (bankAccount) {
-        await tx.bankAccount.update({ where: { id: bankAccount.id }, data: { currentBalance: { increment: amount } } });
-      }
-      await tx.transaction.create({
-        data: {
-          companyId,
-          bankAccountId: bankAccount?.id,
-          dateAd: new Date(),
-          type: (method === 'CASH' ? 'CASH' : bankAccount ? 'BANK' : 'WALLET') as any,
-          category: 'INCOME' as any,
-          amount,
-          description: `Fee payment — ${invoice.student?.name ?? 'Student'} (Invoice ${invoice.month})`,
-          referenceType: 'FEE_PAYMENT',
-          referenceId: created.id,
-          status: 'COMPLETED' as any,
-        },
-      });
-      return created;
+    const { payment, status } = await this.applyConfirmedPayment(companyId, invoice, {
+      amount,
+      method,
+      bankAccountId: bankAccount?.id,
+      notes: body.notes || null,
     });
 
     // Ledger posting is best-effort — a posting failure must never lose a receipt
@@ -650,10 +612,241 @@ export class SchoolFinanceService {
     return { ...payment, invoiceStatus: status };
   }
 
+  // BANK always names a real bank account — that's what "bank transfer" means.
+  // ESEWA/KHALTI don't: the money can stay wallet-to-wallet with no bank
+  // involved at all, or later get withdrawn to a bank — that's a separate,
+  // unrelated event, not something this one payment record can know. So a
+  // bank account is optional for wallet methods, never required.
+  private async resolveBankAccount(companyId: string, method: string, bankAccountId?: string) {
+    if (method === 'BANK') {
+      if (!bankAccountId) throw new BadRequestException('Select which bank account received this payment');
+      const bankAccount = await this.prisma.bankAccount.findFirst({ where: { id: bankAccountId, companyId }, select: { id: true } });
+      if (!bankAccount) throw new BadRequestException('Bank account not found');
+      return bankAccount;
+    }
+    if ((method === 'ESEWA' || method === 'KHALTI') && bankAccountId) {
+      const bankAccount = await this.prisma.bankAccount.findFirst({ where: { id: bankAccountId, companyId }, select: { id: true } });
+      if (!bankAccount) throw new BadRequestException('Bank account not found');
+      return bankAccount;
+    }
+    return null;
+  }
+
+  // Shared by recordPayment (counter/gateway, already-trusted) and
+  // confirmPaymentProof (portal proof, just approved by staff): assigns the
+  // receipt number + verification code, updates the invoice, bumps the bank
+  // balance, and logs a Transaction row — all in one $transaction. Every fee
+  // payment gets a Transaction row regardless of method, so it shows up on
+  // the Transactions page without anyone having to dig into a Ledger system
+  // account to confirm a payment actually happened. Only a real linked bank
+  // account's balance moves; Cash and unsettled wallet payments still get a
+  // Transaction, just with no bankAccountId attached.
+  private async applyConfirmedPayment(
+    companyId: string,
+    invoice: { id: string; studentId: string; totalAmount: any; paidAmount: any; month: string; student?: { name: string } | null },
+    input: { amount: number; method: string; bankAccountId?: string; notes?: string | null; existingPaymentId?: string; reviewedByUserId?: string },
+  ) {
+    const receiptNo = await this.nextReceiptNo(companyId);
+    const verificationCode = randomVerificationCode();
+    const newPaid = round2(Number(invoice.paidAmount) + input.amount);
+    const status = newPaid >= Number(invoice.totalAmount) ? 'PAID' : 'PARTIAL';
+
+    const payment = await this.prisma.$transaction(async (tx) => {
+      const created = input.existingPaymentId
+        ? await tx.feePayment.update({
+            where: { id: input.existingPaymentId },
+            data: {
+              receiptNo,
+              verificationCode,
+              status: 'CONFIRMED',
+              reviewedByUserId: input.reviewedByUserId,
+              reviewedAt: new Date(),
+            },
+          })
+        : await tx.feePayment.create({
+            data: {
+              companyId,
+              invoiceId: invoice.id,
+              receiptNo,
+              verificationCode,
+              amount: input.amount,
+              method: input.method,
+              bankAccountId: input.bankAccountId,
+              notes: input.notes || null,
+              status: 'CONFIRMED',
+            },
+          });
+      await tx.feeInvoice.update({
+        where: { id: invoice.id },
+        data: { paidAmount: newPaid, status, paidDate: status === 'PAID' ? new Date() : undefined },
+      });
+      if (input.bankAccountId) {
+        await tx.bankAccount.update({ where: { id: input.bankAccountId }, data: { currentBalance: { increment: input.amount } } });
+      }
+      await tx.transaction.create({
+        data: {
+          companyId,
+          bankAccountId: input.bankAccountId,
+          dateAd: new Date(),
+          type: (input.method === 'CASH' ? 'CASH' : input.bankAccountId ? 'BANK' : 'WALLET') as any,
+          category: 'INCOME' as any,
+          amount: input.amount,
+          description: `Fee payment — ${invoice.student?.name ?? 'Student'} (Invoice ${invoice.month})`,
+          referenceType: 'FEE_PAYMENT',
+          referenceId: created.id,
+          status: 'COMPLETED' as any,
+        },
+      });
+      return created;
+    });
+
+    return { payment, status };
+  }
+
   listPayments(companyId: string, invoiceId: string) {
     return this.prisma.feePayment.findMany({
       where: { companyId, invoiceId },
       orderBy: { paidAt: 'desc' },
+    });
+  }
+
+  // ── Payment Proofs (portal-submitted, pending staff confirmation) ──────────────
+
+  async submitPaymentProof(
+    companyId: string,
+    invoiceId: string,
+    studentId: string,
+    body: { amount: number; method?: string; bankAccountId?: string; proofScreenshotUrl: string; notes?: string },
+  ) {
+    const invoice = await this.prisma.feeInvoice.findFirst({ where: { id: invoiceId, companyId, studentId } });
+    if (!invoice) throw new NotFoundException('Invoice not found');
+    if (!body.proofScreenshotUrl) throw new BadRequestException('Payment screenshot is required');
+
+    const amount = round2(Number(body.amount));
+    if (!(amount > 0)) throw new BadRequestException('Payment amount must be positive');
+    const remaining = round2(Number(invoice.totalAmount) - Number(invoice.paidAmount));
+    if (amount > remaining) throw new BadRequestException(`Payment exceeds remaining amount: Rs. ${remaining}`);
+
+    const method = ['BANK', 'ESEWA', 'KHALTI', 'CASH'].includes(body.method ?? '') ? body.method! : 'BANK';
+    const bankAccount = await this.resolveBankAccount(companyId, method, body.bankAccountId);
+
+    const payment = await this.prisma.feePayment.create({
+      data: {
+        companyId,
+        invoiceId,
+        amount,
+        method,
+        bankAccountId: bankAccount?.id,
+        proofScreenshotUrl: body.proofScreenshotUrl,
+        notes: body.notes || null,
+        status: 'PENDING_REVIEW',
+        submittedByPortal: true,
+      },
+    });
+
+    try {
+      await this.notifications.notifyRole(companyId, ['ADMIN', 'ACCOUNTANT'], {
+        type: 'FEE_PAYMENT',
+        title: 'Payment proof submitted',
+        message: `Rs. ${amount} claimed by ${invoice.month} invoice — awaiting confirmation`,
+        link: '/fees',
+        referenceType: 'FEE_PAYMENT',
+        referenceId: payment.id,
+      });
+    } catch (err) {
+      console.error('Notification dispatch failed:', (err as Error).message);
+    }
+
+    return payment;
+  }
+
+  listPendingPaymentProofs(companyId: string) {
+    return this.prisma.feePayment.findMany({
+      where: { companyId, status: 'PENDING_REVIEW' },
+      include: { invoice: { include: { student: { select: { id: true, name: true, rollNumber: true } } } }, bankAccount: { select: { bankName: true } } },
+      orderBy: { createdAt: 'asc' },
+    });
+  }
+
+  async confirmPaymentProof(companyId: string, paymentId: string, reviewerUserId?: string) {
+    const pending = await this.prisma.feePayment.findFirst({
+      where: { id: paymentId, companyId, status: 'PENDING_REVIEW' },
+      include: { invoice: { include: { student: { select: { name: true } } } } },
+    });
+    if (!pending) throw new NotFoundException('Pending payment proof not found');
+
+    const invoice = pending.invoice;
+    const remaining = round2(Number(invoice.totalAmount) - Number(invoice.paidAmount));
+    const amount = Number(pending.amount);
+    if (amount > remaining) {
+      throw new BadRequestException(`This invoice's remaining balance (Rs. ${remaining}) is now less than the claimed amount — resolve the other payments first`);
+    }
+
+    const { payment, status } = await this.applyConfirmedPayment(companyId, invoice, {
+      amount,
+      method: pending.method,
+      bankAccountId: pending.bankAccountId ?? undefined,
+      notes: pending.notes,
+      existingPaymentId: pending.id,
+      reviewedByUserId: reviewerUserId,
+    });
+
+    try {
+      await this.postFeePayment(companyId, payment.id, invoice.student?.name ?? 'Student');
+    } catch (err) {
+      console.error('Fee payment ledger posting failed:', (err as Error).message);
+    }
+
+    try {
+      await this.portalNotifications.notifyStudent(companyId, invoice.studentId, {
+        title: 'Payment confirmed',
+        message: `Your payment of Rs. ${amount} has been confirmed — Receipt ${payment.receiptNo}.`,
+        link: '/portal/fees',
+        referenceType: 'FEE_PAYMENT',
+        referenceId: payment.id,
+      });
+    } catch (err) {
+      console.error('Portal receipt notification failed:', (err as Error).message);
+    }
+
+    return { ...payment, invoiceStatus: status };
+  }
+
+  async rejectPaymentProof(companyId: string, paymentId: string, reason: string, reviewerUserId?: string) {
+    if (!reason?.trim()) throw new BadRequestException('A rejection reason is required');
+    const pending = await this.prisma.feePayment.findFirst({ where: { id: paymentId, companyId, status: 'PENDING_REVIEW' } });
+    if (!pending) throw new NotFoundException('Pending payment proof not found');
+
+    const payment = await this.prisma.feePayment.update({
+      where: { id: pending.id },
+      data: { status: 'REJECTED', rejectionReason: reason.trim(), reviewedByUserId: reviewerUserId, reviewedAt: new Date() },
+    });
+
+    try {
+      const invoice = await this.prisma.feeInvoice.findUnique({ where: { id: pending.invoiceId }, select: { studentId: true } });
+      if (invoice) {
+        await this.portalNotifications.notifyStudent(companyId, invoice.studentId, {
+          title: 'Payment proof rejected',
+          message: `Your submitted payment proof was rejected: ${reason.trim()}. Please resubmit.`,
+          link: '/portal/fees',
+          referenceType: 'FEE_PAYMENT',
+          referenceId: payment.id,
+        });
+      }
+    } catch (err) {
+      console.error('Portal rejection notification failed:', (err as Error).message);
+    }
+
+    return payment;
+  }
+
+  verifyByCode(companyId: string, code: string) {
+    return this.prisma.feePayment.findFirst({
+      where: { companyId, verificationCode: code, status: 'CONFIRMED' },
+      include: {
+        invoice: { include: { student: { include: { class: { select: { name: true, section: true } } } } } },
+        bankAccount: { select: { bankName: true } },
+      },
     });
   }
 

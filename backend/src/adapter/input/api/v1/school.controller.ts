@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Patch, Delete, Body, Param, Query } from '@nestjs/common';
+import { Controller, Get, Post, Put, Patch, Delete, Body, Param, Query, Req } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { Roles } from '../../../../modules/decorators/roles.decorator';
 import { SchoolService } from '../../../../application/services/school.service';
@@ -345,6 +345,39 @@ export class SchoolController {
   @ApiQuery({ name: 'companyId', required: true })
   listInvoicePayments(@Param('id') id: string, @Query('companyId') companyId: string) {
     return this.finance.listPayments(companyId, id);
+  }
+
+  @Get('fee-payments/pending')
+  @Roles('ADMIN', 'ACCOUNTANT')
+  @ApiQuery({ name: 'companyId', required: true })
+  listPendingPaymentProofs(@Query('companyId') companyId: string) {
+    return this.finance.listPendingPaymentProofs(companyId);
+  }
+
+  @Get('fee-payments/verify/:code')
+  @Roles('ADMIN', 'ACCOUNTANT')
+  @ApiQuery({ name: 'companyId', required: true })
+  verifyPaymentByCode(@Param('code') code: string, @Query('companyId') companyId: string) {
+    return this.finance.verifyByCode(companyId, code);
+  }
+
+  @Patch('fee-payments/:id/confirm')
+  @Roles('ADMIN', 'ACCOUNTANT')
+  @ApiQuery({ name: 'companyId', required: true })
+  confirmPaymentProof(@Param('id') id: string, @Query('companyId') companyId: string, @Req() req: any) {
+    return this.finance.confirmPaymentProof(companyId, id, req.user?.sub);
+  }
+
+  @Patch('fee-payments/:id/reject')
+  @Roles('ADMIN', 'ACCOUNTANT')
+  @ApiQuery({ name: 'companyId', required: true })
+  rejectPaymentProof(
+    @Param('id') id: string,
+    @Query('companyId') companyId: string,
+    @Body() body: { reason: string },
+    @Req() req: any,
+  ) {
+    return this.finance.rejectPaymentProof(companyId, id, body.reason, req.user?.sub);
   }
 
   @Patch('fee-invoices/:id/release')

@@ -1,5 +1,9 @@
-import { Controller, Post, Get, Patch, Body, Req, UseGuards, Query, Param } from '@nestjs/common';
-import { ApiTags } from '@nestjs/swagger';
+import {
+  Controller, Post, Get, Patch, Body, Req, UseGuards, Query, Param,
+  UploadedFile, UseInterceptors, BadRequestException,
+} from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { ApiTags, ApiConsumes } from '@nestjs/swagger';
 import { PortalUserType } from '@prisma/client';
 import { Public } from '../../../../modules/decorators/public.decorator';
 import { PortalService } from '../../../../application/services/portal.service';
@@ -8,6 +12,10 @@ import { PortalNotificationService } from '../../../../application/services/port
 import { PortalGuard } from '../../../../modules/guards/portal.guard';
 import { PortalRoles } from '../../../../modules/decorators/portal-roles.decorator';
 import { Roles } from '../../../../modules/decorators/roles.decorator';
+import { makeUploadStorage, extensionFilter } from './upload.util';
+
+const PROOF_IMAGE_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.webp'];
+const MAX_PROOF_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
 
 @ApiTags('Portal')
 @Controller('api/v1/portal')
@@ -68,6 +76,36 @@ export class PortalController {
   @Get('fees/:invoiceId/receipt')
   feeReceipt(@Param('invoiceId') invoiceId: string, @Req() req: any) {
     return this.portalService.getFeeReceipt(invoiceId, req.portalUser.studentId, req.portalUser.companyId);
+  }
+
+  // Screenshot upload for payment proof — portal users can't call the
+  // staff-only /api/v1/upload endpoint, so this is a scoped equivalent:
+  // images only, smaller size limit, same local-disk storage/URL shape.
+  @Public()
+  @UseGuards(PortalGuard)
+  @PortalRoles(PortalUserType.PARENT, PortalUserType.STUDENT)
+  @Post('upload')
+  @ApiConsumes('multipart/form-data')
+  @UseInterceptors(FileInterceptor('file', {
+    storage: makeUploadStorage(),
+    limits: { fileSize: MAX_PROOF_FILE_SIZE },
+    fileFilter: extensionFilter(PROOF_IMAGE_EXTENSIONS),
+  }))
+  uploadProof(@UploadedFile() file: any) {
+    if (!file) throw new BadRequestException('No file provided');
+    return { url: `/uploads/${file.filename}`, originalName: file.originalname, size: file.size, mimeType: file.mimetype };
+  }
+
+  @Public()
+  @UseGuards(PortalGuard)
+  @PortalRoles(PortalUserType.PARENT, PortalUserType.STUDENT)
+  @Post('fees/:invoiceId/payment-proof')
+  submitPaymentProof(
+    @Param('invoiceId') invoiceId: string,
+    @Req() req: any,
+    @Body() body: { amount: number; method?: string; bankAccountId?: string; proofScreenshotUrl: string; notes?: string },
+  ) {
+    return this.portalService.submitPaymentProof(invoiceId, req.portalUser.studentId, req.portalUser.companyId, body);
   }
 
   @Public()

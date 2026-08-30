@@ -102,6 +102,15 @@ export class PortalService {
     return this.finance.getFeeReceipt(companyId, invoiceId, studentId);
   }
 
+  submitPaymentProof(
+    invoiceId: string,
+    studentId: string,
+    companyId: string,
+    body: { amount: number; method?: string; bankAccountId?: string; proofScreenshotUrl: string; notes?: string },
+  ) {
+    return this.finance.submitPaymentProof(companyId, invoiceId, studentId, body);
+  }
+
   async getResults(studentId: string, companyId: string) {
     return this.prisma.examResult.findMany({
       where: { studentId, companyId },

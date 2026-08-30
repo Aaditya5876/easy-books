@@ -19,20 +19,18 @@ export async function printFeeReceipt(inv, payment) {
   const paidDate = pay?.paidAt ? new Date(pay.paidAt) : new Date();
   const balanceDue = Number(inv.totalAmount) - Number(inv.paidAmount);
 
-  // Demo-only QR: encodes receipt details for quick visual verification.
-  // NOT a real payment/bank QR — no gateway or bank integration is wired to it.
-  const qrPayload = [
-    `${inv.company?.name || 'School'} — Fee Receipt`,
-    `Receipt: ${receiptNo}`,
-    `Student: ${inv.student?.name || '—'}`,
-    `Amount Paid: Rs. ${fmt(amountPaid)}`,
-    `Month: ${inv.month}`,
-  ].join('\n');
+  // Encodes just the payment's verificationCode — not a URL, not the receipt
+  // details — so scanning it (via the admin's in-app scanner) looks up the
+  // transaction exactly as stored in the DB, as ground truth against a
+  // possibly-edited screenshot or printed copy. Older/unconfirmed payments
+  // have no code yet, so the QR is simply omitted for those.
   let qrDataUrl = '';
-  try {
-    qrDataUrl = await QRCode.toDataURL(qrPayload, { width: 120, margin: 1 });
-  } catch {
-    // QR generation is a nice-to-have — receipt still prints without it
+  if (pay?.verificationCode) {
+    try {
+      qrDataUrl = await QRCode.toDataURL(pay.verificationCode, { width: 120, margin: 1 });
+    } catch {
+      // QR generation is a nice-to-have — receipt still prints without it
+    }
   }
 
   w.document.write(`
@@ -73,7 +71,7 @@ export async function printFeeReceipt(inv, payment) {
       ${qrDataUrl ? `
       <div style="text-align:center">
         <img src="${qrDataUrl}" width="90" height="90" alt="Receipt QR" />
-        <p style="font-size:10px;color:#999;margin:2px 0 0">Scan to view receipt details (demo)</p>
+        <p style="font-size:10px;color:#999;margin:2px 0 0">Scan to verify this receipt</p>
       </div>` : '<div></div>'}
       <div class="stamp" style="margin-top:0">
         <p>_______________________</p>

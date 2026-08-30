@@ -1231,24 +1231,41 @@ model FeeInvoiceItem {
   @@map("fee_invoice_items")
 }
 
-// One row per receipt — partial payments each get their own receipt number
+// One row per receipt — partial payments each get their own receipt number.
+// A portal-submitted proof starts life as PENDING_REVIEW with no receiptNo —
+// it only becomes a real receipt (receiptNo + verificationCode assigned) once
+// staff confirm it. Postgres allows multiple NULLs under the receiptNo unique
+// index, so several pending rows with no number yet is fine.
 model FeePayment {
-  id            String       @id @default(uuid())
-  companyId     String
-  company       Company      @relation(fields: [companyId], references: [id])
-  invoiceId     String
-  invoice       FeeInvoice   @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
-  receiptNo     String
-  amount        Decimal      @db.Decimal(12, 2)
-  method        String       @default("CASH") // CASH | BANK | ESEWA | KHALTI
-  bankAccountId String? // set when method = BANK/ESEWA/KHALTI — which bank account this payment settles into
-  bankAccount   BankAccount? @relation(fields: [bankAccountId], references: [id])
-  paidAt        DateTime     @default(now())
-  notes         String?
-  createdAt     DateTime     @default(now())
+  id                 String           @id @default(uuid())
+  companyId          String
+  company            Company          @relation(fields: [companyId], references: [id])
+  invoiceId          String
+  invoice            FeeInvoice       @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  receiptNo          String?
+  amount             Decimal          @db.Decimal(12, 2)
+  method             String           @default("CASH") // CASH | BANK | ESEWA | KHALTI
+  bankAccountId      String? // set when method = BANK/ESEWA/KHALTI — which bank account this payment settles into
+  bankAccount        BankAccount?     @relation(fields: [bankAccountId], references: [id])
+  paidAt             DateTime         @default(now())
+  notes              String?
+  createdAt          DateTime         @default(now())
+  status             FeePaymentStatus @default(CONFIRMED)
+  proofScreenshotUrl String? // screenshot the parent/student uploaded as proof of payment
+  submittedByPortal  Boolean          @default(false)
+  verificationCode   String?          @unique // short code encoded in the receipt QR, assigned on confirm
+  reviewedByUserId   String?
+  reviewedAt         DateTime?
+  rejectionReason    String?
 
   @@unique([companyId, receiptNo])
   @@map("fee_payments")
+}
+
+enum FeePaymentStatus {
+  PENDING_REVIEW
+  CONFIRMED
+  REJECTED
 }
 
 model StudentScholarship {

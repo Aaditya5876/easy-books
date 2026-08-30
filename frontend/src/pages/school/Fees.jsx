@@ -1,11 +1,13 @@
 import { useState, useEffect, Fragment } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Pencil, Trash2, DollarSign, CheckCircle, Printer, Users, Sparkles, ChevronDown, ChevronRight, ChevronLeft, Receipt, Search, FileText, Send } from 'lucide-react';
+import { Plus, Pencil, Trash2, DollarSign, CheckCircle, Printer, Users, Sparkles, ChevronDown, ChevronRight, ChevronLeft, Receipt, Search, FileText, Send, ScanLine } from 'lucide-react';
 import { feesApi, classesApi, schoolFinanceApi, inventoryApi, bankAccountApi } from '@/api';
 import StudentFeeProfileTab from './fees/StudentFeeProfileTab';
 import FeeHeadsTab from './fees/FeeHeadsTab';
 import FeePackagesTab from './fees/FeePackagesTab';
+import PendingProofsTab from './fees/PendingProofsTab';
+import VerifyPaymentDialog from './fees/VerifyPaymentDialog';
 import StudentCombobox from '@/components/shared/StudentCombobox';
 import { getActiveCompanyId } from '@/lib/companyContext';
 import { useRole } from '@/lib/useRole';
@@ -526,6 +528,13 @@ export default function Fees() {
   const [payDialog, setPayDialog] = useState(null);
   const [expandedId, setExpandedId] = useState(null);
   const [invoiceDate, setInvoiceDate] = useState(() => format(new Date(), 'yyyy-MM-dd'));
+  const [verifyDialog, setVerifyDialog] = useState(false);
+
+  const { data: pendingProofs = [] } = useQuery({
+    queryKey: ['fee-payments-pending'],
+    queryFn: () => feesApi.listPendingProofs().then(r => r.data),
+    enabled: !!companyId,
+  });
 
   useEffect(() => {
     const timer = setTimeout(() => setInvoiceSearch(invoiceSearchInput.trim()), 300);
@@ -604,6 +613,9 @@ export default function Fees() {
           <p className="text-muted-foreground text-sm mt-1">{t('fees.feeManagementSubtitle', { defaultValue: 'Fee structures and student invoices' })}</p>
         </div>
         <div className="flex gap-2">
+          <Button variant="outline" onClick={() => setVerifyDialog(true)} className="self-end">
+            <ScanLine className="w-4 h-4 mr-2" /> {t('fees.scanReceiptQr', { defaultValue: 'Scan Receipt QR' })}
+          </Button>
           {tab === 'structures' && (
             <Button onClick={() => setStructureDialog({ mode: 'add' })}>
               <Plus className="w-4 h-4 mr-2" /> {t('fees.addFee', { defaultValue: 'Add Fee' })}
@@ -634,6 +646,7 @@ export default function Fees() {
       <div className="flex gap-1 bg-muted p-1 rounded-lg w-fit flex-wrap">
         {[
           { id: 'invoices', label: t('fees.feeInvoices', { defaultValue: 'Fee Invoices' }) },
+          { id: 'pendingProofs', label: t('fees.pendingProofs', { defaultValue: 'Pending Proofs' }), count: pendingProofs.length },
           { id: 'profile', label: t('fees.studentFees', { defaultValue: 'Student Fees' }) },
           { id: 'structures', label: t('fees.feeStructures', { defaultValue: 'Fee Structures' }) },
           { id: 'heads', label: t('fees.feeHeads', { defaultValue: 'Fee Heads' }) },
@@ -642,16 +655,23 @@ export default function Fees() {
           <button
             key={tb.id}
             onClick={() => setTab(tb.id)}
-            className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${tab === tb.id ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+            className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors inline-flex items-center gap-1.5 ${tab === tb.id ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
           >
             {tb.label}
+            {!!tb.count && (
+              <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-amber-500 text-white text-[10px] font-bold">
+                {tb.count}
+              </span>
+            )}
           </button>
         ))}
       </div>
 
+      {tab === 'pendingProofs' && <PendingProofsTab />}
       {tab === 'profile' && <StudentFeeProfileTab />}
       {tab === 'heads' && <FeeHeadsTab />}
       {tab === 'packages' && <FeePackagesTab />}
+      <VerifyPaymentDialog open={verifyDialog} onClose={() => setVerifyDialog(false)} />
 
       {/* Invoices Tab */}
       {tab === 'invoices' && (
