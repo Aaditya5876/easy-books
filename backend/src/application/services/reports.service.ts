@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../../core/db/psql/prisma.client';
 
 function dateRangeWhere(dateFrom?: string, dateTo?: string) {
@@ -23,6 +23,7 @@ export class ReportsService {
   // TRANSACTION_MEMO entries are excluded — they're single-sided vendor/customer
   // tracking, not a real posted voucher (see LedgerPostingService.postPartyLedgerLineTx).
   async getDayBook(companyId: string, dateFrom?: string, dateTo?: string) {
+    if (!companyId) throw new BadRequestException('companyId is required');
     const entries = await this.prisma.ledgerEntry.findMany({
       where: {
         companyId,
@@ -66,6 +67,7 @@ export class ReportsService {
   // One account's full running history — works for a system account (Cash in
   // Hand, Purchase Expenses...) or a vendor/customer's own Purchase/Sales Account.
   async getPartyStatement(companyId: string, accountId: string, dateFrom?: string, dateTo?: string) {
+    if (!companyId) throw new BadRequestException('companyId is required');
     const account = await this.prisma.ledgerAccount.findFirst({ where: { id: accountId, companyId } });
     if (!account) throw new NotFoundException('Ledger account not found');
 
@@ -108,6 +110,7 @@ export class ReportsService {
   // only the single-sided memo tracking entries (which have no offsetting leg
   // anywhere) need to be excluded for the books to actually balance.
   private async getNetAccountBalances(companyId: string) {
+    if (!companyId) throw new BadRequestException('companyId is required');
     const grouped = await this.prisma.ledgerEntry.groupBy({
       by: ['accountId'],
       where: { companyId, referenceType: { not: 'TRANSACTION_MEMO' } },
@@ -115,7 +118,7 @@ export class ReportsService {
     });
 
     const accounts = await this.prisma.ledgerAccount.findMany({
-      where: { id: { in: grouped.map((g) => g.accountId) } },
+      where: { id: { in: grouped.map((g) => g.accountId) }, companyId },
     });
     const accountById = new Map(accounts.map((a) => [a.id, a]));
 
@@ -192,6 +195,7 @@ export class ReportsService {
   // A voucher with more than two legs attributes its full cash movement to the
   // first non-cash leg — correct for the overwhelming majority (2-leg) case.
   async getCashFlowStatement(companyId: string, dateFrom?: string, dateTo?: string) {
+    if (!companyId) throw new BadRequestException('companyId is required');
     const cashAccounts = await this.prisma.ledgerAccount.findMany({
       where: { companyId, isSystem: true, accountType: 'ASSET', accountName: { in: ['Cash in Hand', 'Bank Account'] } },
     });

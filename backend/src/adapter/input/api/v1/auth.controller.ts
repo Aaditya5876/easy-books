@@ -26,7 +26,8 @@ export class AuthController {
 
   @Public()
   @Post('register')
-  @ApiOperation({ summary: 'Register new user and company — sends OTP for email verification' })
+  @Throttle({ default: { limit: 3, ttl: 60000 } })
+  @ApiOperation({ summary: 'Register new user and company — sends OTP for email verification (rate-limited: 3 per minute)' })
   async register(@Body(new ZodValidationPipe(RegisterSchema)) dto: RegisterDTO) {
     return this.authService.register(dto);
   }
@@ -34,7 +35,8 @@ export class AuthController {
   @Public()
   @Post('verify-otp')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Verify OTP and complete registration — issues auth tokens' })
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
+  @ApiOperation({ summary: 'Verify OTP and complete registration — issues auth tokens (rate-limited: 5 per minute)' })
   @ApiBody({ schema: { type: 'object', required: ['email', 'otp'], properties: { email: { type: 'string' }, otp: { type: 'string' } } } })
   async verifyOtp(
     @Body('email') email: string,

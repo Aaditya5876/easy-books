@@ -22,6 +22,7 @@ export class FixedAssetServiceImpl {
   ) {}
 
   async findAll(companyId: string) {
+    if (!companyId) throw new BadRequestException('companyId is required');
     return this.prisma.fixedAsset.findMany({ where: { companyId }, orderBy: { purchaseDateAd: 'desc' } });
   }
 

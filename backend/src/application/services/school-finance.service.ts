@@ -5,7 +5,7 @@ import { LedgerPostingService } from './ledger-posting.service';
 import { NotificationServiceImpl } from './notification.service.impl';
 import { PortalNotificationService } from './portal-notification.service';
 import { SmsService } from './sms.service';
-import { adToBs } from '@easy-books/shared';
+import { adToBs, bsYearMonth, isValidBsYearMonth } from '@easy-books/shared';
 
 // Short, QR-friendly code — not the DB id, so a scanned/printed receipt
 // doesn't leak the payment's UUID. Collisions are practically impossible at
@@ -342,7 +342,10 @@ export class SchoolFinanceService {
   // button) always leaves invoices unreleased, requiring an explicit Release
   // action (releaseInvoiceById/releaseBulk below).
   async billingRun(companyId: string, month?: string, classId?: string, dueDate?: string, invoiceDate?: string, autoRelease = false) {
-    const resolvedMonth = month?.trim() || adToBs(invoiceDate ? new Date(invoiceDate) : new Date()).split('-').slice(0, 2).join('-');
+    if (month?.trim() && !isValidBsYearMonth(month.trim())) {
+      throw new BadRequestException('month must be in BS "YYYY-MM" format, e.g. 2083-05');
+    }
+    const resolvedMonth = month?.trim() || bsYearMonth(invoiceDate ? new Date(invoiceDate) : new Date());
 
     const students = await this.prisma.student.findMany({
       where: { companyId, status: 'ACTIVE', ...(classId ? { classId } : {}) },
@@ -456,6 +459,7 @@ export class SchoolFinanceService {
   }
 
   async releaseBulk(companyId: string) {
+    if (!companyId) throw new BadRequestException('companyId is required');
     const invoices = await this.prisma.feeInvoice.findMany({ where: { companyId, releasedAt: null }, select: { id: true } });
     for (const inv of invoices) {
       await this.releaseInvoice(companyId, inv.id);
@@ -651,6 +655,14 @@ export class SchoolFinanceService {
     const newPaid = round2(Number(invoice.paidAmount) + input.amount);
     const status = newPaid >= Number(invoice.totalAmount) ? 'PAID' : 'PARTIAL';
 
+    // The linked account's own paymentType decides the Transaction type — not
+    // the payment method — since an ESEWA/KHALTI-method payment now always
+    // links to the school's own wallet account (never a real bank).
+    const linkedAccount = input.bankAccountId
+      ? await this.prisma.bankAccount.findUnique({ where: { id: input.bankAccountId }, select: { paymentType: true } })
+      : null;
+    const transactionType = input.method === 'CASH' ? 'CASH' : linkedAccount?.paymentType === 'BANK' ? 'BANK' : 'WALLET';
+
     const payment = await this.prisma.$transaction(async (tx) => {
       const created = input.existingPaymentId
         ? await tx.feePayment.update({
@@ -688,7 +700,7 @@ export class SchoolFinanceService {
           companyId,
           bankAccountId: input.bankAccountId,
           dateAd: new Date(),
-          type: (input.method === 'CASH' ? 'CASH' : input.bankAccountId ? 'BANK' : 'WALLET') as any,
+          type: transactionType as any,
           category: 'INCOME' as any,
           amount: input.amount,
           description: `Fee payment — ${invoice.student?.name ?? 'Student'} (Invoice ${invoice.month})`,
@@ -721,6 +733,12 @@ export class SchoolFinanceService {
     const invoice = await this.prisma.feeInvoice.findFirst({ where: { id: invoiceId, companyId, studentId } });
     if (!invoice) throw new NotFoundException('Invoice not found');
     if (!body.proofScreenshotUrl) throw new BadRequestException('Payment screenshot is required');
+    // Must be one of our own uploaded files, not an arbitrary attacker-hosted
+    // URL — otherwise a submitted "proof" could force staff browsers to load
+    // external content every time the pending-review list is opened.
+    if (!/^\/uploads\/[A-Za-z0-9._-]+$/.test(body.proofScreenshotUrl)) {
+      throw new BadRequestException('Invalid screenshot reference');
+    }
 
     const amount = round2(Number(body.amount));
     if (!(amount > 0)) throw new BadRequestException('Payment amount must be positive');
@@ -761,6 +779,7 @@ export class SchoolFinanceService {
   }
 
   listPendingPaymentProofs(companyId: string) {
+    if (!companyId) throw new BadRequestException('companyId is required');
     return this.prisma.feePayment.findMany({
       where: { companyId, status: 'PENDING_REVIEW' },
       include: { invoice: { include: { student: { select: { id: true, name: true, rollNumber: true } } } }, bankAccount: { select: { bankName: true } } },
@@ -881,24 +900,22 @@ export class SchoolFinanceService {
   private async postFeePayment(companyId: string, paymentId: string, studentName: string) {
     const payment = await this.prisma.feePayment.findUnique({
       where: { id: paymentId },
-      include: { invoice: true },
+      include: { invoice: true, bankAccount: { select: { paymentType: true } } },
     });
     if (!payment) return;
 
-    // Cash is Cash. A real linked bank account (BANK, or ESEWA/KHALTI already
-    // settled to one) is genuinely "Bank Account" money. An ESEWA/KHALTI
-    // payment with no bank account is still sitting as wallet balance — not
-    // the same pool of money as a bank account — so it gets its own account
-    // instead of being mislabeled as "Bank Account".
+    // Cash is Cash. Everything else names a specific configured account, and
+    // that account's own paymentType (Bank/eSewa/Khalti) — not the payment's
+    // method — decides which pool of money actually moved, since a payment
+    // recorded as "eSewa" could still be linked to a real bank account it
+    // already settled into.
     const drAccountName = payment.method === 'CASH'
       ? 'Cash in Hand'
-      : payment.bankAccountId
-        ? 'Bank Account'
-        : payment.method === 'ESEWA'
-          ? 'eSewa Wallet'
-          : payment.method === 'KHALTI'
-            ? 'Khalti Wallet'
-            : 'Bank Account';
+      : payment.bankAccount?.paymentType === 'ESEWA'
+        ? 'eSewa Wallet'
+        : payment.bankAccount?.paymentType === 'KHALTI'
+          ? 'Khalti Wallet'
+          : 'Bank Account';
     const desc = `Fee receipt ${payment.receiptNo} — ${studentName} (${payment.invoice.month})`;
 
     const [drAccount, receivable] = await Promise.all([

@@ -3,6 +3,7 @@ import {
   UploadedFile, UseInterceptors, BadRequestException,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { Throttle } from '@nestjs/throttler';
 import { ApiTags, ApiConsumes } from '@nestjs/swagger';
 import { PortalUserType } from '@prisma/client';
 import { Public } from '../../../../modules/decorators/public.decorator';
@@ -28,6 +29,7 @@ export class PortalController {
 
   @Public()
   @Post('login')
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
   login(@Body() body: { phone: string; password: string; companyId: string }) {
     return this.portalService.login(body.phone, body.password, body.companyId);
   }

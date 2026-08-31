@@ -2,6 +2,7 @@ import { BadRequestException } from '@nestjs/common';
 import { diskStorage } from 'multer';
 import { extname, join } from 'path';
 import { existsSync, mkdirSync } from 'fs';
+import { randomUUID } from 'crypto';
 
 // Shared by the staff-facing generic uploader and the portal's own
 // payment-proof uploader — both files land in the same local `uploads/` dir
@@ -13,9 +14,12 @@ export function makeUploadStorage() {
       if (!existsSync(uploadDir)) mkdirSync(uploadDir, { recursive: true });
       cb(null, uploadDir);
     },
+    // A random UUID, not Date.now()+Math.random() — these files are served
+    // unauthenticated from a public static path (payment-proof screenshots,
+    // bank QR codes, etc.), so the filename itself is the only thing standing
+    // between "I have the link" and "I can guess/enumerate someone else's".
     filename: (_req, file, cb) => {
-      const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
-      cb(null, `${uniqueSuffix}${extname(file.originalname)}`);
+      cb(null, `${randomUUID()}${extname(file.originalname)}`);
     },
   });
 }

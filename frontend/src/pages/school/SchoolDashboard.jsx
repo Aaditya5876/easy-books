@@ -7,6 +7,7 @@ import { GraduationCap, DollarSign, AlertCircle, Users, TrendingUp, CheckCircle,
 import { useTranslation } from 'react-i18next';
 import { schoolDashboardApi, schoolAnalyticsApi, aiApi, transactionApi, examSchedulesApi, schoolEventsApi, noticesApi } from '@/api';
 import { getActiveCompanyId } from '@/lib/companyContext';
+import { formatBsYearMonth } from '@/lib/nepaliDate';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useRole } from '@/lib/useRole';
@@ -410,9 +411,9 @@ export default function SchoolDashboard() {
             <ResponsiveContainer width="100%" height={210}>
               <BarChart data={data?.feeMonths ?? []} margin={{ top: 5, right: 10, left: -10, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                <XAxis dataKey="month" tick={{ fontSize: 11 }} />
+                <XAxis dataKey="month" tick={{ fontSize: 11 }} tickFormatter={formatBsYearMonth} />
                 <YAxis tick={{ fontSize: 11 }} tickFormatter={v => v >= 1000 ? `${Math.round(v / 1000)}k` : v} />
-                <Tooltip formatter={(v, name) => [fmtRs(v), name === 'collected' ? 'Collected' : 'Pending']} />
+                <Tooltip labelFormatter={formatBsYearMonth} formatter={(v, name) => [fmtRs(v), name === 'collected' ? 'Collected' : 'Pending']} />
                 <Legend formatter={v => v === 'collected' ? 'Collected' : 'Pending'} wrapperStyle={{ fontSize: 12 }} />
                 <Bar dataKey="collected" stackId="a" fill="#10b981" />
                 <Bar dataKey="pending" stackId="a" fill="#f59e0b" radius={[4, 4, 0, 0]} />
@@ -466,7 +467,7 @@ export default function SchoolDashboard() {
                       <td className="px-5 py-3 text-right font-mono tabular-nums text-amber-700">
                         Rs. {Number(row.dueAmount).toLocaleString('en-NP', { minimumFractionDigits: 2 })}
                       </td>
-                      <td className="px-5 py-3 text-muted-foreground">{row.month}</td>
+                      <td className="px-5 py-3 text-muted-foreground">{formatBsYearMonth(row.month)}</td>
                     </tr>
                   ))}
                 </tbody>

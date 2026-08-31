@@ -8,6 +8,7 @@ import apiClient from '@/api/client';
 import { printFeeReceipt } from '@/lib/printFeeReceipt';
 import { printFeeInvoice } from '@/lib/printFeeInvoice';
 import { pageVariants, containerVariants, cardVariants, itemVariants } from '@/lib/portalAnimations';
+import { formatBsYearMonth } from '@/lib/nepaliDate';
 import PortalFilterSelect from '@/components/portal/PortalFilterSelect';
 import PortalPagination from '@/components/portal/PortalPagination';
 import PortalPageHeader from '@/components/portal/PortalPageHeader';
@@ -34,11 +35,24 @@ function SubmitProofDialog({ invoice, dueAmount, bankAccounts, onClose, onSubmit
   const { t } = useTranslation();
   const [amount, setAmount] = useState(String(dueAmount));
   const [method, setMethod] = useState('BANK');
-  const [bankAccountId, setBankAccountId] = useState(bankAccounts[0]?.id || '');
+  const filteredAccounts = bankAccounts.filter(b => b.paymentType === method);
+  const [bankAccountId, setBankAccountId] = useState(() => bankAccounts.find(b => b.paymentType === 'BANK')?.id || '');
   const [notes, setNotes] = useState('');
   const [file, setFile] = useState(null);
   const [preview, setPreview] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const needsAccount = method === 'BANK' || method === 'ESEWA' || method === 'KHALTI';
+  const accountLabel = method === 'ESEWA'
+    ? t('portal.esewaNumber', { defaultValue: 'eSewa Number' })
+    : method === 'KHALTI'
+      ? t('portal.khaltiNumber', { defaultValue: 'Khalti Number' })
+      : t('portal.paidToAccount', { defaultValue: 'Paid To' });
+
+  function changeMethod(next) {
+    setMethod(next);
+    const firstMatch = bankAccounts.find(b => b.paymentType === next);
+    setBankAccountId(firstMatch?.id || '');
+  }
 
   function handleFile(f) {
     if (!f) return;
@@ -49,7 +63,7 @@ function SubmitProofDialog({ invoice, dueAmount, bankAccounts, onClose, onSubmit
   async function submit() {
     const amt = Number(amount);
     if (!(amt > 0)) return toast.error(t('portal.enterValidAmount', { defaultValue: 'Enter a valid amount' }));
-    if (method === 'BANK' && !bankAccountId) return toast.error(t('portal.selectBankAccount', { defaultValue: 'Select which account you paid to' }));
+    if (needsAccount && !bankAccountId) return toast.error(t('portal.selectBankAccount', { defaultValue: 'Select which account you paid to' }));
     if (!file) return toast.error(t('portal.screenshotRequired', { defaultValue: 'Please attach a screenshot of the payment' }));
 
     setSubmitting(true);
@@ -58,7 +72,7 @@ function SubmitProofDialog({ invoice, dueAmount, bankAccounts, onClose, onSubmit
       await portalApi.submitPaymentProof(invoice.id, {
         amount: amt,
         method,
-        bankAccountId: method === 'BANK' ? bankAccountId : undefined,
+        bankAccountId: needsAccount ? bankAccountId : undefined,
         proofScreenshotUrl: uploadRes.data.url,
         notes: notes || undefined,
       });
@@ -95,23 +109,32 @@ function SubmitProofDialog({ invoice, dueAmount, bankAccounts, onClose, onSubmit
           <div>
             <label className="text-xs font-medium text-slate-500 mb-1 block">{t('portal.paymentMethod', { defaultValue: 'Payment Method' })}</label>
             <select
-              value={method} onChange={(e) => setMethod(e.target.value)}
+              value={method} onChange={(e) => changeMethod(e.target.value)}
               className="w-full h-9 px-3 rounded-lg border border-slate-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-200"
             >
               <option value="BANK">{t('portal.methodBank', { defaultValue: 'Bank Transfer' })}</option>
               <option value="ESEWA">{t('portal.methodEsewa', { defaultValue: 'eSewa' })}</option>
               <option value="KHALTI">{t('portal.methodKhalti', { defaultValue: 'Khalti' })}</option>
+              <option value="CASH">{t('portal.methodCash', { defaultValue: 'Cash' })}</option>
             </select>
           </div>
-          {method === 'BANK' && (
+          {needsAccount && (
             <div>
-              <label className="text-xs font-medium text-slate-500 mb-1 block">{t('portal.paidToAccount', { defaultValue: 'Paid To' })}</label>
+              <label className="text-xs font-medium text-slate-500 mb-1 block">{accountLabel}</label>
               <select
                 value={bankAccountId} onChange={(e) => setBankAccountId(e.target.value)}
                 className="w-full h-9 px-3 rounded-lg border border-slate-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-200"
               >
-                {bankAccounts.map(b => <option key={b.id} value={b.id}>{b.bankName}</option>)}
+                <option value="">{t('portal.chooseAccount', { defaultValue: 'Choose…' })}</option>
+                {filteredAccounts.map(b => (
+                  <option key={b.id} value={b.id}>{method === 'BANK' ? b.bankName : `${b.bankName} (${b.accountNumber})`}</option>
+                ))}
               </select>
+              {filteredAccounts.length === 0 && (
+                <p className="text-xs text-amber-600 mt-1">
+                  {t('portal.noAccountsOfTypeHint', { defaultValue: 'The school hasn\'t set up {{account}} yet.', account: accountLabel })}
+                </p>
+              )}
             </div>
           )}
           <div>
@@ -304,7 +327,7 @@ export default function PortalFees() {
                     <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm hover:shadow-md transition-shadow">
                       <div className="flex items-start justify-between gap-3 mb-3">
                         <div>
-                          <p className="font-semibold text-slate-900">{f.month}</p>
+                          <p className="font-semibold text-slate-900">{formatBsYearMonth(f.month)}</p>
                           {f.description && <p className="text-xs text-slate-400 mt-0.5">{f.description}</p>}
                         </div>
                         <span className="shrink-0 inline-flex px-2.5 py-1 rounded-full text-xs font-semibold" style={{ background: cfg.bg, color: cfg.color }}>

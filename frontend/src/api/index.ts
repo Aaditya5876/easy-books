@@ -187,6 +187,9 @@ export const notificationsApi = {
   unreadCount: () => apiClient.get('/api/v1/notifications/unread-count'),
   markRead: (id: string) => apiClient.patch(`/api/v1/notifications/${id}/read`),
   markAllRead: () => apiClient.patch('/api/v1/notifications/mark-all-read'),
+  getPreferences: () => apiClient.get('/api/v1/notifications/preferences'),
+  updatePreferences: (data: { transactions?: boolean; reminders?: boolean; system?: boolean }) =>
+    apiClient.put('/api/v1/notifications/preferences', data),
 };
 
 // Companies
@@ -551,4 +554,12 @@ export const aiApi = {
 
 export const reportsApi = {
   trialBalance: () => apiClient.get('/api/v1/reports/trial-balance', { params: { companyId: companyId() } }),
+};
+
+export const fiscalYearApi = {
+  status: () => apiClient.get('/api/v1/fiscal-year/status', { params: { companyId: companyId() } }),
+  close: (fiscalYear: string, password: string) =>
+    apiClient.post('/api/v1/fiscal-year/close', { companyId: companyId(), fiscalYear, password }),
+  reopen: (fiscalYear: string, password: string) =>
+    apiClient.post('/api/v1/fiscal-year/reopen', { companyId: companyId(), fiscalYear, password }),
 };

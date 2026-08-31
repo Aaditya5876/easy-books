@@ -1,5 +1,14 @@
 import { format } from 'date-fns';
 import QRCode from 'qrcode';
+import { formatBsYearMonth } from './nepaliDate';
+
+// See printFeeInvoice.js's esc() for why this is needed — document.write()
+// into a same-origin popup doesn't auto-escape like JSX does.
+function esc(value) {
+  return String(value ?? '').replace(/[&<>"']/g, (c) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+  }[c]));
+}
 
 // A receipt is proof of ONE payment, not a running "total paid so far" summary
 // — a school can take several partial payments against the same invoice, and
@@ -46,20 +55,20 @@ export async function printFeeReceipt(inv, payment) {
       @media print{button{display:none}}
     </style></head>
     <body>
-    <h2>${inv.company?.name || 'School'}</h2>
-    ${inv.company?.address ? `<p style="text-align:center;color:#666;margin:4px 0">${inv.company.address}</p>` : ''}
-    ${inv.company?.phone ? `<p style="text-align:center;color:#666;margin:4px 0">Phone: ${inv.company.phone}</p>` : ''}
+    <h2>${esc(inv.company?.name || 'School')}</h2>
+    ${inv.company?.address ? `<p style="text-align:center;color:#666;margin:4px 0">${esc(inv.company.address)}</p>` : ''}
+    ${inv.company?.phone ? `<p style="text-align:center;color:#666;margin:4px 0">Phone: ${esc(inv.company.phone)}</p>` : ''}
     <div class="divider"></div>
     <div style="text-align:center;font-weight:bold;margin-bottom:8px">FEE RECEIPT</div>
-    <div class="row"><span class="label">Receipt No:</span> <span>${receiptNo}</span></div>
+    <div class="row"><span class="label">Receipt No:</span> <span>${esc(receiptNo)}</span></div>
     <div class="row"><span class="label">Date:</span> <span>${format(paidDate, 'dd MMM yyyy')}</span></div>
-    ${pay?.method ? `<div class="row"><span class="label">Method:</span> <span>${pay.method}</span></div>` : ''}
+    ${pay?.method ? `<div class="row"><span class="label">Method:</span> <span>${esc(pay.method)}</span></div>` : ''}
     <div class="divider"></div>
-    <div class="row"><span class="label">Student:</span> <span>${inv.student?.name || '—'}</span></div>
-    <div class="row"><span class="label">Roll No:</span> <span>${inv.student?.rollNumber || '—'}</span></div>
-    <div class="row"><span class="label">Class:</span> <span>${className}</span></div>
-    <div class="row"><span class="label">Month:</span> <span>${inv.month}</span></div>
-    ${inv.description ? `<div class="row"><span class="label">Description:</span> <span>${inv.description}</span></div>` : ''}
+    <div class="row"><span class="label">Student:</span> <span>${esc(inv.student?.name || '—')}</span></div>
+    <div class="row"><span class="label">Roll No:</span> <span>${esc(inv.student?.rollNumber || '—')}</span></div>
+    <div class="row"><span class="label">Class:</span> <span>${esc(className)}</span></div>
+    <div class="row"><span class="label">Month:</span> <span>${esc(formatBsYearMonth(inv.month))}</span></div>
+    ${inv.description ? `<div class="row"><span class="label">Description:</span> <span>${esc(inv.description)}</span></div>` : ''}
     <div class="divider"></div>
     <div class="row total"><span>Amount Paid (this receipt):</span> <span>Rs. ${fmt(amountPaid)}</span></div>
     <div class="row"><span class="label">Invoice Total:</span> <span>Rs. ${fmt(inv.totalAmount)}</span></div>
@@ -72,6 +81,7 @@ export async function printFeeReceipt(inv, payment) {
       <div style="text-align:center">
         <img src="${qrDataUrl}" width="90" height="90" alt="Receipt QR" />
         <p style="font-size:10px;color:#999;margin:2px 0 0">Scan to verify this receipt</p>
+        <p style="font-size:11px;font-family:monospace;font-weight:bold;margin:2px 0 0">${pay.verificationCode}</p>
       </div>` : '<div></div>'}
       <div class="stamp" style="margin-top:0">
         <p>_______________________</p>

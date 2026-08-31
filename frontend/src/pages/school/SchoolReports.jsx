@@ -8,7 +8,7 @@ import {
 } from 'recharts';
 import { ledgerApi, schoolAnalyticsApi, transactionApi, schoolDashboardApi, reportsApi } from '@/api';
 import { getActiveCompanyId } from '@/lib/companyContext';
-import { getCurrentFiscalYear } from '@/lib/nepaliDate';
+import { getCurrentFiscalYear, formatBsYearMonth } from '@/lib/nepaliDate';
 import { useRole } from '@/lib/useRole';
 import { BarChart2, CalendarCheck2, DollarSign, Trophy, Boxes, Phone, ShieldCheck, Printer } from 'lucide-react';
 
@@ -315,10 +315,10 @@ function FeesTab({ auditStartDate, auditEndDate }) {
           <ResponsiveContainer width="100%" height={260}>
             <ComposedChart data={data.byMonth} margin={{ top: 5, right: 0, left: -10, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-              <XAxis dataKey="month" tick={{ fontSize: 11 }} />
+              <XAxis dataKey="month" tick={{ fontSize: 11 }} tickFormatter={formatBsYearMonth} />
               <YAxis yAxisId="amt" tick={{ fontSize: 11 }} tickFormatter={kFmt} />
               <YAxis yAxisId="rate" orientation="right" domain={[0, 100]} tick={{ fontSize: 11 }} unit="%" />
-              <Tooltip formatter={(v, name) => name === 'rate' ? [`${v}%`, t('reports.collectionRate', { defaultValue: 'Collection rate' })] : [fmtRs(v), name === 'collected' ? t('reports.collected', { defaultValue: 'Collected' }) : t('reports.pending', { defaultValue: 'Pending' })]} />
+              <Tooltip labelFormatter={formatBsYearMonth} formatter={(v, name) => name === 'rate' ? [`${v}%`, t('reports.collectionRate', { defaultValue: 'Collection rate' })] : [fmtRs(v), name === 'collected' ? t('reports.collected', { defaultValue: 'Collected' }) : t('reports.pending', { defaultValue: 'Pending' })]} />
               <Legend wrapperStyle={{ fontSize: 12 }} formatter={v => v === 'collected' ? t('reports.collected', { defaultValue: 'Collected' }) : v === 'pending' ? t('reports.pending', { defaultValue: 'Pending' }) : t('reports.ratePercent', { defaultValue: 'Rate %' })} />
               <Bar yAxisId="amt" dataKey="collected" stackId="a" fill="#10b981" />
               <Bar yAxisId="amt" dataKey="pending" stackId="a" fill="#f59e0b" radius={[4, 4, 0, 0]} />
@@ -381,7 +381,7 @@ function FeesTab({ auditStartDate, auditEndDate }) {
                   <tr key={i}>
                     <td className="px-3 py-2 font-medium">{r.studentName}</td>
                     <td className="px-3 py-2 text-muted-foreground">{r.className}</td>
-                    <td className="px-3 py-2 text-muted-foreground">{r.month}</td>
+                    <td className="px-3 py-2 text-muted-foreground">{formatBsYearMonth(r.month)}</td>
                     <td className="px-3 py-2 text-right tabular-nums">{r.daysOver}</td>
                     <td className="px-3 py-2 text-right tabular-nums font-medium text-amber-700">{fmtRs(r.due)}</td>
                   </tr>
@@ -543,9 +543,9 @@ function OperationsTab({ auditStartDate, auditEndDate }) {
           <ResponsiveContainer width="100%" height={220}>
             <BarChart data={data.payrollByMonth} margin={{ top: 5, right: 10, left: -10, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-              <XAxis dataKey="month" tick={{ fontSize: 11 }} />
+              <XAxis dataKey="month" tick={{ fontSize: 11 }} tickFormatter={formatBsYearMonth} />
               <YAxis tick={{ fontSize: 11 }} tickFormatter={kFmt} />
-              <Tooltip formatter={(v) => [fmtRs(v), t('reports.netPayroll', { defaultValue: 'Net payroll' })]} />
+              <Tooltip labelFormatter={formatBsYearMonth} formatter={(v) => [fmtRs(v), t('reports.netPayroll', { defaultValue: 'Net payroll' })]} />
               <Bar dataKey="total" fill="#0ea5e9" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>

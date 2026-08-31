@@ -1,4 +1,4 @@
-import { Controller, Get, Patch, Param, Query, Request } from '@nestjs/common';
+import { Controller, Get, Patch, Put, Body, Param, Query, Request } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { NotificationServiceImpl } from '../../../../application/services/notification.service.impl';
 
@@ -48,5 +48,17 @@ export class NotificationController {
   @ApiOperation({ summary: 'Mark a single notification as read' })
   markRead(@Param('id') id: string, @Request() req: any) {
     return this.service.markRead(id, req.user.sub);
+  }
+
+  @Get('preferences')
+  @ApiOperation({ summary: 'Get the current user\'s notification category preferences' })
+  getPreferences(@Request() req: any) {
+    return this.service.getPreference(req.user.sub);
+  }
+
+  @Put('preferences')
+  @ApiOperation({ summary: 'Update the current user\'s notification category preferences' })
+  updatePreferences(@Request() req: any, @Body() body: { transactions?: boolean; reminders?: boolean; system?: boolean }) {
+    return this.service.updatePreference(req.user.sub, body);
   }
 }

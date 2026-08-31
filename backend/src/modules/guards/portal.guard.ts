@@ -18,7 +18,7 @@ export class PortalGuard implements CanActivate {
     let payload: any;
     try {
       payload = this.jwtService.verify(token, {
-        secret: process.env.JWT_SECRET || 'easybooks-secret',
+        secret: process.env.JWT_SECRET,
       });
       if (payload.type !== 'portal') throw new UnauthorizedException('Invalid portal token');
     } catch {

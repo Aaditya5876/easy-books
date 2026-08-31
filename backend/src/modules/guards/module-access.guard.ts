@@ -1,4 +1,4 @@
-import { Injectable, CanActivate, ExecutionContext, ForbiddenException } from '@nestjs/common';
+import { Injectable, CanActivate, ExecutionContext, ForbiddenException, BadRequestException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { REQUIRES_MODULE_KEY } from '../decorators/requires-module.decorator';
 import { ModuleKey } from '../../../core/modules/module-keys';
@@ -25,7 +25,10 @@ export class ModuleAccessGuard implements CanActivate {
     const req = context.switchToHttp().getRequest();
     const companyId: string | undefined =
       req.query?.companyId || req.params?.companyId || req.body?.companyId;
-    if (!companyId) return true; // let normal validation reject the missing companyId
+    // Fail closed — an omitted companyId must never silently skip a licensing
+    // check (it previously did, letting any request without the field bypass
+    // module entitlements entirely).
+    if (!companyId) throw new BadRequestException('companyId is required');
 
     const company = await this.prisma.company.findUnique({
       where: { id: companyId },

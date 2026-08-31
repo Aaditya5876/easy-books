@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { feesApi } from '@/api';
+import { formatBsYearMonth } from '@/lib/nepaliDate';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -106,7 +107,7 @@ export default function VerifyPaymentDialog({ open, onClose }) {
             <div className="bg-muted/40 rounded-lg p-3 text-sm space-y-1">
               <p><span className="text-muted-foreground">{t('fees.receiptNoColon', { defaultValue: 'Receipt:' })}</span> <strong className="font-mono">{result.receiptNo}</strong></p>
               <p><span className="text-muted-foreground">{t('fees.studentColon', { defaultValue: 'Student:' })}</span> <strong>{result.invoice?.student?.name}</strong></p>
-              <p><span className="text-muted-foreground">{t('fees.monthColon', { defaultValue: 'Month:' })}</span> {result.invoice?.month}</p>
+              <p><span className="text-muted-foreground">{t('fees.monthColon', { defaultValue: 'Month:' })}</span> {formatBsYearMonth(result.invoice?.month)}</p>
               <p><span className="text-muted-foreground">{t('fees.amountColon', { defaultValue: 'Amount:' })}</span> <strong>{fmtAmt(result.amount)}</strong></p>
               <p><span className="text-muted-foreground">{t('fees.paymentMethod', { defaultValue: 'Method' })}:</span> {result.method}{result.bankAccount?.bankName ? ` · ${result.bankAccount.bankName}` : ''}</p>
               <p><span className="text-muted-foreground">{t('fees.paidAtColon', { defaultValue: 'Paid At:' })}</span> {new Date(result.paidAt).toLocaleString('en-NP')}</p>

@@ -29,7 +29,7 @@ export class PortalService {
         type: 'portal',
         portalType: portalUser.type,
       },
-      { secret: process.env.JWT_SECRET || 'easybooks-secret', expiresIn: '30d' },
+      { secret: process.env.JWT_SECRET, expiresIn: '30d' },
     );
     return { token, student: portalUser.student, portalType: portalUser.type };
   }
@@ -44,6 +44,7 @@ export class PortalService {
     const student = await this.prisma.student.findFirst({ where: { id: studentId, companyId } });
     if (!student) throw new NotFoundException('Student not found');
     if (!phone || !password) throw new BadRequestException('Phone and password are required');
+    if (password.length < 6) throw new BadRequestException('Password must be at least 6 characters');
     const passwordHash = await bcrypt.hash(password, 10);
     return this.prisma.portalUser.upsert({
       where: { studentId_type: { studentId, type } },
@@ -89,13 +90,23 @@ export class PortalService {
   }
 
   // Deliberately minimal fields — a parent scanning to pay only needs the
-  // bank name and the QR itself, never the account number, balance, or the
-  // bank's own online-banking login stored on this record.
+  // bank name and the QR itself, never a real bank account number, balance,
+  // or the bank's own online-banking login stored on this record. eSewa/Khalti
+  // are different: the "account number" there IS the wallet phone number —
+  // the exact thing a parent needs to confirm they're paying the right
+  // wallet — so it's safe (and useful) to include for those two types only.
   async getPaymentQrCodes(companyId: string) {
-    return this.prisma.bankAccount.findMany({
+    const accounts = await this.prisma.bankAccount.findMany({
       where: { companyId, qrCodeUrl: { not: null } },
-      select: { id: true, bankName: true, qrCodeUrl: true },
+      select: { id: true, bankName: true, qrCodeUrl: true, paymentType: true, accountNumber: true },
     });
+    return accounts.map((a) => ({
+      id: a.id,
+      bankName: a.bankName,
+      qrCodeUrl: a.qrCodeUrl,
+      paymentType: a.paymentType,
+      accountNumber: a.paymentType === 'BANK' ? undefined : a.accountNumber,
+    }));
   }
 
   getFeeReceipt(invoiceId: string, studentId: string, companyId: string) {

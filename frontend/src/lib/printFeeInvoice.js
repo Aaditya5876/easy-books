@@ -1,5 +1,5 @@
 import { format } from 'date-fns';
-import { adToBs } from './nepaliDate';
+import { adToBs, formatBsYearMonth } from './nepaliDate';
 import apiClient from '@/api/client';
 
 // Same pattern as PortalFees.jsx's local resolveFileUrl — qrCodeUrl comes back
@@ -8,6 +8,18 @@ import apiClient from '@/api/client';
 // API origin prefixed to actually load.
 function resolveFileUrl(url = '') {
   return url.startsWith('http') ? url : `${apiClient.defaults.baseURL}${url}`;
+}
+
+// This document is built with document.write() into a same-origin popup —
+// unlike JSX, nothing here auto-escapes. Every value that ultimately traces
+// back to something a user typed (student/guardian names, notes, item
+// descriptions, company info, bank names…) must be escaped before going into
+// the HTML string, or a student named `<img src=x onerror=...>` becomes
+// script that runs in whoever prints/views this invoice's browser.
+function esc(value) {
+  return String(value ?? '').replace(/[&<>"']/g, (c) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+  }[c]));
 }
 
 // The bill presented before payment — itemized charges, invoice/due dates,
@@ -31,7 +43,7 @@ export function printFeeInvoice(inv) {
   const itemRows = (inv.items ?? []).map((it, i) => `
     <tr>
       <td style="padding:7px 10px;border-bottom:1px solid #e5e5e5">${i + 1}</td>
-      <td style="padding:7px 10px;border-bottom:1px solid #e5e5e5">${it.feeHead?.name || it.inventoryItem?.itemName || it.description}</td>
+      <td style="padding:7px 10px;border-bottom:1px solid #e5e5e5">${esc(it.feeHead?.name || it.inventoryItem?.itemName || it.description)}</td>
       <td style="padding:7px 10px;border-bottom:1px solid #e5e5e5;text-align:right">Rs. ${fmt(it.amount)}</td>
     </tr>
   `).join('');
@@ -50,8 +62,8 @@ export function printFeeInvoice(inv) {
     <div class="qr-grid">
       ${qrAccounts.map(b => `
         <div class="qr-card">
-          <img src="${resolveFileUrl(b.qrCodeUrl)}" alt="${b.bankName} QR" />
-          <p style="margin:4px 0 0">${b.bankName}</p>
+          <img src="${esc(resolveFileUrl(b.qrCodeUrl))}" alt="${esc(b.bankName)} QR" />
+          <p style="margin:4px 0 0">${esc(b.bankName)}</p>
         </div>
       `).join('')}
     </div>
@@ -89,10 +101,10 @@ export function printFeeInvoice(inv) {
     <body>
     <div class="head">
       <div>
-        <p class="school-name">${inv.company?.name || 'School'}</p>
-        ${inv.company?.address ? `<p class="muted" style="margin:4px 0">${inv.company.address}</p>` : ''}
-        ${inv.company?.phone ? `<p class="muted" style="margin:2px 0">Phone: ${inv.company.phone}</p>` : ''}
-        ${inv.company?.email ? `<p class="muted" style="margin:2px 0">${inv.company.email}</p>` : ''}
+        <p class="school-name">${esc(inv.company?.name || 'School')}</p>
+        ${inv.company?.address ? `<p class="muted" style="margin:4px 0">${esc(inv.company.address)}</p>` : ''}
+        ${inv.company?.phone ? `<p class="muted" style="margin:2px 0">Phone: ${esc(inv.company.phone)}</p>` : ''}
+        ${inv.company?.email ? `<p class="muted" style="margin:2px 0">${esc(inv.company.email)}</p>` : ''}
       </div>
       <div class="meta-box">
         <h1>FEE INVOICE</h1>
@@ -106,16 +118,16 @@ export function printFeeInvoice(inv) {
     <p class="section-title">Bill To</p>
     <div class="bill-to">
       <div>
-        <p style="margin:2px 0"><strong>${inv.student?.name || '—'}</strong></p>
-        <p class="muted" style="margin:2px 0">Roll No: ${inv.student?.rollNumber || '—'} &nbsp;·&nbsp; Class: ${className}</p>
-        ${inv.student?.guardianName ? `<p class="muted" style="margin:2px 0">Guardian: ${inv.student.guardianName}${inv.student.guardianPhone ? ` (${inv.student.guardianPhone})` : ''}</p>` : ''}
+        <p style="margin:2px 0"><strong>${esc(inv.student?.name || '—')}</strong></p>
+        <p class="muted" style="margin:2px 0">Roll No: ${esc(inv.student?.rollNumber || '—')} &nbsp;·&nbsp; Class: ${esc(className)}</p>
+        ${inv.student?.guardianName ? `<p class="muted" style="margin:2px 0">Guardian: ${esc(inv.student.guardianName)}${inv.student.guardianPhone ? ` (${esc(inv.student.guardianPhone)})` : ''}</p>` : ''}
       </div>
       <div style="text-align:right">
         <p class="muted" style="margin:2px 0">Billing Period</p>
-        <p style="margin:2px 0"><strong>${inv.month}</strong></p>
+        <p style="margin:2px 0"><strong>${formatBsYearMonth(inv.month)}</strong></p>
       </div>
     </div>
-    ${inv.description ? `<p class="muted" style="margin-top:10px">${inv.description}</p>` : ''}
+    ${inv.description ? `<p class="muted" style="margin-top:10px">${esc(inv.description)}</p>` : ''}
 
     <p class="section-title">Charges</p>
     <table>
@@ -134,7 +146,7 @@ export function printFeeInvoice(inv) {
 
     ${qrSection}
 
-    ${inv.notes ? `<div class="notes"><strong>Notes:</strong> ${inv.notes}</div>` : ''}
+    ${inv.notes ? `<div class="notes"><strong>Notes:</strong> ${esc(inv.notes)}</div>` : ''}
 
     <div class="footer">
       <div></div>

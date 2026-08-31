@@ -4,8 +4,13 @@ import { tap } from 'rxjs/operators';
 import { AuditLogService } from '../../application/services/audit-log.service';
 
 const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
-const SENSITIVE_KEY_PATTERN = /password|token|secret|otp/i;
+const SENSITIVE_KEY_PATTERN = /password|token|secret|otp|pin|api[-_]?key|signature|credential|account[-_]?number|date[-_]?of[-_]?birth|guardian[-_]?phone|pan[-_]?number|salary|ssf/i;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+// Whole-body routes where even key-level redaction isn't enough — the entire
+// payload is either credentials/PII-dense (auth, bank accounts) or an entire
+// spreadsheet of student/employee records (bulk import), or a signed
+// third-party payment payload (eSewa/Khalti verify callbacks).
+const WHOLE_BODY_REDACT_MODULES = [/^auth\//, /^bank-accounts/, /^bulk\//, /^portal\/pay\//];
 
 function redact(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(redact);
@@ -43,6 +48,7 @@ export class AuditLogInterceptor implements NestInterceptor {
     const moduleSegments = pathSegments.slice(2).filter((seg: string) => !UUID_PATTERN.test(seg));
     const module = moduleSegments.join('/') || 'unknown';
     const companyId = query?.companyId || body?.companyId || params?.companyId || null;
+    const redactWholeBody = WHOLE_BODY_REDACT_MODULES.some((pattern) => pattern.test(module));
 
     return next.handle().pipe(
       tap((response) => {
@@ -58,7 +64,7 @@ export class AuditLogInterceptor implements NestInterceptor {
             entityId,
             method,
             path: pathSegments.join('/'),
-            changes: redact(body),
+            changes: redactWholeBody ? '[REDACTED]' : redact(body),
           })
           .catch(() => {
             // AuditLogService.record already swallows/logs its own errors —

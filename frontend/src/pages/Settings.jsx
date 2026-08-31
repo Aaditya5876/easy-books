@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
 import { api } from '@/api/adapter';
-import { usersApi, companyApi, recycleBinApi, bankAccountApi, uploadApi } from '@/api';
+import { usersApi, companyApi, recycleBinApi, bankAccountApi, uploadApi, notificationsApi, fiscalYearApi } from '@/api';
 import apiClient from '@/api/client';
 import { useAuth } from '@/lib/AuthContext';
 import { useRole } from "@/lib/useRole";
@@ -154,13 +154,70 @@ export default function Settings() {
   });
   const [automationSaving, setAutomationSaving] = useState(false);
   const [automationSaved, setAutomationSaved] = useState(false);
+  const [fiscalYearStatus, setFiscalYearStatus] = useState(null);
+  const [closingFiscalYear, setClosingFiscalYear] = useState(false);
+  const [confirmingClose, setConfirmingClose] = useState(false);
+  const [closePassword, setClosePassword] = useState('');
+  const [reopeningYear, setReopeningYear] = useState(null); // fiscalYear string currently mid-confirm, or null
+  const [reopenPassword, setReopenPassword] = useState('');
+  const [reopenSaving, setReopenSaving] = useState(false);
   const [bankAccounts, setBankAccounts] = useState([]);
   const [qrUploadingId, setQrUploadingId] = useState(null);
   const [showAddBank, setShowAddBank] = useState(false);
-  const [bankForm, setBankForm] = useState({ bankName: '', accountNumber: '', accountType: '', branch: '', currentBalance: '' });
+  const [bankForm, setBankForm] = useState({ bankName: '', accountNumber: '', accountType: '', branch: '', currentBalance: '', paymentType: 'BANK' });
   const [addBankSaving, setAddBankSaving] = useState(false);
 
   useEffect(() => { loadCompanies(); }, []);
+  useEffect(() => { loadFiscalYearStatus(); }, [activeCompanyId]);
+
+  async function loadFiscalYearStatus() {
+    if (!activeCompanyId) return;
+    try {
+      const res = await fiscalYearApi.status();
+      setFiscalYearStatus(res.data);
+    } catch {
+      setFiscalYearStatus(null);
+    }
+  }
+
+  async function handleCloseFiscalYear() {
+    if (!fiscalYearStatus?.preview || !closePassword) return;
+    setClosingFiscalYear(true);
+    try {
+      await fiscalYearApi.close(fiscalYearStatus.preview.fiscalYear, closePassword);
+      setConfirmingClose(false);
+      setClosePassword('');
+      await loadFiscalYearStatus();
+    } catch (err) {
+      alert(err?.response?.data?.message || t('settings.failedCloseFiscalYear', { defaultValue: 'Failed to close fiscal year' }));
+    } finally {
+      setClosingFiscalYear(false);
+    }
+  }
+
+  async function handleReopenFiscalYear(fiscalYear) {
+    if (!reopenPassword) return;
+    setReopenSaving(true);
+    try {
+      await fiscalYearApi.reopen(fiscalYear, reopenPassword);
+      setReopeningYear(null);
+      setReopenPassword('');
+      await loadFiscalYearStatus();
+    } catch (err) {
+      alert(err?.response?.data?.message || t('settings.failedReopenFiscalYear', { defaultValue: 'Failed to reopen fiscal year' }));
+    } finally {
+      setReopenSaving(false);
+    }
+  }
+
+  // Server is the source of truth for notification preferences (per-user,
+  // shared across devices) — localStorage is only the instant-UI cache
+  // (usePreferences default) until this hydrates it with the real value.
+  useEffect(() => {
+    notificationsApi.getPreferences()
+      .then(res => updatePref('notifications', res.data))
+      .catch(() => {});
+  }, []);
 
   async function loadCompanies() {
     setLoading(true);
@@ -180,6 +237,7 @@ export default function Settings() {
       autoPayroll: active?.auto_payroll ?? true,
       autoReconciliation: active?.auto_reconciliation ?? true,
       autoLibraryReminders: active?.auto_library_reminders ?? true,
+      autoPaymentProofReminders: active?.auto_payment_proof_reminders ?? true,
     });
     setLoading(false);
   }
@@ -239,9 +297,10 @@ export default function Settings() {
         accountType: bankForm.accountType.trim() || undefined,
         branch: bankForm.branch.trim() || undefined,
         currentBalance: bankForm.currentBalance ? Number(bankForm.currentBalance) : 0,
+        paymentType: bankForm.paymentType,
       });
       setShowAddBank(false);
-      setBankForm({ bankName: '', accountNumber: '', accountType: '', branch: '', currentBalance: '' });
+      setBankForm({ bankName: '', accountNumber: '', accountType: '', branch: '', currentBalance: '', paymentType: 'BANK' });
       await loadBankAccounts();
     } catch (err) {
       alert(err?.response?.data?.message || t('settings.failedAddBank', { defaultValue: 'Failed to add bank account' }));
@@ -671,7 +730,89 @@ export default function Settings() {
               <div>
                 <Label className="text-xs">{t('settings.fiscalYearLabel', { defaultValue: 'Fiscal Year' })}</Label>
                 <Input value={t('settings.fiscalYearValue', { defaultValue: 'Shrawan 1 – Ashadh End (Nepali BS Calendar)' })} disabled className="text-sm" />
+                <p className="text-xs text-muted-foreground mt-1">{t('settings.fiscalYearFixedHint', { defaultValue: "Nepal's fiscal year is fixed by law — not configurable." })}</p>
               </div>
+
+              {fiscalYearStatus && (
+                <div className="rounded-lg border p-3 space-y-2.5">
+                  <p className="text-sm">{t('settings.currentlyIn', { defaultValue: 'Currently in:' })} <strong>{fiscalYearStatus.currentFiscalYear}</strong></p>
+
+                  {fiscalYearStatus.closedYears.length > 0 && (
+                    <div className="space-y-2 pt-1 border-t">
+                      {fiscalYearStatus.closedYears.map(y => (
+                        <div key={y.fiscalYear} className="space-y-1">
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="text-muted-foreground">
+                              {y.fiscalYear} — {y.reopenedAt ? t('settings.reopened', { defaultValue: 'Reopened' }) : t('settings.closed', { defaultValue: 'Closed' })}
+                            </span>
+                            <span className={`font-medium tabular-nums ${y.netProfit >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>
+                              Rs. {Math.abs(y.netProfit).toLocaleString('en-NP')}{y.netProfit < 0 ? ` ${t('settings.loss', { defaultValue: 'loss' })}` : ''}
+                            </span>
+                          </div>
+                          {isAdmin && !y.reopenedAt && (
+                            reopeningYear === y.fiscalYear ? (
+                              <div className="flex gap-1.5 items-center pl-2">
+                                <Input
+                                  type="password" placeholder={t('settings.enterPassword', { defaultValue: 'Password' })}
+                                  value={reopenPassword} onChange={e => setReopenPassword(e.target.value)}
+                                  className="h-7 text-xs"
+                                />
+                                <Button size="sm" variant="destructive" className="h-7 px-2 text-xs" disabled={reopenSaving || !reopenPassword} onClick={() => handleReopenFiscalYear(y.fiscalYear)}>
+                                  {reopenSaving ? t('settings.reopening', { defaultValue: 'Reopening…' }) : t('settings.confirm', { defaultValue: 'Confirm' })}
+                                </Button>
+                                <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => { setReopeningYear(null); setReopenPassword(''); }}>{t('settings.cancel', { defaultValue: 'Cancel' })}</Button>
+                              </div>
+                            ) : (
+                              <button type="button" className="text-xs text-muted-foreground underline hover:text-foreground pl-2" onClick={() => setReopeningYear(y.fiscalYear)}>
+                                {t('settings.reopenFiscalYear', { defaultValue: 'Reopen' })}
+                              </button>
+                            )
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {fiscalYearStatus.preview ? (
+                    <div className="rounded-md bg-amber-50 border border-amber-200 p-2.5 space-y-2">
+                      <p className="text-xs font-medium text-amber-800">
+                        {t('settings.fiscalYearEndedNotClosed', { defaultValue: 'Fiscal year {{fy}} has ended and isn\'t closed yet.', fy: fiscalYearStatus.preview.fiscalYear })}
+                      </p>
+                      <div className="grid grid-cols-3 gap-2 text-xs">
+                        <div><p className="text-muted-foreground">{t('settings.income', { defaultValue: 'Income' })}</p><p className="font-medium tabular-nums">Rs. {fiscalYearStatus.preview.totalIncome.toLocaleString('en-NP')}</p></div>
+                        <div><p className="text-muted-foreground">{t('settings.expense', { defaultValue: 'Expense' })}</p><p className="font-medium tabular-nums">Rs. {fiscalYearStatus.preview.totalExpense.toLocaleString('en-NP')}</p></div>
+                        <div><p className="text-muted-foreground">{t('settings.net', { defaultValue: 'Net' })}</p><p className="font-medium tabular-nums">Rs. {fiscalYearStatus.preview.netProfit.toLocaleString('en-NP')}</p></div>
+                      </div>
+                      {isAdmin && (
+                        confirmingClose ? (
+                          <div className="space-y-2 pt-1">
+                            <p className="text-xs text-amber-800">
+                              {t('settings.closeFiscalYearWarning', { defaultValue: 'This posts closing entries and cannot be undone lightly. Enter your password to confirm closing {{fy}}.', fy: fiscalYearStatus.preview.fiscalYear })}
+                            </p>
+                            <Input
+                              type="password" placeholder={t('settings.enterPassword', { defaultValue: 'Password' })}
+                              value={closePassword} onChange={e => setClosePassword(e.target.value)}
+                              className="h-8 text-sm"
+                            />
+                            <div className="flex gap-2">
+                              <Button size="sm" disabled={closingFiscalYear || !closePassword} onClick={handleCloseFiscalYear}>
+                                {closingFiscalYear ? t('settings.closing', { defaultValue: 'Closing…' }) : t('settings.confirmClose', { defaultValue: 'Confirm Close' })}
+                              </Button>
+                              <Button size="sm" variant="outline" onClick={() => { setConfirmingClose(false); setClosePassword(''); }}>{t('settings.cancel', { defaultValue: 'Cancel' })}</Button>
+                            </div>
+                          </div>
+                        ) : (
+                          <Button size="sm" variant="outline" onClick={() => setConfirmingClose(true)}>
+                            {t('settings.closeFiscalYearButton', { defaultValue: 'Close Fiscal Year {{fy}}', fy: fiscalYearStatus.preview.fiscalYear })}
+                          </Button>
+                        )
+                      )}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">{t('settings.noFiscalYearPendingClose', { defaultValue: 'No fiscal year is pending close.' })}</p>
+                  )}
+                </div>
+              )}
             </div>
 
             <Button onClick={savePreferences} disabled={prefsSaving || !isAdmin} className="w-full">
@@ -861,7 +1002,11 @@ export default function Settings() {
                       type="button"
                       role="switch"
                       aria-checked={prefs.notifications[n.key]}
-                      onClick={() => updatePref('notifications', { [n.key]: !prefs.notifications[n.key] })}
+                      onClick={() => {
+                        const value = !prefs.notifications[n.key];
+                        updatePref('notifications', { [n.key]: value });
+                        notificationsApi.updatePreferences({ [n.key]: value }).catch(() => {});
+                      }}
                       className={`relative shrink-0 w-10 h-5 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 ${
                         prefs.notifications[n.key] ? 'bg-primary' : 'bg-muted'
                       }`}
@@ -890,6 +1035,7 @@ export default function Settings() {
                 { key: 'autoFeeBilling', label: t('settings.autoFeeBillingLabel', { defaultValue: 'Auto Fee Billing' }), desc: t('settings.autoFeeBillingDesc', { defaultValue: 'Automatically generate monthly fee invoices for every active student' }) },
                 { key: 'autoInvoiceRelease', label: t('settings.autoInvoiceReleaseLabel', { defaultValue: 'Auto-Release Invoices' }), desc: t('settings.autoInvoiceReleaseDesc', { defaultValue: 'Immediately release auto-billed invoices to the student portal (notifies students). If off, invoices are created but held for manual review/release.' }) },
                 { key: 'autoLibraryReminders', label: t('settings.autoLibraryRemindersLabel', { defaultValue: 'Library Due-Date Reminders' }), desc: t('settings.autoLibraryRemindersDesc', { defaultValue: 'Nightly "book due in 3 days" reminder to students in the portal' }) },
+                { key: 'autoPaymentProofReminders', label: t('settings.autoPaymentProofRemindersLabel', { defaultValue: 'Payment Proof Reminders' }), desc: t('settings.autoPaymentProofRemindersDesc', { defaultValue: 'Nightly nudge to Admin/Accountant about payment proofs still awaiting review. Never auto-approves — a person always has to check the screenshot.' }) },
               ] : []),
               { key: 'autoPayroll', label: t('settings.autoPayrollLabel', { defaultValue: 'Auto Payroll Processing' }), desc: t('settings.autoPayrollDesc', { defaultValue: 'Automatically process monthly payroll for all employees' }) },
               { key: 'autoReconciliation', label: t('settings.autoReconciliationLabel', { defaultValue: 'Daily Reconciliation Summary' }), desc: t('settings.autoReconciliationDesc', { defaultValue: 'Nightly summary of income, expenses, overdue invoices and ledger balance sent to admins' }) },
@@ -948,7 +1094,14 @@ export default function Settings() {
                         </div>
                       )}
                       <div>
-                        <p className="text-sm font-medium">{b.bankName}</p>
+                        <p className="text-sm font-medium inline-flex items-center gap-1.5">
+                          {b.bankName}
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide bg-muted text-muted-foreground">
+                            {b.paymentType === 'ESEWA' ? t('settings.paymentTypeEsewa', { defaultValue: 'eSewa' })
+                              : b.paymentType === 'KHALTI' ? t('settings.paymentTypeKhalti', { defaultValue: 'Khalti' })
+                              : t('settings.paymentTypeBank', { defaultValue: 'Bank' })}
+                          </span>
+                        </p>
                         <p className="text-xs text-muted-foreground">{b.accountNumber}</p>
                       </div>
                     </div>
@@ -1126,12 +1279,27 @@ export default function Settings() {
       </Tabs>
 
       {/* ── Add Bank Account Dialog ───────────────────────────────────────── */}
-      <Dialog open={showAddBank} onOpenChange={v => { setShowAddBank(v); if (!v) setBankForm({ bankName: '', accountNumber: '', accountType: '', branch: '', currentBalance: '' }); }}>
+      <Dialog open={showAddBank} onOpenChange={v => { setShowAddBank(v); if (!v) setBankForm({ bankName: '', accountNumber: '', accountType: '', branch: '', currentBalance: '', paymentType: 'BANK' }); }}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle>{t('settings.addBankAccount', { defaultValue: 'Add Bank Account' })}</DialogTitle>
           </DialogHeader>
           <form onSubmit={handleAddBank} className="space-y-4 pt-2">
+            <div className="space-y-1.5">
+              <Label>{t('settings.paymentTypeLabel', { defaultValue: 'Payment Type *' })}</Label>
+              <select
+                className="w-full border rounded-md px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring"
+                value={bankForm.paymentType}
+                onChange={e => setBankForm(f => ({ ...f, paymentType: e.target.value }))}
+              >
+                <option value="BANK">{t('settings.paymentTypeBank', { defaultValue: 'Bank' })}</option>
+                <option value="ESEWA">{t('settings.paymentTypeEsewa', { defaultValue: 'eSewa' })}</option>
+                <option value="KHALTI">{t('settings.paymentTypeKhalti', { defaultValue: 'Khalti' })}</option>
+              </select>
+              <p className="text-xs text-muted-foreground">
+                {t('settings.paymentTypeHint', { defaultValue: 'Which "Paid To" list this account shows up in for staff and the student portal.' })}
+              </p>
+            </div>
             <div className="space-y-1.5">
               <Label>{t('settings.bankNameLabel', { defaultValue: 'Bank / Wallet Name *' })}</Label>
               <Input placeholder={t('settings.bankNamePlaceholder', { defaultValue: 'e.g. eSewa, Khalti, Nabil Bank' })} value={bankForm.bankName} onChange={e => setBankForm(f => ({ ...f, bankName: e.target.value }))} required />

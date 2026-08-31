@@ -187,8 +187,24 @@ model User {
 
   userCompanies UserCompany[]
   notifications Notification[]
+  notificationPreference NotificationPreference?
 
   @@map("users")
+}
+
+// Per-user, applies across every company they belong to — matches how the
+// Settings toggle is presented ("my notification settings"), not scoped per
+// company. Missing row = all three categories on (the historical default).
+model NotificationPreference {
+  id           String  @id @default(uuid())
+  userId       String  @unique
+  user         User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions Boolean @default(true) // LOW_STOCK, FEE_PAYMENT
+  reminders    Boolean @default(true) // LEAVE_REQUEST, PAYROLL_PAID
+  system       Boolean @default(true) // SYSTEM_AUTOMATION
+  updatedAt    DateTime @updatedAt
+
+  @@map("notification_preferences")
 }
 
 model Company {
@@ -226,6 +242,7 @@ model Company {
   autoPayroll        Boolean  @default(true) // auto-process monthly payroll
   autoReconciliation Boolean  @default(true) // daily reconciliation summary notification
   autoLibraryReminders Boolean @default(true) // schools: "book due in 3 days" student portal reminder
+  autoPaymentProofReminders Boolean @default(true) // schools: nudge ADMIN/ACCOUNTANT about payment proofs still awaiting review — never auto-approves, a human always has to look at the screenshot
   // Which optional shared modules this company's plan includes, e.g.
   // ["FINANCE", "HRMS", "COMMUNICATION", "INVENTORY", "AI", "BULK_IMPORT"].
   // Empty = unrestricted (legacy/full-access) — enforced by ModuleAccessGuard,
@@ -288,8 +305,34 @@ model Company {
   feePackages          FeePackage[]
   notifications        Notification[]
   portalNotifications  PortalNotification[]
+  fiscalYearCloses     FiscalYearClose[]
 
   @@map("companies")
+}
+
+// One row per fiscal year a company has manually closed. Closing posts real
+// ledger entries (see FiscalYearService) that zero out every Income/Expense
+// account's balance into Retained Earnings — this record is just the audit
+// trail + the guard against closing the same year twice.
+model FiscalYearClose {
+  id               String    @id @default(uuid())
+  companyId        String
+  company          Company   @relation(fields: [companyId], references: [id])
+  fiscalYear       String // e.g. "2082-83" (BS, Shrawan-Ashadh)
+  closedAt         DateTime  @default(now())
+  closedByUserId   String
+  totalIncome      Decimal   @db.Decimal(14, 2)
+  totalExpense     Decimal   @db.Decimal(14, 2)
+  netProfit        Decimal   @db.Decimal(14, 2)
+  // Reopening never deletes this row — it posts reversing entries and stamps
+  // these two fields, keeping a full audit trail (closed → reopened, not
+  // "never happened"). A reopened year is treated as open again for
+  // FiscalYearService.getStatus's preview/close-eligibility check.
+  reopenedAt       DateTime?
+  reopenedByUserId String?
+
+  @@unique([companyId, fiscalYear])
+  @@map("fiscal_year_closes")
 }
 
 model UserCompany {
@@ -462,24 +505,31 @@ model Payroll {
 }
 
 model BankAccount {
-  id             String   @id @default(uuid())
+  id             String                  @id @default(uuid())
   companyId      String
-  company        Company  @relation(fields: [companyId], references: [id])
+  company        Company                 @relation(fields: [companyId], references: [id])
   bankName       String
   accountNumber  String
-  accountType    String?
+  accountType    String? // free-text detail (Savings, Current…) — unrelated to paymentType below
   branch         String?
-  currentBalance Decimal  @default(0) @db.Decimal(14, 2)
+  currentBalance Decimal                 @default(0) @db.Decimal(14, 2)
   portalUrl      String?
   qrCodeUrl      String? // scan-to-pay QR image (eSewa/Khalti/bank QR) shown to payers, e.g. in the parent portal
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  paymentType    BankAccountPaymentType  @default(BANK) // which "Paid To" list this account belongs in (Bank/eSewa/Khalti)
+  createdAt      DateTime                @default(now())
+  updatedAt      DateTime                @updatedAt
 
   transactions Transaction[]
   cheques      Cheque[]
   feePayments  FeePayment[]
 
   @@map("bank_accounts")
+}
+
+enum BankAccountPaymentType {
+  BANK
+  ESEWA
+  KHALTI
 }
 
 model Transaction {

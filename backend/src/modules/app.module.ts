@@ -42,6 +42,7 @@ import { UploadModule } from './platform/upload.module';
 import { ScheduledTasksModule } from './platform/scheduled-tasks.module';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { RolesGuard } from './guards/roles.guard';
+import { CompanyAccessGuard } from './guards/company-access.guard';
 import { ModuleAccessGuard } from './guards/module-access.guard';
 import { AuditLogInterceptor } from './interceptors/audit-log.interceptor';
 import { PrismaService } from '../../core/db/psql/prisma.client';
@@ -91,10 +92,12 @@ import { PrismaService } from '../../core/db/psql/prisma.client';
   providers: [
     PrismaService,
     // Global guards — run on every request in order: Throttler, JWT, Roles,
-    // then per-company module licensing (only bites routes tagged @RequiresModule()).
+    // then company-membership scoping, then per-company module licensing
+    // (only bites routes tagged @RequiresModule()).
     { provide: APP_GUARD, useClass: ThrottlerGuard },
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_GUARD, useClass: RolesGuard },
+    { provide: APP_GUARD, useClass: CompanyAccessGuard },
     { provide: APP_GUARD, useClass: ModuleAccessGuard },
     // Runs after the guards above (so req.user is already populated) — logs
     // every non-GET request as an audit trail entry. See AuditLogInterceptor.

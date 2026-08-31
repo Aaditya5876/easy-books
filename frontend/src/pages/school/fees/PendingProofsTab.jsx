@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { feesApi } from '@/api';
 import apiClient from '@/api/client';
+import { formatBsYearMonth } from '@/lib/nepaliDate';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { CheckCircle, XCircle, ImageOff, Clock } from 'lucide-react';
@@ -92,7 +93,7 @@ export default function PendingProofsTab() {
                 <div>
                   <p className="font-semibold text-sm">{p.invoice?.student?.name}</p>
                   <p className="text-xs text-muted-foreground">
-                    {p.invoice?.month} · {t('fees.rollNo', { defaultValue: 'Roll' })} {p.invoice?.student?.rollNumber ?? '—'}
+                    {formatBsYearMonth(p.invoice?.month)} · {t('fees.rollNo', { defaultValue: 'Roll' })} {p.invoice?.student?.rollNumber ?? '—'}
                   </p>
                 </div>
                 <span className="text-xs text-muted-foreground whitespace-nowrap">

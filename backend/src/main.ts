@@ -8,7 +8,14 @@ import { join } from 'path';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, { bufferLogs: true });
-  app.useStaticAssets(join(process.cwd(), 'uploads'), { prefix: '/uploads' });
+  // nosniff stops a browser from re-interpreting an uploaded file's bytes as
+  // a different content type than what it was validated/stored as (e.g. an
+  // uploaded image whose content doesn't match its extension being executed
+  // as HTML/script by a MIME-sniffing browser).
+  app.useStaticAssets(join(process.cwd(), 'uploads'), {
+    prefix: '/uploads',
+    setHeaders: (res) => res.setHeader('X-Content-Type-Options', 'nosniff'),
+  });
 
   app.useLogger(app.get(Logger));
   app.use(cookieParser());

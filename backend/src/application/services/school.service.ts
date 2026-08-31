@@ -4,7 +4,7 @@ import { SmsService } from './sms.service';
 import { AiService } from './ai.service';
 import { InventoryServiceImpl } from './inventory.service.impl';
 import { PortalNotificationService } from './portal-notification.service';
-import { adToBs } from '@easy-books/shared';
+import { adToBs, isValidBsYearMonth } from '@easy-books/shared';
 
 // Forms send whole entity objects (with id/relations/_count) and bare "YYYY-MM-DD"
 // strings; Prisma rejects unknown keys and date-only strings. Whitelist + coerce here
@@ -629,6 +629,9 @@ export class SchoolService {
 
   async createFeeInvoice(body: any) {
     const data = clean(body, ['companyId', 'studentId', 'month', 'description', 'paidAmount', 'discount', 'fine', 'invoiceDate', 'dueDate', 'status', 'notes']);
+    if (data.month && !isValidBsYearMonth(data.month)) {
+      throw new BadRequestException('month must be in BS "YYYY-MM" format, e.g. 2083-05');
+    }
     const rows: Array<{ description: string; amount: number; feeHeadId?: string | null; inventoryItemId?: string | null; quantity?: number | null }> =
       Array.isArray(body.items) && body.items.length
         ? body.items.map((it: any) => ({
@@ -677,6 +680,9 @@ export class SchoolService {
   }
 
   async generateBulkInvoices(companyId: string, classId: string, month: string, feeStructureIds: string[]) {
+    if (!isValidBsYearMonth(month)) {
+      throw new BadRequestException('month must be in BS "YYYY-MM" format, e.g. 2083-05');
+    }
     const students = await this.prisma.student.findMany({
       where: { companyId, classId, status: 'ACTIVE' },
     });

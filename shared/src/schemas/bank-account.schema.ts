@@ -9,6 +9,7 @@ export const CreateBankAccountSchema = z.object({
   currentBalance: z.number().default(0),
   portalUrl: z.string().url().optional(),
   qrCodeUrl: z.string().optional(), // relative /uploads/... path from the upload endpoint, not a full URL
+  paymentType: z.enum(['BANK', 'ESEWA', 'KHALTI']).default('BANK'),
 });
 
 export const UpdateBankAccountSchema = CreateBankAccountSchema.omit({ companyId: true }).partial();

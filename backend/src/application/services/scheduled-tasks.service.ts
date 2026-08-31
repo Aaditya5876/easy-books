@@ -5,7 +5,7 @@ import { SchoolFinanceService } from './school-finance.service';
 import { PayrollEngineService } from './payroll.engine';
 import { NotificationServiceImpl } from './notification.service.impl';
 import { PortalNotificationService } from './portal-notification.service';
-import { adToBs } from '@easy-books/shared';
+import { bsYearMonth } from '@easy-books/shared';
 
 // Fully automatic monthly fee billing + payroll — no button click required.
 // Deliberately runs DAILY rather than "on the 1st of the month": fee/payroll
@@ -34,13 +34,13 @@ export class ScheduledTasksService {
 
   @Cron(CronExpression.EVERY_DAY_AT_1AM)
   async runMonthlyAutomation() {
-    const currentBsMonth = adToBs(new Date()).split('-').slice(0, 2).join('-');
+    const currentBsMonth = bsYearMonth(new Date());
     const companies = await this.prisma.company.findMany({
       where: { isActive: true },
       select: {
         id: true, name: true, businessType: true,
         autoFeeBilling: true, autoInvoiceRelease: true, autoPayroll: true, autoReconciliation: true,
-        autoLibraryReminders: true,
+        autoLibraryReminders: true, autoPaymentProofReminders: true,
       },
     });
 
@@ -89,6 +89,18 @@ export class ScheduledTasksService {
           }
         } catch (err) {
           this.logger.error(`Auto payroll processing failed for "${company.name}": ${(err as Error).message}`);
+        }
+      }
+
+      if (company.businessType === 'SCHOOL' && company.autoPaymentProofReminders) {
+        try {
+          const proofReminder = await this.runPendingProofReminders(company.id);
+          if (proofReminder) {
+            updates.push(proofReminder);
+            link = link ?? '/fees';
+          }
+        } catch (err) {
+          this.logger.error(`Payment proof reminder failed for "${company.name}": ${(err as Error).message}`);
         }
       }
 
@@ -157,6 +169,24 @@ export class ScheduledTasksService {
         this.logger.error(`Library reminder notification failed for issue ${issue.id}: ${(err as Error).message}`);
       }
     }
+  }
+
+  // Deliberately a reminder, never an auto-approval — the screenshot review
+  // step exists specifically so a human checks the proof before money is
+  // marked received; skipping that at 1am would defeat the whole point.
+  // Folds into the same nightly "automation completed" notification as the
+  // other checklist items instead of its own separate ping.
+  private async runPendingProofReminders(companyId: string) {
+    const pending = await this.prisma.feePayment.findMany({
+      where: { companyId, status: 'PENDING_REVIEW' },
+      include: { invoice: { include: { student: { select: { name: true } } } } },
+    });
+    if (pending.length === 0) return null;
+
+    return {
+      label: `${pending.length} payment proof(s) still awaiting review`,
+      items: pending.map((p) => ({ name: p.invoice.student?.name ?? 'Student', amount: Number(p.amount) })),
+    };
   }
 
   // Summarizes yesterday's money movement for one company: payments received

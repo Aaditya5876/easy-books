@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../../core/db/psql/prisma.client';
 
 export interface AuditLogEntry {
@@ -40,6 +40,7 @@ export class AuditLogService {
     limit?: number;
   }) {
     const { companyId, userId, module, action, dateFrom, dateTo, limit } = params;
+    if (!companyId) throw new BadRequestException('companyId is required');
     return this.prisma.auditLog.findMany({
       where: {
         companyId,
