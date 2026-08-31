@@ -41,11 +41,16 @@ services:
       DATABASE_URL: postgresql://easybooksuser:easybookspass@postgres:5432/easybooks
       REDIS_HOST: redis
       REDIS_PORT: 6379
-      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:-easybooks-access-secret}
-      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-easybooks-refresh-secret}
+      # No insecure fallback defaults — deploy-time env vars are required.
+      # (JWT_SECRET signs parent/student portal tokens; JWT_ACCESS/REFRESH_SECRET
+      # sign staff tokens. All three must be set to real random values before
+      # `docker compose up`, e.g. via a deploy-time .env file next to this one.)
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?JWT_ACCESS_SECRET must be set}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:?JWT_REFRESH_SECRET must be set}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set}
       JWT_ACCESS_EXPIRES_IN: 15m
       JWT_REFRESH_EXPIRES_IN: 7d
-      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:5173}
+      CORS_ORIGIN: ${CORS_ORIGIN:?CORS_ORIGIN must be set to the real frontend domain}
     depends_on:
       postgres:
         condition: service_healthy
