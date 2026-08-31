@@ -344,7 +344,7 @@ export default function Settings() {
     // the delete fired immediately regardless of what the user clicked. Fixed here.
     const ok = await confirm({
       title: t('settings.confirmDeleteCompanyTitle', { defaultValue: 'Delete this company?' }),
-      description: t('settings.confirmDeleteCompany', { defaultValue: 'This permanently deletes the company and cannot be undone. If you just want to pause a school that stopped using EasyBooks, use Deactivate instead.' }),
+      description: t('settings.confirmDeleteCompany', { defaultValue: 'This permanently deletes the company and cannot be undone. If you just want to pause a school that stopped using OneBook, use Deactivate instead.' }),
       confirmLabel: t('settings.delete', { defaultValue: 'Delete' }),
       variant: 'destructive',
     });

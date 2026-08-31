@@ -159,7 +159,7 @@ export default function PortalLogin() {
         </div>
 
         <p className="text-center text-xs text-slate-600 mt-6">
-          {t('portal.footerTagline', { defaultValue: 'EasyBooks School Management · Nepal' })}
+          {t('portal.footerTagline', { defaultValue: 'OneBook School Management · Nepal' })}
         </p>
       </motion.div>
     </div>

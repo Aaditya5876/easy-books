@@ -177,7 +177,7 @@ export default function PortalLayout() {
             <BookOpen className="w-4 h-4 text-white" />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-bold text-white leading-none">EasyBooks</p>
+            <p className="text-sm font-bold text-white leading-none">OneBook</p>
             <p className="text-[10px] text-slate-400 mt-0.5">
               {portalType === 'STUDENT'
                 ? t('portal.studentPortal', { defaultValue: 'Student Portal' })
@@ -270,7 +270,7 @@ export default function PortalLayout() {
           <div className="w-7 h-7 rounded-lg bg-blue-500 flex items-center justify-center shrink-0">
             <BookOpen className="w-3.5 h-3.5 text-white" />
           </div>
-          <p className="text-sm font-bold text-slate-900">EasyBooks</p>
+          <p className="text-sm font-bold text-slate-900">OneBook</p>
         </div>
         <NotificationBell isMobile />
       </div>

@@ -277,8 +277,8 @@ export default function Login() {
         <div className="h-1 bg-gradient-to-r from-primary via-blue-500 to-indigo-400" />
 
         <CardHeader className="text-center pb-2">
-          <img src="/logo-icon.png" alt="Easy Books" className="w-12 h-12 object-contain mx-auto mb-3 drop-shadow-lg" />
-          <CardTitle className="text-xl">{t('auth.appName', { defaultValue: 'Easy Books' })}</CardTitle>
+          <img src="/logo-icon.png" alt="OneBook" className="w-12 h-12 object-contain mx-auto mb-3 drop-shadow-lg" />
+          <CardTitle className="text-xl">{t('auth.appName', { defaultValue: 'OneBook' })}</CardTitle>
           <p className="text-sm text-muted-foreground">{t('auth.appTagline', { defaultValue: 'Nepal Accounting Software' })}</p>
         </CardHeader>
 

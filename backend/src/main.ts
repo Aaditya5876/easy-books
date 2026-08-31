@@ -30,7 +30,7 @@ async function bootstrap() {
   const envLabel = isProduction ? 'Production' : 'Development';
 
   const swaggerConfig = new DocumentBuilder()
-    .setTitle(`Easy Books API (${envLabel})`)
+    .setTitle(`OneBook API (${envLabel})`)
     .setDescription('Accounting & Inventory Management API — Nepal')
     .setVersion('1.0')
     .addBearerAuth()
@@ -76,7 +76,7 @@ async function bootstrap() {
 
   const port = process.env.PORT || 3000;
   await app.listen(port);
-  console.log(`Easy Books API (${envLabel}) running on http://localhost:${port}`);
+  console.log(`OneBook API (${envLabel}) running on http://localhost:${port}`);
   console.log(`Swagger docs at http://localhost:${port}/docs`);
 }
 

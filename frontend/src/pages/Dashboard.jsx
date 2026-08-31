@@ -750,7 +750,7 @@ function NoCompanyState() {
       <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mb-6">
         <Building2 className="w-8 h-8 text-primary" />
       </div>
-      <h2 className="text-xl font-bold text-foreground mb-2">{t('bizDashboard.welcomeToEasyBooks', { defaultValue: 'Welcome to EasyBooks' })}</h2>
+      <h2 className="text-xl font-bold text-foreground mb-2">{t('bizDashboard.welcomeToEasyBooks', { defaultValue: 'Welcome to OneBook' })}</h2>
       <p className="text-sm text-muted-foreground mb-8 text-center max-w-md">
         {t('bizDashboard.getStartedHint', { defaultValue: 'Get started by creating your first company. You can manage multiple companies from this app.' })}
       </p>

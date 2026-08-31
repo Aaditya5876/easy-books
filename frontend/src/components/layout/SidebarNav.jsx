@@ -256,14 +256,14 @@ export default function SidebarNav({ collapsed, onToggle }) {
         {prefs.companyLogoUrl ? (
           <img src={prefs.companyLogoUrl} alt="Company" className="w-16 h-16 rounded-lg object-cover shrink-0 ring-1 ring-white/20" />
         ) : (
-          <img src="/logo-icon.png" alt="EasyBooks" className="w-16 h-16 object-contain shrink-0" />
+          <img src="/logo-icon.png" alt="OneBook" className="w-16 h-16 object-contain shrink-0" />
         )}
         {!collapsed && (
           <div className="animate-fade-in">
             <h1 className={cn(
               "text-sm font-bold tracking-tight",
               hasBgColor ? (bgIsDark ? "text-white" : "text-gray-900") : "text-sidebar-foreground"
-            )}>EasyBooks</h1>
+            )}>OneBook</h1>
             <p className={cn(
               "text-[10px] leading-none",
               hasBgColor ? (bgIsDark ? "text-white/50" : "text-gray-600") : "text-sidebar-muted"

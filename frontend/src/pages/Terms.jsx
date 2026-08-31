@@ -7,14 +7,14 @@ const LAST_UPDATED = 'DRAFT — not yet finalized';
 const SECTIONS = [
   {
     title: '1. Introduction',
-    body: `These Terms and Agreement ("Terms") govern access to and use of Easy Books
+    body: `These Terms and Agreement ("Terms") govern access to and use of OneBook
       (the "Service"), provided by GeoInfosys ("we", "us", "our"). By creating an
       account or using the Service, you agree to these Terms. If you do not
       agree, do not use the Service.`,
   },
   {
     title: '2. The Service',
-    body: `Easy Books is an accounting/ERP and school-management platform. Features
+    body: `OneBook is an accounting/ERP and school-management platform. Features
       and availability may change, be added, or be removed at our discretion,
       with reasonable notice for material changes.`,
   },
