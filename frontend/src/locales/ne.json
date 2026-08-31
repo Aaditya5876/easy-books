@@ -1382,6 +1382,9 @@
     "materialsTab": "अध्ययन सामग्री"
   },
   "auth": {
+    "mustAgreeToTerms": "जारी राख्न कृपया सर्तहरू र सम्झौतामा सहमत हुनुहोस्",
+    "agreeToTermsPrefix": "म सहमत छु",
+    "termsAndAgreement": "सर्तहरू र सम्झौता",
     "appName": "Easy Books",
     "appTagline": "नेपाल लेखा सफ्टवेयर",
     "login": "लगइन",

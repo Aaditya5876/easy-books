@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
 
 function businessTypes(t) {
   return [
@@ -127,6 +128,7 @@ export default function Login() {
   });
   const [showRegPw, setShowRegPw] = useState(false);
   const [showConfirmPw, setShowConfirmPw] = useState(false);
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
 
   // OTP
   const [otpEmail, setOtpEmail] = useState('');
@@ -178,6 +180,7 @@ export default function Login() {
     setError('');
     if (regForm.password !== regForm.confirmPassword) { setError(t('auth.passwordsDontMatch', { defaultValue: 'Passwords do not match' })); return; }
     if (regForm.password.length < 8) { setError(t('auth.passwordMinLength', { defaultValue: 'Password must be at least 8 characters' })); return; }
+    if (!agreedToTerms) { setError(t('auth.mustAgreeToTerms', { defaultValue: 'Please agree to the Terms and Agreement to continue' })); return; }
     setLoading(true);
     try {
       const { confirmPassword: _confirmPassword, otherBusinessDesc, ...payload } = regForm;
@@ -269,7 +272,8 @@ export default function Login() {
       <div className="login-orb login-orb-2" />
       <div className="login-orb login-orb-3" />
 
-      <Card className="w-full max-w-md shadow-2xl glass-dialog border-border/40 relative z-10 overflow-hidden">
+      <div className="w-full max-w-md flex flex-col items-center relative z-10">
+      <Card className="w-full shadow-2xl glass-dialog border-border/40 overflow-hidden">
         <div className="h-1 bg-gradient-to-r from-primary via-blue-500 to-indigo-400" />
 
         <CardHeader className="text-center pb-2">
@@ -704,9 +708,24 @@ export default function Login() {
                           </div>
                         </div>
 
+                        <div className="flex items-start gap-2">
+                          <Checkbox
+                            id="agree-terms"
+                            checked={agreedToTerms}
+                            onCheckedChange={(v) => setAgreedToTerms(v === true)}
+                            className="mt-0.5"
+                          />
+                          <Label htmlFor="agree-terms" className="text-xs font-normal text-muted-foreground leading-snug cursor-pointer">
+                            {t('auth.agreeToTermsPrefix', { defaultValue: 'I agree to the' })}{' '}
+                            <Link to="/terms" target="_blank" rel="noopener noreferrer" className="underline hover:text-foreground">
+                              {t('auth.termsAndAgreement', { defaultValue: 'Terms and Agreement' })}
+                            </Link>
+                          </Label>
+                        </div>
+
                         {error && <p className="text-sm text-destructive">{error}</p>}
 
-                        <Button type="submit" className="w-full" onClick={handleRegister} disabled={loading}>
+                        <Button type="submit" className="w-full" onClick={handleRegister} disabled={loading || !agreedToTerms}>
                           {loading ? t('auth.creatingAccount', { defaultValue: 'Creating account...' }) : t('auth.createAccount', { defaultValue: 'Create Account' })}
                         </Button>
                       </motion.div>
@@ -718,6 +737,12 @@ export default function Login() {
           )}
         </CardContent>
       </Card>
+      <p className="text-center text-xs text-muted-foreground mt-4">
+        <Link to="/terms" target="_blank" rel="noopener noreferrer" className="underline hover:text-foreground">
+          {t('auth.termsAndAgreement', { defaultValue: 'Terms and Agreement' })}
+        </Link>
+      </p>
+      </div>
     </div>
   );
 }

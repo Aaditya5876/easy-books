@@ -9,6 +9,7 @@ import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import { PreferencesProvider } from '@/lib/PreferencesContext';
 import UserNotRegisteredError from '@/components/UserNotRegisteredError';
 import Login from './pages/Login';
+import Terms from './pages/Terms';
 import Layout from './components/Layout';
 import Dashboard from './pages/Dashboard';
 import Ledger from './pages/Ledger';
@@ -168,6 +169,7 @@ function App() {
           <Router>
             <Routes>
               <Route path="/login" element={<Login />} />
+              <Route path="/terms" element={<Terms />} />
               {/* Portal — completely separate auth from admin */}
               <Route path="/portal/login" element={<PortalLogin />} />
               <Route path="/portal" element={<PortalLayout />}>
