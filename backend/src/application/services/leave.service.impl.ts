@@ -1,6 +1,7 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../../../core/db/psql/prisma.client';
 import { NotificationServiceImpl } from './notification.service.impl';
+import { resolveLinkedEmployee } from './self-service-employee.util';
 import { adToBs } from '@easy-books/shared';
 
 // Count working days between two dates, skipping Saturdays (Nepal weekly holiday)
@@ -32,6 +33,48 @@ export class LeaveServiceImpl {
     private readonly prisma: PrismaService,
     private readonly notifications: NotificationServiceImpl,
   ) {}
+
+  // ─── Self-service (any authenticated employee) ─────────────────────────────
+
+  async getSelfContext(companyId: string, email: string) {
+    const employee = await resolveLinkedEmployee(this.prisma, companyId, email);
+    if (!employee) return { linked: false, employeeName: null, fiscalYear: null, balances: [] };
+    const fiscalYear = getFiscalYear(new Date());
+    const balances = await this.getBalances(employee.id, companyId, fiscalYear);
+    return { linked: true, employeeName: employee.name, fiscalYear, balances };
+  }
+
+  async findSelfRequests(companyId: string, email: string) {
+    const employee = await resolveLinkedEmployee(this.prisma, companyId, email);
+    if (!employee) return [];
+    return this.findRequests(companyId, { employeeId: employee.id });
+  }
+
+  async createSelfRequest(companyId: string, email: string, data: {
+    leaveTypeId: string;
+    startDate: string;
+    endDate: string;
+    reason?: string;
+  }) {
+    const employee = await resolveLinkedEmployee(this.prisma, companyId, email);
+    if (!employee) {
+      throw new NotFoundException(
+        'No employee record is linked to your account — ask an admin to set your employee email to match your login email.',
+      );
+    }
+    return this.createRequest(companyId, { ...data, employeeId: employee.id });
+  }
+
+  async cancelSelfRequest(id: string, companyId: string, email: string) {
+    const employee = await resolveLinkedEmployee(this.prisma, companyId, email);
+    if (!employee) throw new NotFoundException('No employee record is linked to your account');
+
+    const req = await this.prisma.leaveRequest.findFirst({ where: { id, companyId } });
+    if (!req) throw new NotFoundException('Leave request not found');
+    if (req.employeeId !== employee.id) throw new ForbiddenException('You can only cancel your own leave requests');
+
+    return this.cancelRequest(id, companyId);
+  }
 
   // ─── Leave Types ─────────────────────────────────────────────────────────────
 

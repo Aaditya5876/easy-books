@@ -92,6 +92,9 @@ export class CompanyServiceImpl {
     dashainBonusMonth?: string;
     workingDaysPerMonth?: number;
     overtimeRatePerHour?: number;
+    attendanceDeductionEnabled?: boolean;
+    standardStartTime?: string;
+    standardEndTime?: string;
   }) {
     return this.prisma.companyPayrollSettings.upsert({
       where: { companyId },

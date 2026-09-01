@@ -144,6 +144,7 @@ export default function Settings() {
   // ── Company Prefs (server-side) ───────────────────────────────────────────
   const [companyPrefs, setCompanyPrefs] = useState({
     abbreviation: '', workingDaysPerMonth: 26,
+    standardStartTime: '', standardEndTime: '', attendanceDeductionEnabled: false,
   });
   const [prefsSaving, setPrefsSaving] = useState(false);
   const [prefsSaved, setPrefsSaved] = useState(false);
@@ -230,6 +231,9 @@ export default function Settings() {
     setCompanyPrefs({
       abbreviation: active?.abbreviation || '',
       workingDaysPerMonth: payrollRes?.data?.workingDaysPerMonth ?? 26,
+      standardStartTime: payrollRes?.data?.standardStartTime ?? '',
+      standardEndTime: payrollRes?.data?.standardEndTime ?? '',
+      attendanceDeductionEnabled: payrollRes?.data?.attendanceDeductionEnabled ?? false,
     });
     setAutomation({
       autoFeeBilling: active?.auto_fee_billing ?? true,
@@ -452,6 +456,9 @@ export default function Settings() {
         companyApi.update(activeCompanyId, { abbreviation: companyPrefs.abbreviation || undefined }),
         companyApi.upsertPayrollSettings(activeCompanyId, {
           workingDaysPerMonth: Number(companyPrefs.workingDaysPerMonth),
+          standardStartTime: companyPrefs.standardStartTime || undefined,
+          standardEndTime: companyPrefs.standardEndTime || undefined,
+          attendanceDeductionEnabled: companyPrefs.attendanceDeductionEnabled,
         }),
       ]);
       setPrefsSaved(true);
@@ -713,6 +720,44 @@ export default function Settings() {
               <SmartNumberInput min={20} max={31} value={companyPrefs.workingDaysPerMonth}
                 onChange={e => setCompanyPrefs({ ...companyPrefs, workingDaysPerMonth: parseInt(e.target.value) || 26 })} />
               <p className="text-xs text-muted-foreground">{t('settings.workingDaysHint', { defaultValue: 'Used for absent-day salary deduction (default: 26)' })}</p>
+            </div>
+
+            <div className="pt-1 border-t space-y-3">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <h4 className="text-sm font-medium flex items-center gap-1.5"><Clock className="w-3.5 h-3.5 text-primary" />{t('settings.workingHoursHeading', { defaultValue: 'Working Hours & Attendance Deduction' })}</h4>
+                  <p className="text-xs text-muted-foreground mt-0.5">{t('settings.workingHoursSubtitle', { defaultValue: 'If enabled, staff who check in/out for fewer hours than expected get a prorated salary deduction — on top of absent-day deduction, not instead of it.' })}</p>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={companyPrefs.attendanceDeductionEnabled}
+                  onClick={() => setCompanyPrefs(p => ({ ...p, attendanceDeductionEnabled: !p.attendanceDeductionEnabled }))}
+                  className={`relative shrink-0 w-10 h-5 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 ${
+                    companyPrefs.attendanceDeductionEnabled ? 'bg-primary' : 'bg-muted'
+                  }`}
+                >
+                  <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-transform ${
+                    companyPrefs.attendanceDeductionEnabled ? 'translate-x-5' : 'translate-x-0'
+                  }`} />
+                </button>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label className="text-xs">{t('settings.standardStartTimeLabel', { defaultValue: 'Standard Start Time' })}</Label>
+                  <Input type="time" className="text-sm" value={companyPrefs.standardStartTime}
+                    onChange={e => setCompanyPrefs({ ...companyPrefs, standardStartTime: e.target.value })} />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">{t('settings.standardEndTimeLabel', { defaultValue: 'Standard End Time' })}</Label>
+                  <Input type="time" className="text-sm" value={companyPrefs.standardEndTime}
+                    onChange={e => setCompanyPrefs({ ...companyPrefs, standardEndTime: e.target.value })} />
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {t('settings.workingHoursHint', { defaultValue: 'Applies to full-time staff. Part-time staff are judged against their own contracted hours/day, set per employee on the Employees page.' })}
+              </p>
             </div>
 
             <div className="pt-1 border-t space-y-3">

@@ -92,6 +92,27 @@ export const attendanceApi = {
   selfMark: (action: 'IN' | 'OUT') => apiClient.post('/api/v1/attendance/self', { action }, { params: { companyId: companyId() } }),
 };
 
+// Leave
+export const leaveApi = {
+  // Self-service — open to every role.
+  selfContext: () => apiClient.get('/api/v1/leave/self/context', { params: { companyId: companyId() } }),
+  selfRequests: () => apiClient.get('/api/v1/leave/self/requests', { params: { companyId: companyId() } }),
+  applySelf: (data: { leaveTypeId: string; startDate: string; endDate: string; reason?: string }) =>
+    apiClient.post('/api/v1/leave/self/requests', data, { params: { companyId: companyId() } }),
+  cancelSelf: (id: string) => apiClient.patch(`/api/v1/leave/self/requests/${id}/cancel`, {}, { params: { companyId: companyId() } }),
+  // Leave types — ADMIN manages, everyone can list (needed to populate the apply form).
+  listTypes: () => apiClient.get('/api/v1/leave/types', { params: { companyId: companyId() } }),
+  createType: (data: { name: string; daysPerYear: number; isPaid?: boolean }) =>
+    apiClient.post('/api/v1/leave/types', data, { params: { companyId: companyId() } }),
+  updateType: (id: string, data: object) => apiClient.put(`/api/v1/leave/types/${id}`, data, { params: { companyId: companyId() } }),
+  removeType: (id: string) => apiClient.delete(`/api/v1/leave/types/${id}`, { params: { companyId: companyId() } }),
+  // HR approvals — ACCOUNTANT/ADMIN.
+  listRequests: (params?: { employeeId?: string; status?: string }) =>
+    apiClient.get('/api/v1/leave/requests', { params: { companyId: companyId(), ...params } }),
+  approve: (id: string) => apiClient.patch(`/api/v1/leave/requests/${id}/approve`, {}, { params: { companyId: companyId() } }),
+  reject: (id: string) => apiClient.patch(`/api/v1/leave/requests/${id}/reject`, {}, { params: { companyId: companyId() } }),
+};
+
 // Payroll
 export const payrollApi = {
   summary: (month: string) => apiClient.get('/api/v1/payroll/summary', { params: { companyId: companyId(), month } }),

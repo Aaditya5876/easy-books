@@ -18,6 +18,8 @@ export interface PayrollResult {
   absentDays: number;
   halfDays: number;
   absentDeduction: number;
+  hoursShortfallDeduction: number;
+  incompleteAttendanceDays: number;
   overtimeAmount: number;
   ssfEmployee: number;
   ssfEmployer: number;
@@ -25,6 +27,29 @@ export interface PayrollResult {
   dashainBonus: number;
   isDashainBonus: boolean;
   netSalary: number;
+}
+
+// "HH:mm" -> minutes since midnight, or null if unparseable/out of range.
+function parseTimeToMinutes(time: string | null | undefined): number | null {
+  if (!time) return null;
+  const m = /^(\d{1,2}):(\d{2})$/.exec(time.trim());
+  if (!m) return null;
+  const h = Number(m[1]);
+  const min = Number(m[2]);
+  if (h < 0 || h > 23 || min < 0 || min > 59) return null;
+  return h * 60 + min;
+}
+
+// Hours between two "HH:mm" strings, or null if unparseable or non-positive
+// (e.g. checkOut before checkIn) — callers must treat null as "can't judge
+// this day" rather than guessing, never as a zero-hour shortfall.
+function hoursBetween(start: string | null | undefined, end: string | null | undefined): number | null {
+  const startMin = parseTimeToMinutes(start);
+  const endMin = parseTimeToMinutes(end);
+  if (startMin === null || endMin === null) return null;
+  const diff = endMin - startMin;
+  if (diff <= 0) return null;
+  return diff / 60;
 }
 
 function calculateSSF(basicSalary: number, employeeRate: number, employerRate: number) {
@@ -151,6 +176,35 @@ export class PayrollEngineService {
     const perDaySalary = grossSalary / workingDaysPerMonth;
     const absentDeduction = Number(((absentDays + halfDays * 0.5) * perDaySalary).toFixed(2));
 
+    // Attendance-based salary deduction (opt-in) — for PRESENT days only, not
+    // a replacement for the absent/half-day deduction above. Each employee is
+    // judged against their OWN expected hours (their contracted hours if
+    // PART_TIME, else the company's standard hours), so a part-timer's already
+    // smaller basicSalary is prorated the same way a full-timer's is.
+    let hoursShortfallDeduction = 0;
+    let incompleteAttendanceDays = 0;
+    if (settings?.attendanceDeductionEnabled) {
+      const isPartTime = employee.employmentType === 'PART_TIME';
+      const expectedHours = isPartTime
+        ? (employee.contractedHoursPerDay != null ? Number(employee.contractedHoursPerDay) : null)
+        : hoursBetween(settings?.standardStartTime, settings?.standardEndTime);
+
+      if (expectedHours && expectedHours > 0) {
+        const presentDays = attendance.filter((a) => a.status === 'PRESENT');
+        let shortfallTotal = 0;
+        for (const day of presentDays) {
+          const actualHours = hoursBetween(day.checkInTime, day.checkOutTime);
+          if (actualHours === null) {
+            incompleteAttendanceDays += 1;
+            continue;
+          }
+          const shortfall = Math.max(0, expectedHours - actualHours);
+          if (shortfall > 0) shortfallTotal += perDaySalary * (shortfall / expectedHours);
+        }
+        hoursShortfallDeduction = Number(shortfallTotal.toFixed(2));
+      }
+    }
+
     const overtimeHoursTotal = attendance.reduce((sum, a) => sum + Number(a.overtimeHours ?? 0), 0);
     const overtimeRatePerHour = Number(settings?.overtimeRatePerHour ?? 0);
     const overtimeAmount = Number((overtimeHoursTotal * overtimeRatePerHour).toFixed(2));
@@ -164,10 +218,11 @@ export class PayrollEngineService {
     const isDashainBonus = !!(settings?.dashainBonusApplicable && dashainMonthNum && bsMonth === dashainMonthNum);
     const dashainBonus = isDashainBonus ? basicSalary : 0;
 
-    const netSalary = Number((grossSalary - absentDeduction - ssf.employee - pit + overtimeAmount + dashainBonus).toFixed(2));
+    const netSalary = Number((grossSalary - absentDeduction - hoursShortfallDeduction - ssf.employee - pit + overtimeAmount + dashainBonus).toFixed(2));
 
     const data = {
       basicSalary, allowances, grossSalary, absentDays, halfDays, absentDeduction,
+      hoursShortfallDeduction, incompleteAttendanceDays,
       overtimeAmount, ssfEmployee: ssf.employee, ssfEmployer: ssf.employer, pit,
       netSalary, isDashainBonus, status: 'PROCESSED' as const,
     };
@@ -203,7 +258,7 @@ export class PayrollEngineService {
     employeeId: string,
     employeeName: string,
     month: string,
-    data: { basicSalary: number; allowances: number; grossSalary: number; absentDays: number; halfDays: number; absentDeduction: number; overtimeAmount: number; ssfEmployee: number; ssfEmployer: number; pit: number; netSalary: number; isDashainBonus: boolean },
+    data: { basicSalary: number; allowances: number; grossSalary: number; absentDays: number; halfDays: number; absentDeduction: number; hoursShortfallDeduction: number; incompleteAttendanceDays: number; overtimeAmount: number; ssfEmployee: number; ssfEmployer: number; pit: number; netSalary: number; isDashainBonus: boolean },
     dashainBonus: number,
   ): PayrollResult {
     return {
@@ -216,6 +271,8 @@ export class PayrollEngineService {
       absentDays: data.absentDays,
       halfDays: data.halfDays,
       absentDeduction: data.absentDeduction,
+      hoursShortfallDeduction: data.hoursShortfallDeduction,
+      incompleteAttendanceDays: data.incompleteAttendanceDays,
       overtimeAmount: data.overtimeAmount,
       ssfEmployee: data.ssfEmployee,
       ssfEmployer: data.ssfEmployer,
@@ -257,6 +314,7 @@ export class PayrollEngineService {
       (
         Number(payroll.grossSalary) -
         Number(payroll.absentDeduction) -
+        Number(payroll.hoursShortfallDeduction) -
         Number(payroll.ssfEmployee) -
         Number(payroll.pit) +
         Number(payroll.overtimeAmount) +

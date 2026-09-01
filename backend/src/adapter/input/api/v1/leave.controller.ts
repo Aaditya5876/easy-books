@@ -11,6 +11,45 @@ import { RequiresModule } from '../../../../modules/decorators/requires-module.d
 export class LeaveController {
   constructor(private readonly service: LeaveServiceImpl) {}
 
+  // ─── Self-service (any authenticated staff role — overrides the class-level
+  // roles above where narrower) ────────────────────────────────────────────────
+
+  @Get('self/context')
+  @Roles('ADMIN', 'ACCOUNTANT', 'STAFF', 'TEACHER', 'LIBRARIAN')
+  @ApiOperation({ summary: "Get the current user's own leave balances" })
+  @ApiQuery({ name: 'companyId', required: true })
+  selfContext(@Request() req: any, @Query('companyId') companyId: string) {
+    return this.service.getSelfContext(companyId, req.user.email);
+  }
+
+  @Get('self/requests')
+  @Roles('ADMIN', 'ACCOUNTANT', 'STAFF', 'TEACHER', 'LIBRARIAN')
+  @ApiOperation({ summary: "Get the current user's own leave requests" })
+  @ApiQuery({ name: 'companyId', required: true })
+  selfRequests(@Request() req: any, @Query('companyId') companyId: string) {
+    return this.service.findSelfRequests(companyId, req.user.email);
+  }
+
+  @Post('self/requests')
+  @Roles('ADMIN', 'ACCOUNTANT', 'STAFF', 'TEACHER', 'LIBRARIAN')
+  @ApiOperation({ summary: 'Submit a leave request for the current user' })
+  @ApiQuery({ name: 'companyId', required: true })
+  createSelfRequest(
+    @Request() req: any,
+    @Query('companyId') companyId: string,
+    @Body() body: { leaveTypeId: string; startDate: string; endDate: string; reason?: string },
+  ) {
+    return this.service.createSelfRequest(companyId, req.user.email, body);
+  }
+
+  @Patch('self/requests/:id/cancel')
+  @Roles('ADMIN', 'ACCOUNTANT', 'STAFF', 'TEACHER', 'LIBRARIAN')
+  @ApiOperation({ summary: "Cancel one of the current user's own leave requests" })
+  @ApiQuery({ name: 'companyId', required: true })
+  cancelSelfRequest(@Request() req: any, @Param('id') id: string, @Query('companyId') companyId: string) {
+    return this.service.cancelSelfRequest(id, companyId, req.user.email);
+  }
+
   // ─── Leave Types ─────────────────────────────────────────────────────────────
 
   @Get('types')

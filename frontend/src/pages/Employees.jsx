@@ -43,6 +43,8 @@ const EMPTY_FORM = {
   date_of_joining: '',
   salary: '',
   status: 'ACTIVE',
+  employment_type: 'FULL_TIME',
+  contracted_hours_per_day: '',
 };
 
 /* ── Reusable two-column dialog body ─────────────────────────────────── */
@@ -210,6 +212,37 @@ function EmployeeFormBody({ data, onChange, errors = {} }) {
             </SelectContent>
           </Select>
         </div>
+
+        {/* Employment Type */}
+        <div className="space-y-1">
+          <Label className="text-xs">{t('employees.employmentType', { defaultValue: 'Employment Type' })}</Label>
+          <Select value={data.employment_type || 'FULL_TIME'} onValueChange={v => onChange('employment_type', v)}>
+            <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="FULL_TIME">{t('employees.fullTime', { defaultValue: 'Full-time' })}</SelectItem>
+              <SelectItem value="PART_TIME">{t('employees.partTime', { defaultValue: 'Part-time' })}</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* Contracted Hours/Day — part-time only */}
+        {data.employment_type === 'PART_TIME' && (
+          <div className="space-y-1">
+            <Label className="text-xs">{t('employees.contractedHoursPerDay', { defaultValue: 'Contracted Hours / Day' })} *</Label>
+            <Input
+              type="number"
+              min="0.5"
+              max="24"
+              step="0.5"
+              className="h-9 text-sm"
+              value={data.contracted_hours_per_day}
+              onChange={e => onChange('contracted_hours_per_day', e.target.value)}
+              placeholder={t('employees.contractedHoursPlaceholder', { defaultValue: 'e.g. 4' })}
+            />
+            {errors.contracted_hours_per_day && <p className="text-xs text-red-600">{errors.contracted_hours_per_day}</p>}
+            <p className="text-xs text-muted-foreground">{t('employees.contractedHoursHint', { defaultValue: 'Used to prorate salary if attendance-based deduction is enabled (Settings → Preferences).' })}</p>
+          </div>
+        )}
       </motion.div>
     </div>
   );
@@ -246,6 +279,9 @@ export default function Employees() {
     const errs = {};
     if (!data.name?.trim()) errs.name = t('employees.fullNameRequired', { defaultValue: 'Full name is required' });
     if (!data.employee_id?.trim()) errs.employee_id = t('employees.employeeIdRequired', { defaultValue: 'Employee ID is required' });
+    if (data.employment_type === 'PART_TIME' && !(parseFloat(data.contracted_hours_per_day) > 0)) {
+      errs.contracted_hours_per_day = t('employees.contractedHoursRequired', { defaultValue: 'Contracted hours/day is required for part-time employees' });
+    }
     return errs;
   }
 
@@ -259,9 +295,14 @@ export default function Employees() {
     setFormErrors({});
     // salary in the DTO is named `basicSalary` — the UI field is called
     // "Salary" for the user but must be renamed on the way out.
-    const { salary, ...rest } = form;
+    const { salary, contracted_hours_per_day, ...rest } = form;
     try {
-      await api.Employee.create({ ...rest, company_id: companyId, basic_salary: parseFloat(salary) || 0 });
+      await api.Employee.create({
+        ...rest,
+        company_id: companyId,
+        basic_salary: parseFloat(salary) || 0,
+        ...(rest.employment_type === 'PART_TIME' ? { contracted_hours_per_day: parseFloat(contracted_hours_per_day) } : {}),
+      });
       setForm(EMPTY_FORM);
       setShowForm(false);
       toast.success(t('employees.employeeAdded', { defaultValue: 'Employee added' }));
@@ -280,9 +321,13 @@ export default function Employees() {
       return;
     }
     setEditErrors({});
-    const { salary, ...rest } = editEmployee;
+    const { salary, contracted_hours_per_day, ...rest } = editEmployee;
     try {
-      await api.Employee.update(editEmployee.id, { ...rest, basic_salary: parseFloat(salary) || 0 });
+      await api.Employee.update(editEmployee.id, {
+        ...rest,
+        basic_salary: parseFloat(salary) || 0,
+        ...(rest.employment_type === 'PART_TIME' ? { contracted_hours_per_day: parseFloat(contracted_hours_per_day) } : {}),
+      });
       setEditEmployee(null);
       toast.success(t('employees.employeeUpdated', { defaultValue: 'Employee updated' }));
       load();
@@ -338,6 +383,15 @@ export default function Employees() {
     { key: 'phone', label: t('employees.phone', { defaultValue: 'Phone' }) },
     { key: 'date_of_joining', label: t('employees.joined', { defaultValue: 'Joined' }), render: r => formatDate(r.date_of_joining) },
     { key: 'basic_salary', label: t('employees.salary', { defaultValue: 'Salary' }), render: r => r.basic_salary ? `NPR ${Number(r.basic_salary).toLocaleString()}` : '—' },
+    {
+      key: 'employment_type',
+      label: t('employees.employmentType', { defaultValue: 'Employment Type' }),
+      render: r => (
+        <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-slate-100 text-slate-600">
+          {r.employment_type === 'PART_TIME' ? t('employees.partTime', { defaultValue: 'Part-time' }) : t('employees.fullTime', { defaultValue: 'Full-time' })}
+        </span>
+      ),
+    },
     {
       key: 'status',
       label: t('employees.status', { defaultValue: 'Status' }),

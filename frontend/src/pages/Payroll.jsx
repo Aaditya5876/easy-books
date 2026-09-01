@@ -127,6 +127,7 @@ export default function Payroll() {
   const liveNet = showDetail ? Math.max(0,
     num(showDetail.grossSalary)
     - num(showDetail.absentDeduction)
+    - num(showDetail.hoursShortfallDeduction)
     - num(showDetail.ssfEmployee)
     - num(showDetail.pit)
     + num(showDetail.overtimeAmount)
@@ -254,6 +255,7 @@ export default function Payroll() {
     // Deductions section
     sectionHeader('DEDUCTIONS');
     row(`Absent / Half Days (${p.absentDays}/${p.halfDays})`, p.absentDeduction, true);
+    if (num(p.hoursShortfallDeduction) > 0) row('Insufficient Hours', p.hoursShortfallDeduction, true);
     row('SSF (Employee)', p.ssfEmployee, true);
     row('Income Tax (PIT)', p.pit, true);
     row('Other Deductions', p.otherDeductions, true);
@@ -497,6 +499,19 @@ export default function Payroll() {
                       <span>{t('payroll.absentDeduction', { defaultValue: 'Absent Deduction' })}</span>
                       <span className="font-medium">− {npr(showDetail.absentDeduction)}</span>
                     </div>
+                    {num(showDetail.hoursShortfallDeduction) > 0 && (
+                      <div className="flex justify-between items-center text-red-600">
+                        <span>
+                          {t('payroll.hoursShortfallDeduction', { defaultValue: 'Insufficient Hours' })}
+                          {showDetail.incompleteAttendanceDays > 0 && (
+                            <span className="text-amber-600 ml-1" title={t('payroll.incompleteAttendanceHint', { defaultValue: '{{count}} day(s) had no checkout time and were skipped from this calculation', count: showDetail.incompleteAttendanceDays })}>
+                              ({t('payroll.incompleteDays', { defaultValue: '{{count}} incomplete', count: showDetail.incompleteAttendanceDays })})
+                            </span>
+                          )}
+                        </span>
+                        <span className="font-medium">− {npr(showDetail.hoursShortfallDeduction)}</span>
+                      </div>
+                    )}
                     <div className="flex justify-between items-center text-red-600">
                       <span>{t('payroll.ssfEmployeeLabel', { defaultValue: 'SSF (Employee)' })}</span>
                       <span className="font-medium">− {npr(showDetail.ssfEmployee)}</span>
