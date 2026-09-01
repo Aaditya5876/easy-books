@@ -17,6 +17,20 @@ export class UserController {
     return this.service.listCompanyUsers(companyId);
   }
 
+  // SUPER_ADMIN only — creates a new client company + its first ADMIN login
+  // for sales-led onboarding. Placed before ':id'-style routes below is not
+  // required here (literal 'provision-client' segment never collides with a
+  // param route), kept next to 'invite' for readability.
+  @Post('provision-client')
+  @Roles('SUPER_ADMIN')
+  @ApiOperation({ summary: "Create a new client company and its first ADMIN login (sales-led onboarding)" })
+  provisionClient(
+    @Body() body: { companyName: string; businessType: string; adminName: string; adminEmail: string; enabledModules?: string[] },
+    @Req() req: any,
+  ) {
+    return this.service.provisionClient(req.user.sub, body);
+  }
+
   @Post('invite')
   @Roles('ADMIN')
   @ApiOperation({ summary: 'Invite a user to the company (creates user if not exists)' })

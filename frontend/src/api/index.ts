@@ -519,6 +519,9 @@ export const usersApi = {
     apiClient.patch(`/api/v1/users/${userId}/role`, { role }, { params: { companyId: cid } }),
   remove: (userId: string, cid: string) =>
     apiClient.delete(`/api/v1/users/${userId}`, { params: { companyId: cid } }),
+  // SUPER_ADMIN only — sales-led onboarding: new company + its first ADMIN login.
+  provisionClient: (data: { companyName: string; businessType: string; adminName: string; adminEmail: string; enabledModules?: string[] }) =>
+    apiClient.post('/api/v1/users/provision-client', data),
 };
 
 // ── Portal API (parent/student token-based auth) ─────────────────────────────

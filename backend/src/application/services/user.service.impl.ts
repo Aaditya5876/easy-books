@@ -1,6 +1,7 @@
-import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ForbiddenException, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../../../core/db/psql/prisma.client';
 import { MailService } from './mail.service';
+import { MODULE_KEYS, ModuleKey } from '../../../core/modules/module-keys';
 import * as bcrypt from 'bcrypt';
 
 const ROLE_HIERARCHY = ['STAFF', 'TEACHER', 'LIBRARIAN', 'ACCOUNTANT', 'ADMIN', 'SUPER_ADMIN'];
@@ -68,6 +69,59 @@ export class UserServiceImpl {
     await this.mailService.sendInvitation(data.email, data.name, company.name, tempPassword);
 
     return { message: 'User invited', userId: user.id, user };
+  }
+
+  // SUPER_ADMIN only (enforced by @Roles('SUPER_ADMIN') on the controller) —
+  // creates a brand-new client company plus its first ADMIN login in one
+  // step, for the sales-led onboarding flow (client pays off-platform, we
+  // set them up and hand over credentials) rather than self-registration.
+  // The requesting SUPER_ADMIN is also linked to the new company (non-default)
+  // so they can switch into it afterward to manage its package/support it.
+  async provisionClient(
+    requesterId: string,
+    data: { companyName: string; businessType: string; adminName: string; adminEmail: string; enabledModules?: string[] },
+  ) {
+    const existing = await this.prisma.user.findUnique({ where: { email: data.adminEmail } });
+    if (existing) throw new ConflictException('A user with this email already exists');
+
+    const enabledModules = data.enabledModules ?? [];
+    const invalid = enabledModules.filter((m) => !MODULE_KEYS.includes(m as ModuleKey));
+    if (invalid.length > 0) throw new BadRequestException(`Unknown module key(s): ${invalid.join(', ')}`);
+
+    const company = await this.prisma.company.create({
+      data: { name: data.companyName, businessType: data.businessType, enabledModules },
+    });
+
+    const tempPassword = Math.random().toString(36).slice(-10);
+    const hashed = await bcrypt.hash(tempPassword, 10);
+
+    const admin = await this.prisma.user.create({
+      data: {
+        email: data.adminEmail,
+        name: data.adminName,
+        password: hashed,
+        role: 'ADMIN',
+        emailVerified: true,
+        mustChangePassword: true,
+        userCompanies: { create: { companyId: company.id, isDefault: true } },
+      },
+      select: { id: true, email: true, name: true },
+    });
+
+    const requesterLink = await this.prisma.userCompany.findUnique({
+      where: { userId_companyId: { userId: requesterId, companyId: company.id } },
+    });
+    if (!requesterLink) {
+      await this.prisma.userCompany.create({ data: { userId: requesterId, companyId: company.id, isDefault: false } });
+    }
+
+    try {
+      await this.mailService.sendInvitation(data.adminEmail, data.adminName, company.name, tempPassword);
+    } catch (err) {
+      console.error('Client-provisioning invite email failed:', (err as Error).message);
+    }
+
+    return { company, admin, tempPassword };
   }
 
   async changeRole(targetUserId: string, companyId: string, newRole: string, changedByRole: string) {

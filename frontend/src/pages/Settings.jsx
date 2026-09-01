@@ -155,6 +155,12 @@ export default function Settings() {
   const [packageSaving, setPackageSaving] = useState(false);
   const [packageSaved, setPackageSaved] = useState(false);
 
+  // ── Create Client (SUPER_ADMIN only — sales-led onboarding) ──────────────
+  const [provisionForm, setProvisionForm] = useState({
+    companyName: '', businessType: 'SCHOOL', adminName: '', adminEmail: '', package: 'STANDARD',
+  });
+  const [provisioning, setProvisioning] = useState(false);
+
   const [automation, setAutomation] = useState({
     autoFeeBilling: true, autoInvoiceRelease: true, autoPayroll: true, autoReconciliation: true,
     autoLibraryReminders: true,
@@ -504,6 +510,27 @@ export default function Settings() {
       alert(err?.response?.data?.message || t('settings.packageSaveFailed', { defaultValue: 'Failed to update package' }));
     } finally {
       setPackageSaving(false);
+    }
+  }
+
+  async function handleProvisionClient(e) {
+    e.preventDefault();
+    setProvisioning(true);
+    try {
+      const res = await usersApi.provisionClient({
+        companyName: provisionForm.companyName,
+        businessType: provisionForm.businessType,
+        adminName: provisionForm.adminName,
+        adminEmail: provisionForm.adminEmail,
+        enabledModules: PACKAGE_MODULES[provisionForm.package] || [],
+      });
+      if (res.data.tempPassword) setTempPassword(res.data.tempPassword);
+      setProvisionForm({ companyName: '', businessType: 'SCHOOL', adminName: '', adminEmail: '', package: 'STANDARD' });
+      loadCompanies();
+    } catch (err) {
+      alert(err?.response?.data?.message || t('settings.provisionFailed', { defaultValue: 'Failed to create client' }));
+    } finally {
+      setProvisioning(false);
     }
   }
 
@@ -931,6 +958,61 @@ export default function Settings() {
                   : t('settings.noPackageSet', { defaultValue: 'No package set yet — this company currently has unrestricted (legacy) access to everything.' })}
                 {packageSaved && <span className="text-emerald-600 ml-2 inline-flex items-center gap-1"><Check className="w-3 h-3" />{t('settings.saved', { defaultValue: 'Saved!' })}</span>}
               </p>
+            </div>
+          )}
+
+          {/* Create Client — SUPER_ADMIN only (sales-led onboarding: creates the
+              company + its first ADMIN login, instead of self-registration) */}
+          {isSuperAdmin && (
+            <div className="bg-card rounded-xl border p-6 space-y-4 max-w-lg">
+              <div>
+                <h3 className="font-semibold flex items-center gap-1.5"><UserPlus className="w-4 h-4 text-primary" />{t('settings.createClientHeading', { defaultValue: 'Create Client' })}</h3>
+                <p className="text-sm text-muted-foreground mt-0.5">{t('settings.createClientSubtitle', { defaultValue: "Sets up a new client's company and their first admin login — for after they've paid, instead of self-registration." })}</p>
+              </div>
+              <form onSubmit={handleProvisionClient} className="space-y-3">
+                <div className="space-y-1.5">
+                  <Label>{t('settings.companyNameLabel', { defaultValue: 'Company / School Name' })}</Label>
+                  <Input required value={provisionForm.companyName} onChange={e => setProvisionForm(f => ({ ...f, companyName: e.target.value }))} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>{t('settings.productLabel', { defaultValue: 'Product' })}</Label>
+                  <select
+                    className="w-full border rounded-md px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring"
+                    value={provisionForm.businessType}
+                    onChange={e => setProvisionForm(f => ({ ...f, businessType: e.target.value }))}
+                  >
+                    <option value="SCHOOL">{t('settings.productSchool', { defaultValue: 'School Management System' })}</option>
+                    <option value="OTHER">{t('settings.productOneBook', { defaultValue: 'OneBook (Business)' })}</option>
+                  </select>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label>{t('settings.adminNameLabel', { defaultValue: "Admin's Name" })}</Label>
+                    <Input required value={provisionForm.adminName} onChange={e => setProvisionForm(f => ({ ...f, adminName: e.target.value }))} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>{t('settings.adminEmailLabel', { defaultValue: "Admin's Email" })}</Label>
+                    <Input type="email" required value={provisionForm.adminEmail} onChange={e => setProvisionForm(f => ({ ...f, adminEmail: e.target.value }))} />
+                  </div>
+                </div>
+                {provisionForm.businessType === 'SCHOOL' && (
+                  <div className="space-y-1.5">
+                    <Label>{t('settings.packageLabel', { defaultValue: 'Package' })}</Label>
+                    <select
+                      className="w-full border rounded-md px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring"
+                      value={provisionForm.package}
+                      onChange={e => setProvisionForm(f => ({ ...f, package: e.target.value }))}
+                    >
+                      <option value="BASE">{t('settings.packageBASE', { defaultValue: 'Base' })}</option>
+                      <option value="STANDARD">{t('settings.packageSTANDARD', { defaultValue: 'Standard' })}</option>
+                      <option value="PREMIUM">{t('settings.packagePREMIUM', { defaultValue: 'Premium' })}</option>
+                    </select>
+                  </div>
+                )}
+                <Button type="submit" disabled={provisioning} className="w-full">
+                  {provisioning ? t('settings.creatingClient', { defaultValue: 'Creating…' }) : t('settings.createClientButton', { defaultValue: 'Create Client & Send Login' })}
+                </Button>
+              </form>
             </div>
           )}
 
