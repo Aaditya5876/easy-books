@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../../core/db/psql/prisma.client';
+import { MODULE_KEYS, ModuleKey } from '../../../core/modules/module-keys';
 
 @Injectable()
 export class CompanyServiceImpl {
@@ -66,9 +67,27 @@ export class CompanyServiceImpl {
       bankAccounts, transactions, ledgerAccounts, ledgerEntries,
       inventoryItems, salesOrders, purchaseOrders, payments,
       payrollSettings,
+      // enabledModules controls which package a company is on — never
+      // settable through this general-purpose endpoint (any company ADMIN
+      // could otherwise grant themselves every module for free). Only
+      // updatePackage() below, which is SUPER_ADMIN-gated at the controller,
+      // may change it.
+      enabledModules,
       ...updateData
     } = data;
     return this.prisma.company.update({ where: { id }, data: updateData });
+  }
+
+  // SUPER_ADMIN-only (enforced by @Roles('SUPER_ADMIN') on the controller
+  // route) — sets which package (Base/Standard/Premium) a company is on.
+  async updatePackage(id: string, enabledModules: string[]) {
+    const company = await this.prisma.company.findFirst({ where: { id } });
+    if (!company) throw new NotFoundException('Company not found');
+
+    const invalid = enabledModules.filter((m) => !MODULE_KEYS.includes(m as ModuleKey));
+    if (invalid.length > 0) throw new BadRequestException(`Unknown module key(s): ${invalid.join(', ')}`);
+
+    return this.prisma.company.update({ where: { id }, data: { enabledModules } });
   }
 
   async remove(id: string) {

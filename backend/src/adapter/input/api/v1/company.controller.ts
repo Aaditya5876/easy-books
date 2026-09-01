@@ -51,6 +51,17 @@ export class CompanyController {
     return this.service.update(id, body);
   }
 
+  // SUPER_ADMIN only — @Roles('SUPER_ADMIN') here means literally that: a
+  // regular company ADMIN does not satisfy this list (unlike most @Roles()
+  // checks, SUPER_ADMIN is not a superset of ADMIN in RolesGuard — it's a
+  // separate bypass — so this is the one place that distinction matters).
+  @Patch(':id/package')
+  @Roles('SUPER_ADMIN')
+  @ApiOperation({ summary: "Set a company's package (Base/Standard/Premium) by enabled module keys" })
+  updatePackage(@Param('id') id: string, @Body('enabledModules') enabledModules: string[]) {
+    return this.service.updatePackage(id, enabledModules);
+  }
+
   @Delete(':id')
   @Roles('ADMIN')
   @ApiOperation({ summary: 'Delete a company' })

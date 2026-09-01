@@ -1,6 +1,7 @@
 import { Controller, Get, Post, Put, Patch, Delete, Body, Param, Query, Req } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { Roles } from '../../../../modules/decorators/roles.decorator';
+import { RequiresModule } from '../../../../modules/decorators/requires-module.decorator';
 import { SchoolService } from '../../../../application/services/school.service';
 import { SchoolAnalyticsService } from '../../../../application/services/school-analytics.service';
 import { SchoolFinanceService } from '../../../../application/services/school-finance.service';
@@ -499,9 +500,11 @@ export class SchoolController {
   }
 
   // ── Exams (tabs) ──────────────────────────────────────────────────────────────
+  // Standard+ tier — see MODULE_KEYS in core/modules/module-keys.ts.
 
   @Get('exams')
   @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'TEACHER')
+  @RequiresModule('SCHOOL_ACADEMICS')
   @ApiQuery({ name: 'companyId', required: true })
   listExams(@Query('companyId') companyId: string) {
     return this.service.listExams(companyId);
@@ -509,12 +512,14 @@ export class SchoolController {
 
   @Post('exams')
   @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'TEACHER')
+  @RequiresModule('SCHOOL_ACADEMICS')
   createExam(@Body() body: { companyId: string; name: string; examDate?: string; notes?: string }) {
     return this.service.createExam(body);
   }
 
   @Delete('exams/:id')
   @Roles('ADMIN')
+  @RequiresModule('SCHOOL_ACADEMICS')
   @ApiQuery({ name: 'companyId', required: true })
   deleteExam(@Param('id') id: string, @Query('companyId') companyId: string) {
     return this.service.deleteExam(id, companyId);
@@ -524,6 +529,7 @@ export class SchoolController {
 
   @Get('exam-results')
   @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'TEACHER')
+  @RequiresModule('SCHOOL_ACADEMICS')
   @ApiQuery({ name: 'companyId', required: true })
   @ApiQuery({ name: 'examName', required: false })
   @ApiQuery({ name: 'studentId', required: false })
@@ -537,6 +543,7 @@ export class SchoolController {
 
   @Get('exam-results/report-card')
   @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'TEACHER')
+  @RequiresModule('SCHOOL_ACADEMICS')
   @ApiQuery({ name: 'companyId', required: true })
   @ApiQuery({ name: 'studentId', required: true })
   @ApiQuery({ name: 'examName', required: true })
@@ -550,12 +557,14 @@ export class SchoolController {
 
   @Post('exam-results')
   @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'TEACHER')
+  @RequiresModule('SCHOOL_ACADEMICS')
   createExamResult(@Body() body: any) {
     return this.service.createExamResult(body);
   }
 
   @Put('exam-results/:id')
   @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'TEACHER')
+  @RequiresModule('SCHOOL_ACADEMICS')
   @ApiQuery({ name: 'companyId', required: true })
   updateExamResult(@Param('id') id: string, @Query('companyId') companyId: string, @Body() body: any) {
     return this.service.updateExamResult(id, companyId, body);
@@ -563,6 +572,7 @@ export class SchoolController {
 
   @Delete('exam-results/:id')
   @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'TEACHER')
+  @RequiresModule('SCHOOL_ACADEMICS')
   @ApiQuery({ name: 'companyId', required: true })
   deleteExamResult(@Param('id') id: string, @Query('companyId') companyId: string) {
     return this.service.deleteExamResult(id, companyId);
@@ -572,6 +582,7 @@ export class SchoolController {
 
   @Get('exam-schedules')
   @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'TEACHER', 'LIBRARIAN')
+  @RequiresModule('SCHOOL_ACADEMICS')
   @ApiQuery({ name: 'companyId', required: true })
   @ApiQuery({ name: 'classId', required: false })
   @ApiQuery({ name: 'examName', required: false })
@@ -585,12 +596,14 @@ export class SchoolController {
 
   @Post('exam-schedules')
   @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'TEACHER')
+  @RequiresModule('SCHOOL_ACADEMICS')
   createExamSchedule(@Body() body: any) {
     return this.service.createExamSchedule(body);
   }
 
   @Post('exam-schedules/bulk')
   @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'TEACHER')
+  @RequiresModule('SCHOOL_ACADEMICS')
   createExamSchedulesBulk(@Body() body: {
     companyId: string;
     classId: string;
@@ -602,6 +615,7 @@ export class SchoolController {
 
   @Put('exam-schedules/:id')
   @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'TEACHER')
+  @RequiresModule('SCHOOL_ACADEMICS')
   @ApiQuery({ name: 'companyId', required: true })
   updateExamSchedule(@Param('id') id: string, @Query('companyId') companyId: string, @Body() body: any) {
     return this.service.updateExamSchedule(id, companyId, body);
@@ -609,6 +623,7 @@ export class SchoolController {
 
   @Delete('exam-schedules/:id')
   @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'TEACHER')
+  @RequiresModule('SCHOOL_ACADEMICS')
   @ApiQuery({ name: 'companyId', required: true })
   deleteExamSchedule(@Param('id') id: string, @Query('companyId') companyId: string) {
     return this.service.deleteExamSchedule(id, companyId);
@@ -618,6 +633,7 @@ export class SchoolController {
 
   @Get('timetable')
   @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'TEACHER')
+  @RequiresModule('SCHOOL_ACADEMICS')
   @ApiQuery({ name: 'companyId', required: true })
   @ApiQuery({ name: 'classId', required: true })
   getTimetable(@Query('companyId') companyId: string, @Query('classId') classId: string) {
@@ -626,12 +642,14 @@ export class SchoolController {
 
   @Post('timetable')
   @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'TEACHER')
+  @RequiresModule('SCHOOL_ACADEMICS')
   upsertTimetableEntry(@Body() body: any) {
     return this.service.upsertTimetableEntry(body);
   }
 
   @Delete('timetable/:id')
   @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'TEACHER')
+  @RequiresModule('SCHOOL_ACADEMICS')
   @ApiQuery({ name: 'companyId', required: true })
   deleteTimetableEntry(@Param('id') id: string, @Query('companyId') companyId: string) {
     return this.service.deleteTimetableEntry(id, companyId);
@@ -705,9 +723,11 @@ export class SchoolController {
   }
 
   // ── Study Materials ───────────────────────────────────────────────────────────
+  // Standard+ tier — see MODULE_KEYS in core/modules/module-keys.ts.
 
   @Get('study-materials')
   @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'TEACHER')
+  @RequiresModule('SCHOOL_ACADEMICS')
   @ApiQuery({ name: 'companyId', required: true })
   @ApiQuery({ name: 'classId', required: false })
   @ApiQuery({ name: 'subjectId', required: false })
@@ -721,12 +741,14 @@ export class SchoolController {
 
   @Post('study-materials')
   @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'TEACHER')
+  @RequiresModule('SCHOOL_ACADEMICS')
   createStudyMaterial(@Body() body: any) {
     return this.service.createStudyMaterial(body);
   }
 
   @Delete('study-materials/:id')
   @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'TEACHER')
+  @RequiresModule('SCHOOL_ACADEMICS')
   @ApiQuery({ name: 'companyId', required: true })
   deleteStudyMaterial(@Param('id') id: string, @Query('companyId') companyId: string) {
     return this.service.deleteStudyMaterial(id, companyId);
@@ -736,6 +758,7 @@ export class SchoolController {
 
   @Get('homework')
   @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'TEACHER')
+  @RequiresModule('SCHOOL_ACADEMICS')
   @ApiQuery({ name: 'companyId', required: true })
   @ApiQuery({ name: 'classId', required: false })
   @ApiQuery({ name: 'subjectId', required: false })
@@ -749,12 +772,14 @@ export class SchoolController {
 
   @Post('homework')
   @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'TEACHER')
+  @RequiresModule('SCHOOL_ACADEMICS')
   createHomework(@Body() body: any) {
     return this.service.createHomework(body);
   }
 
   @Put('homework/:id')
   @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'TEACHER')
+  @RequiresModule('SCHOOL_ACADEMICS')
   @ApiQuery({ name: 'companyId', required: true })
   updateHomework(@Param('id') id: string, @Query('companyId') companyId: string, @Body() body: any) {
     return this.service.updateHomework(id, companyId, body);
@@ -762,15 +787,18 @@ export class SchoolController {
 
   @Delete('homework/:id')
   @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'TEACHER')
+  @RequiresModule('SCHOOL_ACADEMICS')
   @ApiQuery({ name: 'companyId', required: true })
   deleteHomework(@Param('id') id: string, @Query('companyId') companyId: string) {
     return this.service.deleteHomework(id, companyId);
   }
 
   // ── Library ───────────────────────────────────────────────────────────────────
+  // Premium tier — see MODULE_KEYS in core/modules/module-keys.ts.
 
   @Get('library/books')
   @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'LIBRARIAN')
+  @RequiresModule('FACILITIES')
   @ApiQuery({ name: 'companyId', required: true })
   listBooks(@Query('companyId') companyId: string) {
     return this.service.listBooks(companyId);
@@ -778,12 +806,14 @@ export class SchoolController {
 
   @Post('library/books')
   @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'LIBRARIAN')
+  @RequiresModule('FACILITIES')
   createBook(@Body() body: any) {
     return this.service.createBook(body);
   }
 
   @Put('library/books/:id')
   @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'LIBRARIAN')
+  @RequiresModule('FACILITIES')
   @ApiQuery({ name: 'companyId', required: true })
   updateBook(@Param('id') id: string, @Query('companyId') companyId: string, @Body() body: any) {
     return this.service.updateBook(id, companyId, body);
@@ -791,6 +821,7 @@ export class SchoolController {
 
   @Delete('library/books/:id')
   @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'LIBRARIAN')
+  @RequiresModule('FACILITIES')
   @ApiQuery({ name: 'companyId', required: true })
   deleteBook(@Param('id') id: string, @Query('companyId') companyId: string) {
     return this.service.deleteBook(id, companyId);
@@ -798,6 +829,7 @@ export class SchoolController {
 
   @Get('library/issues')
   @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'LIBRARIAN')
+  @RequiresModule('FACILITIES')
   @ApiQuery({ name: 'companyId', required: true })
   @ApiQuery({ name: 'status', required: false })
   listIssues(@Query('companyId') companyId: string, @Query('status') status?: string) {
@@ -806,43 +838,51 @@ export class SchoolController {
 
   @Post('library/issues')
   @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'LIBRARIAN')
+  @RequiresModule('FACILITIES')
   issueBook(@Body() body: any) {
     return this.service.issueBook(body);
   }
 
   @Patch('library/issues/:id/return')
   @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'LIBRARIAN')
+  @RequiresModule('FACILITIES')
   @ApiQuery({ name: 'companyId', required: true })
   returnBook(@Param('id') id: string, @Query('companyId') companyId: string, @Body() body: { fine?: number }) {
     return this.service.returnBook(id, companyId, body.fine);
   }
 
   // ── Hostel ────────────────────────────────────────────────────────────────────
+  // Premium tier — see MODULE_KEYS in core/modules/module-keys.ts.
 
   @Get('hostel/rooms')
+  @RequiresModule('FACILITIES')
   @ApiQuery({ name: 'companyId', required: true })
   listHostelRooms(@Query('companyId') companyId: string) {
     return this.service.listHostelRooms(companyId);
   }
 
   @Post('hostel/rooms')
+  @RequiresModule('FACILITIES')
   createHostelRoom(@Body() body: any) {
     return this.service.createHostelRoom(body);
   }
 
   @Put('hostel/rooms/:id')
+  @RequiresModule('FACILITIES')
   @ApiQuery({ name: 'companyId', required: true })
   updateHostelRoom(@Param('id') id: string, @Query('companyId') companyId: string, @Body() body: any) {
     return this.service.updateHostelRoom(id, companyId, body);
   }
 
   @Delete('hostel/rooms/:id')
+  @RequiresModule('FACILITIES')
   @ApiQuery({ name: 'companyId', required: true })
   deleteHostelRoom(@Param('id') id: string, @Query('companyId') companyId: string) {
     return this.service.deleteHostelRoom(id, companyId);
   }
 
   @Get('hostel/allocations')
+  @RequiresModule('FACILITIES')
   @ApiQuery({ name: 'companyId', required: true })
   @ApiQuery({ name: 'roomId', required: false })
   listHostelAllocations(@Query('companyId') companyId: string, @Query('roomId') roomId?: string) {
@@ -850,42 +890,50 @@ export class SchoolController {
   }
 
   @Post('hostel/allocations')
+  @RequiresModule('FACILITIES')
   allocateStudent(@Body() body: any) {
     return this.service.allocateStudent(body);
   }
 
   @Delete('hostel/allocations/:id')
+  @RequiresModule('FACILITIES')
   @ApiQuery({ name: 'companyId', required: true })
   deallocateStudent(@Param('id') id: string, @Query('companyId') companyId: string) {
     return this.service.deallocateStudent(id, companyId);
   }
 
   // ── Transport ─────────────────────────────────────────────────────────────────
+  // Premium tier — see MODULE_KEYS in core/modules/module-keys.ts.
 
   @Get('transport/routes')
+  @RequiresModule('FACILITIES')
   @ApiQuery({ name: 'companyId', required: true })
   listTransportRoutes(@Query('companyId') companyId: string) {
     return this.service.listTransportRoutes(companyId);
   }
 
   @Post('transport/routes')
+  @RequiresModule('FACILITIES')
   createTransportRoute(@Body() body: any) {
     return this.service.createTransportRoute(body);
   }
 
   @Put('transport/routes/:id')
+  @RequiresModule('FACILITIES')
   @ApiQuery({ name: 'companyId', required: true })
   updateTransportRoute(@Param('id') id: string, @Query('companyId') companyId: string, @Body() body: any) {
     return this.service.updateTransportRoute(id, companyId, body);
   }
 
   @Delete('transport/routes/:id')
+  @RequiresModule('FACILITIES')
   @ApiQuery({ name: 'companyId', required: true })
   deleteTransportRoute(@Param('id') id: string, @Query('companyId') companyId: string) {
     return this.service.deleteTransportRoute(id, companyId);
   }
 
   @Get('transport/assignments')
+  @RequiresModule('FACILITIES')
   @ApiQuery({ name: 'companyId', required: true })
   @ApiQuery({ name: 'routeId', required: false })
   listTransportAssignments(@Query('companyId') companyId: string, @Query('routeId') routeId?: string) {
@@ -893,11 +941,13 @@ export class SchoolController {
   }
 
   @Post('transport/assignments')
+  @RequiresModule('FACILITIES')
   assignStudentTransport(@Body() body: any) {
     return this.service.assignStudentTransport(body);
   }
 
   @Delete('transport/assignments/:id')
+  @RequiresModule('FACILITIES')
   @ApiQuery({ name: 'companyId', required: true })
   removeStudentTransport(@Param('id') id: string, @Query('companyId') companyId: string) {
     return this.service.removeStudentTransport(id, companyId);

@@ -21,7 +21,7 @@ import {
 import {
   Building2, Plus, Trash2, Save, ImagePlus, X, UserPlus, Copy, Check, Shield,
   Phone, Mail, MapPin, Hash, User, Palette, Type, Bell, RotateCcw, Upload,
-  Recycle, RotateCw, Lock, AlertTriangle, Clock, Zap, QrCode, Power, PowerOff
+  Recycle, RotateCw, Lock, AlertTriangle, Clock, Zap, QrCode, Power, PowerOff, Layers
 } from 'lucide-react';
 
 const SIDEBAR_PALETTE = ['#1e293b', '#1e3a5f', '#14532d', '#4c1d95', '#881337', '#7c2d12'];
@@ -86,6 +86,7 @@ export default function Settings() {
   const { canEdit, canDelete, canManageUsers } = useRole();
   const { prefs, updatePref, resetPrefs } = usePreferences();
   const isAdmin = user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN';
+  const isSuperAdmin = user?.role === 'SUPER_ADMIN';
   const isSchool = user?.defaultCompany?.businessType === 'SCHOOL';
   const activeCompanyId = getActiveCompanyId();
   const logoInputRef = useRef(null);
@@ -148,6 +149,11 @@ export default function Settings() {
   });
   const [prefsSaving, setPrefsSaving] = useState(false);
   const [prefsSaved, setPrefsSaved] = useState(false);
+
+  // ── Package (SUPER_ADMIN only) ────────────────────────────────────────────
+  const [companyEnabledModules, setCompanyEnabledModules] = useState([]);
+  const [packageSaving, setPackageSaving] = useState(false);
+  const [packageSaved, setPackageSaved] = useState(false);
 
   const [automation, setAutomation] = useState({
     autoFeeBilling: true, autoInvoiceRelease: true, autoPayroll: true, autoReconciliation: true,
@@ -228,6 +234,7 @@ export default function Settings() {
     ]);
     setCompanies(list);
     const active = list.find(c => c.id === activeCompanyId);
+    setCompanyEnabledModules(active?.enabledModules ?? []);
     setCompanyPrefs({
       abbreviation: active?.abbreviation || '',
       workingDaysPerMonth: payrollRes?.data?.workingDaysPerMonth ?? 26,
@@ -467,6 +474,36 @@ export default function Settings() {
       alert(t('settings.failedSavePreferences', { defaultValue: 'Failed to save preferences' }));
     } finally {
       setPrefsSaving(false);
+    }
+  }
+
+  // ── Package (SUPER_ADMIN only) ────────────────────────────────────────────
+  const PACKAGE_MODULES = {
+    BASE: ['BASE'],
+    STANDARD: ['BASE', 'SCHOOL_ACADEMICS'],
+    PREMIUM: ['BASE', 'SCHOOL_ACADEMICS', 'FACILITIES', 'HRMS', 'AI', 'BULK_IMPORT', 'FINANCE', 'INVENTORY'],
+  };
+
+  function currentPackageTier() {
+    if (companyEnabledModules.length === 0) return null; // legacy/unrestricted — not on a tier yet
+    if (companyEnabledModules.includes('FACILITIES')) return 'PREMIUM';
+    if (companyEnabledModules.includes('SCHOOL_ACADEMICS')) return 'STANDARD';
+    return 'BASE';
+  }
+
+  async function savePackage(tier) {
+    if (!activeCompanyId) return;
+    setPackageSaving(true);
+    try {
+      const modules = PACKAGE_MODULES[tier];
+      await companyApi.updatePackage(activeCompanyId, modules);
+      setCompanyEnabledModules(modules);
+      setPackageSaved(true);
+      setTimeout(() => setPackageSaved(false), 2000);
+    } catch (err) {
+      alert(err?.response?.data?.message || t('settings.packageSaveFailed', { defaultValue: 'Failed to update package' }));
+    } finally {
+      setPackageSaving(false);
     }
   }
 
@@ -865,6 +902,37 @@ export default function Settings() {
             </Button>
             {!isAdmin && <p className="text-xs text-muted-foreground text-center">{t('settings.adminOnlyPreferences', { defaultValue: 'Only Admins can change preferences.' })}</p>}
           </div>
+
+          {/* Package — SUPER_ADMIN only (platform-operator control, not self-service for the school's own admin) */}
+          {isSuperAdmin && (
+            <div className="bg-card rounded-xl border p-6 space-y-4 max-w-lg">
+              <div>
+                <h3 className="font-semibold flex items-center gap-1.5"><Layers className="w-4 h-4 text-primary" />{t('settings.packageHeading', { defaultValue: 'Package' })}</h3>
+                <p className="text-sm text-muted-foreground mt-0.5">{t('settings.packageSubtitle', { defaultValue: 'Which features this company can access. Super-admin only — not visible to the school\'s own admin.' })}</p>
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                {['BASE', 'STANDARD', 'PREMIUM'].map(tier => (
+                  <button
+                    key={tier}
+                    type="button"
+                    disabled={packageSaving}
+                    onClick={() => savePackage(tier)}
+                    className={`rounded-lg border p-3 text-center text-sm font-medium transition-colors disabled:opacity-50 ${
+                      currentPackageTier() === tier ? 'border-primary bg-primary/10 text-primary' : 'border-border hover:bg-muted'
+                    }`}
+                  >
+                    {t(`settings.package${tier}`, { defaultValue: tier.charAt(0) + tier.slice(1).toLowerCase() })}
+                  </button>
+                ))}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {currentPackageTier()
+                  ? t('settings.currentPackage', { defaultValue: 'Current: {{tier}}', tier: currentPackageTier() })
+                  : t('settings.noPackageSet', { defaultValue: 'No package set yet — this company currently has unrestricted (legacy) access to everything.' })}
+                {packageSaved && <span className="text-emerald-600 ml-2 inline-flex items-center gap-1"><Check className="w-3 h-3" />{t('settings.saved', { defaultValue: 'Saved!' })}</span>}
+              </p>
+            </div>
+          )}
 
           {/* Appearance */}
           <div className="bg-card rounded-xl border p-6 space-y-6 max-w-lg">

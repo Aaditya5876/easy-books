@@ -230,6 +230,8 @@ export const companyApi = {
   update: (id: string, data: object) => apiClient.put(`/api/v1/companies/${id}`, data),
   getPayrollSettings: (id: string) => apiClient.get(`/api/v1/companies/${id}/payroll-settings`),
   upsertPayrollSettings: (id: string, data: object) => apiClient.patch(`/api/v1/companies/${id}/payroll-settings`, data),
+  // SUPER_ADMIN only — sets which package (Base/Standard/Premium) a company is on.
+  updatePackage: (id: string, enabledModules: string[]) => apiClient.patch(`/api/v1/companies/${id}/package`, { enabledModules }),
 };
 
 // File Upload

@@ -133,10 +133,10 @@ const schoolNavSections = [
     items: [
       { icon: GraduationCap, label: 'Students', path: '/students', roles: ['TEACHER', 'LIBRARIAN'] },
       { icon: CalendarCheck2, label: 'Attendance', path: '/student-attendance', roles: ['TEACHER'] },
-      { icon: CalendarDays, label: 'Routine', path: '/routine', roles: ['TEACHER'] },
-      { icon: Trophy, label: 'Exam', path: '/exams', roles: ['TEACHER'] },
-      { icon: FolderOpen, label: 'Study Material', path: '/study-materials', roles: ['TEACHER'] },
-      { icon: ClipboardList, label: 'Homework', path: '/homework', roles: ['TEACHER'] },
+      { icon: CalendarDays, label: 'Routine', path: '/routine', roles: ['TEACHER'], module: 'SCHOOL_ACADEMICS' },
+      { icon: Trophy, label: 'Exam', path: '/exams', roles: ['TEACHER'], module: 'SCHOOL_ACADEMICS' },
+      { icon: FolderOpen, label: 'Study Material', path: '/study-materials', roles: ['TEACHER'], module: 'SCHOOL_ACADEMICS' },
+      { icon: ClipboardList, label: 'Homework', path: '/homework', roles: ['TEACHER'], module: 'SCHOOL_ACADEMICS' },
     ]
   },
   {
@@ -168,9 +168,9 @@ const schoolNavSections = [
     labelColor: 'text-violet-400',
     activeClass: 'bg-violet-600 text-white shadow-sm shadow-violet-900/30',
     items: [
-      { icon: Library, label: 'Library', path: '/library', roles: ['LIBRARIAN'] },
-      { icon: Home, label: 'Hostel', path: '/hostel' },
-      { icon: Bus, label: 'Transport', path: '/transport' },
+      { icon: Library, label: 'Library', path: '/library', roles: ['LIBRARIAN'], module: 'FACILITIES' },
+      { icon: Home, label: 'Hostel', path: '/hostel', module: 'FACILITIES' },
+      { icon: Bus, label: 'Transport', path: '/transport', module: 'FACILITIES' },
     ]
   },
   {
