@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, Query } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param, Query, Req } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { AttendanceServiceImpl } from '../../../../application/services/attendance.service.impl';
 import { Roles } from '../../../../modules/decorators/roles.decorator';
@@ -15,6 +15,24 @@ import { CreateAttendanceSchema, UpdateAttendanceSchema, CreateAttendanceDTO, Up
 @Controller('api/v1/attendance')
 export class AttendanceController {
   constructor(private readonly service: AttendanceServiceImpl) {}
+
+  // ── Self-service (any authenticated staff role — overrides the class-level
+  // ACCOUNTANT/ADMIN restriction above) ─────────────────────────────────────
+  @Get('self/today')
+  @Roles('ADMIN', 'ACCOUNTANT', 'STAFF', 'TEACHER', 'LIBRARIAN')
+  @ApiOperation({ summary: "Get the current user's own attendance status for today" })
+  @ApiQuery({ name: 'companyId', required: true })
+  selfToday(@Req() req: any, @Query('companyId') companyId: string) {
+    return this.service.selfToday(companyId, req.user.email);
+  }
+
+  @Post('self')
+  @Roles('ADMIN', 'ACCOUNTANT', 'STAFF', 'TEACHER', 'LIBRARIAN')
+  @ApiOperation({ summary: "Check the current user in or out for today" })
+  @ApiQuery({ name: 'companyId', required: true })
+  selfMark(@Req() req: any, @Query('companyId') companyId: string, @Body('action') action: 'IN' | 'OUT') {
+    return this.service.selfMark(companyId, req.user.email, action);
+  }
 
   @Get()
   @ApiOperation({ summary: 'Get all attendance records' })

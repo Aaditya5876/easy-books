@@ -15,6 +15,7 @@ import { IAuthService, AuthTokens } from '../../domain/services/auth.service';
 import { IUserRepository, USER_REPOSITORY } from '../../domain/repositories';
 import { PrismaService } from '../../../core/db/psql/prisma.client';
 import { MailService } from './mail.service';
+import { markSelfAttendance } from './self-attendance.util';
 
 @Injectable()
 export class AuthServiceImpl implements IAuthService {
@@ -125,6 +126,32 @@ export class AuthServiceImpl implements IAuthService {
 
     const tokens = await this.issueTokens(user.id, user.email, user.role);
     return { ...tokens, mustChangePassword: user.mustChangePassword };
+  }
+
+  // Login-page "quick attendance" — validates credentials exactly like login()
+  // but never issues tokens/cookies, so the requester stays on the login page
+  // instead of being signed into the full app. Scoped to the user's default
+  // company (falls back to their first company) since they haven't picked an
+  // active company yet at this point.
+  async quickAttendance(email: string, password: string, action: 'IN' | 'OUT') {
+    const user = await this.userRepo.findByEmail(email);
+    if (!user) throw new UnauthorizedException('Invalid credentials');
+
+    const valid = await bcrypt.compare(password, user.password);
+    if (!valid) throw new UnauthorizedException('Invalid credentials');
+
+    if (!user.emailVerified) {
+      throw new UnauthorizedException('Please verify your email before logging in');
+    }
+
+    const userCompany = await this.prisma.userCompany.findFirst({
+      where: { userId: user.id },
+      orderBy: { isDefault: 'desc' },
+    });
+    if (!userCompany) throw new BadRequestException('No company found for this account');
+
+    const record = await markSelfAttendance(this.prisma, userCompany.companyId, user.email, action);
+    return { success: true, record };
   }
 
   async changePassword(userId: string, currentPassword: string, newPassword: string): Promise<void> {

@@ -74,6 +74,16 @@ export class AuthController {
     return { success: true, message: 'Login successful', mustChangePassword: result.mustChangePassword };
   }
 
+  @Public()
+  @Post('quick-attendance')
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  @ApiOperation({ summary: "Validate credentials and check the user in/out without starting a session — login-page quick action (rate-limited: 10 per minute)" })
+  @ApiBody({ schema: { type: 'object', required: ['email', 'password', 'action'], properties: { email: { type: 'string' }, password: { type: 'string' }, action: { type: 'string', enum: ['IN', 'OUT'] } } } })
+  async quickAttendance(@Body('email') email: string, @Body('password') password: string, @Body('action') action: 'IN' | 'OUT') {
+    return this.authService.quickAttendance(email, password, action);
+  }
+
   @Post('change-password')
   @HttpCode(HttpStatus.OK)
   @ApiBearerAuth()

@@ -33,6 +33,7 @@ import Payroll from './pages/Payroll';
 import Quotations from './pages/Quotations';
 import Reports from './pages/Reports';
 import Workflow from './pages/Workflow';
+import MyAttendance from './pages/MyAttendance';
 import SchoolDashboard from './pages/school/SchoolDashboard';
 import Students from './pages/school/Students';
 import Classes from './pages/school/Classes';
@@ -68,6 +69,7 @@ import PaymentReturn from './pages/portal/PaymentReturn';
 // Routes without `roles` are not registered for restricted roles.
 const schoolRoutes = [
   { path: '/', page: SchoolDashboard, roles: ['TEACHER', 'LIBRARIAN'] },
+  { path: '/my-attendance', page: MyAttendance, roles: ['TEACHER', 'LIBRARIAN'] },
   { path: '/students', page: Students, roles: ['TEACHER', 'LIBRARIAN'] },
   { path: '/classes', page: Classes, roles: ['TEACHER'] },
   { path: '/subjects', page: Subjects, roles: ['TEACHER'] },
@@ -130,6 +132,7 @@ const AuthenticatedApp = () => {
         ) : (
           <>
             <Route path="/" element={<Dashboard />} />
+            <Route path="/my-attendance" element={<MyAttendance />} />
             <Route path="/ledger" element={<Ledger />} />
             <Route path="/transactions" element={<Transactions />} />
             <Route path="/vendors" element={<Vendors />} />

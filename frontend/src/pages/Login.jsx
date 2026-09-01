@@ -113,6 +113,11 @@ export default function Login() {
   const [loginForm, setLoginForm] = useState({ email: '', password: '' });
   const [showLoginPw, setShowLoginPw] = useState(false);
 
+  // Quick attendance (login-page check in/out — no session started)
+  const [attAction, setAttAction] = useState('IN');
+  const [attLoading, setAttLoading] = useState(false);
+  const [attMessage, setAttMessage] = useState(null);
+
   // Register
   const [regStep, setRegStep] = useState(1);
   const [regForm, setRegForm] = useState({
@@ -172,6 +177,30 @@ export default function Login() {
       setError(err?.response?.data?.message || t('auth.invalidCredentials', { defaultValue: 'Invalid email or password' }));
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleQuickAttendance() {
+    if (!loginForm.email || !loginForm.password) {
+      setAttMessage({ type: 'error', text: t('auth.enterEmailPasswordFirst', { defaultValue: 'Enter your email and password above first' }) });
+      return;
+    }
+    setAttLoading(true);
+    setAttMessage(null);
+    try {
+      const res = await authApi.quickAttendance(loginForm.email, loginForm.password, attAction);
+      const rec = res.data?.record;
+      const time = attAction === 'IN' ? rec?.checkInTime : rec?.checkOutTime;
+      setAttMessage({
+        type: 'success',
+        text: attAction === 'IN'
+          ? t('auth.checkedInAt', { defaultValue: 'Checked in at {{time}}', time })
+          : t('auth.checkedOutAt', { defaultValue: 'Checked out at {{time}}', time }),
+      });
+    } catch (err) {
+      setAttMessage({ type: 'error', text: err?.response?.data?.message || t('auth.attendanceFailed', { defaultValue: 'Could not mark attendance' }) });
+    } finally {
+      setAttLoading(false);
     }
   }
 
@@ -513,6 +542,36 @@ export default function Login() {
                     </Link>
                   </p>
                 </form>
+              )}
+
+              {/* ── Quick Attendance — check in/out without a full sign-in ── */}
+              {mode === 'login' && (
+                <div className="mt-4 pt-4 border-t border-border/60">
+                  <p className="text-xs font-medium text-muted-foreground mb-2">
+                    {t('auth.quickAttendance', { defaultValue: 'Quick Attendance' })}
+                  </p>
+                  <div className="flex gap-2">
+                    <select
+                      className="h-9 flex-1 rounded-md border border-input bg-background px-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                      value={attAction}
+                      onChange={e => setAttAction(e.target.value)}
+                    >
+                      <option value="IN">{t('auth.checkIn', { defaultValue: 'Check In' })}</option>
+                      <option value="OUT">{t('auth.checkOut', { defaultValue: 'Check Out' })}</option>
+                    </select>
+                    <Button type="button" variant="outline" className="h-9 shrink-0" onClick={handleQuickAttendance} disabled={attLoading}>
+                      {attLoading ? t('auth.marking', { defaultValue: 'Marking…' }) : t('auth.markAttendance', { defaultValue: 'Mark Attendance' })}
+                    </Button>
+                  </div>
+                  {attMessage && (
+                    <p className={`text-xs mt-2 ${attMessage.type === 'error' ? 'text-destructive' : 'text-emerald-600'}`}>
+                      {attMessage.text}
+                    </p>
+                  )}
+                  <p className="text-[11px] text-muted-foreground mt-1">
+                    {t('auth.quickAttendanceHint', { defaultValue: 'Uses the email and password above — no need to sign in.' })}
+                  </p>
+                </div>
               )}
 
               {/* ── REGISTER FORM ── */}

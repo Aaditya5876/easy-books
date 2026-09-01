@@ -14,6 +14,7 @@ export interface IAuthService {
   changePassword(userId: string, currentPassword: string, newPassword: string): Promise<void>;
   refresh(userId: string, refreshToken: string): Promise<AuthTokens>;
   logout(userId: string): Promise<void>;
+  quickAttendance(email: string, password: string, action: 'IN' | 'OUT'): Promise<{ success: boolean; record: unknown }>;
   me(userId: string): Promise<{
     id: string;
     email: string;

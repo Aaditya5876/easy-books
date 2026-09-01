@@ -8,7 +8,7 @@ import {
   Kanban, UserCircle, Settings, Shield,
   GraduationCap, School, BookMarked, DollarSign, Trophy,
   Megaphone, CalendarDays, CalendarCheck2,
-  FolderOpen, Library, Home, Bus
+  FolderOpen, Library, Home, Bus, Fingerprint
 } from 'lucide-react';
 import { cn } from "@/lib/utils";
 import { useTranslation } from 'react-i18next';
@@ -23,6 +23,7 @@ const navSections = [
     activeClass: 'bg-sidebar-primary text-sidebar-primary-foreground shadow-sm',
     items: [
       { icon: LayoutDashboard, label: 'Dashboard', path: '/' },
+      { icon: Fingerprint, label: 'My Attendance', path: '/my-attendance' },
       { icon: BarChart2, label: 'Reports', path: '/reports' },
     ]
   },
@@ -105,6 +106,7 @@ const schoolNavSections = [
     activeClass: 'bg-sidebar-primary text-sidebar-primary-foreground shadow-sm',
     items: [
       { icon: LayoutDashboard, label: 'Dashboard', path: '/', roles: ['TEACHER', 'LIBRARIAN'] },
+      { icon: Fingerprint, label: 'My Attendance', path: '/my-attendance', roles: ['TEACHER', 'LIBRARIAN'] },
       // Reports is split by tab for TEACHER (see SchoolReports.jsx) — the backend
       // only grants TEACHER the Attendance/Academics analytics endpoints, not
       // Fees/Operations/Audit. LIBRARIAN has no backend access to any tab, so stays hidden.

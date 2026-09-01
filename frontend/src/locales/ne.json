@@ -1,6 +1,7 @@
 {
   "nav": {
     "Dashboard": "ड्यासबोर्ड",
+    "My Attendance": "मेरो हाजिरी",
     "Reports": "प्रतिवेदन",
     "Academic Years": "शैक्षिक वर्ष",
     "Teachers": "शिक्षकहरू",
@@ -1405,6 +1406,16 @@
     "parentOrStudent": "अभिभावक वा विद्यार्थी?",
     "signInToPortal": "पोर्टलमा साइन इन गर्नुहोस्",
     "invalidCredentials": "गलत इमेल वा पासवर्ड",
+    "quickAttendance": "छिटो हाजिरी",
+    "checkIn": "भित्र्याइ",
+    "checkOut": "बाहिर्याइ",
+    "marking": "गर्दै…",
+    "markAttendance": "हाजिरी गर्नुहोस्",
+    "quickAttendanceHint": "माथिको इमेल र पासवर्ड प्रयोग हुन्छ — साइन इन गर्नु पर्दैन।",
+    "enterEmailPasswordFirst": "कृपया माथि आफ्नो इमेल र पासवर्ड लेख्नुहोस्",
+    "checkedInAt": "{{time}} मा भित्र्याइ भयो",
+    "checkedOutAt": "{{time}} मा बाहिर्याइ भयो",
+    "attendanceFailed": "हाजिरी गर्न सकिएन",
     "personalDetails": "व्यक्तिगत विवरण",
     "fullNameRequiredLabel": "पूरा नाम *",
     "emailRequiredLabel": "इमेल *",
@@ -2810,5 +2821,19 @@
     "timeStatusSection": "समय र स्थिति",
     "cancel": "रद्द गर्नुहोस्",
     "save": "सुरक्षित गर्नुहोस्"
+  },
+  "myAttendance": {
+    "title": "मेरो हाजिरी",
+    "subtitle": "आफ्नो दिनको भित्र्याइ र बाहिर्याइ गर्नुहोस्",
+    "notLinked": "तपाईंको खातासँग कुनै कर्मचारी विवरण जोडिएको छैन। कृपया एडमिनलाई आफ्नो कर्मचारी इमेल तपाईंको लगइन इमेलसँग मिलाउन भन्नुहोस्।",
+    "onLeave": "तपाईं आज बिदामा हुनुहुन्छ",
+    "doneForToday": "भित्र्याइ {{in}} · बाहिर्याइ {{out}}",
+    "checkedInAtStatus": "{{time}} मा भित्र्याइ भयो",
+    "notCheckedInYet": "अझै भित्र्याइ गरिएको छैन",
+    "checkIn": "भित्र्याइ",
+    "checkOut": "बाहिर्याइ",
+    "checkedIn": "सफलतापूर्वक भित्र्याइ भयो",
+    "checkedOut": "सफलतापूर्वक बाहिर्याइ भयो",
+    "markFailed": "हाजिरी गर्न सकिएन"
   }
 }

@@ -13,6 +13,10 @@ export const authApi = {
   logout: () => apiClient.post('/api/v1/auth/logout'),
   me: () => apiClient.get('/api/v1/auth/me'),
   refresh: () => apiClient.post('/api/v1/auth/refresh'),
+  // Login-page quick attendance — validates credentials and marks the check
+  // in/out without starting a session (no redirect into the app).
+  quickAttendance: (email: string, password: string, action: 'IN' | 'OUT') =>
+    apiClient.post('/api/v1/auth/quick-attendance', { email, password, action }),
 };
 
 // Inventory
@@ -83,6 +87,9 @@ export const attendanceApi = {
   create: (data: object) => apiClient.post('/api/v1/attendance', data),
   update: (id: string, data: object) => apiClient.put(`/api/v1/attendance/${id}`, data, { params: { companyId: companyId() } }),
   remove: (id: string) => apiClient.delete(`/api/v1/attendance/${id}`, { params: { companyId: companyId() } }),
+  // Self-service — open to every role, unlike the HR endpoints above.
+  selfToday: () => apiClient.get('/api/v1/attendance/self/today', { params: { companyId: companyId() } }),
+  selfMark: (action: 'IN' | 'OUT') => apiClient.post('/api/v1/attendance/self', { action }, { params: { companyId: companyId() } }),
 };
 
 // Payroll
