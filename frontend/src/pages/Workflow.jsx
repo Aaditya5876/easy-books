@@ -17,6 +17,7 @@ import { useToast } from "@/components/ui/use-toast";
 import EmptyState from '../components/EmptyState';
 import PageLoader from '../components/PageLoader';
 import { motion } from 'framer-motion';
+import { useRole } from '@/lib/useRole';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -185,9 +186,11 @@ function KanbanColumn({ title, dotColor, tasks, onCardClick, onAddNew }) {
             {tasks.length}
           </span>
         </div>
-        <Button variant="ghost" size="icon" className="w-6 h-6" onClick={onAddNew}>
-          <Plus className="w-3 h-3" />
-        </Button>
+        {onAddNew && (
+          <Button variant="ghost" size="icon" className="w-6 h-6" onClick={onAddNew}>
+            <Plus className="w-3 h-3" />
+          </Button>
+        )}
       </div>
 
       <div className="space-y-2 min-h-[200px] bg-muted/20 rounded-lg p-2">
@@ -212,6 +215,7 @@ const EMPTY_VENDOR = { name: '', phone: '', email: '', address: '' };
 
 function SlideOutPanel({ task, onClose, onSave }) {
   const { t } = useTranslation();
+  const { canCreate } = useRole();
   const [editing, setEditing] = useState(null);
   const [saving, setSaving] = useState(false);
   const { toast } = useToast();
@@ -485,48 +489,50 @@ function SlideOutPanel({ task, onClose, onSave }) {
             />
           </div>
 
-          {/* Quick Actions */}
-          <div className="space-y-2">
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{t('workflow.quickActions', { defaultValue: 'Quick Actions' })}</p>
-            <div className="grid grid-cols-2 gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                className="justify-start gap-1.5 text-xs font-medium h-9"
-                onClick={openSalesDialog}
-              >
-                <Plus className="w-3 h-3 shrink-0 text-muted-foreground" />
-                {t('workflow.createSalesBill', { defaultValue: 'Create Sales Bill' })}
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                className="justify-start gap-1.5 text-xs font-medium h-9"
-                onClick={openPurchaseDialog}
-              >
-                <Plus className="w-3 h-3 shrink-0 text-muted-foreground" />
-                {t('workflow.createPurchase', { defaultValue: 'Create Purchase' })}
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                className="justify-start gap-1.5 text-xs font-medium h-9"
-                onClick={openClientDialog}
-              >
-                <Plus className="w-3 h-3 shrink-0 text-muted-foreground" />
-                {t('workflow.addClient', { defaultValue: 'Add Client' })}
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                className="justify-start gap-1.5 text-xs font-medium h-9"
-                onClick={openVendorDialog}
-              >
-                <Plus className="w-3 h-3 shrink-0 text-muted-foreground" />
-                {t('workflow.addVendor', { defaultValue: 'Add Vendor' })}
-              </Button>
+          {/* Quick Actions — all four hit ACCOUNTANT/ADMIN-only create endpoints */}
+          {canCreate && (
+            <div className="space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{t('workflow.quickActions', { defaultValue: 'Quick Actions' })}</p>
+              <div className="grid grid-cols-2 gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="justify-start gap-1.5 text-xs font-medium h-9"
+                  onClick={openSalesDialog}
+                >
+                  <Plus className="w-3 h-3 shrink-0 text-muted-foreground" />
+                  {t('workflow.createSalesBill', { defaultValue: 'Create Sales Bill' })}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="justify-start gap-1.5 text-xs font-medium h-9"
+                  onClick={openPurchaseDialog}
+                >
+                  <Plus className="w-3 h-3 shrink-0 text-muted-foreground" />
+                  {t('workflow.createPurchase', { defaultValue: 'Create Purchase' })}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="justify-start gap-1.5 text-xs font-medium h-9"
+                  onClick={openClientDialog}
+                >
+                  <Plus className="w-3 h-3 shrink-0 text-muted-foreground" />
+                  {t('workflow.addClient', { defaultValue: 'Add Client' })}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="justify-start gap-1.5 text-xs font-medium h-9"
+                  onClick={openVendorDialog}
+                >
+                  <Plus className="w-3 h-3 shrink-0 text-muted-foreground" />
+                  {t('workflow.addVendor', { defaultValue: 'Add Vendor' })}
+                </Button>
+              </div>
             </div>
-          </div>
+          )}
         </div>
 
         {/* Footer */}
@@ -1013,6 +1019,7 @@ function NewTaskDialog({ open, onOpenChange, onCreated }) {
 
 export default function Workflow() {
   const { t } = useTranslation();
+  const { canCreate } = useRole();
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedTask, setSelectedTask] = useState(null);
@@ -1082,10 +1089,12 @@ export default function Workflow() {
         title={t('workflow.pageTitle', { defaultValue: 'Workflow' })}
         subtitle={t('workflow.pageSubtitle', { defaultValue: 'Track tasks and projects across your team' })}
       >
-        <Button onClick={() => setShowNewDialog(true)} className="gap-2">
-          <Plus className="w-4 h-4" />
-          {t('workflow.newTask', { defaultValue: 'New Task' })}
-        </Button>
+        {canCreate && (
+          <Button onClick={() => setShowNewDialog(true)} className="gap-2">
+            <Plus className="w-4 h-4" />
+            {t('workflow.newTask', { defaultValue: 'New Task' })}
+          </Button>
+        )}
       </PageHeader>
 
       {loading ? (
@@ -1095,11 +1104,11 @@ export default function Workflow() {
           icon={CheckCircle2}
           title={t('workflow.noTasksYet', { defaultValue: 'No tasks yet' })}
           description={t('workflow.noTasksYetHint', { defaultValue: 'Create your first task to start managing work across your team.' })}
-          action={
+          action={canCreate ? (
             <Button onClick={() => setShowNewDialog(true)} className="gap-2">
               <Plus className="w-4 h-4" /> {t('workflow.newTask', { defaultValue: 'New Task' })}
             </Button>
-          }
+          ) : null}
         />
       ) : (
         <div className="flex gap-4 items-start">
@@ -1115,7 +1124,7 @@ export default function Workflow() {
                 dotColor={col.dotColor}
                 tasks={colTasks}
                 onCardClick={setSelectedTask}
-                onAddNew={openNewTaskInColumn}
+                onAddNew={canCreate ? openNewTaskInColumn : undefined}
               />
             );
           })}
