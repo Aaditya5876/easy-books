@@ -27,12 +27,14 @@ export class VendorController {
   }
 
   @Post()
+  @Roles('ACCOUNTANT', 'ADMIN')
   @ApiOperation({ summary: 'Create a vendor' })
   create(@Body(new ZodValidationPipe(CreateVendorSchema)) dto: CreateVendorDTO) {
     return this.service.create(dto);
   }
 
   @Put(':id')
+  @Roles('ACCOUNTANT', 'ADMIN')
   @ApiOperation({ summary: 'Update a vendor' })
   @ApiQuery({ name: 'companyId', required: true })
   update(
@@ -44,6 +46,7 @@ export class VendorController {
   }
 
   @Delete(':id')
+  @Roles('ACCOUNTANT', 'ADMIN')
   @ApiOperation({ summary: 'Delete a vendor (blocked if has purchase orders)' })
   @ApiQuery({ name: 'companyId', required: true })
   remove(@Param('id') id: string, @Query('companyId') companyId: string) {

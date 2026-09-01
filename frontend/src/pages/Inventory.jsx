@@ -139,7 +139,7 @@ const EMPTY_FORM = {
 
 export default function Inventory() {
   const { t } = useTranslation();
-  const { canEdit, canDelete } = useRole();
+  const { canEdit, canEditRecords, canDeleteFinancialRecords } = useRole();
   const companyId = getActiveCompanyId();
   const [items, setItems] = useState([]);
   const [company, setCompany] = useState(null);
@@ -378,7 +378,7 @@ export default function Inventory() {
         onAdd={() => { setShowExtraFields(false); setShowAdd(true); }}
         addLabel={t('inventory.addStock', { defaultValue: 'Add Stock' })}
       >
-        {canEdit && (
+        {canEditRecords && (
           <Button onClick={() => setImportOpen(true)} variant="outline" className="gap-2">
             <Upload className="w-4 h-4" />{t('inventory.import', { defaultValue: 'Import' })}
           </Button>
@@ -396,7 +396,7 @@ export default function Inventory() {
             <Tag className="w-4 h-4" />{t('inventory.update', { defaultValue: 'Update' })}
           </Button>
         )}
-        {canDelete && (
+        {canDeleteFinancialRecords && (
           <Button onClick={handleDeleteClick} variant="destructive" className="gap-2" disabled={!selectedItem}>
             <Trash2 className="w-4 h-4" />{t('inventory.delete', { defaultValue: 'Delete' })}
           </Button>

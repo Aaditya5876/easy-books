@@ -32,7 +32,7 @@ const EMPTY_FORM = { name: '', contact_person: '', phone: '', email: '', address
 export default function Clients() {
   const { t } = useTranslation();
   const companyId = getActiveCompanyId();
-  const { canEdit } = useRole();
+  const { canCreate, canEdit } = useRole();
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -154,7 +154,7 @@ export default function Clients() {
       </div>
 
       {clients.length === 0 ? (
-        <EmptyState icon={UserCheck} title={t('clients.noClientsYet', { defaultValue: 'No clients yet' })} description={t('clients.noClientsYetHint', { defaultValue: 'Add your first client to start managing your sales relationships.' })} action={<Button onClick={() => setShowAdd(true)}>{t('clients.addClient', { defaultValue: 'Add Client' })}</Button>} />
+        <EmptyState icon={UserCheck} title={t('clients.noClientsYet', { defaultValue: 'No clients yet' })} description={t('clients.noClientsYetHint', { defaultValue: 'Add your first client to start managing your sales relationships.' })} action={canCreate ? <Button onClick={() => setShowAdd(true)}>{t('clients.addClient', { defaultValue: 'Add Client' })}</Button> : null} />
       ) : (
         <DataTable columns={columns} data={filtered} emptyMessage={t('clients.noClientsMatchSearch', { defaultValue: 'No clients match your search.' })} onRowClick={canEdit ? (row) => setEditClient({ ...row }) : undefined} />
       )}

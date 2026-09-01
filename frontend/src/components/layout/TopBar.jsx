@@ -21,9 +21,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Input } from "@/components/ui/input";
 import { getActiveCompanyId, setActiveCompanyId } from '@/lib/companyContext';
 import { getTodayBS } from '@/lib/nepaliDate';
+import { useRole } from '@/lib/useRole';
 
 export default function TopBar({ onMobileMenuToggle, onToolOpen }) {
   const navigate = useNavigate();
+  const { isAdmin, isAccountant, canViewPayroll } = useRole();
   const { i18n } = useTranslation();
   const { resolvedTheme, setTheme } = useTheme();
   const { prefs } = usePreferences();
@@ -205,11 +207,13 @@ export default function TopBar({ onMobileMenuToggle, onToolOpen }) {
                 {c.isDefault && <span className="ml-auto text-[10px] text-muted-foreground">default</span>}
               </DropdownMenuItem>
             ))}
-            {companies.length > 0 && <DropdownMenuSeparator />}
-            <DropdownMenuItem onClick={() => navigate('/settings')}>
-              <Plus className="w-4 h-4 mr-2" />
-              Add Company
-            </DropdownMenuItem>
+            {isAdmin && companies.length > 0 && <DropdownMenuSeparator />}
+            {isAdmin && (
+              <DropdownMenuItem onClick={() => navigate('/settings')}>
+                <Plus className="w-4 h-4 mr-2" />
+                Add Company
+              </DropdownMenuItem>
+            )}
           </DropdownMenuContent>
         </DropdownMenu>
 
@@ -249,36 +253,41 @@ export default function TopBar({ onMobileMenuToggle, onToolOpen }) {
           </DropdownMenuContent>
         </DropdownMenu>
 
-        {/* HR */}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground">
-              <UsersRound className="w-4 h-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-48">
-            <DropdownMenuItem onClick={() => navigate('/employees')}>
-              <UserCircle className="w-4 h-4 mr-2" />Employees
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => navigate('/attendance')}>
-              <CalendarCheck className="w-4 h-4 mr-2" />Attendance
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => navigate('/payroll')}>
-              <Banknote className="w-4 h-4 mr-2" />Payroll
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        {/* HR — routes are ACCOUNTANT/ADMIN-only for restricted roles (see schoolRoutes in App.jsx) */}
+        {canViewPayroll && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground">
+                <UsersRound className="w-4 h-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48">
+              <DropdownMenuItem onClick={() => navigate('/employees')}>
+                <UserCircle className="w-4 h-4 mr-2" />Employees
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => navigate('/attendance')}>
+                <CalendarCheck className="w-4 h-4 mr-2" />Attendance
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => navigate('/payroll')}>
+                <Banknote className="w-4 h-4 mr-2" />Payroll
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
 
-        {/* Settings shortcut */}
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => navigate('/settings')}
-          className="text-muted-foreground hover:text-foreground"
-          title="Settings"
-        >
-          <Settings className="w-4 h-4" />
-        </Button>
+        {/* Settings shortcut — /settings is reachable by ADMIN/ACCOUNTANT (bank accounts,
+            fiscal year, automation); unreachable for restricted roles (see schoolRoutes in App.jsx) */}
+        {(isAdmin || isAccountant) && (
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => navigate('/settings')}
+            className="text-muted-foreground hover:text-foreground"
+            title="Settings"
+          >
+            <Settings className="w-4 h-4" />
+          </Button>
+        )}
 
         {/* ── Inline Search ── */}
         {searchOpen ? (
@@ -432,10 +441,14 @@ export default function TopBar({ onMobileMenuToggle, onToolOpen }) {
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-48">
-            <DropdownMenuItem onClick={() => navigate('/settings')}>
-              <Settings className="w-4 h-4 mr-2" />Settings
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
+            {(isAdmin || isAccountant) && (
+              <>
+                <DropdownMenuItem onClick={() => navigate('/settings')}>
+                  <Settings className="w-4 h-4 mr-2" />Settings
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+              </>
+            )}
             <DropdownMenuItem onClick={() => apiAuth.logout()}>
               <LogOut className="w-4 h-4 mr-2" />Logout
             </DropdownMenuItem>

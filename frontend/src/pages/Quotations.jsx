@@ -45,7 +45,7 @@ const EMPTY_FORM = {
 
 export default function Quotations() {
   const { t } = useTranslation();
-  const { canEdit } = useRole();
+  const { canCreate, canEdit } = useRole();
   const companyId = getActiveCompanyId();
   const [quotations, setQuotations] = useState([]);
   const [clients, setClients] = useState([]);
@@ -598,11 +598,11 @@ export default function Quotations() {
           icon={ClipboardList}
           title={t('quotations.emptyTitle', { defaultValue: 'No quotations yet' })}
           description={t('quotations.emptyDescription', { defaultValue: 'Create your first quotation or proposal for a client.' })}
-          action={
+          action={canCreate ? (
             <Button onClick={openNew}>
               <Plus className="w-4 h-4 mr-2" />{t('quotations.newQuotation', { defaultValue: 'New Quotation' })}
             </Button>
-          }
+          ) : null}
         />
       ) : (
         <DataTable

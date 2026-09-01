@@ -328,7 +328,7 @@ const PAGE_SIZE = 50;
 export default function Students() {
   const { t } = useTranslation();
   const companyId = getActiveCompanyId();
-  const { canCreate, canEdit, canDelete } = useRole();
+  const { canCreateRecords, canEditRecords, canDeleteRecords, isAdmin, isAccountant, isTeacher, isLibrarian } = useRole();
   const qc = useQueryClient();
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
@@ -388,13 +388,17 @@ export default function Students() {
           <p className="text-muted-foreground text-sm mt-1">{t('students.enrolled', { defaultValue: '{{count}} enrolled', count: total })}</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={() => setImportOpen(true)}>
-            <Upload className="w-4 h-4 mr-1" /> {t('students.import', { defaultValue: 'Import' })}
-          </Button>
-          <Button variant="outline" onClick={() => setPromoteDialog(true)}>
-            <ArrowRight className="w-4 h-4 mr-1" /> {t('students.promote', { defaultValue: 'Promote' })}
-          </Button>
-          {canCreate && (
+          {!isTeacher && !isLibrarian && (
+            <Button variant="outline" onClick={() => setImportOpen(true)}>
+              <Upload className="w-4 h-4 mr-1" /> {t('students.import', { defaultValue: 'Import' })}
+            </Button>
+          )}
+          {isAdmin && (
+            <Button variant="outline" onClick={() => setPromoteDialog(true)}>
+              <ArrowRight className="w-4 h-4 mr-1" /> {t('students.promote', { defaultValue: 'Promote' })}
+            </Button>
+          )}
+          {canCreateRecords && (
             <Button onClick={() => setDialog({ mode: 'add' })}>
               <Plus className="w-4 h-4 mr-2" /> {t('students.enrollStudent', { defaultValue: 'Enroll Student' })}
             </Button>
@@ -455,7 +459,7 @@ export default function Students() {
             <p className="text-muted-foreground text-sm">
               {search || filterClass ? t('students.noMatch', { defaultValue: 'No students match your search' }) : t('students.noStudentsYet', { defaultValue: 'No students enrolled yet' })}
             </p>
-            {!search && !filterClass && canCreate && (
+            {!search && !filterClass && canCreateRecords && (
               <Button className="mt-4" size="sm" onClick={() => setDialog({ mode: 'add' })}>
                 {t('students.enrollFirstStudent', { defaultValue: 'Enroll First Student' })}
               </Button>
@@ -494,14 +498,16 @@ export default function Students() {
                     </td>
                     <td className="px-5 py-3">
                       <div className="flex items-center gap-2 justify-end">
-                        <button
-                          onClick={() => setPortalDialog(student)}
-                          className="p-1.5 rounded hover:bg-emerald-50 text-muted-foreground hover:text-emerald-700 transition-colors"
-                          title={t('students.setPortalAccess', { defaultValue: 'Set Portal Access' })}
-                        >
-                          <KeyRound className="w-3.5 h-3.5" />
-                        </button>
-                        {canEdit && (
+                        {(isAdmin || isAccountant) && (
+                          <button
+                            onClick={() => setPortalDialog(student)}
+                            className="p-1.5 rounded hover:bg-emerald-50 text-muted-foreground hover:text-emerald-700 transition-colors"
+                            title={t('students.setPortalAccess', { defaultValue: 'Set Portal Access' })}
+                          >
+                            <KeyRound className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                        {canEditRecords && (
                           <button
                             onClick={() => setDialog({ mode: 'edit', student })}
                             className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
@@ -509,7 +515,7 @@ export default function Students() {
                             <Pencil className="w-3.5 h-3.5" />
                           </button>
                         )}
-                        {canDelete && (
+                        {canDeleteRecords && (
                           <button
                             onClick={async () => {
                               const ok = await confirm({ description: t('students.confirmRemove', { defaultValue: 'Remove {{name}}?', name: student.name }), variant: 'destructive' });

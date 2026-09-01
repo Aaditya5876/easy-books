@@ -23,6 +23,7 @@ import PageLoader from '../components/PageLoader';
 import EmptyState from '../components/EmptyState';
 import { SmartNumberInput } from "@/components/ui/smart-number-input";
 import { FileAttachmentZone } from "@/components/ui/file-attachment-zone";
+import { useRole } from "@/lib/useRole";
 
 const EMPTY_FORM = {
   client_name: '', client_contact: '', client_address: '', client_pan: '',
@@ -37,6 +38,7 @@ const EMPTY_FORM = {
 
 export default function Sales() {
   const { t } = useTranslation();
+  const { canCreate } = useRole();
   const companyId = getActiveCompanyId();
   const [orders, setOrders] = useState([]);
   const [inventory, setInventory] = useState([]);
@@ -332,7 +334,7 @@ export default function Sales() {
           icon={Receipt}
           title={t('sales.emptyTitle', { defaultValue: 'No sales orders yet' })}
           description={t('sales.emptyDescription', { defaultValue: 'Create your first invoice to get started.' })}
-          action={<Button onClick={openNewSale}>{t('sales.newSale', { defaultValue: 'New Sale' })}</Button>}
+          action={canCreate ? <Button onClick={openNewSale}>{t('sales.newSale', { defaultValue: 'New Sale' })}</Button> : null}
         />
       ) : (
         <DataTable columns={columns} data={filtered} emptyMessage={t('sales.noSearchMatch', { defaultValue: 'No sales orders match your search.' })} />

@@ -179,7 +179,7 @@ function printNotice(n) {
 
 export default function Notices() {
   const { t } = useTranslation();
-  const { canEdit, canDelete } = useRole();
+  const { canEditRecords, canDelete, isAdmin } = useRole();
   const qc = useQueryClient();
   const [dialog, setDialog] = useState({ open: false, notice: null });
   const [search, setSearch] = useState('');
@@ -209,7 +209,7 @@ export default function Notices() {
           <Megaphone className="h-6 w-6 text-primary" />
           <h1 className="text-2xl font-bold">{t('notices.noticeBoard', { defaultValue: 'Notice Board' })}</h1>
         </div>
-        {canEdit && (
+        {canEditRecords && (
           <Button onClick={() => setDialog({ open: true, notice: null })}>
             <Plus className="h-4 w-4 mr-1" /> {t('notices.postNotice', { defaultValue: 'Post Notice' })}
           </Button>
@@ -248,17 +248,19 @@ export default function Notices() {
                   <Button size="icon" variant="ghost" onClick={() => printNotice(n)} title={t('notices.print', { defaultValue: 'Print' })}>
                     <Printer className="h-4 w-4" />
                   </Button>
-                  <Button size="icon" variant="ghost" title={t('notices.broadcastSms', { defaultValue: 'Broadcast SMS to all guardians' })} onClick={async () => {
-                    try {
-                      const res = await noticesApi.broadcastSms(n.id);
-                      toast.success(t('notices.smsSent', { defaultValue: 'SMS sent: {{sent}} delivered, {{failed}} failed', sent: res.data.sent, failed: res.data.failed }));
-                    } catch (e) {
-                      toast.error(e?.response?.data?.message || t('notices.smsFailed', { defaultValue: 'SMS failed — check SMS_API_KEY' }));
-                    }
-                  }}>
-                    <MessageSquare className="h-4 w-4 text-violet-600" />
-                  </Button>
-                  {canEdit && (
+                  {isAdmin && (
+                    <Button size="icon" variant="ghost" title={t('notices.broadcastSms', { defaultValue: 'Broadcast SMS to all guardians' })} onClick={async () => {
+                      try {
+                        const res = await noticesApi.broadcastSms(n.id);
+                        toast.success(t('notices.smsSent', { defaultValue: 'SMS sent: {{sent}} delivered, {{failed}} failed', sent: res.data.sent, failed: res.data.failed }));
+                      } catch (e) {
+                        toast.error(e?.response?.data?.message || t('notices.smsFailed', { defaultValue: 'SMS failed — check SMS_API_KEY' }));
+                      }
+                    }}>
+                      <MessageSquare className="h-4 w-4 text-violet-600" />
+                    </Button>
+                  )}
+                  {canEditRecords && (
                     <Button size="icon" variant="ghost" onClick={() => setDialog({ open: true, notice: n })}>
                       <Pencil className="h-4 w-4" />
                     </Button>

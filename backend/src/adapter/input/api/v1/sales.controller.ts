@@ -32,7 +32,7 @@ export class SalesController {
   }
 
   @Post()
-  @Roles('STAFF', 'ACCOUNTANT', 'ADMIN')
+  @Roles('ACCOUNTANT', 'ADMIN')
   @ApiOperation({ summary: 'Create a sales order (auto-generates invoice number, deducts stock, posts to ledger)' })
   create(@Body() body: any) {
     return this.service.create(body);

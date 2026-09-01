@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/select";
 import { SmartNumberInput } from "@/components/ui/smart-number-input";
 import { FileAttachmentZone } from "@/components/ui/file-attachment-zone";
+import { useRole } from "@/lib/useRole";
 
 const UNITS = ['Piece', 'Set', 'Liter', 'ml', 'Kg', 'gm', 'NOS'];
 
@@ -41,6 +42,7 @@ const EMPTY_FORM = {
 
 export default function Purchase() {
   const { t } = useTranslation();
+  const { canCreate } = useRole();
   const companyId = getActiveCompanyId();
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -251,7 +253,7 @@ export default function Purchase() {
           icon={ShoppingCart}
           title={t('purchase.noOrdersYet', { defaultValue: 'No purchase orders yet' })}
           description={t('purchase.noOrdersDescription', { defaultValue: 'Add your first purchase order to track your expenses.' })}
-          action={<Button onClick={() => setShowNew(true)}>{t('purchase.newPurchase', { defaultValue: 'New Purchase' })}</Button>}
+          action={canCreate ? <Button onClick={() => setShowNew(true)}>{t('purchase.newPurchase', { defaultValue: 'New Purchase' })}</Button> : null}
         />
       ) : (
         <DataTable columns={columns} data={filtered} emptyMessage={t('purchase.noSearchMatch', { defaultValue: 'No purchase orders match your search.' })} />

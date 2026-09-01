@@ -57,7 +57,7 @@ function defaultStatusForMethod(payMethod) {
 
 export default function Transactions() {
   const { t } = useTranslation();
-  const { canDelete } = useRole();
+  const { canDeleteFinancialRecords } = useRole();
   const companyId = getActiveCompanyId();
   const [transactions, setTransactions] = useState([]);
   const [bankAccounts, setBankAccounts] = useState([]);
@@ -485,7 +485,7 @@ export default function Transactions() {
                   <Building2 className="w-3.5 h-3.5" />
                   <span>{acct.bank_name}</span>
                   <span className="text-xs opacity-60">···{acct.account_number?.slice(-4)}</span>
-                  {canDelete && (
+                  {canDeleteFinancialRecords && (
                     <button
                       onClick={e => { e.stopPropagation(); deleteBankAccount(acct.id); }}
                       className="ml-1 opacity-0 group-hover:opacity-60 hover:!opacity-100 transition-opacity"

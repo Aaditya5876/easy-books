@@ -32,7 +32,7 @@ const EMPTY_FORM = { name: '', contact_person: '', phone: '', email: '', address
 export default function Vendors() {
   const { t } = useTranslation();
   const companyId = getActiveCompanyId();
-  const { canEdit } = useRole();
+  const { canCreate, canEdit } = useRole();
   const [vendors, setVendors] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -118,7 +118,7 @@ export default function Vendors() {
       />
 
       {vendors.length === 0 ? (
-        <EmptyState icon={Users} title={t('vendors.noVendorsYet', { defaultValue: 'No vendors yet' })} description={t('vendors.noVendorsYetHint', { defaultValue: 'Add your first vendor to start tracking purchases.' })} action={<Button onClick={() => setShowAdd(true)}>{t('vendors.addVendor', { defaultValue: 'Add Vendor' })}</Button>} />
+        <EmptyState icon={Users} title={t('vendors.noVendorsYet', { defaultValue: 'No vendors yet' })} description={t('vendors.noVendorsYetHint', { defaultValue: 'Add your first vendor to start tracking purchases.' })} action={canCreate ? <Button onClick={() => setShowAdd(true)}>{t('vendors.addVendor', { defaultValue: 'Add Vendor' })}</Button> : null} />
       ) : (
         <DataTable columns={columns} data={filtered} emptyMessage={t('vendors.noVendorsMatch', { defaultValue: 'No vendors match your search.' })} onRowClick={canEdit ? (row) => setEditVendor({ ...row }) : undefined} />
       )}

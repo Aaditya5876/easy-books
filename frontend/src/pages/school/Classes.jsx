@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Pencil, Trash2, School } from 'lucide-react';
+import { Plus, Pencil, Trash2, School, Search } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { classesApi, employeeApi } from '@/api';
 import { getActiveCompanyId } from '@/lib/companyContext';
@@ -92,6 +92,8 @@ export default function Classes() {
   const { canManageAcademicContent, canDelete } = useRole();
   const qc = useQueryClient();
   const [dialog, setDialog] = useState(null);
+  const [search, setSearch] = useState('');
+  const [teacherFilter, setTeacherFilter] = useState('all');
 
   const { data: classes = [], isLoading } = useQuery({
     queryKey: ['classes', companyId],
@@ -116,6 +118,15 @@ export default function Classes() {
 
   const teacherName = (id) => employees.find(e => e.id === id)?.name || '—';
 
+  const assignedTeacherIds = [...new Set(classes.map(c => c.classTeacherId).filter(Boolean))];
+  const q = search.trim().toLowerCase();
+  const filteredClasses = classes.filter(cls => {
+    const matchesSearch = !q || cls.name.toLowerCase().includes(q) || (cls.section || '').toLowerCase().includes(q);
+    const matchesTeacher = teacherFilter === 'all'
+      || (teacherFilter === 'unassigned' ? !cls.classTeacherId : cls.classTeacherId === teacherFilter);
+    return matchesSearch && matchesTeacher;
+  });
+
   return (
     <div className="p-6 space-y-5">
       <div className="flex items-center justify-between">
@@ -130,6 +141,31 @@ export default function Classes() {
         )}
       </div>
 
+      {classes.length > 0 && (
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="relative w-full max-w-xs">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Input
+              className="pl-8"
+              placeholder={t('classes.searchPlaceholder', { defaultValue: 'Search by class or section…' })}
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+            />
+          </div>
+          {assignedTeacherIds.length > 0 && (
+            <select
+              className="text-sm border rounded-md px-2 py-2 bg-background focus:outline-none focus:ring-2 focus:ring-ring"
+              value={teacherFilter}
+              onChange={e => setTeacherFilter(e.target.value)}
+            >
+              <option value="all">{t('classes.allTeachers', { defaultValue: 'All class teachers' })}</option>
+              <option value="unassigned">{t('classes.unassigned', { defaultValue: 'Unassigned' })}</option>
+              {assignedTeacherIds.map(id => <option key={id} value={id}>{teacherName(id)}</option>)}
+            </select>
+          )}
+        </div>
+      )}
+
       <div className="bg-white rounded-xl border border-border overflow-hidden">
         {isLoading ? (
           <div className="p-12 text-center text-muted-foreground text-sm">{t('classes.loading', { defaultValue: 'Loading…' })}</div>
@@ -141,6 +177,8 @@ export default function Classes() {
               <Button className="mt-4" size="sm" onClick={() => setDialog({ mode: 'add' })}>{t('classes.addFirstClass', { defaultValue: 'Add First Class' })}</Button>
             )}
           </div>
+        ) : filteredClasses.length === 0 ? (
+          <div className="p-12 text-center text-muted-foreground text-sm">{t('classes.noMatches', { defaultValue: 'No classes match your filters.' })}</div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -154,7 +192,7 @@ export default function Classes() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {classes.map(cls => (
+                {filteredClasses.map(cls => (
                   <tr key={cls.id} className="hover:bg-muted/20">
                     <td className="px-5 py-3 font-medium">{cls.name}</td>
                     <td className="px-5 py-3 text-muted-foreground">{cls.section || '—'}</td>

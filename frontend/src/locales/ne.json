@@ -119,6 +119,8 @@
     "tagExam": "परीक्षा",
     "tagHomeworkDue": "गृहकार्य बुझाउने",
     "pendingFeesTitle": "शुल्क बाँकी भएका विद्यार्थी",
+    "allClasses": "सबै कक्षा",
+    "noPendingFeesForClass": "यस कक्षामा कुनै शुल्क बाँकी छैन",
     "allFeesCollected": "सबै शुल्क संकलन भयो — उत्कृष्ट काम!",
     "dueAmount": "बाँकी रकम",
     "noReminders": "केही बाँकी छैन — सबै पूरा भयो",
@@ -636,7 +638,11 @@
     "sectionHeader": "सेक्सन",
     "classTeacherHeader": "कक्षा शिक्षक",
     "studentsHeader": "विद्यार्थी",
-    "confirmDelete": "{{name}} मेटाउने?"
+    "confirmDelete": "{{name}} मेटाउने?",
+    "searchPlaceholder": "कक्षा वा सेक्सन खोज्नुहोस्…",
+    "allTeachers": "सबै कक्षा शिक्षक",
+    "unassigned": "तोकिएको छैन",
+    "noMatches": "तपाईंको फिल्टरसँग मिल्ने कक्षा भेटिएन।"
   },
   "events": {
     "eventUpdated": "कार्यक्रम अद्यावधिक भयो",
@@ -1174,7 +1180,10 @@
     "noClassesYet": "अहिलेसम्म कुनै कक्षा सेट गरिएको छैन",
     "standards": "कक्षाहरू",
     "standardsHeader": "कक्षाहरू",
-    "standardsHint": "यो विषय सबै कक्षाको लागि उपलब्ध बनाउन सबै अनचेक छोड्नुहोस्।"
+    "standardsHint": "यो विषय सबै कक्षाको लागि उपलब्ध बनाउन सबै अनचेक छोड्नुहोस्।",
+    "searchPlaceholder": "नाम वा कोडले खोज्नुहोस्…",
+    "allStandardsFilter": "सबै कक्षा",
+    "noMatches": "तपाईंको फिल्टरसँग मिल्ने विषय भेटिएन।"
   },
   "timetable": {
     "periodSaved": "पिरियड सुरक्षित भयो",

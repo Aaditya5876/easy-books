@@ -21,6 +21,7 @@ import { ExternalLink, FileText, Calendar, Hash, User, Phone, Building2, Layers,
 import { motion } from 'framer-motion';
 import PageLoader from '../components/PageLoader';
 import EmptyState from '../components/EmptyState';
+import { useRole } from '@/lib/useRole';
 
 // ─── Category config ──────────────────────────────────────────────────────────
 const CATEGORY_CONFIG = {
@@ -113,6 +114,7 @@ const remarkColors = {
 // ─── Main component ───────────────────────────────────────────────────────────
 export default function Memo() {
   const { t } = useTranslation();
+  const { canCreate } = useRole();
   const companyId = getActiveCompanyId();
   const remarkLabel = (r) => t(REMARK_LABEL_KEYS[r] || '', { defaultValue: r });
   const categories = CATEGORIES.map(c => ({ ...c, label: t(c.labelKey, { defaultValue: c.label }) }));
@@ -449,11 +451,11 @@ export default function Memo() {
               icon={FileText}
               title={t('memo.noDocumentsYet', { defaultValue: 'No documents yet' })}
               description={t('memo.addFirstDocumentDescription', { defaultValue: 'Add your first document record for this category.' })}
-              action={
+              action={canCreate ? (
                 <Button onClick={() => setShowAdd(true)}>
                   <Plus className="w-4 h-4 mr-2" />{t('memo.addFirstRecord', { defaultValue: 'Add First Record' })}
                 </Button>
-              }
+              ) : null}
             />
           ) : (
             <DataTable

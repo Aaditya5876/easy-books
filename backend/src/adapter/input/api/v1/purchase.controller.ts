@@ -32,7 +32,7 @@ export class PurchaseController {
   }
 
   @Post()
-  @Roles('STAFF', 'ACCOUNTANT', 'ADMIN')
+  @Roles('ACCOUNTANT', 'ADMIN')
   @ApiOperation({ summary: 'Create a purchase order (auto-generates number, increases stock, posts to ledger)' })
   create(@Body() body: any) {
     return this.service.create(body);

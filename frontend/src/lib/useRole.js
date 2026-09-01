@@ -22,11 +22,25 @@ export function useRole() {
     canCreate:      isAdmin || isAccountant,  // ADMIN + ACCOUNTANT
     canEdit:        isAdmin || isAccountant,  // ADMIN + ACCOUNTANT
     canDelete:      isAdmin,                  // ADMIN only
-    // Classes/Subjects/Routine/Study Materials are TEACHER-only nav items (their
-    // whole purpose is teacher self-service) and the backend grants TEACHER write
-    // access there specifically — use this instead of canCreate/canEdit/canDelete
-    // on those four pages only.
-    canManageAcademicContent: isAdmin || isAccountant || isTeacher,
+    // A handful of delete endpoints (students, school events, ...) have no
+    // @Roles() override and inherit the school controller's class-level
+    // @Roles('STAFF','ACCOUNTANT','ADMIN') — wider than the generic
+    // ADMIN-only `canDelete` above. Use this instead on those specific pages.
+    canDeleteRecords: isAdmin || isAccountant || isStaff,
+    // Bank accounts / inventory deletes are explicitly @Roles('ACCOUNTANT','ADMIN')
+    // on the backend — narrower than canDeleteRecords, wider than canDelete.
+    canDeleteFinancialRecords: isAdmin || isAccountant,
+    // A few create/update endpoints (school notices, ...) have no @Roles()
+    // override and inherit @Roles('STAFF','ACCOUNTANT','ADMIN') — wider than
+    // the generic ADMIN+ACCOUNTANT-only `canCreate`/`canEdit` above.
+    canCreateRecords: isAdmin || isAccountant || isStaff,
+    canEditRecords: isAdmin || isAccountant || isStaff,
+    // Classes/Subjects/Routine/Study Materials grant create/update to
+    // STAFF/ACCOUNTANT/ADMIN/TEACHER on the backend (TEACHER additionally,
+    // since these are also teacher self-service pages) — use this instead of
+    // canCreate/canEdit on those four pages only. (deleteClass stays ADMIN-only
+    // — keep using canDelete for that one action.)
+    canManageAcademicContent: isAdmin || isAccountant || isStaff || isTeacher,
     canManageUsers: isAdmin,                  // ADMIN only
     canProcessPayroll: isAdmin,               // ADMIN only
     canViewPayroll: isAdmin || isAccountant,  // ADMIN + ACCOUNTANT

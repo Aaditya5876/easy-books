@@ -223,6 +223,7 @@ export default function SchoolDashboard() {
   const [insightsDialog, setInsightsDialog] = useState(false);
   const [insights, setInsights] = useState(null);
   const [insightsLoading, setInsightsLoading] = useState(false);
+  const [pendingFeesClassFilter, setPendingFeesClassFilter] = useState('all');
 
   const { data, isLoading } = useQuery({
     queryKey: ['school-dashboard', companyId],
@@ -302,6 +303,11 @@ export default function SchoolDashboard() {
       setInsightsLoading(false);
     }
   }
+
+  const pendingFeesClasses = [...new Set((data?.pendingFeesList ?? []).map(row => row.className))].sort();
+  const filteredPendingFees = pendingFeesClassFilter === 'all'
+    ? (data?.pendingFeesList ?? [])
+    : (data?.pendingFeesList ?? []).filter(row => row.className === pendingFeesClassFilter);
 
   return (
     <div className="p-6 space-y-6">
@@ -440,14 +446,28 @@ export default function SchoolDashboard() {
       {/* Pending fees table — financial roles only */}
       {showFinancials && (
         <div className="bg-white rounded-xl border border-border">
-          <div className="px-5 py-4 border-b border-border flex items-center justify-between">
+          <div className="px-5 py-4 border-b border-border flex items-center justify-between gap-3 flex-wrap">
             <h2 className="font-semibold text-sm">{t('dashboard.pendingFeesTitle', { defaultValue: 'Students with Pending Fees' })}</h2>
-            <span className="text-xs text-muted-foreground">{t('dashboard.nStudents', { defaultValue: '{{count}} students', count: data?.studentsWithDues ?? 0 })}</span>
+            <div className="flex items-center gap-3">
+              {pendingFeesClasses.length > 1 && (
+                <select
+                  value={pendingFeesClassFilter}
+                  onChange={e => setPendingFeesClassFilter(e.target.value)}
+                  className="text-xs border rounded-md px-2 py-1.5 bg-background focus:outline-none focus:ring-2 focus:ring-ring"
+                >
+                  <option value="all">{t('dashboard.allClasses', { defaultValue: 'All classes' })}</option>
+                  {pendingFeesClasses.map(cls => <option key={cls} value={cls}>{cls}</option>)}
+                </select>
+              )}
+              <span className="text-xs text-muted-foreground">{t('dashboard.nStudents', { defaultValue: '{{count}} students', count: data?.studentsWithDues ?? 0 })}</span>
+            </div>
           </div>
           {isLoading ? (
             <div className="p-8 text-center text-muted-foreground text-sm">{t('common.loading', { defaultValue: 'Loading…' })}</div>
           ) : data?.pendingFeesList?.length === 0 ? (
             <div className="p-8 text-center text-muted-foreground text-sm">{t('dashboard.allFeesCollected', { defaultValue: 'All fees are collected — great work!' })}</div>
+          ) : filteredPendingFees.length === 0 ? (
+            <div className="p-8 text-center text-muted-foreground text-sm">{t('dashboard.noPendingFeesForClass', { defaultValue: 'No pending fees for this class' })}</div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
@@ -460,7 +480,7 @@ export default function SchoolDashboard() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
-                  {(data?.pendingFeesList ?? []).slice(0, 10).map((row) => (
+                  {filteredPendingFees.slice(0, 10).map((row) => (
                     <tr key={row.id} className="hover:bg-muted/20">
                       <td className="px-5 py-3 font-medium">{row.studentName}</td>
                       <td className="px-5 py-3 text-muted-foreground">{row.className}</td>

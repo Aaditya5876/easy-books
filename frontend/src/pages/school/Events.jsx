@@ -184,7 +184,7 @@ function EventDialog({ open, onClose, event, mode = 'AD' }) {
 
 export default function Events({ mode: propMode = 'AD' }) {
   const { t } = useTranslation();
-  const { canEdit, canDelete } = useRole();
+  const { canEdit, canDeleteRecords } = useRole();
   const qc = useQueryClient();
   const [dialog, setDialog] = useState({ open: false, event: null });
   const [mode, setMode] = useState(propMode);
@@ -343,7 +343,7 @@ export default function Events({ mode: propMode = 'AD' }) {
                   <Pencil className="h-4 w-4" />
                 </Button>
               )}
-              {canDelete && (
+              {canDeleteRecords && (
                 <Button size="icon" variant="ghost" onClick={async () => { if (await confirm({ description: t('events.deleteConfirm', { defaultValue: 'Delete this event?' }), variant: 'destructive' })) remove.mutate(e.id); }}>
                   <Trash2 className="h-4 w-4 text-destructive" />
                 </Button>

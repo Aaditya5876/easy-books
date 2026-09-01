@@ -561,7 +561,8 @@ const INVOICE_PAGE_SIZE = 50;
 export default function Fees() {
   const { t } = useTranslation();
   const companyId = getActiveCompanyId();
-  const { canDelete } = useRole();
+  const { canDelete, isAdmin, isAccountant } = useRole();
+  const canVerifyPayments = isAdmin || isAccountant;
   const qc = useQueryClient();
   const [tab, setTab] = useState('invoices');
   const [filterStatus, setFilterStatus] = useState('');
@@ -580,7 +581,7 @@ export default function Fees() {
   const { data: pendingProofs = [] } = useQuery({
     queryKey: ['fee-payments-pending'],
     queryFn: () => feesApi.listPendingProofs().then(r => r.data),
-    enabled: !!companyId,
+    enabled: !!companyId && canVerifyPayments,
   });
 
   useEffect(() => {
@@ -674,9 +675,11 @@ export default function Fees() {
           <p className="text-muted-foreground text-sm mt-1">{t('fees.feeManagementSubtitle', { defaultValue: 'Fee structures and student invoices' })}</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={() => setVerifyDialog(true)} className="self-end">
-            <ScanLine className="w-4 h-4 mr-2" /> {t('fees.scanReceiptQr', { defaultValue: 'Scan Receipt QR' })}
-          </Button>
+          {canVerifyPayments && (
+            <Button variant="outline" onClick={() => setVerifyDialog(true)} className="self-end">
+              <ScanLine className="w-4 h-4 mr-2" /> {t('fees.scanReceiptQr', { defaultValue: 'Scan Receipt QR' })}
+            </Button>
+          )}
           {tab === 'structures' && (
             <Button onClick={() => setStructureDialog({ mode: 'add' })}>
               <Plus className="w-4 h-4 mr-2" /> {t('fees.addFee', { defaultValue: 'Add Fee' })}
@@ -689,12 +692,16 @@ export default function Fees() {
                 <input type="date" value={invoiceDate} onChange={e => setInvoiceDate(e.target.value)}
                   className="flex h-9 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm" />
               </div>
-              <Button variant="outline" onClick={() => releaseBulk.mutate()} disabled={releaseBulk.isPending} className="self-end">
-                <Send className="w-4 h-4 mr-2" /> {t('fees.releaseInvoices', { defaultValue: 'Release Invoices' })}
-              </Button>
-              <Button variant="outline" onClick={() => setBulkDialog(true)} className="self-end">
-                <Users className="w-4 h-4 mr-2" /> {t('fees.billingRun', { defaultValue: 'Monthly Billing Run' })}
-              </Button>
+              {canVerifyPayments && (
+                <Button variant="outline" onClick={() => releaseBulk.mutate()} disabled={releaseBulk.isPending} className="self-end">
+                  <Send className="w-4 h-4 mr-2" /> {t('fees.releaseInvoices', { defaultValue: 'Release Invoices' })}
+                </Button>
+              )}
+              {canVerifyPayments && (
+                <Button variant="outline" onClick={() => setBulkDialog(true)} className="self-end">
+                  <Users className="w-4 h-4 mr-2" /> {t('fees.billingRun', { defaultValue: 'Monthly Billing Run' })}
+                </Button>
+              )}
               <Button onClick={() => setInvoiceDialog(true)} className="self-end">
                 <Plus className="w-4 h-4 mr-2" /> {t('fees.newInvoice', { defaultValue: 'New Invoice' })}
               </Button>
@@ -707,7 +714,7 @@ export default function Fees() {
       <div className="flex gap-1 bg-muted p-1 rounded-lg w-fit flex-wrap">
         {[
           { id: 'invoices', label: t('fees.feeInvoices', { defaultValue: 'Fee Invoices' }) },
-          { id: 'pendingProofs', label: t('fees.pendingProofs', { defaultValue: 'Pending Proofs' }), count: pendingProofs.length },
+          ...(canVerifyPayments ? [{ id: 'pendingProofs', label: t('fees.pendingProofs', { defaultValue: 'Pending Proofs' }), count: pendingProofs.length }] : []),
           { id: 'profile', label: t('fees.studentFees', { defaultValue: 'Student Fees' }) },
           { id: 'structures', label: t('fees.feeStructures', { defaultValue: 'Fee Structures' }) },
           { id: 'heads', label: t('fees.feeHeads', { defaultValue: 'Fee Heads' }) },
@@ -728,7 +735,7 @@ export default function Fees() {
         ))}
       </div>
 
-      {tab === 'pendingProofs' && <PendingProofsTab />}
+      {tab === 'pendingProofs' && canVerifyPayments && <PendingProofsTab />}
       {tab === 'profile' && <StudentFeeProfileTab />}
       {tab === 'heads' && <FeeHeadsTab />}
       {tab === 'packages' && <FeePackagesTab />}
@@ -867,7 +874,7 @@ export default function Fees() {
                           </td>
                           <td className="px-5 py-3" onClick={e => e.stopPropagation()}>
                             <div className="flex gap-1 flex-wrap">
-                              {!inv.releasedAt && (
+                              {!inv.releasedAt && canVerifyPayments && (
                                 <Button size="sm" variant="outline" className="text-blue-600 hover:bg-blue-50" disabled={releaseOne.isPending} onClick={() => releaseOne.mutate(inv.id)} title={t('fees.release', { defaultValue: 'Release to student portal' })}>
                                   <Send className="w-3.5 h-3.5 mr-1" /> {t('fees.release', { defaultValue: 'Release' })}
                                 </Button>

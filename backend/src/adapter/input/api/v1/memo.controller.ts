@@ -29,12 +29,14 @@ export class MemoController {
   }
 
   @Post()
+  @Roles('ACCOUNTANT', 'ADMIN')
   @ApiOperation({ summary: 'Create a memo document' })
   create(@Body(new ZodValidationPipe(CreateMemoDocumentSchema)) dto: CreateMemoDocumentDTO) {
     return this.service.create(dto);
   }
 
   @Put(':id')
+  @Roles('ACCOUNTANT', 'ADMIN')
   @ApiOperation({ summary: 'Update a memo document' })
   @ApiQuery({ name: 'companyId', required: true })
   update(
@@ -46,6 +48,7 @@ export class MemoController {
   }
 
   @Delete(':id')
+  @Roles('ACCOUNTANT', 'ADMIN')
   @ApiOperation({ summary: 'Delete a memo document' })
   @ApiQuery({ name: 'companyId', required: true })
   remove(@Param('id') id: string, @Query('companyId') companyId: string) {

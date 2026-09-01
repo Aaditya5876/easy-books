@@ -3,8 +3,10 @@ import AcademicYear from './AcademicYear';
 import Events from './Events';
 import CalendarPage from '../CalendarPage';
 import { Button } from '@/components/ui/button';
+import { useRole } from '@/lib/useRole';
 
 export default function CalendarEvents() {
+  const { isLibrarian } = useRole();
   const [view, setView] = useState('calendar'); // calendar | years | events
   const [calendarMode, setCalendarMode] = useState('AD'); // AD | BS
 
@@ -17,7 +19,9 @@ export default function CalendarEvents() {
         </div>
         <div className="flex gap-2">
           <Button variant={view==='calendar'? 'default':'ghost'} onClick={() => setView('calendar')}>Calendar</Button>
-          <Button variant={view==='years'? 'default':'ghost'} onClick={() => setView('years')}>Academic Years</Button>
+          {!isLibrarian && (
+            <Button variant={view==='years'? 'default':'ghost'} onClick={() => setView('years')}>Academic Years</Button>
+          )}
           <Button variant={view==='events'? 'default':'ghost'} onClick={() => setView('events')}>Events</Button>
           <Button variant="outline" onClick={() => setCalendarMode(m => m === 'AD' ? 'BS' : 'AD')}>{calendarMode === 'AD' ? 'Show BS' : 'Show AD'}</Button>
         </div>

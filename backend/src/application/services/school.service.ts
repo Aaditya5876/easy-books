@@ -806,7 +806,21 @@ export class SchoolService {
       if (!exam) throw new NotFoundException('Exam not found');
       data.examName = exam.name;
     }
-    return this.prisma.examResult.create({ data });
+    const result = await this.prisma.examResult.create({ data });
+
+    try {
+      await this.portalNotifications.notifyStudent(data.companyId, result.studentId, {
+        title: '📊 New exam result available',
+        message: `Your result for "${result.examName}" has been published — tap to view your marks.`,
+        link: '/portal/results',
+        referenceType: 'EXAM_RESULT',
+        referenceId: result.id,
+      });
+    } catch (err) {
+      console.error(`Exam result notification failed for student ${result.studentId}:`, (err as Error).message);
+    }
+
+    return result;
   }
 
   async updateExamResult(id: string, companyId: string, body: any) {
@@ -818,7 +832,21 @@ export class SchoolService {
       if (!exam) throw new NotFoundException('Exam not found');
       data.examName = exam.name;
     }
-    return this.prisma.examResult.update({ where: { id }, data });
+    const result = await this.prisma.examResult.update({ where: { id }, data });
+
+    try {
+      await this.portalNotifications.notifyStudent(companyId, result.studentId, {
+        title: '📊 Exam result updated',
+        message: `Your result for "${result.examName}" has been updated — tap to view your marks.`,
+        link: '/portal/results',
+        referenceType: 'EXAM_RESULT',
+        referenceId: result.id,
+      });
+    } catch (err) {
+      console.error(`Exam result notification failed for student ${result.studentId}:`, (err as Error).message);
+    }
+
+    return result;
   }
 
   async deleteExamResult(id: string, companyId: string) {
@@ -855,9 +883,29 @@ export class SchoolService {
     roomNumber?: string;
     notes?: string;
   }) {
-    return this.prisma.examSchedule.create({
+    const schedule = await this.prisma.examSchedule.create({
       data: { ...data, examDate: new Date(data.examDate) },
     });
+
+    const students = await this.prisma.student.findMany({
+      where: { companyId: data.companyId, classId: data.classId, status: 'ACTIVE' },
+      select: { id: true },
+    });
+    for (const s of students) {
+      try {
+        await this.portalNotifications.notifyStudent(data.companyId, s.id, {
+          title: '📅 Exam scheduled',
+          message: `"${data.examName}" has been scheduled — check your exam date.`,
+          link: '/portal/exam-schedule',
+          referenceType: 'EXAM_SCHEDULE',
+          referenceId: schedule.id,
+        });
+      } catch (err) {
+        console.error(`Exam schedule notification failed for student ${s.id}:`, (err as Error).message);
+      }
+    }
+
+    return schedule;
   }
 
   // Creates one date-sheet in one go: a shared exam name/class plus a table of
@@ -912,10 +960,30 @@ export class SchoolService {
   async updateExamSchedule(id: string, companyId: string, body: any) {
     const existing = await this.prisma.examSchedule.findFirst({ where: { id, companyId } });
     if (!existing) throw new NotFoundException('Exam schedule not found');
-    return this.prisma.examSchedule.update({
+    const updated = await this.prisma.examSchedule.update({
       where: { id },
       data: clean(body, ['classId', 'subjectId', 'examName', 'examDate', 'startTime', 'endTime', 'roomNumber', 'notes']),
     });
+
+    const students = await this.prisma.student.findMany({
+      where: { companyId, classId: updated.classId, status: 'ACTIVE' },
+      select: { id: true },
+    });
+    for (const s of students) {
+      try {
+        await this.portalNotifications.notifyStudent(companyId, s.id, {
+          title: '📅 Exam schedule updated',
+          message: `"${updated.examName}" schedule has changed — check the latest date and time.`,
+          link: '/portal/exam-schedule',
+          referenceType: 'EXAM_SCHEDULE',
+          referenceId: updated.id,
+        });
+      } catch (err) {
+        console.error(`Exam schedule notification failed for student ${s.id}:`, (err as Error).message);
+      }
+    }
+
+    return updated;
   }
 
   async deleteExamSchedule(id: string, companyId: string) {
@@ -1161,10 +1229,30 @@ export class SchoolService {
   async updateHomework(id: string, companyId: string, body: any) {
     const hw = await this.prisma.homework.findFirst({ where: { id, companyId } });
     if (!hw) throw new NotFoundException('Homework not found');
-    return this.prisma.homework.update({
+    const updated = await this.prisma.homework.update({
       where: { id },
       data: clean(body, ['classId', 'subjectId', 'title', 'description', 'dueDate', 'fileUrl']),
     });
+
+    const students = await this.prisma.student.findMany({
+      where: { companyId, classId: updated.classId, status: 'ACTIVE' },
+      select: { id: true },
+    });
+    for (const s of students) {
+      try {
+        await this.portalNotifications.notifyStudent(companyId, s.id, {
+          title: '📝 Homework updated',
+          message: `"${updated.title}" has been updated — due ${updated.dueDate.toLocaleDateString('en-NP', { day: 'numeric', month: 'short', year: 'numeric' })}.`,
+          link: '/portal/homework',
+          referenceType: 'HOMEWORK',
+          referenceId: updated.id,
+        });
+      } catch (err) {
+        console.error(`Homework notification failed for student ${s.id}:`, (err as Error).message);
+      }
+    }
+
+    return updated;
   }
 
   async deleteHomework(id: string, companyId: string) {
