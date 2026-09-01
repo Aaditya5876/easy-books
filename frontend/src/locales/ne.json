@@ -2616,6 +2616,8 @@
     "creatingClient": "बनाउँदै…",
     "createClientButton": "ग्राहक बनाउनुहोस् र लगइन पठाउनुहोस्",
     "provisionFailed": "ग्राहक बनाउन असफल भयो",
+    "clientCreatedEmailed": "ग्राहक बनाइयो — लगइन विवरण {{email}} मा इमेल गरियो",
+    "clientCreatedEmailFailed": "ग्राहक बनाइयो, तर इनभाइट इमेल पठाउन असफल भयो — यो पासवर्ड म्यानुअल रूपमा साझा गर्नुहोस्",
     "systemDefaultsHeading": "प्रणाली पूर्वनिर्धारण (पढ्ने-मात्र)",
     "currencyLabel": "मुद्रा",
     "currencyValue": "NPR — नेपाली रुपैयाँ",

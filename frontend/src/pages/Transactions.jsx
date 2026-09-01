@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import { toast } from 'sonner';
 import { api } from '@/api/adapter';
 import { uploadApi } from '@/api';
 import { getActiveCompanyId } from '@/lib/companyContext';
@@ -136,7 +137,7 @@ export default function Transactions() {
       if (!url) throw new Error('No URL returned from upload');
       setBankForm(f => ({ ...f, qr_code_url: url }));
     } catch (err) {
-      alert(err?.response?.data?.message || t('transactions.qrUploadFailed', { defaultValue: 'QR upload failed' }));
+      toast.error(err?.response?.data?.message || t('transactions.qrUploadFailed', { defaultValue: 'QR upload failed' }));
     } finally {
       setUploadingQr(false);
     }
@@ -237,7 +238,7 @@ export default function Transactions() {
       await api.Transaction.update(id, { status: toApiEnum(newStatusLower) });
     } catch (err) {
       setTransactions(previous);
-      alert(err?.response?.data?.message || t('transactions.failedToUpdateStatus', { defaultValue: 'Failed to update status.' }));
+      toast.error(err?.response?.data?.message || t('transactions.failedToUpdateStatus', { defaultValue: 'Failed to update status.' }));
     }
   }
 

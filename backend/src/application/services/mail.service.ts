@@ -33,7 +33,12 @@ export class MailService {
     }
   }
 
-  async sendInvitation(email: string, name: string, companyName: string, tempPassword: string): Promise<void> {
+  // Returns whether the email actually went out — callers that have no other
+  // way to hand over the temp password (e.g. client provisioning) need this
+  // to decide whether to fall back to displaying it. Never throws: existing
+  // callers that don't check the return value keep their current behavior
+  // (invite/user creation still succeeds even if the email failed).
+  async sendInvitation(email: string, name: string, companyName: string, tempPassword: string): Promise<boolean> {
     const from = this.config.get<string>('SMTP_FROM', 'OneBook Nepal <noreply@easybooks.com.np>');
     try {
       await this.transporter.sendMail({
@@ -42,8 +47,10 @@ export class MailService {
         subject: `You've been invited to ${companyName} on OneBook`,
         html: this.inviteTemplate(name, companyName, email, tempPassword),
       });
+      return true;
     } catch (err) {
       this.logger.error(`Failed to send invite to ${email}: ${err.message}`);
+      return false;
     }
   }
 

@@ -115,13 +115,12 @@ export class UserServiceImpl {
       await this.prisma.userCompany.create({ data: { userId: requesterId, companyId: company.id, isDefault: false } });
     }
 
-    try {
-      await this.mailService.sendInvitation(data.adminEmail, data.adminName, company.name, tempPassword);
-    } catch (err) {
-      console.error('Client-provisioning invite email failed:', (err as Error).message);
-    }
+    const emailSent = await this.mailService.sendInvitation(data.adminEmail, data.adminName, company.name, tempPassword);
 
-    return { company, admin, tempPassword };
+    // tempPassword is still returned even when emailSent is true — the
+    // frontend only displays it as a fallback if delivery failed, but the
+    // caller (SUPER_ADMIN) has no other way to retrieve it after this response.
+    return { company, admin, tempPassword, emailSent };
   }
 
   async changeRole(targetUserId: string, companyId: string, newRole: string, changedByRole: string) {

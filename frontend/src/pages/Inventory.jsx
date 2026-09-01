@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { motion } from 'framer-motion';
+import { toast } from 'sonner';
 import { api, apiAuth } from '@/api/adapter';
 import { inventoryApi } from '@/api';
 import { getActiveCompanyId } from '@/lib/companyContext';
@@ -209,13 +210,13 @@ export default function Inventory() {
       setPassword('');
       setShowConfirmDialog(true);
     } catch {
-      alert(t('inventory.invalidPasswordAlert', { defaultValue: 'Invalid password or authentication failed' }));
+      toast.error(t('inventory.invalidPasswordAlert', { defaultValue: 'Invalid password or authentication failed' }));
       setPassword('');
     }
   };
 
   const handleUpdateClick = () => {
-    if (!selectedItem) { alert(t('inventory.selectRowFirstAlert', { defaultValue: 'Please select an item from the table first by clicking on a row.' })); return; }
+    if (!selectedItem) { toast.error(t('inventory.selectRowFirstAlert', { defaultValue: 'Please select an item from the table first by clicking on a row.' })); return; }
     setUpdateForm({
       unit_selling_price: selectedItem.unit_selling_price || 0,
       unit_purchase_price: selectedItem.unit_purchase_price || 0,
@@ -232,7 +233,7 @@ export default function Inventory() {
       setUpdatePassword('');
       setShowUpdateDialog(true);
     } catch {
-      alert(t('inventory.invalidPasswordAlert', { defaultValue: 'Invalid password or authentication failed' }));
+      toast.error(t('inventory.invalidPasswordAlert', { defaultValue: 'Invalid password or authentication failed' }));
       setUpdatePassword('');
     }
   };
@@ -252,7 +253,7 @@ export default function Inventory() {
     if (updateForm.unit_purchase_price !== '') payload.unit_purchase_price = updateForm.unit_purchase_price;
     if (updateForm.stock_location) payload.stock_location = updateForm.stock_location;
     if (updateForm.image_url) payload.image_url = updateForm.image_url;
-    if (Object.keys(payload).length === 0) { alert(t('inventory.updateAtLeastOneFieldAlert', { defaultValue: 'Update at least one field before saving.' })); return; }
+    if (Object.keys(payload).length === 0) { toast.error(t('inventory.updateAtLeastOneFieldAlert', { defaultValue: 'Update at least one field before saving.' })); return; }
     await api.InventoryItem.update(selectedItem.id, payload);
     setShowUpdateDialog(false);
     setSelectedItem(null);
@@ -268,7 +269,7 @@ export default function Inventory() {
   };
 
   async function handleAdjustClick() {
-    if (!selectedItem) { alert(t('inventory.selectItemFirstAlert', { defaultValue: 'Please select an item from the table first.' })); return; }
+    if (!selectedItem) { toast.error(t('inventory.selectItemFirstAlert', { defaultValue: 'Please select an item from the table first.' })); return; }
     setAdjForm({ type: 'ADDITION', quantity: '', reason: '' });
     setShowAdjustDialog(true);
   }
@@ -286,14 +287,14 @@ export default function Inventory() {
       setSelectedItem(null);
       loadItems();
     } catch (err) {
-      alert(err?.response?.data?.message || t('inventory.adjustmentFailedAlert', { defaultValue: 'Adjustment failed' }));
+      toast.error(err?.response?.data?.message || t('inventory.adjustmentFailedAlert', { defaultValue: 'Adjustment failed' }));
     } finally {
       setAdjSubmitting(false);
     }
   }
 
   async function handleViewLog() {
-    if (!selectedItem) { alert(t('inventory.selectItemFirstAlert', { defaultValue: 'Please select an item from the table first.' })); return; }
+    if (!selectedItem) { toast.error(t('inventory.selectItemFirstAlert', { defaultValue: 'Please select an item from the table first.' })); return; }
     try {
       const res = await inventoryApi.getAdjustments(selectedItem.id);
       const data = res?.data?.data ?? res?.data ?? [];

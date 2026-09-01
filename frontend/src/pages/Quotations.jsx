@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import { toast } from 'sonner';
 import { api } from '@/api/adapter';
 import { quotationApi } from '@/api';
 import { getActiveCompanyId } from '@/lib/companyContext';
@@ -290,7 +291,7 @@ export default function Quotations() {
       await quotationApi.convert(quotation.id);
       await loadData();
     } catch (err) {
-      alert(err?.response?.data?.message || t('quotations.convertFailed', { defaultValue: 'Failed to convert quotation to sale' }));
+      toast.error(err?.response?.data?.message || t('quotations.convertFailed', { defaultValue: 'Failed to convert quotation to sale' }));
     } finally {
       setConverting(null);
     }

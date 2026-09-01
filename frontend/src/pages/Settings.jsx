@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
 import { api } from '@/api/adapter';
+import { toast } from 'sonner';
 import { usersApi, companyApi, recycleBinApi, bankAccountApi, uploadApi, notificationsApi, fiscalYearApi } from '@/api';
 import apiClient from '@/api/client';
 import { useAuth } from '@/lib/AuthContext';
@@ -202,7 +203,7 @@ export default function Settings() {
       setClosePassword('');
       await loadFiscalYearStatus();
     } catch (err) {
-      alert(err?.response?.data?.message || t('settings.failedCloseFiscalYear', { defaultValue: 'Failed to close fiscal year' }));
+      toast.error(err?.response?.data?.message || t('settings.failedCloseFiscalYear', { defaultValue: 'Failed to close fiscal year' }));
     } finally {
       setClosingFiscalYear(false);
     }
@@ -217,7 +218,7 @@ export default function Settings() {
       setReopenPassword('');
       await loadFiscalYearStatus();
     } catch (err) {
-      alert(err?.response?.data?.message || t('settings.failedReopenFiscalYear', { defaultValue: 'Failed to reopen fiscal year' }));
+      toast.error(err?.response?.data?.message || t('settings.failedReopenFiscalYear', { defaultValue: 'Failed to reopen fiscal year' }));
     } finally {
       setReopenSaving(false);
     }
@@ -277,7 +278,7 @@ export default function Settings() {
       setAutomationSaved(true);
       setTimeout(() => setAutomationSaved(false), 2000);
     } catch {
-      alert(t('settings.failedSaveAutomation', { defaultValue: 'Failed to save automation settings' }));
+      toast.error(t('settings.failedSaveAutomation', { defaultValue: 'Failed to save automation settings' }));
     } finally {
       setAutomationSaving(false);
     }
@@ -296,7 +297,7 @@ export default function Settings() {
       await bankAccountApi.update(bankAccountId, { qrCodeUrl: uploadRes.data.url });
       await loadBankAccounts();
     } catch {
-      alert(t('settings.failedUploadQr', { defaultValue: 'Failed to upload QR code' }));
+      toast.error(t('settings.failedUploadQr', { defaultValue: 'Failed to upload QR code' }));
     } finally {
       setQrUploadingId(null);
     }
@@ -320,7 +321,7 @@ export default function Settings() {
       setBankForm({ bankName: '', accountNumber: '', accountType: '', branch: '', currentBalance: '', paymentType: 'BANK' });
       await loadBankAccounts();
     } catch (err) {
-      alert(err?.response?.data?.message || t('settings.failedAddBank', { defaultValue: 'Failed to add bank account' }));
+      toast.error(err?.response?.data?.message || t('settings.failedAddBank', { defaultValue: 'Failed to add bank account' }));
     } finally {
       setAddBankSaving(false);
     }
@@ -410,7 +411,7 @@ export default function Settings() {
       else { setShowInvite(false); setInviteForm({ name: '', email: '', role: 'STAFF' }); }
       loadUsers();
     } catch (err) {
-      alert(err?.response?.data?.message || t('settings.failedInviteUser', { defaultValue: 'Failed to invite user' }));
+      toast.error(err?.response?.data?.message || t('settings.failedInviteUser', { defaultValue: 'Failed to invite user' }));
     } finally {
       setInviteLoading(false);
     }
@@ -422,7 +423,7 @@ export default function Settings() {
       await usersApi.changeRole(userId, activeCompanyId, newRole);
       loadUsers();
     } catch (err) {
-      alert(err?.response?.data?.message || t('settings.failedChangeRole', { defaultValue: 'Failed to change role' }));
+      toast.error(err?.response?.data?.message || t('settings.failedChangeRole', { defaultValue: 'Failed to change role' }));
     } finally {
       setRoleChanging(null);
     }
@@ -441,7 +442,7 @@ export default function Settings() {
       await usersApi.remove(u.id, activeCompanyId);
       loadUsers();
     } catch (err) {
-      alert(err?.response?.data?.message || t('settings.failedRemoveUser', { defaultValue: 'Failed to remove user' }));
+      toast.error(err?.response?.data?.message || t('settings.failedRemoveUser', { defaultValue: 'Failed to remove user' }));
     } finally {
       setRemovingUserId(null);
     }
@@ -477,7 +478,7 @@ export default function Settings() {
       setPrefsSaved(true);
       setTimeout(() => setPrefsSaved(false), 2000);
     } catch {
-      alert(t('settings.failedSavePreferences', { defaultValue: 'Failed to save preferences' }));
+      toast.error(t('settings.failedSavePreferences', { defaultValue: 'Failed to save preferences' }));
     } finally {
       setPrefsSaving(false);
     }
@@ -507,7 +508,7 @@ export default function Settings() {
       setPackageSaved(true);
       setTimeout(() => setPackageSaved(false), 2000);
     } catch (err) {
-      alert(err?.response?.data?.message || t('settings.packageSaveFailed', { defaultValue: 'Failed to update package' }));
+      toast.error(err?.response?.data?.message || t('settings.packageSaveFailed', { defaultValue: 'Failed to update package' }));
     } finally {
       setPackageSaving(false);
     }
@@ -524,11 +525,18 @@ export default function Settings() {
         adminEmail: provisionForm.adminEmail,
         enabledModules: PACKAGE_MODULES[provisionForm.package] || [],
       });
-      if (res.data.tempPassword) setTempPassword(res.data.tempPassword);
+      if (res.data.emailSent) {
+        toast.success(t('settings.clientCreatedEmailed', { defaultValue: 'Client created — login details emailed to {{email}}', email: provisionForm.adminEmail }));
+      } else if (res.data.tempPassword) {
+        // Email delivery failed — this is the only remaining way to hand over
+        // the password, so fall back to showing it instead of losing it.
+        toast.error(t('settings.clientCreatedEmailFailed', { defaultValue: 'Client created, but the invite email failed to send — share this password manually' }));
+        setTempPassword(res.data.tempPassword);
+      }
       setProvisionForm({ companyName: '', businessType: 'SCHOOL', adminName: '', adminEmail: '', package: 'STANDARD' });
       loadCompanies();
     } catch (err) {
-      alert(err?.response?.data?.message || t('settings.provisionFailed', { defaultValue: 'Failed to create client' }));
+      toast.error(err?.response?.data?.message || t('settings.provisionFailed', { defaultValue: 'Failed to create client' }));
     } finally {
       setProvisioning(false);
     }

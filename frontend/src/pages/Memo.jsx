@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import { toast } from 'sonner';
 import { api } from '@/api/adapter';
 import { getActiveCompanyId } from '@/lib/companyContext';
 import { adToBs } from '@/lib/nepaliDate';
@@ -150,11 +151,11 @@ export default function Memo() {
     const cat = form.category;
     // Basic required-field guard
     if (cat === 'purchase_bill' && !form.vendor_name?.trim()) {
-      alert(t('memo.vendorNameRequiredAlert', { defaultValue: 'Vendor name is required' }));
+      toast.error(t('memo.vendorNameRequiredAlert', { defaultValue: 'Vendor name is required' }));
       return;
     }
     if (cat !== 'purchase_bill' && cat !== 'supporting_doc' && !form.client_name?.trim()) {
-      alert(t('memo.clientNameRequiredAlert', { defaultValue: 'Client name is required' }));
+      toast.error(t('memo.clientNameRequiredAlert', { defaultValue: 'Client name is required' }));
       return;
     }
 
@@ -203,7 +204,7 @@ export default function Memo() {
       await loadData();
     } catch (error) {
       console.error('Error creating document:', error);
-      alert(t('memo.errorSavingDocument', { defaultValue: 'Error saving document: ' }) + error.message);
+      toast.error(t('memo.errorSavingDocument', { defaultValue: 'Error saving document: ' }) + error.message);
     }
   }
 
@@ -418,7 +419,7 @@ export default function Memo() {
         onAdd={() => setShowAdd(true)}
         addLabel={t('memo.addDocument', { defaultValue: 'Add Document' })}
         onDelete={() => {
-          if (!selectedDoc) { alert(t('memo.selectDocumentToDelete', { defaultValue: 'Please select a document to delete' })); return; }
+          if (!selectedDoc) { toast.error(t('memo.selectDocumentToDelete', { defaultValue: 'Please select a document to delete' })); return; }
           setShowDeleteDialog(true);
         }}
         deleteLabel={t('memo.deleteSelected', { defaultValue: 'Delete Selected' })}
