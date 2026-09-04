@@ -533,12 +533,14 @@ export class SchoolController {
   @ApiQuery({ name: 'companyId', required: true })
   @ApiQuery({ name: 'examName', required: false })
   @ApiQuery({ name: 'studentId', required: false })
+  @ApiQuery({ name: 'classId', required: false })
   listExamResults(
     @Query('companyId') companyId: string,
     @Query('examName') examName?: string,
     @Query('studentId') studentId?: string,
+    @Query('classId') classId?: string,
   ) {
-    return this.service.listExamResults(companyId, examName, studentId);
+    return this.service.listExamResults(companyId, examName, studentId, classId);
   }
 
   @Get('exam-results/report-card')

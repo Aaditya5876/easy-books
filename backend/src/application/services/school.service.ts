@@ -726,12 +726,13 @@ export class SchoolService {
 
   // ── Exam Results ──────────────────────────────────────────────────────────────
 
-  async listExamResults(companyId: string, examName?: string, studentId?: string) {
+  async listExamResults(companyId: string, examName?: string, studentId?: string, classId?: string) {
     return this.prisma.examResult.findMany({
       where: {
         companyId,
         ...(examName ? { examName } : {}),
         ...(studentId ? { studentId } : {}),
+        ...(classId ? { student: { classId } } : {}),
       },
       orderBy: { createdAt: 'desc' },
       include: {

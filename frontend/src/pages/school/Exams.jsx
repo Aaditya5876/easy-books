@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, Trophy, Pencil, Trash2, Eye, Sparkles } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { examResultsApi, examsApi, subjectsApi, studentsApi, aiApi } from '@/api';
+import { examResultsApi, examsApi, subjectsApi, studentsApi, classesApi, aiApi } from '@/api';
 import { confirm } from '@/lib/confirm';
 import { filterSubjectsByClass } from '@/lib/subjectFilter';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -13,7 +13,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
+
+const classLabel = (c) => `${c.name}${c.section ? ` (${c.section})` : ''}`;
 
 // ── Add Exam (creates a tab like "First Terminal" — no marks entry here) ───────
 
@@ -299,8 +302,9 @@ function printReportCard(data, aiRemark) {
   setTimeout(() => w.print(), 300);
 }
 
-function ViewReportCardDialog({ open, onClose, studentId, examName }) {
+function ViewReportCardDialog({ open, onClose, studentId, examName, onEdit }) {
   const { t } = useTranslation();
+  const qc = useQueryClient();
   const [aiComment, setAiComment] = useState('');
   const [aiLoading, setAiLoading] = useState(false);
 
@@ -310,12 +314,22 @@ function ViewReportCardDialog({ open, onClose, studentId, examName }) {
     enabled: open && !!studentId && !!examName,
   });
 
+  const remove = useMutation({
+    mutationFn: (id) => examResultsApi.remove(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['exam-results'] });
+      qc.invalidateQueries({ queryKey: ['report-card', studentId, examName] });
+      toast.success(t('exams.resultDeleted', { defaultValue: 'Result deleted' }));
+    },
+    onError: () => toast.error(t('exams.failedToDelete', { defaultValue: 'Failed to delete' })),
+  });
+
   async function generateComment() {
     if (!cardData) return;
     setAiLoading(true);
     try {
       const res = await aiApi.reportCardComment({
-        companyId,
+        companyId: getActiveCompanyId(),
         studentName: cardData.student?.name,
         examResults: cardData.results?.map(r => ({
           subject: r.subject?.name || 'Subject',
@@ -343,6 +357,35 @@ function ViewReportCardDialog({ open, onClose, studentId, examName }) {
             <div className="text-sm bg-muted rounded-md p-3 space-y-2">
               <div className="font-medium">{cardData.student?.name}</div>
               <div className="text-muted-foreground">{t('exams.subjectsOverall', { count: cardData.results?.length, percentage: cardData.percentage, defaultValue: '{{count}} subjects · {{percentage}}% overall' })}</div>
+
+              <div className="divide-y divide-border/60 border-y border-border/60 -mx-1 my-2">
+                {cardData.results?.map(r => (
+                  <div key={r.id} className="flex items-center justify-between gap-2 px-1 py-1.5">
+                    <span className="truncate">{r.subject?.name || '—'}</span>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="tabular-nums text-xs">
+                        {Number(r.marksObtained).toFixed(0)}/{Number(r.totalMarks).toFixed(0)}
+                        {r.grade ? ` · ${r.grade}` : ''}
+                      </span>
+                      <button
+                        onClick={() => { onClose(); onEdit(r); }}
+                        className="p-1 rounded hover:bg-background text-muted-foreground hover:text-foreground transition-colors"
+                        title={t('exams.editThisResult', { defaultValue: 'Edit this result' })}
+                      >
+                        <Pencil className="w-3 h-3" />
+                      </button>
+                      <button
+                        onClick={async () => { if (await confirm({ description: t('exams.deleteThisResult', { defaultValue: 'Delete this result?' }), variant: 'destructive' })) remove.mutate(r.id); }}
+                        className="p-1 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600 transition-colors"
+                        title={t('exams.delete', { defaultValue: 'Delete' })}
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
               <button
                 type="button"
                 onClick={generateComment}
@@ -378,11 +421,11 @@ function ViewReportCardDialog({ open, onClose, studentId, examName }) {
 export default function Exams() {
   const { t } = useTranslation();
   const companyId = getActiveCompanyId();
-  const qc = useQueryClient();
   const [examDialog, setExamDialog] = useState(false);
   const [entryDialog, setEntryDialog] = useState(null);
   const [viewDialog, setViewDialog] = useState(null);
   const [filterExam, setFilterExam] = useState('');
+  const [filterClass, setFilterClass] = useState('ALL');
   const [activeTab, setActiveTab] = useState('results');
 
   const { data: exams = [] } = useQuery({
@@ -391,19 +434,49 @@ export default function Exams() {
     enabled: !!companyId,
   });
 
-  const { data: results = [], isLoading } = useQuery({
-    queryKey: ['exam-results', companyId, filterExam],
-    queryFn: () => examResultsApi.list(filterExam ? { examName: filterExam } : {}).then(r => r.data),
+  const { data: classes = [] } = useQuery({
+    queryKey: ['classes', companyId],
+    queryFn: () => classesApi.list().then(r => r.data),
     enabled: !!companyId,
   });
 
-  const remove = useMutation({
-    mutationFn: (id) => examResultsApi.remove(id),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['exam-results'] }); toast.success(t('exams.resultDeleted', { defaultValue: 'Result deleted' })); },
-    onError: () => toast.error(t('exams.failedToDelete', { defaultValue: 'Failed to delete' })),
+  const { data: results = [], isLoading } = useQuery({
+    queryKey: ['exam-results', companyId, filterExam, filterClass],
+    queryFn: () => examResultsApi.list({
+      ...(filterExam ? { examName: filterExam } : {}),
+      ...(filterClass !== 'ALL' ? { classId: filterClass } : {}),
+    }).then(r => r.data),
+    enabled: !!companyId,
   });
 
-  const filtered = filterExam ? results.filter(r => r.examName === filterExam) : results;
+  // One row per student per exam (not per subject) — group the flat
+  // ExamResult rows and pivot each student's subjects into columns.
+  const subjectColumns = useMemo(() => {
+    const seen = new Map();
+    for (const r of results) {
+      if (r.subjectId && !seen.has(r.subjectId)) seen.set(r.subjectId, r.subject?.name || '—');
+    }
+    return Array.from(seen, ([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
+  }, [results]);
+
+  const pivotedRows = useMemo(() => {
+    const groups = new Map();
+    for (const r of results) {
+      const key = `${r.studentId}|${r.examName}`;
+      if (!groups.has(key)) {
+        groups.set(key, { studentId: r.studentId, examName: r.examName, student: r.student, bySubject: new Map() });
+      }
+      groups.get(key).bySubject.set(r.subjectId, r);
+    }
+    return Array.from(groups.values())
+      .map(g => {
+        const subjectResults = Array.from(g.bySubject.values());
+        const totalObtained = subjectResults.reduce((s, r) => s + Number(r.marksObtained), 0);
+        const totalMax = subjectResults.reduce((s, r) => s + Number(r.totalMarks), 0);
+        return { ...g, totalObtained, totalMax, percentage: totalMax > 0 ? (totalObtained / totalMax) * 100 : 0 };
+      })
+      .sort((a, b) => (a.student?.name || '').localeCompare(b.student?.name || ''));
+  }, [results]);
 
   return (
     <div className="p-6 space-y-5">
@@ -430,30 +503,39 @@ export default function Exams() {
             </Button>
           </div>
 
-          {exams.length > 0 && (
-            <div className="flex gap-2 flex-wrap">
-              <button
-                onClick={() => setFilterExam('')}
-                className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${!filterExam ? 'bg-primary text-primary-foreground border-primary' : 'border-border hover:bg-muted'}`}
-              >
-                {t('exams.allExams', { defaultValue: 'All Exams' })}
-              </button>
-              {exams.map(ex => (
+          <div className="flex flex-wrap items-center gap-3">
+            {exams.length > 0 && (
+              <div className="flex gap-2 flex-wrap">
                 <button
-                  key={ex.id}
-                  onClick={() => setFilterExam(ex.name)}
-                  className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${filterExam === ex.name ? 'bg-primary text-primary-foreground border-primary' : 'border-border hover:bg-muted'}`}
+                  onClick={() => setFilterExam('')}
+                  className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${!filterExam ? 'bg-primary text-primary-foreground border-primary' : 'border-border hover:bg-muted'}`}
                 >
-                  {ex.name}
+                  {t('exams.allExams', { defaultValue: 'All Exams' })}
                 </button>
-              ))}
-            </div>
-          )}
+                {exams.map(ex => (
+                  <button
+                    key={ex.id}
+                    onClick={() => setFilterExam(ex.name)}
+                    className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${filterExam === ex.name ? 'bg-primary text-primary-foreground border-primary' : 'border-border hover:bg-muted'}`}
+                  >
+                    {ex.name}
+                  </button>
+                ))}
+              </div>
+            )}
+            <Select value={filterClass} onValueChange={setFilterClass}>
+              <SelectTrigger className="w-44 ml-auto"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">{t('exams.allClasses', { defaultValue: 'All Classes' })}</SelectItem>
+                {classes.map(c => <SelectItem key={c.id} value={c.id}>{classLabel(c)}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
 
           <div className="bg-card rounded-xl border border-border overflow-hidden">
             {isLoading ? (
               <div className="p-12 text-center text-muted-foreground text-sm">{t('exams.loadingResults', { defaultValue: 'Loading results…' })}</div>
-            ) : filtered.length === 0 ? (
+            ) : pivotedRows.length === 0 ? (
               <div className="p-12 text-center">
                 <Trophy className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
                 <p className="text-muted-foreground text-sm">{t('exams.noExamResultsYet', { defaultValue: 'No exam results yet' })}</p>
@@ -466,43 +548,39 @@ export default function Exams() {
                     <tr>
                       <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('exams.student', { defaultValue: 'Student' })}</th>
                       <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('exams.class', { defaultValue: 'Class' })}</th>
-                      <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('exams.exam', { defaultValue: 'Exam' })}</th>
-                      <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('exams.subject', { defaultValue: 'Subject' })}</th>
-                      <th className="text-right px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('exams.marks', { defaultValue: 'Marks' })}</th>
-                      <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('exams.grade', { defaultValue: 'Grade' })}</th>
+                      {!filterExam && (
+                        <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('exams.exam', { defaultValue: 'Exam' })}</th>
+                      )}
+                      {subjectColumns.map(sc => (
+                        <th key={sc.id} className="text-right px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide whitespace-nowrap">{sc.name}</th>
+                      ))}
+                      <th className="text-right px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('exams.total', { defaultValue: 'Total' })}</th>
+                      <th className="text-right px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">%</th>
                       <th className="px-5 py-3" />
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border">
-                    {filtered.map(r => (
-                      <tr key={r.id} className="hover:bg-muted/20">
-                        <td className="px-5 py-3 font-medium">{r.student?.name || '—'}</td>
+                    {pivotedRows.map(row => (
+                      <tr key={`${row.studentId}|${row.examName}`} className="hover:bg-muted/20">
+                        <td className="px-5 py-3 font-medium">{row.student?.name || '—'}</td>
                         <td className="px-5 py-3 text-muted-foreground text-xs">
-                          {r.student?.class ? `${r.student.class.name}${r.student.class.section ? ` (${r.student.class.section})` : ''}` : '—'}
+                          {row.student?.class ? classLabel(row.student.class) : '—'}
                         </td>
-                        <td className="px-5 py-3 text-muted-foreground">{r.examName}</td>
-                        <td className="px-5 py-3 text-muted-foreground">{r.subject?.name || '—'}</td>
-                        <td className="px-5 py-3 text-right tabular-nums">
-                          {Number(r.marksObtained).toFixed(0)} / {Number(r.totalMarks).toFixed(0)}
-                          <span className="text-muted-foreground ml-1 text-xs">
-                            ({((Number(r.marksObtained) / Number(r.totalMarks)) * 100).toFixed(1)}%)
-                          </span>
-                        </td>
-                        <td className="px-5 py-3">
-                          {r.grade ? (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold bg-blue-100 text-blue-700">{r.grade}</span>
-                          ) : '—'}
-                        </td>
+                        {!filterExam && <td className="px-5 py-3 text-muted-foreground">{row.examName}</td>}
+                        {subjectColumns.map(sc => {
+                          const r = row.bySubject.get(sc.id);
+                          return (
+                            <td key={sc.id} className="px-5 py-3 text-right tabular-nums text-xs">
+                              {r ? Number(r.marksObtained).toFixed(0) : '—'}
+                            </td>
+                          );
+                        })}
+                        <td className="px-5 py-3 text-right tabular-nums">{row.totalObtained} / {row.totalMax}</td>
+                        <td className="px-5 py-3 text-right tabular-nums font-medium">{row.percentage.toFixed(1)}%</td>
                         <td className="px-5 py-3">
                           <div className="flex gap-2 justify-end">
-                            <button onClick={() => setViewDialog({ studentId: r.studentId, examName: r.examName })} className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors" title={t('exams.viewReportCard', { defaultValue: 'View report card' })}>
+                            <button onClick={() => setViewDialog({ studentId: row.studentId, examName: row.examName })} className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors" title={t('exams.viewReportCard', { defaultValue: 'View report card' })}>
                               <Eye className="w-3.5 h-3.5" />
-                            </button>
-                            <button onClick={() => setEntryDialog({ mode: 'edit', result: r })} className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors">
-                              <Pencil className="w-3.5 h-3.5" />
-                            </button>
-                            <button onClick={async () => { if (await confirm({ description: t('exams.deleteThisResult', { defaultValue: 'Delete this result?' }), variant: 'destructive' })) remove.mutate(r.id); }} className="p-1.5 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600 transition-colors">
-                              <Trash2 className="w-3.5 h-3.5" />
                             </button>
                           </div>
                         </td>
@@ -540,6 +618,7 @@ export default function Exams() {
           onClose={() => setViewDialog(null)}
           studentId={viewDialog.studentId}
           examName={viewDialog.examName}
+          onEdit={(result) => setEntryDialog({ mode: 'edit', result })}
         />
       )}
     </div>

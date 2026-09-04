@@ -775,7 +775,11 @@
     "selectASubject": "एउटा विषय छान्नुहोस्",
     "subjectRequired": "विषय *",
     "subjectsOverall": "{{count}} विषय · {{percentage}}% समग्र",
-    "viewReportCard": "रिपोर्ट कार्ड हेर्नुहोस्"
+    "viewReportCard": "रिपोर्ट कार्ड हेर्नुहोस्",
+    "total": "जम्मा",
+    "allClasses": "सबै कक्षा",
+    "editThisResult": "यो नतिजा सम्पादन गर्नुहोस्",
+    "delete": "मेटाउनुहोस्"
   },
   "examSchedule": {
     "scheduleUpdated": "परीक्षा तालिका अद्यावधिक भयो",
