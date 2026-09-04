@@ -807,6 +807,8 @@
     "scheduleExam": "परीक्षा तालिका बनाउनुहोस्",
     "examNameRequired": "परीक्षाको नाम *",
     "examNamePlaceholder": "जस्तै प्रथम त्रैमासिक २०८२",
+    "selectExamName": "परीक्षा छान्नुहोस्",
+    "noExamsYetHint": "अहिलेसम्म कुनै परीक्षा छैन — पहिले Results ट्याबको \"Add Exam\" बटनबाट एउटा बनाउनुहोस्।",
     "classRequired": "कक्षा *",
     "selectClass": "कक्षा छान्नुहोस्",
     "subject": "विषय",

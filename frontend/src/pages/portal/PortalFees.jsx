@@ -217,7 +217,7 @@ export default function PortalFees() {
     setViewingId(invoiceId);
     try {
       const res = await portalApi.feeReceipt(invoiceId);
-      printFeeInvoice(res.data);
+      printFeeInvoice(res.data, localStorage.getItem('portal_token'));
     } catch (e) {
       toast.error(e?.response?.data?.message || t('portal.couldNotLoadInvoice', { defaultValue: 'Could not load invoice' }));
     } finally {

@@ -53,28 +53,31 @@ export default function TopBar({ onMobileMenuToggle, onToolOpen }) {
     setUser(me);
     const companyList = await api.Company.list();
     setCompanies(companyList);
+    // A deactivated company is now hard-blocked server-side (CompanyAccessGuard),
+    // so never let the switcher land on one — pick among active companies only.
+    const activeCompanies = companyList.filter(c => c.is_active);
     const activeId = getActiveCompanyId();
-    if (activeId) {
-      const active = companyList.find(c => c.id === activeId);
-      setActiveCompany(active || companyList[0] || null);
+    let resolved = activeId ? companyList.find(c => c.id === activeId) : null;
+    if (!resolved?.is_active) {
+      resolved = activeCompanies[0] || null;
+      if (resolved) setActiveCompanyId(resolved.id);
+    }
+    setActiveCompany(resolved);
+    if (resolved) {
       // Pre-load search data in background — Clients/Vendors/Inventory are
       // business-ERP-only modules (don't exist for school companies) and are
       // also role-gated to STAFF/ACCOUNTANT/ADMIN, so skip entirely for school
       // companies or for TEACHER/LIBRARIAN to avoid pointless 403s.
-      const company = active || companyList[0];
-      const canSearchBusinessData = company?.business_type !== 'SCHOOL' && me?.role !== 'TEACHER' && me?.role !== 'LIBRARIAN';
+      const canSearchBusinessData = resolved.business_type !== 'SCHOOL' && me?.role !== 'TEACHER' && me?.role !== 'LIBRARIAN';
       if (canSearchBusinessData) {
         Promise.all([
-          api.Client.filter({ company_id: activeId }),
-          api.Vendor.filter({ company_id: activeId }),
-          api.InventoryItem.filter({ company_id: activeId }),
+          api.Client.filter({ company_id: resolved.id }),
+          api.Vendor.filter({ company_id: resolved.id }),
+          api.InventoryItem.filter({ company_id: resolved.id }),
         ]).then(([cls, vens, inv]) => {
           setSearchData({ clients: cls, vendors: vens, inventory: inv });
         }).catch(() => {});
       }
-    } else if (companyList.length > 0) {
-      setActiveCompany(companyList[0]);
-      setActiveCompanyId(companyList[0].id);
     }
     // Pre-load unread count so the badge is right before the dropdown ever opens
     if (import.meta.env.VITE_ENABLE_NOTIFICATIONS === 'true') {
@@ -200,7 +203,7 @@ export default function TopBar({ onMobileMenuToggle, onToolOpen }) {
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" className="w-56">
-            {companies.map(c => (
+            {companies.filter(c => c.is_active).map(c => (
               <DropdownMenuItem key={c.id} onClick={() => switchCompany(c)}>
                 <Building2 className="w-4 h-4 mr-2" />
                 {c.name}

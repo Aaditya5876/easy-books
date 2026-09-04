@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { examSchedulesApi, classesApi, subjectsApi } from '@/api';
+import { examSchedulesApi, classesApi, subjectsApi, examsApi } from '@/api';
 import { confirm } from '@/lib/confirm';
 import { filterSubjectsByClass } from '@/lib/subjectFilter';
 import { Button } from '@/components/ui/button';
@@ -23,7 +23,7 @@ const classLabel = (c) => `${c.name}${c.section ? ` - ${c.section}` : ''}`;
 
 // ── Edit a single already-scheduled paper ──────────────────────────────────────
 
-function EditScheduleDialog({ open, onClose, entry, classes, subjects }) {
+function EditScheduleDialog({ open, onClose, entry, classes, subjects, exams }) {
   const { t } = useTranslation();
   const qc = useQueryClient();
   const [form, setForm] = useState({
@@ -78,8 +78,16 @@ function EditScheduleDialog({ open, onClose, entry, classes, subjects }) {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-1">
             <Label>{t('examSchedule.examNameRequired', { defaultValue: 'Exam Name *' })}</Label>
-            <Input value={form.examName} onChange={e => { setForm(p => ({ ...p, examName: e.target.value })); if (errors.examName) setErrors(er => ({ ...er, examName: undefined })); }} placeholder={t('examSchedule.examNamePlaceholder', { defaultValue: 'e.g. First Terminal 2082' })} />
+            <Select value={form.examName} onValueChange={v => { setForm(p => ({ ...p, examName: v })); if (errors.examName) setErrors(er => ({ ...er, examName: undefined })); }}>
+              <SelectTrigger><SelectValue placeholder={t('examSchedule.selectExamName', { defaultValue: 'Select exam' })} /></SelectTrigger>
+              <SelectContent>
+                {exams.map(ex => <SelectItem key={ex.id} value={ex.name}>{ex.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
             {errors.examName && <p className="text-xs text-red-600">{errors.examName}</p>}
+            {exams.length === 0 && (
+              <p className="text-xs text-muted-foreground">{t('examSchedule.noExamsYetHint', { defaultValue: 'No exams yet — create one from the Results tab\'s "Add Exam" button first.' })}</p>
+            )}
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
@@ -143,7 +151,7 @@ function EditScheduleDialog({ open, onClose, entry, classes, subjects }) {
 let rowSeq = 0;
 const newSubjectRow = () => ({ key: ++rowSeq, subjectId: '', examDate: '', startTime: '', endTime: '' });
 
-function NewScheduleDialog({ open, onClose, classes, subjects }) {
+function NewScheduleDialog({ open, onClose, classes, subjects, exams }) {
   const { t } = useTranslation();
   const qc = useQueryClient();
   const [examName, setExamName] = useState('');
@@ -196,8 +204,16 @@ function NewScheduleDialog({ open, onClose, classes, subjects }) {
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
               <Label>{t('examSchedule.examNameRequired', { defaultValue: 'Exam Name *' })}</Label>
-              <Input value={examName} onChange={e => { setExamName(e.target.value); if (errors.examName) setErrors(er => ({ ...er, examName: undefined })); }} placeholder={t('examSchedule.examNamePlaceholder', { defaultValue: 'e.g. First Terminal 2082' })} />
+              <Select value={examName} onValueChange={v => { setExamName(v); if (errors.examName) setErrors(er => ({ ...er, examName: undefined })); }}>
+                <SelectTrigger><SelectValue placeholder={t('examSchedule.selectExamName', { defaultValue: 'Select exam' })} /></SelectTrigger>
+                <SelectContent>
+                  {exams.map(ex => <SelectItem key={ex.id} value={ex.name}>{ex.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
               {errors.examName && <p className="text-xs text-red-600">{errors.examName}</p>}
+              {exams.length === 0 && (
+                <p className="text-xs text-muted-foreground">{t('examSchedule.noExamsYetHint', { defaultValue: 'No exams yet — create one from the Results tab\'s "Add Exam" button first.' })}</p>
+              )}
             </div>
             <div className="space-y-1">
               <Label>{t('examSchedule.classRequired', { defaultValue: 'Class *' })}</Label>
@@ -295,6 +311,11 @@ export default function ExamSchedule() {
   const { data: subjects = [] } = useQuery({
     queryKey: ['school-subjects'],
     queryFn: () => subjectsApi.list().then(r => r.data),
+  });
+
+  const { data: exams = [] } = useQuery({
+    queryKey: ['exams'],
+    queryFn: () => examsApi.list().then(r => r.data),
   });
 
   const { data: schedules = [], isLoading } = useQuery({
@@ -439,6 +460,7 @@ export default function ExamSchedule() {
           onClose={() => setShowNew(false)}
           classes={classes}
           subjects={subjects}
+          exams={exams}
         />
       )}
 
@@ -449,6 +471,7 @@ export default function ExamSchedule() {
           entry={editEntry}
           classes={classes}
           subjects={subjects}
+          exams={exams}
         />
       )}
     </div>

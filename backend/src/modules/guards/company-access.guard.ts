@@ -38,12 +38,21 @@ export class CompanyAccessGuard implements CanActivate {
 
     if (user.role === 'SUPER_ADMIN') return true;
 
-    const membership = await this.prisma.userCompany.findFirst({
-      where: { userId: user.sub, companyId },
-      select: { id: true },
-    });
+    const [membership, company] = await Promise.all([
+      this.prisma.userCompany.findFirst({ where: { userId: user.sub, companyId }, select: { id: true } }),
+      this.prisma.company.findUnique({ where: { id: companyId }, select: { isActive: true } }),
+    ]);
     if (!membership) {
       throw new ForbiddenException('You do not have access to this company');
+    }
+    // isActive is a real access gate here (unlike the nightly-automation-only
+    // read it gets elsewhere) — a deactivated company is fully locked out of
+    // every companyId-scoped route this guard covers. The company-by-:id
+    // routes (company.controller.ts) never pass a "companyId"-named param,
+    // so they're untouched by this — an ADMIN can still view/reactivate their
+    // own deactivated company from Settings.
+    if (company && !company.isActive) {
+      throw new ForbiddenException('This company has been deactivated. Contact GeoInfosys to reactivate it.');
     }
     return true;
   }
