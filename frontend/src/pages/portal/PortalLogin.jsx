@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { portalApi } from '@/api';
 import { toast } from 'sonner';
@@ -9,8 +9,7 @@ import { useTranslation } from 'react-i18next';
 export default function PortalLogin() {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const [params] = useSearchParams();
-  const [form, setForm]       = useState({ phone: '', password: '', companyId: params.get('company') || '' });
+  const [form, setForm]       = useState({ phone: '', password: '' });
   const [loading, setLoading] = useState(false);
   const [showPw, setShowPw]   = useState(false);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
@@ -21,9 +20,8 @@ export default function PortalLogin() {
 
   async function handleSubmit(e) {
     e.preventDefault();
-    if (!form.phone.trim())    { toast.error(t('portal.phoneRequired', { defaultValue: 'Phone number is required' })); return; }
-    if (!form.password)        { toast.error(t('portal.passwordRequired', { defaultValue: 'Password is required' })); return; }
-    if (!form.companyId.trim()) { toast.error(t('portal.schoolIdRequired', { defaultValue: 'School ID is required' })); return; }
+    if (!form.phone.trim()) { toast.error(t('portal.phoneRequired', { defaultValue: 'Phone number is required' })); return; }
+    if (!form.password)     { toast.error(t('portal.passwordRequired', { defaultValue: 'Password is required' })); return; }
     setLoading(true);
     try {
       const res = await portalApi.login(form);
@@ -130,17 +128,6 @@ export default function PortalLogin() {
                   {showPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="block text-sm font-semibold text-slate-700">{t('portal.schoolId', { defaultValue: 'School ID' })}</label>
-              <input
-                placeholder={t('portal.schoolIdPlaceholder', { defaultValue: 'Provided by your school admin' })}
-                value={form.companyId}
-                onChange={e => set('companyId', e.target.value)}
-                className="w-full h-12 px-4 rounded-xl border border-slate-200 text-slate-900 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all bg-slate-50"
-              />
-              <p className="text-xs text-slate-400">{t('portal.schoolIdHint', { defaultValue: 'Ask your school administrator for this ID' })}</p>
             </div>
 
             <motion.button

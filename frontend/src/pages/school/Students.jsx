@@ -154,7 +154,7 @@ function PortalPasswordDialog({ open, onClose, student, companyId }) {
   const [copied, setCopied] = useState(false);
   const [errors, setErrors] = useState({});
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
-  const portalLink = `${window.location.origin}/portal/login?company=${companyId}`;
+  const portalLink = `${window.location.origin}/portal/login`;
 
   function copyPortalLink() {
     navigator.clipboard.writeText(portalLink);
@@ -203,7 +203,7 @@ function PortalPasswordDialog({ open, onClose, student, companyId }) {
             </Button>
           </div>
           <p className="text-xs text-muted-foreground">
-            {t('students.portalLoginLinkHint', { defaultValue: 'Share this link with the phone number and password below — it pre-fills the School ID so they only enter their credentials. One login works for both the parent and the student.' })}
+            {t('students.portalLoginLinkHint', { defaultValue: 'Share this link along with the phone number and password below. One login works for both the parent and the student.' })}
           </p>
         </div>
         <form onSubmit={handleSubmit} className="space-y-4 pt-1">

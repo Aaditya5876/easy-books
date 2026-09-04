@@ -28,8 +28,8 @@ export class PortalController {
   @Public()
   @Post('login')
   @Throttle({ default: { limit: 5, ttl: 60000 } })
-  login(@Body() body: { phone: string; password: string; companyId: string }) {
-    return this.portalService.login(body.phone, body.password, body.companyId);
+  login(@Body() body: { phone: string; password: string }) {
+    return this.portalService.login(body.phone, body.password);
   }
 
   // Not @Public() — requires a staff login. Explicitly role-gated: setting a

@@ -12,24 +12,31 @@ export class PortalService {
     private readonly finance: SchoolFinanceService,
   ) {}
 
-  async login(phone: string, password: string, companyId: string) {
-    const portalUser = await this.prisma.portalUser.findFirst({
-      where: { phone, companyId, isActive: true },
+  // No school ID needed from the user: phone numbers aren't guaranteed unique
+  // across schools (this is a multi-tenant DB), so we look up every active
+  // portal_users row for the phone and let the password itself disambiguate —
+  // bcrypt hashes are salted per-record, so a plaintext password only ever
+  // matches its own account's hash.
+  async login(phone: string, password: string) {
+    const candidates = await this.prisma.portalUser.findMany({
+      where: { phone, isActive: true },
       include: { student: { include: { class: true } } },
     });
-    if (!portalUser) throw new UnauthorizedException('Invalid phone number or password');
-    const valid = await bcrypt.compare(password, portalUser.passwordHash);
-    if (!valid) throw new UnauthorizedException('Invalid phone number or password');
-    const token = this.jwtService.sign(
-      {
-        studentId: portalUser.studentId,
-        companyId,
-        classId: portalUser.student?.classId,
-        type: 'portal',
-      },
-      { secret: process.env.JWT_SECRET, expiresIn: '30d' },
-    );
-    return { token, student: portalUser.student };
+    for (const portalUser of candidates) {
+      if (await bcrypt.compare(password, portalUser.passwordHash)) {
+        const token = this.jwtService.sign(
+          {
+            studentId: portalUser.studentId,
+            companyId: portalUser.companyId,
+            classId: portalUser.student?.classId,
+            type: 'portal',
+          },
+          { secret: process.env.JWT_SECRET, expiresIn: '30d' },
+        );
+        return { token, student: portalUser.student };
+      }
+    }
+    throw new UnauthorizedException('Invalid phone number or password');
   }
 
   async setPortalPassword(studentId: string, phone: string, password: string, companyId: string) {
