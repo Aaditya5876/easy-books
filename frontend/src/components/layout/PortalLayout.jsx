@@ -139,13 +139,11 @@ export default function PortalLayout() {
   const navigate  = useNavigate();
   const location  = useLocation();
   const outlet    = useOutlet();
-  const [portalType, setPortalType] = useState('PARENT');
   const [hasToken, setHasToken] = useState(false);
 
   useEffect(() => {
     const token = localStorage.getItem('portal_token');
     if (!token) { navigate('/portal/login', { replace: true }); return; }
-    setPortalType(localStorage.getItem('portal_type') || 'PARENT');
     setHasToken(true);
   }, [navigate]);
 
@@ -159,7 +157,6 @@ export default function PortalLayout() {
   function logout() {
     localStorage.removeItem('portal_token');
     localStorage.removeItem('portal_student');
-    localStorage.removeItem('portal_type');
     navigate('/portal/login', { replace: true });
   }
 
@@ -179,9 +176,7 @@ export default function PortalLayout() {
           <div className="flex-1 min-w-0">
             <p className="text-sm font-bold text-white leading-none">OneBook</p>
             <p className="text-[10px] text-slate-400 mt-0.5">
-              {portalType === 'STUDENT'
-                ? t('portal.studentPortal', { defaultValue: 'Student Portal' })
-                : t('portal.parentPortal', { defaultValue: 'Parent Portal' })}
+              {t('portal.studentPortal', { defaultValue: 'Student Portal' })}
             </p>
           </div>
           <NotificationBell />

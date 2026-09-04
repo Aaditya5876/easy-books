@@ -1,6 +1,5 @@
 import { Injectable, UnauthorizedException, NotFoundException, BadRequestException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { PortalUserType } from '@prisma/client';
 import { PrismaService } from '../../../core/db/psql/prisma.client';
 import { SchoolFinanceService } from './school-finance.service';
 import * as bcrypt from 'bcrypt';
@@ -27,28 +26,21 @@ export class PortalService {
         companyId,
         classId: portalUser.student?.classId,
         type: 'portal',
-        portalType: portalUser.type,
       },
       { secret: process.env.JWT_SECRET, expiresIn: '30d' },
     );
-    return { token, student: portalUser.student, portalType: portalUser.type };
+    return { token, student: portalUser.student };
   }
 
-  async setPortalPassword(
-    studentId: string,
-    type: PortalUserType,
-    phone: string,
-    password: string,
-    companyId: string,
-  ) {
+  async setPortalPassword(studentId: string, phone: string, password: string, companyId: string) {
     const student = await this.prisma.student.findFirst({ where: { id: studentId, companyId } });
     if (!student) throw new NotFoundException('Student not found');
     if (!phone || !password) throw new BadRequestException('Phone and password are required');
     if (password.length < 6) throw new BadRequestException('Password must be at least 6 characters');
     const passwordHash = await bcrypt.hash(password, 10);
     return this.prisma.portalUser.upsert({
-      where: { studentId_type: { studentId, type } },
-      create: { companyId, studentId, type, phone, passwordHash },
+      where: { studentId },
+      create: { companyId, studentId, phone, passwordHash },
       update: { phone, passwordHash, isActive: true },
     });
   }

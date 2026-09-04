@@ -5,13 +5,11 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Throttle } from '@nestjs/throttler';
 import { ApiTags, ApiConsumes } from '@nestjs/swagger';
-import { PortalUserType } from '@prisma/client';
 import { Public } from '../../../../modules/decorators/public.decorator';
 import { PortalService } from '../../../../application/services/portal.service';
 import { PaymentService } from '../../../../application/services/payment.service';
 import { PortalNotificationService } from '../../../../application/services/portal-notification.service';
 import { PortalGuard } from '../../../../modules/guards/portal.guard';
-import { PortalRoles } from '../../../../modules/decorators/portal-roles.decorator';
 import { Roles } from '../../../../modules/decorators/roles.decorator';
 import { makeUploadStorage, extensionFilter } from './upload.util';
 
@@ -35,14 +33,12 @@ export class PortalController {
   }
 
   // Not @Public() — requires a staff login. Explicitly role-gated: setting a
-  // parent/student portal password is an administrative action, not something
+  // student's portal password is an administrative action, not something
   // every staff role (e.g. TEACHER, LIBRARIAN) should be able to do.
   @Roles('ADMIN', 'ACCOUNTANT')
   @Post('set-password')
-  setPassword(
-    @Body() body: { studentId: string; type: PortalUserType; phone: string; password: string; companyId: string },
-  ) {
-    return this.portalService.setPortalPassword(body.studentId, body.type, body.phone, body.password, body.companyId);
+  setPassword(@Body() body: { studentId: string; phone: string; password: string; companyId: string }) {
+    return this.portalService.setPortalPassword(body.studentId, body.phone, body.password, body.companyId);
   }
 
   @Public()
@@ -85,7 +81,6 @@ export class PortalController {
   // images only, smaller size limit, same local-disk storage/URL shape.
   @Public()
   @UseGuards(PortalGuard)
-  @PortalRoles(PortalUserType.PARENT, PortalUserType.STUDENT)
   @Post('upload')
   @ApiConsumes('multipart/form-data')
   @UseInterceptors(FileInterceptor('file', {
@@ -100,7 +95,6 @@ export class PortalController {
 
   @Public()
   @UseGuards(PortalGuard)
-  @PortalRoles(PortalUserType.PARENT, PortalUserType.STUDENT)
   @Post('fees/:invoiceId/payment-proof')
   submitPaymentProof(
     @Param('invoiceId') invoiceId: string,
@@ -191,7 +185,6 @@ export class PortalController {
 
   @Public()
   @UseGuards(PortalGuard)
-  @PortalRoles(PortalUserType.PARENT)
   @Post('pay/esewa/:invoiceId')
   initiateEsewa(
     @Param('invoiceId') invoiceId: string,
@@ -212,7 +205,6 @@ export class PortalController {
 
   @Public()
   @UseGuards(PortalGuard)
-  @PortalRoles(PortalUserType.PARENT)
   @Post('pay/khalti/:invoiceId')
   initiateKhalti(
     @Param('invoiceId') invoiceId: string,

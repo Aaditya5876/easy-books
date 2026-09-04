@@ -1,14 +1,9 @@
-import { Injectable, CanActivate, ExecutionContext, UnauthorizedException, ForbiddenException } from '@nestjs/common';
-import { Reflector } from '@nestjs/core';
+import { Injectable, CanActivate, ExecutionContext, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { PORTAL_ROLES_KEY } from '../decorators/portal-roles.decorator';
 
 @Injectable()
 export class PortalGuard implements CanActivate {
-  constructor(
-    private readonly jwtService: JwtService,
-    private readonly reflector: Reflector,
-  ) {}
+  constructor(private readonly jwtService: JwtService) {}
 
   canActivate(context: ExecutionContext): boolean {
     const req = context.switchToHttp().getRequest();
@@ -25,15 +20,6 @@ export class PortalGuard implements CanActivate {
       throw new UnauthorizedException('Invalid or expired portal token');
     }
     req.portalUser = payload;
-
-    const required = this.reflector.getAllAndOverride<string[]>(PORTAL_ROLES_KEY, [
-      context.getHandler(),
-      context.getClass(),
-    ]);
-    if (required?.length && !required.includes(payload.portalType)) {
-      throw new ForbiddenException(`Portal role '${payload.portalType}' cannot access this resource`);
-    }
-
     return true;
   }
 }

@@ -29,7 +29,6 @@ export default function PortalLogin() {
       const res = await portalApi.login(form);
       localStorage.setItem('portal_token',   res.data.token);
       localStorage.setItem('portal_student', JSON.stringify(res.data.student));
-      localStorage.setItem('portal_type',    res.data.portalType);
       navigate('/portal', { replace: true });
     } catch (err) {
       toast.error(err?.response?.data?.message || t('portal.loginFailed', { defaultValue: 'Login failed. Check your details.' }));

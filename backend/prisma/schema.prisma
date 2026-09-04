@@ -18,11 +18,6 @@ enum UserRole {
   LIBRARIAN
 }
 
-enum PortalUserType {
-  PARENT
-  STUDENT
-}
-
 enum EmployeeStatus {
   ACTIVE
   INACTIVE
@@ -1705,19 +1700,17 @@ model StudentTransport {
 }
 
 model PortalUser {
-  id           String         @id @default(uuid())
+  id           String   @id @default(uuid())
   companyId    String
-  company      Company        @relation(fields: [companyId], references: [id])
-  studentId    String
-  student      Student        @relation(fields: [studentId], references: [id])
-  type         PortalUserType @default(PARENT)
+  company      Company  @relation(fields: [companyId], references: [id])
+  studentId    String   @unique
+  student      Student  @relation(fields: [studentId], references: [id])
   phone        String
   passwordHash String
-  isActive     Boolean        @default(true)
-  createdAt    DateTime       @default(now())
-  updatedAt    DateTime       @updatedAt
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
-  @@unique([studentId, type])
   @@map("portal_users")
 }
 

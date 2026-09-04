@@ -149,7 +149,7 @@ function StudentDialog({ open, onClose, initial, classes, companyId }) {
 
 function PortalPasswordDialog({ open, onClose, student, companyId }) {
   const { t } = useTranslation();
-  const [form, setForm] = useState({ phone: student?.guardianPhone || '', password: '', type: 'PARENT' });
+  const [form, setForm] = useState({ phone: student?.guardianPhone || '', password: '' });
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
   const [errors, setErrors] = useState({});
@@ -176,7 +176,7 @@ function PortalPasswordDialog({ open, onClose, student, companyId }) {
     setLoading(true);
     try {
       await portalApi.setPassword({ studentId: student.id, ...form, companyId });
-      toast.success(t('students.portalAccessSetFor', { defaultValue: "Portal access set for {{name}}'s {{type}}", name: student.name, type: form.type.toLowerCase() }));
+      toast.success(t('students.portalAccessSetFor', { defaultValue: 'Portal access set for {{name}}', name: student.name }));
       onClose();
     } catch (err) {
       toast.error(err?.response?.data?.message || t('students.failedToSetPassword', { defaultValue: 'Failed to set password' }));
@@ -203,17 +203,10 @@ function PortalPasswordDialog({ open, onClose, student, companyId }) {
             </Button>
           </div>
           <p className="text-xs text-muted-foreground">
-            {t('students.portalLoginLinkHint', { defaultValue: 'Share this link with the phone number and password below — it pre-fills the School ID so they only enter their credentials.' })}
+            {t('students.portalLoginLinkHint', { defaultValue: 'Share this link with the phone number and password below — it pre-fills the School ID so they only enter their credentials. One login works for both the parent and the student.' })}
           </p>
         </div>
         <form onSubmit={handleSubmit} className="space-y-4 pt-1">
-          <div className="space-y-1.5">
-            <Label>{t('students.accessType', { defaultValue: 'Access Type' })}</Label>
-            <select className="w-full border rounded-md px-3 py-2 text-sm bg-background" value={form.type} onChange={e => set('type', e.target.value)}>
-              <option value="PARENT">{t('students.parent', { defaultValue: 'Parent' })}</option>
-              <option value="STUDENT">{t('students.student', { defaultValue: 'Student' })}</option>
-            </select>
-          </div>
           <div className="space-y-1.5">
             <Label>{t('students.phoneNumber', { defaultValue: 'Phone Number *' })}</Label>
             <Input placeholder={t('students.phonePlaceholder', { defaultValue: '98XXXXXXXX' })} value={form.phone} onChange={e => { set('phone', e.target.value); if (errors.phone) setErrors(er => ({ ...er, phone: undefined })); }} />
