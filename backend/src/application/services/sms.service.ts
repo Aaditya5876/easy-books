@@ -41,6 +41,11 @@ export class SmsService {
     return this.send(guardianPhone, msg);
   }
 
+  async sendPortalCredentials(phone: string, studentName: string, password: string, schoolName = 'School'): Promise<boolean> {
+    const msg = `${schoolName}: Portal access created for ${studentName}. Phone: ${phone}, Password: ${password}. Please log in and change your password immediately.`;
+    return this.send(phone, msg);
+  }
+
   async sendNotice(phones: string[], noticeTitle: string, schoolName = 'School'): Promise<{ sent: number; failed: number }> {
     const msg = `${schoolName} Notice: "${noticeTitle}". Check portal for full details.`;
     let sent = 0;

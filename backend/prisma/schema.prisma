@@ -1700,16 +1700,19 @@ model StudentTransport {
 }
 
 model PortalUser {
-  id           String   @id @default(uuid())
-  companyId    String
-  company      Company  @relation(fields: [companyId], references: [id])
-  studentId    String   @unique
-  student      Student  @relation(fields: [studentId], references: [id])
-  phone        String
-  passwordHash String
-  isActive     Boolean  @default(true)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id                 String   @id @default(uuid())
+  companyId          String
+  company            Company  @relation(fields: [companyId], references: [id])
+  studentId          String   @unique
+  student            Student  @relation(fields: [studentId], references: [id])
+  phone              String
+  passwordHash       String
+  isActive           Boolean  @default(true)
+  // Admin/bulk-provisioned passwords are known to staff, so the portal blocks
+  // access to everything except /me and /change-password until this is cleared.
+  mustChangePassword Boolean  @default(true)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
   @@map("portal_users")
 }

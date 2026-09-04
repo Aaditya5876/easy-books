@@ -3,46 +3,48 @@ import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { portalApi } from '@/api';
 import { toast } from 'sonner';
-import { BookOpen, Eye, EyeOff, Loader2 } from 'lucide-react';
+import { ShieldCheck, Eye, EyeOff, Loader2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { decodePortalToken } from '@/lib/portalToken';
 
-export default function PortalLogin() {
+export default function PortalChangePassword() {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const [form, setForm]       = useState({ phone: '', password: '' });
+  const [form, setForm]       = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
   const [loading, setLoading] = useState(false);
   const [showPw, setShowPw]   = useState(false);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   useEffect(() => {
-    const token = localStorage.getItem('portal_token');
-    if (!token) return;
-    const claims = decodePortalToken(token);
-    navigate(claims?.mustChangePassword ? '/portal/change-password' : '/portal', { replace: true });
+    if (!localStorage.getItem('portal_token')) navigate('/portal/login', { replace: true });
   }, [navigate]);
 
   async function handleSubmit(e) {
     e.preventDefault();
-    if (!form.phone.trim()) { toast.error(t('portal.phoneRequired', { defaultValue: 'Phone number is required' })); return; }
-    if (!form.password)     { toast.error(t('portal.passwordRequired', { defaultValue: 'Password is required' })); return; }
+    if (!form.currentPassword) { toast.error(t('portal.currentPasswordRequired', { defaultValue: 'Current password is required' })); return; }
+    if (form.newPassword.length < 6) { toast.error(t('portal.passwordMinLength', { defaultValue: 'New password must be at least 6 characters' })); return; }
+    if (form.newPassword !== form.confirmPassword) { toast.error(t('portal.passwordsDontMatch', { defaultValue: 'Passwords do not match' })); return; }
     setLoading(true);
     try {
-      const res = await portalApi.login(form);
-      localStorage.setItem('portal_token',   res.data.token);
-      localStorage.setItem('portal_student', JSON.stringify(res.data.student));
-      navigate(res.data.mustChangePassword ? '/portal/change-password' : '/portal', { replace: true });
+      const res = await portalApi.changePassword(form);
+      localStorage.setItem('portal_token', res.data.token);
+      toast.success(t('portal.passwordChanged', { defaultValue: 'Password changed successfully' }));
+      navigate('/portal', { replace: true });
     } catch (err) {
-      toast.error(err?.response?.data?.message || t('portal.loginFailed', { defaultValue: 'Login failed. Check your details.' }));
+      toast.error(err?.response?.data?.message || t('portal.passwordChangeFailed', { defaultValue: 'Failed to change password' }));
     } finally {
       setLoading(false);
     }
   }
 
+  function logout() {
+    localStorage.removeItem('portal_token');
+    localStorage.removeItem('portal_student');
+    navigate('/portal/login', { replace: true });
+  }
+
   return (
     <div className="relative min-h-screen bg-slate-900 flex items-center justify-center p-4 overflow-hidden">
 
-      {/* Animated background blobs */}
       <motion.div
         className="absolute rounded-full blur-3xl pointer-events-none"
         style={{ width: 380, height: 380, background: 'rgba(59,130,246,0.22)', top: '-8%', left: '-8%' }}
@@ -55,21 +57,13 @@ export default function PortalLogin() {
         animate={{ x: [0, -22, 0], y: [0, 24, 0], scale: [1, 1.12, 1] }}
         transition={{ duration: 14, repeat: Infinity, ease: 'easeInOut', delay: 1 }}
       />
-      <motion.div
-        className="absolute rounded-full blur-3xl pointer-events-none"
-        style={{ width: 420, height: 420, background: 'rgba(16,185,129,0.15)', bottom: '-12%', left: '30%' }}
-        animate={{ x: [0, 16, 0], y: [0, -20, 0], scale: [1, 1.06, 1] }}
-        transition={{ duration: 9, repeat: Infinity, ease: 'easeInOut', delay: 2 }}
-      />
 
-      {/* Card */}
       <motion.div
         className="relative z-10 w-full max-w-sm"
         initial={{ opacity: 0, y: 32, scale: 0.95 }}
         animate={{ opacity: 1, y: 0,  scale: 1 }}
         transition={{ type: 'spring', stiffness: 280, damping: 28, delay: 0.1 }}
       >
-        {/* Logo */}
         <div className="text-center mb-7">
           <motion.div
             className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-blue-500 mb-4 shadow-2xl shadow-blue-500/40"
@@ -77,7 +71,7 @@ export default function PortalLogin() {
             animate={{ scale: 1, rotate: 0 }}
             transition={{ type: 'spring', stiffness: 320, damping: 22, delay: 0.25 }}
           >
-            <BookOpen className="w-8 h-8 text-white" />
+            <ShieldCheck className="w-8 h-8 text-white" />
           </motion.div>
           <motion.h1
             className="text-2xl font-bold text-white"
@@ -85,7 +79,7 @@ export default function PortalLogin() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.35, duration: 0.4 }}
           >
-            {t('portal.studentParentPortal', { defaultValue: 'Student / Parent Portal' })}
+            {t('portal.changePassword', { defaultValue: 'Change Your Password' })}
           </motion.h1>
           <motion.p
             className="text-sm text-slate-400 mt-1"
@@ -93,35 +87,34 @@ export default function PortalLogin() {
             animate={{ opacity: 1 }}
             transition={{ delay: 0.45 }}
           >
-            {t('portal.signInSubtitle', { defaultValue: 'Sign in to view your academic details' })}
+            {t('portal.changePasswordSubtitle', { defaultValue: 'For your security, set a new password before continuing.' })}
           </motion.p>
         </div>
 
-        {/* Form card */}
         <div className="bg-white rounded-3xl p-7 shadow-2xl border border-white/10">
           <form onSubmit={handleSubmit} className="space-y-5">
 
             <div className="space-y-1.5">
-              <label className="block text-sm font-semibold text-slate-700">{t('portal.phoneNumber', { defaultValue: 'Phone Number' })}</label>
+              <label className="block text-sm font-semibold text-slate-700">{t('portal.currentPassword', { defaultValue: 'Current Password' })}</label>
               <input
-                type="tel"
-                placeholder="98XXXXXXXX"
-                value={form.phone}
-                onChange={e => set('phone', e.target.value)}
-                autoComplete="username"
+                type={showPw ? 'text' : 'password'}
+                placeholder={t('portal.currentPasswordPlaceholder', { defaultValue: 'The password you were given' })}
+                value={form.currentPassword}
+                onChange={e => set('currentPassword', e.target.value)}
+                autoComplete="current-password"
                 className="w-full h-12 px-4 rounded-xl border border-slate-200 text-slate-900 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all bg-slate-50"
               />
             </div>
 
             <div className="space-y-1.5">
-              <label className="block text-sm font-semibold text-slate-700">{t('portal.password', { defaultValue: 'Password' })}</label>
+              <label className="block text-sm font-semibold text-slate-700">{t('portal.newPassword', { defaultValue: 'New Password' })}</label>
               <div className="relative">
                 <input
                   type={showPw ? 'text' : 'password'}
-                  placeholder={t('portal.passwordPlaceholder', { defaultValue: 'Enter your password' })}
-                  value={form.password}
-                  onChange={e => set('password', e.target.value)}
-                  autoComplete="current-password"
+                  placeholder={t('portal.passwordPlaceholder', { defaultValue: 'Min 6 characters' })}
+                  value={form.newPassword}
+                  onChange={e => set('newPassword', e.target.value)}
+                  autoComplete="new-password"
                   className="w-full h-12 px-4 pr-11 rounded-xl border border-slate-200 text-slate-900 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all bg-slate-50"
                 />
                 <button
@@ -134,6 +127,18 @@ export default function PortalLogin() {
               </div>
             </div>
 
+            <div className="space-y-1.5">
+              <label className="block text-sm font-semibold text-slate-700">{t('portal.confirmPassword', { defaultValue: 'Confirm New Password' })}</label>
+              <input
+                type={showPw ? 'text' : 'password'}
+                placeholder={t('portal.confirmPasswordPlaceholder', { defaultValue: 'Re-enter new password' })}
+                value={form.confirmPassword}
+                onChange={e => set('confirmPassword', e.target.value)}
+                autoComplete="new-password"
+                className="w-full h-12 px-4 rounded-xl border border-slate-200 text-slate-900 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all bg-slate-50"
+              />
+            </div>
+
             <motion.button
               type="submit"
               disabled={loading}
@@ -142,15 +147,19 @@ export default function PortalLogin() {
             >
               {loading && <Loader2 className="w-4 h-4 animate-spin" />}
               {loading
-                ? t('portal.signingIn', { defaultValue: 'Signing in…' })
-                : t('portal.signIn', { defaultValue: 'Sign In' })}
+                ? t('portal.saving', { defaultValue: 'Saving…' })
+                : t('portal.changePassword', { defaultValue: 'Change Password' })}
             </motion.button>
+
+            <button
+              type="button"
+              onClick={logout}
+              className="w-full text-center text-xs text-slate-400 hover:text-slate-600 transition-colors"
+            >
+              {t('portal.logout', { defaultValue: 'Log out' })}
+            </button>
           </form>
         </div>
-
-        <p className="text-center text-xs text-slate-600 mt-6">
-          {t('portal.footerTagline', { defaultValue: 'OneBook School Management · Nepal' })}
-        </p>
       </motion.div>
     </div>
   );

@@ -53,6 +53,7 @@ import Hostel from './pages/school/Hostel';
 import Transport from './pages/school/Transport';
 import SchoolReports from './pages/school/SchoolReports';
 import PortalLogin from './pages/portal/PortalLogin';
+import PortalChangePassword from './pages/portal/PortalChangePassword';
 import PortalLayout from './components/layout/PortalLayout';
 import PortalDashboard from './pages/portal/PortalDashboard';
 import PortalAttendance from './pages/portal/PortalAttendance';
@@ -178,6 +179,7 @@ function App() {
               <Route path="/terms" element={<Terms />} />
               {/* Portal — completely separate auth from admin */}
               <Route path="/portal/login" element={<PortalLogin />} />
+              <Route path="/portal/change-password" element={<PortalChangePassword />} />
               <Route path="/portal" element={<PortalLayout />}>
                 <Route index element={<PortalDashboard />} />
                 <Route path="attendance" element={<PortalAttendance />} />

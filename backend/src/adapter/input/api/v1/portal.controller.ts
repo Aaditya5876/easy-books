@@ -6,6 +6,7 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { Throttle } from '@nestjs/throttler';
 import { ApiTags, ApiConsumes } from '@nestjs/swagger';
 import { Public } from '../../../../modules/decorators/public.decorator';
+import { SkipPasswordCheck } from '../../../../modules/decorators/skip-password-check.decorator';
 import { PortalService } from '../../../../application/services/portal.service';
 import { PaymentService } from '../../../../application/services/payment.service';
 import { PortalNotificationService } from '../../../../application/services/portal-notification.service';
@@ -41,11 +42,31 @@ export class PortalController {
     return this.portalService.setPortalPassword(body.studentId, body.phone, body.password, body.companyId);
   }
 
+  // Provisions every active student in the school that doesn't already have
+  // a portal account — one call instead of the "Set Portal Access" dialog
+  // repeated per student. Sends each guardian their phone+password by SMS.
+  @Roles('ADMIN', 'ACCOUNTANT')
+  @Post('bulk-set-access')
+  bulkSetAccess(@Body() body: { companyId: string }) {
+    return this.portalService.bulkSetPortalAccess(body.companyId);
+  }
+
   @Public()
   @UseGuards(PortalGuard)
+  @SkipPasswordCheck()
   @Get('me')
   me(@Req() req: any) {
     return this.portalService.getMyStudent(req.portalUser.studentId, req.portalUser.companyId);
+  }
+
+  // Self-service password change — exempted from the mustChangePassword gate
+  // since it's the one thing a pending account is allowed to do.
+  @Public()
+  @UseGuards(PortalGuard)
+  @SkipPasswordCheck()
+  @Patch('change-password')
+  changePassword(@Req() req: any, @Body() body: { currentPassword: string; newPassword: string }) {
+    return this.portalService.changePassword(req.portalUser, body.currentPassword, body.newPassword);
   }
 
   @Public()

@@ -331,6 +331,7 @@ export default function Students() {
   const [promoteDialog, setPromoteDialog] = useState(false);
   const [portalDialog, setPortalDialog] = useState(null);
   const [importOpen, setImportOpen] = useState(false);
+  const [bulkPortalResult, setBulkPortalResult] = useState(null);
 
   // Debounce the search box so we don't hit the server on every keystroke
   useEffect(() => {
@@ -373,6 +374,23 @@ export default function Students() {
     return c ? `${c.name}${c.section ? ` (${c.section})` : ''}` : '—';
   };
 
+  const bulkPortalAccess = useMutation({
+    mutationFn: () => portalApi.bulkSetAccess({ companyId }),
+    onSuccess: (res) => setBulkPortalResult(res.data),
+    onError: (err) => toast.error(err?.response?.data?.message || t('students.failedToSetPortalAccessAll', { defaultValue: 'Failed to set portal access' })),
+  });
+
+  async function handleBulkPortalAccess() {
+    const ok = await confirm({
+      title: t('students.setPortalAccessAllTitle', { defaultValue: 'Set portal access for all students?' }),
+      description: t('students.setPortalAccessAllDesc', {
+        defaultValue: "Creates a portal login for every active student who doesn't already have one, using their guardian's phone number, and texts each guardian their password. This can send a large number of SMS messages.",
+      }),
+      confirmLabel: t('students.proceed', { defaultValue: 'Proceed' }),
+    });
+    if (ok) bulkPortalAccess.mutate();
+  }
+
   return (
     <div className="p-6 space-y-5">
       <div className="flex items-center justify-between">
@@ -389,6 +407,14 @@ export default function Students() {
           {isAdmin && (
             <Button variant="outline" onClick={() => setPromoteDialog(true)}>
               <ArrowRight className="w-4 h-4 mr-1" /> {t('students.promote', { defaultValue: 'Promote' })}
+            </Button>
+          )}
+          {(isAdmin || isAccountant) && (
+            <Button variant="outline" onClick={handleBulkPortalAccess} disabled={bulkPortalAccess.isPending}>
+              <KeyRound className="w-4 h-4 mr-1" />
+              {bulkPortalAccess.isPending
+                ? t('students.settingPortalAccessAll', { defaultValue: 'Setting Access…' })
+                : t('students.setPortalAccessAll', { defaultValue: 'Set Portal Access for All' })}
             </Button>
           )}
           {canCreateRecords && (
@@ -574,6 +600,29 @@ export default function Students() {
           student={portalDialog}
           companyId={companyId}
         />
+      )}
+
+      {bulkPortalResult && (
+        <Dialog open onOpenChange={() => setBulkPortalResult(null)}>
+          <DialogContent className="max-w-sm">
+            <DialogHeader>
+              <DialogTitle>{t('students.portalAccessSummaryTitle', { defaultValue: 'Portal Access Set' })}</DialogTitle>
+            </DialogHeader>
+            <ul className="text-sm space-y-1.5 text-muted-foreground">
+              <li>{t('students.portalAccessCreated', { defaultValue: '{{count}} account(s) created and texted', count: bulkPortalResult.created })}</li>
+              <li>{t('students.portalAccessSkippedExisting', { defaultValue: '{{count}} already had portal access', count: bulkPortalResult.skippedExisting })}</li>
+              <li>{t('students.portalAccessSkippedNoPhone', { defaultValue: '{{count}} skipped — no guardian phone on file', count: bulkPortalResult.skippedNoPhone })}</li>
+              {bulkPortalResult.smsFailed > 0 && (
+                <li className="text-amber-600">
+                  {t('students.portalAccessSmsFailed', { defaultValue: '{{count}} account(s) created but the SMS failed to send — check SMS settings', count: bulkPortalResult.smsFailed })}
+                </li>
+              )}
+            </ul>
+            <DialogFooter>
+              <Button onClick={() => setBulkPortalResult(null)}>{t('students.close', { defaultValue: 'Close' })}</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       )}
     </div>
   );

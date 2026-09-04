@@ -532,6 +532,9 @@ const portalHeaders = () => ({ Authorization: `Bearer ${portalToken()}` });
 export const portalApi = {
   login: (data: object) => apiClient.post('/api/v1/portal/login', data),
   setPassword: (data: object) => apiClient.post('/api/v1/portal/set-password', data),
+  bulkSetAccess: (data: object) => apiClient.post('/api/v1/portal/bulk-set-access', data),
+  changePassword: (data: { currentPassword: string; newPassword: string }) =>
+    apiClient.patch('/api/v1/portal/change-password', data, { headers: portalHeaders() }),
   me: () => apiClient.get('/api/v1/portal/me', { headers: portalHeaders() }),
   attendance: () => apiClient.get('/api/v1/portal/attendance', { headers: portalHeaders() }),
   fees: () => apiClient.get('/api/v1/portal/fees', { headers: portalHeaders() }),

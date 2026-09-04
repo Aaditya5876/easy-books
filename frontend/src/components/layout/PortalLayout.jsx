@@ -10,6 +10,7 @@ import {
 import { cn } from '@/lib/utils';
 import { useTranslation } from 'react-i18next';
 import { portalApi } from '@/api';
+import { decodePortalToken } from '@/lib/portalToken';
 
 const NAV = [
   { icon: LayoutDashboard, label: 'Home',           labelKey: 'portal.home',          path: '/portal',                 color: '#3B82F6' },
@@ -144,6 +145,10 @@ export default function PortalLayout() {
   useEffect(() => {
     const token = localStorage.getItem('portal_token');
     if (!token) { navigate('/portal/login', { replace: true }); return; }
+    if (decodePortalToken(token)?.mustChangePassword) {
+      navigate('/portal/change-password', { replace: true });
+      return;
+    }
     setHasToken(true);
   }, [navigate]);
 
