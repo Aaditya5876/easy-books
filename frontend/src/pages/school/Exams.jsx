@@ -14,6 +14,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu';
 import { toast } from 'sonner';
 
 const classLabel = (c) => `${c.name}${c.section ? ` (${c.section})` : ''}`;
@@ -459,24 +460,36 @@ export default function Exams() {
     return Array.from(seen, ([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
   }, [results]);
 
+  // One row per student — when a single exam is selected, each row is that
+  // exam's subject breakdown; under "All Exams" a student would otherwise
+  // appear once per exam, so instead we collapse to one row per student and
+  // let the view action pick which exam's report card to open.
   const pivotedRows = useMemo(() => {
     const groups = new Map();
     for (const r of results) {
-      const key = `${r.studentId}|${r.examName}`;
+      const key = filterExam ? `${r.studentId}|${r.examName}` : r.studentId;
       if (!groups.has(key)) {
-        groups.set(key, { studentId: r.studentId, examName: r.examName, student: r.student, bySubject: new Map() });
+        groups.set(key, { studentId: r.studentId, student: r.student, examNames: new Set(), bySubject: new Map() });
       }
-      groups.get(key).bySubject.set(r.subjectId, r);
+      const g = groups.get(key);
+      g.examNames.add(r.examName);
+      if (filterExam) g.bySubject.set(r.subjectId, r);
     }
     return Array.from(groups.values())
       .map(g => {
         const subjectResults = Array.from(g.bySubject.values());
         const totalObtained = subjectResults.reduce((s, r) => s + Number(r.marksObtained), 0);
         const totalMax = subjectResults.reduce((s, r) => s + Number(r.totalMarks), 0);
-        return { ...g, totalObtained, totalMax, percentage: totalMax > 0 ? (totalObtained / totalMax) * 100 : 0 };
+        return {
+          ...g,
+          examNames: Array.from(g.examNames).sort(),
+          totalObtained,
+          totalMax,
+          percentage: totalMax > 0 ? (totalObtained / totalMax) * 100 : 0,
+        };
       })
       .sort((a, b) => (a.student?.name || '').localeCompare(b.student?.name || ''));
-  }, [results]);
+  }, [results, filterExam]);
 
   return (
     <div className="p-6 space-y-5">
@@ -548,40 +561,65 @@ export default function Exams() {
                     <tr>
                       <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('exams.student', { defaultValue: 'Student' })}</th>
                       <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('exams.class', { defaultValue: 'Class' })}</th>
-                      {!filterExam && (
-                        <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('exams.exam', { defaultValue: 'Exam' })}</th>
+                      {filterExam ? (
+                        <>
+                          {subjectColumns.map(sc => (
+                            <th key={sc.id} className="text-right px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide whitespace-nowrap">{sc.name}</th>
+                          ))}
+                          <th className="text-right px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('exams.total', { defaultValue: 'Total' })}</th>
+                          <th className="text-right px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">%</th>
+                        </>
+                      ) : (
+                        <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('exams.examsHeader', { defaultValue: 'Exams' })}</th>
                       )}
-                      {subjectColumns.map(sc => (
-                        <th key={sc.id} className="text-right px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide whitespace-nowrap">{sc.name}</th>
-                      ))}
-                      <th className="text-right px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('exams.total', { defaultValue: 'Total' })}</th>
-                      <th className="text-right px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">%</th>
                       <th className="px-5 py-3" />
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border">
                     {pivotedRows.map(row => (
-                      <tr key={`${row.studentId}|${row.examName}`} className="hover:bg-muted/20">
+                      <tr key={row.studentId} className="hover:bg-muted/20">
                         <td className="px-5 py-3 font-medium">{row.student?.name || '—'}</td>
                         <td className="px-5 py-3 text-muted-foreground text-xs">
                           {row.student?.class ? classLabel(row.student.class) : '—'}
                         </td>
-                        {!filterExam && <td className="px-5 py-3 text-muted-foreground">{row.examName}</td>}
-                        {subjectColumns.map(sc => {
-                          const r = row.bySubject.get(sc.id);
-                          return (
-                            <td key={sc.id} className="px-5 py-3 text-right tabular-nums text-xs">
-                              {r ? Number(r.marksObtained).toFixed(0) : '—'}
-                            </td>
-                          );
-                        })}
-                        <td className="px-5 py-3 text-right tabular-nums">{row.totalObtained} / {row.totalMax}</td>
-                        <td className="px-5 py-3 text-right tabular-nums font-medium">{row.percentage.toFixed(1)}%</td>
+                        {filterExam ? (
+                          <>
+                            {subjectColumns.map(sc => {
+                              const r = row.bySubject.get(sc.id);
+                              return (
+                                <td key={sc.id} className="px-5 py-3 text-right tabular-nums text-xs">
+                                  {r ? Number(r.marksObtained).toFixed(0) : '—'}
+                                </td>
+                              );
+                            })}
+                            <td className="px-5 py-3 text-right tabular-nums">{row.totalObtained} / {row.totalMax}</td>
+                            <td className="px-5 py-3 text-right tabular-nums font-medium">{row.percentage.toFixed(1)}%</td>
+                          </>
+                        ) : (
+                          <td className="px-5 py-3 text-muted-foreground text-xs">{row.examNames.join(', ')}</td>
+                        )}
                         <td className="px-5 py-3">
                           <div className="flex gap-2 justify-end">
-                            <button onClick={() => setViewDialog({ studentId: row.studentId, examName: row.examName })} className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors" title={t('exams.viewReportCard', { defaultValue: 'View report card' })}>
-                              <Eye className="w-3.5 h-3.5" />
-                            </button>
+                            {row.examNames.length > 1 ? (
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <button className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors" title={t('exams.viewReportCard', { defaultValue: 'View report card' })}>
+                                    <Eye className="w-3.5 h-3.5" />
+                                  </button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                  {row.examNames.map(examName => (
+                                    <DropdownMenuItem key={examName} onClick={() => setViewDialog({ studentId: row.studentId, examName })}>
+                                      {examName}
+                                    </DropdownMenuItem>
+                                  ))}
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            ) : (
+                              <button onClick={() => setViewDialog({ studentId: row.studentId, examName: row.examNames[0] })} className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors" title={t('exams.viewReportCard', { defaultValue: 'View report card' })}>
+                                <Eye className="w-3.5 h-3.5" />
+                              </button>
+                            )}
                           </div>
                         </td>
                       </tr>
