@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../../../core/db/psql/prisma.client';
 import { MODULE_KEYS, ModuleKey } from '../../../core/modules/module-keys';
 
@@ -41,7 +41,24 @@ export class CompanyServiceImpl {
     return company;
   }
 
+  // Self-serve creation (the Settings "Add Company" button) is capped by
+  // User.maxCompanies — each company beyond that is a separate sale, raised
+  // by a GeoInfosys SUPER_ADMIN via updateMaxCompanies(). The SUPER_ADMIN-only
+  // provisionClient() sales-onboarding path does not go through here, so it's
+  // never blocked by a customer's own limit.
   async create(data: any, userId?: string) {
+    if (userId) {
+      const [user, existingCount] = await Promise.all([
+        this.prisma.user.findUnique({ where: { id: userId }, select: { maxCompanies: true } }),
+        this.prisma.userCompany.count({ where: { userId } }),
+      ]);
+      if (user && existingCount >= user.maxCompanies) {
+        throw new ForbiddenException(
+          `Your plan allows ${user.maxCompanies} compan${user.maxCompanies === 1 ? 'y' : 'ies'}. Contact GeoInfosys to add another.`,
+        );
+      }
+    }
+
     const company = await this.prisma.company.create({ data });
     if (userId) {
       const existingDefault = await this.prisma.userCompany.findFirst({

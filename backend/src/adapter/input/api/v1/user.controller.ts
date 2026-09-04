@@ -56,6 +56,13 @@ export class UserController {
     return this.service.changeRole(userId, companyId, body.role, req.user.role);
   }
 
+  @Patch(':id/max-companies')
+  @Roles('SUPER_ADMIN')
+  @ApiOperation({ summary: 'Set how many companies this user may self-serve create (e.g. after they buy another school)' })
+  updateMaxCompanies(@Param('id') id: string, @Body('maxCompanies') maxCompanies: number) {
+    return this.service.updateMaxCompanies(id, maxCompanies);
+  }
+
   @Delete(':id')
   @Roles('ADMIN')
   @ApiOperation({ summary: 'Remove a user from the company' })

@@ -132,6 +132,7 @@ export default function Settings() {
   const [copied, setCopied] = useState(false);
   const [roleChanging, setRoleChanging] = useState(null);
   const [removingUserId, setRemovingUserId] = useState(null);
+  const [maxCompaniesSaving, setMaxCompaniesSaving] = useState(null);
 
   // ── Recycle Bin ───────────────────────────────────────────────────────────
   const [binAccessGranted, setBinAccessGranted] = useState(false);
@@ -343,10 +344,14 @@ export default function Settings() {
   // ── Company CRUD ──────────────────────────────────────────────────────────
 
   async function addCompany() {
-    await api.Company.create({ ...companyForm, is_active: true });
-    setCompanyForm({ name: '', address: '', phone: '', email: '', pan_vat: '', registration_number: '', business_type: '', default_unit_type: '', currency: 'NPR', logo_url: '' });
-    setShowAddCompany(false);
-    loadCompanies();
+    try {
+      await api.Company.create({ ...companyForm, is_active: true });
+      setCompanyForm({ name: '', address: '', phone: '', email: '', pan_vat: '', registration_number: '', business_type: '', default_unit_type: '', currency: 'NPR', logo_url: '' });
+      setShowAddCompany(false);
+      loadCompanies();
+    } catch (err) {
+      toast.error(err?.response?.data?.message || t('settings.failedAddCompany', { defaultValue: 'Failed to add company' }));
+    }
   }
 
   async function updateCompany() {
@@ -426,6 +431,21 @@ export default function Settings() {
       toast.error(err?.response?.data?.message || t('settings.failedChangeRole', { defaultValue: 'Failed to change role' }));
     } finally {
       setRoleChanging(null);
+    }
+  }
+
+  async function handleMaxCompaniesChange(userId, value) {
+    const n = parseInt(value, 10);
+    if (!n || n < 1) return;
+    setMaxCompaniesSaving(userId);
+    try {
+      await usersApi.updateMaxCompanies(userId, n);
+      loadUsers();
+      toast.success(t('settings.maxCompaniesUpdated', { defaultValue: 'Company limit updated' }));
+    } catch (err) {
+      toast.error(err?.response?.data?.message || t('settings.failedUpdateMaxCompanies', { defaultValue: 'Failed to update company limit' }));
+    } finally {
+      setMaxCompaniesSaving(null);
     }
   }
 
@@ -731,6 +751,19 @@ export default function Settings() {
                         </div>
                       </div>
                       <div className="flex items-center gap-3">
+                        {isSuperAdmin && u.role === 'ADMIN' && (
+                          <div className="flex items-center gap-1.5" title={t('settings.maxCompaniesHint', { defaultValue: 'How many companies this admin may self-serve create' })}>
+                            <span className="text-xs text-muted-foreground">{t('settings.maxCompaniesLabel', { defaultValue: 'Max Companies' })}</span>
+                            <input
+                              type="number"
+                              min={1}
+                              className="w-14 text-xs border rounded-md px-1.5 py-1 bg-background focus:outline-none focus:ring-1 focus:ring-ring"
+                              defaultValue={u.maxCompanies ?? 1}
+                              disabled={maxCompaniesSaving === u.id}
+                              onBlur={e => { if (Number(e.target.value) !== u.maxCompanies) handleMaxCompaniesChange(u.id, e.target.value); }}
+                            />
+                          </div>
+                        )}
                         {u.id === user?.id ? (
                           <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${ROLE_COLORS[u.role] || 'bg-secondary'}`}>
                             {roleLabel(u.role)} {t('settings.youSuffix', { defaultValue: '(you)' })}

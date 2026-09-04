@@ -189,8 +189,20 @@ export class UserServiceImpl {
   async listCompanyUsers(companyId: string) {
     const links = await this.prisma.userCompany.findMany({
       where: { companyId },
-      include: { user: { select: { id: true, email: true, name: true, role: true, createdAt: true } } },
+      include: { user: { select: { id: true, email: true, name: true, role: true, createdAt: true, maxCompanies: true } } },
     });
     return links.map((l) => ({ ...l.user, isDefault: l.isDefault }));
+  }
+
+  // SUPER_ADMIN-only (enforced by @Roles('SUPER_ADMIN') on the controller
+  // route) — raises how many companies this user may self-serve create via
+  // the Settings "Add Company" flow, e.g. after they buy a second school.
+  async updateMaxCompanies(userId: string, maxCompanies: number) {
+    if (!Number.isInteger(maxCompanies) || maxCompanies < 1) {
+      throw new BadRequestException('maxCompanies must be a positive integer');
+    }
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new NotFoundException('User not found');
+    return this.prisma.user.update({ where: { id: userId }, data: { maxCompanies } });
   }
 }

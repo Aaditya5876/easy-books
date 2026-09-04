@@ -523,6 +523,9 @@ export const usersApi = {
   // SUPER_ADMIN only — sales-led onboarding: new company + its first ADMIN login.
   provisionClient: (data: { companyName: string; businessType: string; adminName: string; adminEmail: string; enabledModules?: string[] }) =>
     apiClient.post('/api/v1/users/provision-client', data),
+  // SUPER_ADMIN only — how many companies this user may self-serve create.
+  updateMaxCompanies: (userId: string, maxCompanies: number) =>
+    apiClient.patch(`/api/v1/users/${userId}/max-companies`, { maxCompanies }),
 };
 
 // ── Portal API (parent/student token-based auth) ─────────────────────────────
