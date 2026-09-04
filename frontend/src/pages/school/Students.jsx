@@ -375,17 +375,25 @@ export default function Students() {
   };
 
   const bulkPortalAccess = useMutation({
-    mutationFn: () => portalApi.bulkSetAccess({ companyId }),
+    mutationFn: () => portalApi.bulkSetAccess({ companyId, classId: filterClass || undefined }),
     onSuccess: (res) => setBulkPortalResult(res.data),
     onError: (err) => toast.error(err?.response?.data?.message || t('students.failedToSetPortalAccessAll', { defaultValue: 'Failed to set portal access' })),
   });
 
   async function handleBulkPortalAccess() {
+    const scopeLabel = filterClass ? classLabel(filterClass) : null;
     const ok = await confirm({
-      title: t('students.setPortalAccessAllTitle', { defaultValue: 'Set portal access for all students?' }),
-      description: t('students.setPortalAccessAllDesc', {
-        defaultValue: "Creates a portal login for every active student who doesn't already have one, using their guardian's phone number, and texts each guardian their password. This can send a large number of SMS messages.",
-      }),
+      title: scopeLabel
+        ? t('students.setPortalAccessClassTitle', { defaultValue: 'Set portal access for {{className}}?', className: scopeLabel })
+        : t('students.setPortalAccessAllTitle', { defaultValue: 'Set portal access for all students?' }),
+      description: scopeLabel
+        ? t('students.setPortalAccessClassDesc', {
+            defaultValue: "Creates a portal login for every active student in {{className}} who doesn't already have one, using their guardian's phone number, and texts each guardian their password.",
+            className: scopeLabel,
+          })
+        : t('students.setPortalAccessAllDesc', {
+            defaultValue: "Creates a portal login for every active student who doesn't already have one, using their guardian's phone number, and texts each guardian their password. This can send a large number of SMS messages.",
+          }),
       confirmLabel: t('students.proceed', { defaultValue: 'Proceed' }),
     });
     if (ok) bulkPortalAccess.mutate();
@@ -414,7 +422,9 @@ export default function Students() {
               <KeyRound className="w-4 h-4 mr-1" />
               {bulkPortalAccess.isPending
                 ? t('students.settingPortalAccessAll', { defaultValue: 'Setting Access…' })
-                : t('students.setPortalAccessAll', { defaultValue: 'Set Portal Access for All' })}
+                : filterClass
+                  ? t('students.setPortalAccessClass', { defaultValue: 'Set Portal Access for {{className}}', className: classLabel(filterClass) })
+                  : t('students.setPortalAccessAll', { defaultValue: 'Set Portal Access for All' })}
             </Button>
           )}
           {canCreateRecords && (

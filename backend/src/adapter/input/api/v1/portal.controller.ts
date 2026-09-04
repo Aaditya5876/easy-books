@@ -47,8 +47,8 @@ export class PortalController {
   // repeated per student. Sends each guardian their phone+password by SMS.
   @Roles('ADMIN', 'ACCOUNTANT')
   @Post('bulk-set-access')
-  bulkSetAccess(@Body() body: { companyId: string }) {
-    return this.portalService.bulkSetPortalAccess(body.companyId);
+  bulkSetAccess(@Body() body: { companyId: string; classId?: string }) {
+    return this.portalService.bulkSetPortalAccess(body.companyId, body.classId);
   }
 
   @Public()

@@ -68,9 +68,9 @@ export class PortalService {
   // that doesn't already have one, using the guardian's phone and a random
   // 6-digit password sent by SMS — doing this one student at a time via the
   // individual dialog doesn't scale past a handful of students.
-  async bulkSetPortalAccess(companyId: string) {
+  async bulkSetPortalAccess(companyId: string, classId?: string) {
     const [students, existing, company] = await Promise.all([
-      this.prisma.student.findMany({ where: { companyId, status: 'ACTIVE' } }),
+      this.prisma.student.findMany({ where: { companyId, status: 'ACTIVE', ...(classId ? { classId } : {}) } }),
       this.prisma.portalUser.findMany({ where: { companyId }, select: { studentId: true } }),
       this.prisma.company.findUnique({ where: { id: companyId }, select: { name: true } }),
     ]);
