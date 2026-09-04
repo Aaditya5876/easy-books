@@ -2,9 +2,12 @@ import { Controller, Get, Post, Body, Query, Req } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { FiscalYearService } from '../../../../application/services/fiscal-year.service';
 import { Roles } from '../../../../modules/decorators/roles.decorator';
+import { RequiresModule } from '../../../../modules/decorators/requires-module.decorator';
 
 @ApiTags('Fiscal Year')
 @ApiBearerAuth()
+@Roles('ACCOUNTANT', 'ADMIN')
+@RequiresModule('FINANCE')
 @Controller('api/v1/fiscal-year')
 export class FiscalYearController {
   constructor(private readonly service: FiscalYearService) {}

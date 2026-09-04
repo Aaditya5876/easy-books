@@ -23,21 +23,30 @@ export class ModuleAccessGuard implements CanActivate {
     if (!required) return true;
 
     const req = context.switchToHttp().getRequest();
-    const companyId: string | undefined =
-      req.query?.companyId || req.params?.companyId || req.body?.companyId;
+    // Check EVERY companyId the request carries (see CompanyAccessGuard for
+    // why picking just one source is unsafe) — a handler might enforce the
+    // module against a different companyId than whichever one this check
+    // used to validate, letting a caller with an entitled company satisfy
+    // this guard while the actual operation targeted an unentitled one.
+    const companyIds = [...new Set(
+      [req.query?.companyId, req.params?.companyId, req.body?.companyId]
+        .filter((v): v is string => typeof v === 'string' && v.length > 0),
+    )];
     // Fail closed — an omitted companyId must never silently skip a licensing
     // check (it previously did, letting any request without the field bypass
     // module entitlements entirely).
-    if (!companyId) throw new BadRequestException('companyId is required');
+    if (companyIds.length === 0) throw new BadRequestException('companyId is required');
 
-    const company = await this.prisma.company.findUnique({
-      where: { id: companyId },
-      select: { enabledModules: true },
-    });
-    if (!company || company.enabledModules.length === 0) return true;
+    for (const companyId of companyIds) {
+      const company = await this.prisma.company.findUnique({
+        where: { id: companyId },
+        select: { enabledModules: true },
+      });
+      if (!company || company.enabledModules.length === 0) continue;
 
-    if (!company.enabledModules.includes(required)) {
-      throw new ForbiddenException(`Your plan does not include the ${required} module`);
+      if (!company.enabledModules.includes(required)) {
+        throw new ForbiddenException(`Your plan does not include the ${required} module`);
+      }
     }
     return true;
   }

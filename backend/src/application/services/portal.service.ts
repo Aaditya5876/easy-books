@@ -4,6 +4,7 @@ import { PrismaService } from '../../../core/db/psql/prisma.client';
 import { SchoolFinanceService } from './school-finance.service';
 import { SmsService } from './sms.service';
 import * as bcrypt from 'bcrypt';
+import { randomInt } from 'crypto';
 
 @Injectable()
 export class PortalService {
@@ -86,7 +87,7 @@ export class PortalService {
       const phone = student.guardianPhone;
       if (!phone) { skippedNoPhone++; continue; }
 
-      const password = String(Math.floor(100000 + Math.random() * 900000)); // 6-digit, easy to read from an SMS
+      const password = String(randomInt(100000, 1000000)); // 6-digit, easy to read from an SMS
       const passwordHash = await bcrypt.hash(password, 10);
       await this.prisma.portalUser.create({
         data: { companyId, studentId: student.id, phone, passwordHash, mustChangePassword: true },
