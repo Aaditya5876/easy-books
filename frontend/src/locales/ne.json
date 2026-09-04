@@ -226,6 +226,7 @@
     "setPortalAccessAllDesc": "पहिले नै पोर्टल पहुँच नभएका हरेक सक्रिय विद्यार्थीका लागि, अभिभावकको फोन नम्बर प्रयोग गरी पोर्टल लगइन बनाइनेछ र प्रत्येक अभिभावकलाई SMS मार्फत पासवर्ड पठाइनेछ। यसले धेरै SMS पठाउन सक्छ।",
     "proceed": "अगाडि बढ्नुहोस्",
     "portalAccessSummaryTitle": "पोर्टल पहुँच सेट भयो",
+    "portalAccessSummaryLead": "{{count}} विद्यार्थी/अभिभावक पोर्टल खाता बनाइयो — अभिभावकको फोन नम्बरमा प्रमाणहरू SMS मार्फत पठाइएको छ।",
     "portalAccessCreated": "{{count}} खाता बनाइयो र SMS पठाइयो",
     "portalAccessSkippedExisting": "{{count}} लाई पहिले नै पोर्टल पहुँच थियो",
     "portalAccessSkippedNoPhone": "{{count}} लाई अभिभावकको फोन नम्बर नभएकाले छोडियो",

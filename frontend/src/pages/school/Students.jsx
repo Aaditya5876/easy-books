@@ -608,6 +608,12 @@ export default function Students() {
             <DialogHeader>
               <DialogTitle>{t('students.portalAccessSummaryTitle', { defaultValue: 'Portal Access Set' })}</DialogTitle>
             </DialogHeader>
+            <p className="text-sm">
+              {t('students.portalAccessSummaryLead', {
+                defaultValue: '{{count}} student/parent portal(s) created — credentials have been texted to the guardian’s phone number.',
+                count: bulkPortalResult.created,
+              })}
+            </p>
             <ul className="text-sm space-y-1.5 text-muted-foreground">
               <li>{t('students.portalAccessCreated', { defaultValue: '{{count}} account(s) created and texted', count: bulkPortalResult.created })}</li>
               <li>{t('students.portalAccessSkippedExisting', { defaultValue: '{{count}} already had portal access', count: bulkPortalResult.skippedExisting })}</li>
