@@ -281,7 +281,7 @@ export const studentsApi = {
   },
   get: (id: string) => apiClient.get(`/api/v1/school/students/${id}`, { params: { companyId: companyId() } }),
   create: (data: object) => apiClient.post('/api/v1/school/students', data),
-  update: (id: string, data: object) => apiClient.put(`/api/v1/school/students/${id}`, data),
+  update: (id: string, data: object) => apiClient.put(`/api/v1/school/students/${id}`, data, { params: { companyId: companyId() } }),
   remove: (id: string) => apiClient.delete(`/api/v1/school/students/${id}`, { params: { companyId: companyId() } }),
   promote: (data: object) => apiClient.post('/api/v1/school/students/promote', data),
 };
@@ -289,14 +289,14 @@ export const studentsApi = {
 export const classesApi = {
   list: () => apiClient.get('/api/v1/school/classes', { params: { companyId: companyId() } }),
   create: (data: object) => apiClient.post('/api/v1/school/classes', data),
-  update: (id: string, data: object) => apiClient.put(`/api/v1/school/classes/${id}`, data),
+  update: (id: string, data: object) => apiClient.put(`/api/v1/school/classes/${id}`, data, { params: { companyId: companyId() } }),
   remove: (id: string) => apiClient.delete(`/api/v1/school/classes/${id}`, { params: { companyId: companyId() } }),
 };
 
 export const subjectsApi = {
   list: (classId?: string) => apiClient.get('/api/v1/school/subjects', { params: { companyId: companyId(), classId: classId || undefined } }),
   create: (data: object) => apiClient.post('/api/v1/school/subjects', data),
-  update: (id: string, data: object) => apiClient.put(`/api/v1/school/subjects/${id}`, data),
+  update: (id: string, data: object) => apiClient.put(`/api/v1/school/subjects/${id}`, data, { params: { companyId: companyId() } }),
   remove: (id: string) => apiClient.delete(`/api/v1/school/subjects/${id}`, { params: { companyId: companyId() } }),
 };
 
@@ -314,7 +314,7 @@ export const feesApi = {
   listStructures: (classId?: string) =>
     apiClient.get('/api/v1/school/fee-structures', { params: { companyId: companyId(), classId } }),
   createStructure: (data: object) => apiClient.post('/api/v1/school/fee-structures', data),
-  updateStructure: (id: string, data: object) => apiClient.put(`/api/v1/school/fee-structures/${id}`, data),
+  updateStructure: (id: string, data: object) => apiClient.put(`/api/v1/school/fee-structures/${id}`, data, { params: { companyId: companyId() } }),
   removeStructure: (id: string) =>
     apiClient.delete(`/api/v1/school/fee-structures/${id}`, { params: { companyId: companyId() } }),
   listInvoices: (params?: object) =>

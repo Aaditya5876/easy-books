@@ -63,8 +63,9 @@ export class InventoryServiceImpl {
 
   async update(id: string, companyId: string, dto: UpdateInventoryItemDTO) {
     const before = await this.prisma.inventoryItem.findFirst({ where: { id, companyId } });
+    if (!before) throw new NotFoundException('Inventory item not found');
     const updated = await this.prisma.inventoryItem.update({ where: { id }, data: dto as any });
-    if (before && (dto as any).quantity !== undefined) {
+    if ((dto as any).quantity !== undefined) {
       await this.maybeNotifyLowStock(companyId, updated, Number(before.quantity), Number(updated.quantity));
     }
     return updated;

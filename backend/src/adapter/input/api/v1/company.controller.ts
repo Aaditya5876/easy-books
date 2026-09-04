@@ -33,8 +33,8 @@ export class CompanyController {
   @Get(':id')
   @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'TEACHER', 'LIBRARIAN')
   @ApiOperation({ summary: 'Get a company by id' })
-  findOne(@Param('id') id: string) {
-    return this.service.findOne(id);
+  findOne(@Param('id') id: string, @Req() req: any) {
+    return this.service.findOne(id, req.user.sub, req.user.role);
   }
 
   @Post()
@@ -47,8 +47,8 @@ export class CompanyController {
   @Put(':id')
   @Roles('ADMIN')
   @ApiOperation({ summary: 'Update a company' })
-  update(@Param('id') id: string, @Body() body: any) {
-    return this.service.update(id, body);
+  update(@Param('id') id: string, @Body() body: any, @Req() req: any) {
+    return this.service.update(id, body, req.user.sub, req.user.role);
   }
 
   // SUPER_ADMIN only — @Roles('SUPER_ADMIN') here means literally that: a
@@ -65,8 +65,8 @@ export class CompanyController {
   @Delete(':id')
   @Roles('ADMIN')
   @ApiOperation({ summary: 'Delete a company' })
-  remove(@Param('id') id: string) {
-    return this.service.remove(id);
+  remove(@Param('id') id: string, @Req() req: any) {
+    return this.service.remove(id, req.user.sub, req.user.role);
   }
 
   // ─── Payroll Settings ────────────────────────────────────────────────────────
@@ -74,14 +74,14 @@ export class CompanyController {
   @Get(':id/payroll-settings')
   @Roles('ACCOUNTANT', 'ADMIN')
   @ApiOperation({ summary: 'Get payroll settings for a company' })
-  getPayrollSettings(@Param('id') id: string) {
-    return this.service.getPayrollSettings(id);
+  getPayrollSettings(@Param('id') id: string, @Req() req: any) {
+    return this.service.getPayrollSettings(id, req.user.sub, req.user.role);
   }
 
   @Patch(':id/payroll-settings')
   @Roles('ADMIN')
   @ApiOperation({ summary: 'Create or update payroll settings (SSF %, PIT, Dashain bonus)' })
-  upsertPayrollSettings(@Param('id') id: string, @Body() body: any) {
-    return this.service.upsertPayrollSettings(id, body);
+  upsertPayrollSettings(@Param('id') id: string, @Body() body: any, @Req() req: any) {
+    return this.service.upsertPayrollSettings(id, req.user.sub, req.user.role, body);
   }
 }

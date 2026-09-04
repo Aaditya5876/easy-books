@@ -22,8 +22,14 @@ const STATUS_CONFIG = {
 };
 const PAGE_SIZE = 8;
 
+// Uploaded files now require an authenticated request; a portal session has
+// no cookie (Bearer-only, in localStorage), and a plain <img src> can't send
+// an Authorization header, so the token rides along as a query param instead.
 function resolveFileUrl(url = '') {
-  return url.startsWith('http') ? url : `${apiClient.defaults.baseURL}${url}`;
+  const full = url.startsWith('http') ? url : `${apiClient.defaults.baseURL}${url}`;
+  const token = localStorage.getItem('portal_token');
+  if (!token) return full;
+  return `${full}${full.includes('?') ? '&' : '?'}token=${encodeURIComponent(token)}`;
 }
 
 const PAYMENT_STATUS_BADGE = {

@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../../core/db/psql/prisma.client';
 import { CreateMemoDocumentDTO, UpdateMemoDocumentDTO } from '@easy-books/shared';
 
@@ -26,10 +26,14 @@ export class MemoServiceImpl {
   }
 
   async update(id: string, companyId: string, dto: UpdateMemoDocumentDTO) {
+    const existing = await this.prisma.memoDocument.findFirst({ where: { id, companyId } });
+    if (!existing) throw new NotFoundException('Document not found');
     return this.prisma.memoDocument.update({ where: { id }, data: dto as any });
   }
 
   async remove(id: string, companyId: string) {
+    const existing = await this.prisma.memoDocument.findFirst({ where: { id, companyId } });
+    if (!existing) throw new NotFoundException('Document not found');
     return this.prisma.memoDocument.update({ where: { id }, data: { deletedAt: new Date() } });
   }
 }

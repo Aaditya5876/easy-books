@@ -57,6 +57,8 @@ export class EmployeeServiceImpl {
   }
 
   async update(id: string, companyId: string, dto: UpdateEmployeeDTO) {
+    const existing = await this.prisma.employee.findFirst({ where: { id, companyId, deletedAt: null } });
+    if (!existing) throw new NotFoundException('Employee not found');
     const employeeId = dto.employeeId?.trim();
     if (employeeId !== undefined) {
       await this.assertEmployeeIdFree(companyId, employeeId, id);

@@ -113,6 +113,13 @@ export class LeaveServiceImpl {
   }
 
   async allocateLeave(companyId: string, employeeId: string, leaveTypeId: string, fiscalYear: string, totalDays: number) {
+    const [employee, leaveType] = await Promise.all([
+      this.prisma.employee.findFirst({ where: { id: employeeId, companyId } }),
+      this.prisma.leaveType.findFirst({ where: { id: leaveTypeId, companyId } }),
+    ]);
+    if (!employee) throw new NotFoundException('Employee not found');
+    if (!leaveType) throw new NotFoundException('Leave type not found');
+
     const existing = await this.prisma.leaveBalance.findUnique({
       where: { employeeId_leaveTypeId_fiscalYear: { employeeId, leaveTypeId, fiscalYear } },
     });

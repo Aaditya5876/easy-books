@@ -43,8 +43,12 @@ export class UserServiceImpl {
         data: { userId: existing.id, companyId, isDefault: false },
       });
 
-      await this.prisma.user.update({ where: { id: existing.id }, data: { role: data.role as any } });
-
+      // Deliberately not setting role here: `role` lives globally on User,
+      // not per-company, so overwriting it to match this invite would also
+      // silently change what this person can do at every OTHER company they
+      // already belong to. If they need a different role at this company
+      // specifically, that requires the role to become per-UserCompany —
+      // out of scope for a link-existing-user action.
       return { message: 'Existing user linked to company', userId: existing.id };
     }
 

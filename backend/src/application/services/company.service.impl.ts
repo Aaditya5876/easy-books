@@ -32,7 +32,18 @@ export class CompanyServiceImpl {
     return defaultUC?.company || null;
   }
 
-  async findOne(id: string) {
+  // These routes are keyed on ":id" (the company itself), not a "companyId"
+  // query/body param, so the global CompanyAccessGuard never sees them and
+  // can't verify membership — every method below that touches a specific
+  // company by id must check it here instead.
+  private async assertMembership(companyId: string, userId: string, role: string) {
+    if (role === 'SUPER_ADMIN') return;
+    const membership = await this.prisma.userCompany.findFirst({ where: { userId, companyId } });
+    if (!membership) throw new ForbiddenException('You do not have access to this company');
+  }
+
+  async findOne(id: string, userId: string, role: string) {
+    await this.assertMembership(id, userId, role);
     const company = await this.prisma.company.findFirst({
       where: { id },
       include: { payrollSettings: true },
@@ -75,7 +86,8 @@ export class CompanyServiceImpl {
     return company;
   }
 
-  async update(id: string, data: any) {
+  async update(id: string, data: any, userId: string, role: string) {
+    await this.assertMembership(id, userId, role);
     const company = await this.prisma.company.findFirst({ where: { id } });
     if (!company) throw new NotFoundException('Company not found');
     const {
@@ -107,19 +119,21 @@ export class CompanyServiceImpl {
     return this.prisma.company.update({ where: { id }, data: { enabledModules } });
   }
 
-  async remove(id: string) {
+  async remove(id: string, userId: string, role: string) {
+    await this.assertMembership(id, userId, role);
     return this.prisma.company.delete({ where: { id } });
   }
 
   // ─── Payroll Settings ────────────────────────────────────────────────────────
 
-  async getPayrollSettings(companyId: string) {
+  async getPayrollSettings(companyId: string, userId: string, role: string) {
+    await this.assertMembership(companyId, userId, role);
     const settings = await this.prisma.companyPayrollSettings.findUnique({ where: { companyId } });
     if (!settings) throw new NotFoundException('Payroll settings not configured');
     return settings;
   }
 
-  async upsertPayrollSettings(companyId: string, data: {
+  async upsertPayrollSettings(companyId: string, userId: string, role: string, data: {
     ssfApplicable?: boolean;
     ssfEmployeeRate?: number;
     ssfEmployerRate?: number;
@@ -132,6 +146,7 @@ export class CompanyServiceImpl {
     standardStartTime?: string;
     standardEndTime?: string;
   }) {
+    await this.assertMembership(companyId, userId, role);
     return this.prisma.companyPayrollSettings.upsert({
       where: { companyId },
       create: { companyId, ...data },

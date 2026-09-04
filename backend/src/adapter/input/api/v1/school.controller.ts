@@ -124,8 +124,9 @@ export class SchoolController {
 
   @Put('classes/:id')
   @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'TEACHER')
-  updateClass(@Param('id') id: string, @Body() body: any) {
-    return this.service.updateClass(id, body);
+  @ApiQuery({ name: 'companyId', required: true })
+  updateClass(@Param('id') id: string, @Query('companyId') companyId: string, @Body() body: any) {
+    return this.service.updateClass(id, companyId, body);
   }
 
   @Delete('classes/:id')
@@ -175,8 +176,9 @@ export class SchoolController {
   }
 
   @Put('students/:id')
-  updateStudent(@Param('id') id: string, @Body() body: any) {
-    return this.service.updateStudent(id, body);
+  @ApiQuery({ name: 'companyId', required: true })
+  updateStudent(@Param('id') id: string, @Query('companyId') companyId: string, @Body() body: any) {
+    return this.service.updateStudent(id, companyId, body);
   }
 
   @Delete('students/:id')
@@ -209,8 +211,9 @@ export class SchoolController {
 
   @Put('subjects/:id')
   @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'TEACHER')
-  updateSubject(@Param('id') id: string, @Body() body: any) {
-    return this.service.updateSubject(id, body);
+  @ApiQuery({ name: 'companyId', required: true })
+  updateSubject(@Param('id') id: string, @Query('companyId') companyId: string, @Body() body: any) {
+    return this.service.updateSubject(id, companyId, body);
   }
 
   @Delete('subjects/:id')
@@ -284,14 +287,16 @@ export class SchoolController {
   }
 
   @Put('fee-structures/:id')
-  updateFeeStructure(@Param('id') id: string, @Body() body: any) {
-    return this.service.updateFeeStructure(id, body);
+  @ApiQuery({ name: 'companyId', required: true })
+  updateFeeStructure(@Param('id') id: string, @Query('companyId') companyId: string, @Body() body: any) {
+    return this.service.updateFeeStructure(id, companyId, body);
   }
 
   @Delete('fee-structures/:id')
   @Roles('ADMIN')
-  deleteFeeStructure(@Param('id') id: string) {
-    return this.service.deleteFeeStructure(id);
+  @ApiQuery({ name: 'companyId', required: true })
+  deleteFeeStructure(@Param('id') id: string, @Query('companyId') companyId: string) {
+    return this.service.deleteFeeStructure(id, companyId);
   }
 
   // ── Fee Invoices ──────────────────────────────────────────────────────────────

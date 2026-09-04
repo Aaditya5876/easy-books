@@ -201,8 +201,8 @@ export class SchoolService {
     return this.prisma.schoolClass.create({ data });
   }
 
-  async updateClass(id: string, body: any) {
-    const cls = await this.prisma.schoolClass.findUnique({ where: { id } });
+  async updateClass(id: string, companyId: string, body: any) {
+    const cls = await this.prisma.schoolClass.findFirst({ where: { id, companyId } });
     if (!cls) throw new NotFoundException('Class not found');
     const data = clean(body, ['name', 'section', 'classTeacherId']);
     if (data.name !== undefined || data.section !== undefined) {
@@ -217,6 +217,8 @@ export class SchoolService {
   }
 
   async deleteClass(id: string, companyId: string) {
+    const cls = await this.prisma.schoolClass.findFirst({ where: { id, companyId } });
+    if (!cls) throw new NotFoundException('Class not found');
     const studentCount = await this.prisma.student.count({ where: { classId: id } });
     if (studentCount > 0) throw new BadRequestException(`Cannot delete — ${studentCount} students are enrolled in this class`);
     const blockers: string[] = [];
@@ -303,8 +305,8 @@ export class SchoolService {
     });
   }
 
-  async updateStudent(id: string, body: any) {
-    const student = await this.prisma.student.findUnique({ where: { id } });
+  async updateStudent(id: string, companyId: string, body: any) {
+    const student = await this.prisma.student.findFirst({ where: { id, companyId } });
     if (!student) throw new NotFoundException('Student not found');
     return this.prisma.student.update({
       where: { id },
@@ -355,19 +357,27 @@ export class SchoolService {
     const { classIds } = body;
     const data = clean(body, ['companyId', 'name', 'code', 'bookReference', 'chapters'], ['chapters']);
     await this.assertSubjectNameFree(data.companyId, data.name);
+    if (classIds?.length) {
+      const owned = await this.prisma.schoolClass.count({ where: { id: { in: classIds }, companyId: data.companyId } });
+      if (owned !== classIds.length) throw new NotFoundException('One or more classes do not belong to this company');
+    }
     return this.prisma.subject.create({
       data: { ...data, classes: classIds?.length ? { create: classIds.map((classId: string) => ({ classId })) } : undefined },
       include: { classes: { include: { class: true } } },
     });
   }
 
-  async updateSubject(id: string, body: any) {
+  async updateSubject(id: string, companyId: string, body: any) {
     const { classIds } = body;
-    const subject = await this.prisma.subject.findUnique({ where: { id } });
+    const subject = await this.prisma.subject.findFirst({ where: { id, companyId } });
     if (!subject) throw new NotFoundException('Subject not found');
     const data = clean(body, ['name', 'code', 'bookReference', 'chapters'], ['chapters']);
     if (data.name !== undefined) {
       await this.assertSubjectNameFree(subject.companyId, data.name, id);
+    }
+    if (classIds?.length) {
+      const owned = await this.prisma.schoolClass.count({ where: { id: { in: classIds }, companyId } });
+      if (owned !== classIds.length) throw new NotFoundException('One or more classes do not belong to this company');
     }
     return this.prisma.$transaction(async (tx) => {
       if (classIds !== undefined) {
@@ -429,6 +439,10 @@ export class SchoolService {
 
   async saveAttendance(companyId: string, classId: string, date: string, academicYearId: string | undefined, entries: Array<{ studentId: string; status: string; notes?: string }>) {
     const targetDate = new Date(date);
+
+    const studentIds = [...new Set(entries.map(e => e.studentId))];
+    const ownedCount = await this.prisma.student.count({ where: { id: { in: studentIds }, companyId } });
+    if (ownedCount !== studentIds.length) throw new NotFoundException('One or more students do not belong to this company');
 
     // Snapshot prior status so re-saving an unchanged day doesn't re-notify guardians
     const existing = await this.prisma.studentAttendance.findMany({
@@ -570,14 +584,18 @@ export class SchoolService {
     });
   }
 
-  async updateFeeStructure(id: string, body: any) {
+  async updateFeeStructure(id: string, companyId: string, body: any) {
+    const structure = await this.prisma.feeStructure.findFirst({ where: { id, companyId } });
+    if (!structure) throw new NotFoundException('Fee structure not found');
     return this.prisma.feeStructure.update({
       where: { id },
       data: clean(body, ['classId', 'feeHeadId', 'name', 'amount', 'frequency']),
     });
   }
 
-  async deleteFeeStructure(id: string) {
+  async deleteFeeStructure(id: string, companyId: string) {
+    const structure = await this.prisma.feeStructure.findFirst({ where: { id, companyId } });
+    if (!structure) throw new NotFoundException('Fee structure not found');
     return this.prisma.feeStructure.delete({ where: { id } });
   }
 
@@ -1060,6 +1078,8 @@ export class SchoolService {
       ['companyId', 'classId', 'subjectId', 'teacherId', 'dayOfWeek', 'periodNumber', 'startTime', 'endTime', 'roomNumber'],
       ['dayOfWeek', 'periodNumber'],
     );
+    const cls = await this.prisma.schoolClass.findFirst({ where: { id: data.classId, companyId: data.companyId } });
+    if (!cls) throw new NotFoundException('Class not found');
     const entry = await this.prisma.timetableEntry.upsert({
       where: { classId_dayOfWeek_periodNumber: { classId: data.classId, dayOfWeek: data.dayOfWeek, periodNumber: data.periodNumber } },
       create: data,
@@ -1360,6 +1380,10 @@ export class SchoolService {
     const book = await this.prisma.book.findFirst({ where: { id: data.bookId, companyId: data.companyId } });
     if (!book) throw new NotFoundException('Book not found');
     if (book.availableCopies < 1) throw new BadRequestException('No copies available');
+    if (data.studentId) {
+      const student = await this.prisma.student.findFirst({ where: { id: data.studentId, companyId: data.companyId } });
+      if (!student) throw new NotFoundException('Student not found');
+    }
     const [issue] = await this.prisma.$transaction([
       this.prisma.bookIssue.create({ data: { ...data, status: 'ISSUED', issueDate: new Date() } }),
       this.prisma.book.update({ where: { id: data.bookId }, data: { availableCopies: { decrement: 1 } } }),

@@ -13,8 +13,14 @@ import { useTranslation } from 'react-i18next';
 const FILE_TYPE_ICONS = { pdf: '📄', doc: '📝', docx: '📝', image: '🖼️', other: '📎' };
 const PAGE_SIZE = 9;
 
+// Uploaded files now require an authenticated request; a portal session has
+// no cookie (Bearer-only, in localStorage), and a plain <img src>/<a href>
+// can't send an Authorization header, so the token rides along as a query param.
 function resolveFileUrl(url = '') {
-  return url.startsWith('http') ? url : `${apiClient.defaults.baseURL}${url}`;
+  const full = url.startsWith('http') ? url : `${apiClient.defaults.baseURL}${url}`;
+  const token = localStorage.getItem('portal_token');
+  if (!token) return full;
+  return `${full}${full.includes('?') ? '&' : '?'}token=${encodeURIComponent(token)}`;
 }
 
 const SUBJECT_COLORS = ['#3B82F6', '#10B981', '#8B5CF6', '#F97316', '#F43F5E', '#14B8A6', '#F59E0B', '#6366F1'];

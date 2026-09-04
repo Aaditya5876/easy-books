@@ -27,6 +27,8 @@ export class AttendanceServiceImpl {
   }
 
   async create(dto: CreateAttendanceDTO) {
+    const employee = await this.prisma.employee.findFirst({ where: { id: dto.employeeId, companyId: dto.companyId } });
+    if (!employee) throw new NotFoundException('Employee not found');
     const date = new Date(dto.date);
     return this.prisma.attendance.upsert({
       where: { employeeId_date: { employeeId: dto.employeeId, date } },

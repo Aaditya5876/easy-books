@@ -75,6 +75,16 @@ export class PurchaseServiceImpl {
     const orderNumber = await this.generateOrderNumber(companyId);
 
     const { computedItems, subtotal, discountTotal } = this.computeItems(items);
+
+    // Item ids come straight from the request — confirm every referenced
+    // inventory item actually belongs to this company before stock/price
+    // gets mutated against it (mirrors sales.service.impl.ts's validateStock).
+    const inventoryItemIds = [...new Set(computedItems.map(i => i.inventoryItemId).filter((v): v is string => !!v))];
+    if (inventoryItemIds.length) {
+      const owned = await this.prisma.inventoryItem.count({ where: { id: { in: inventoryItemIds }, companyId } });
+      if (owned !== inventoryItemIds.length) throw new BadRequestException('One or more items do not belong to this company');
+    }
+
     const vatAmount = isVat ? Number(((subtotal - discountTotal + laborCharges) * VAT_RATE).toFixed(2)) : 0;
     const totalAmount = Number((subtotal - discountTotal + laborCharges + vatAmount).toFixed(2));
 

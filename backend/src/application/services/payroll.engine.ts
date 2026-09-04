@@ -330,6 +330,8 @@ export class PayrollEngineService {
   }
 
   async setHold(companyId: string, payrollId: string, isOnHold: boolean, holdReason?: string) {
+    const existing = await this.prisma.payroll.findFirst({ where: { id: payrollId, companyId } });
+    if (!existing) throw new Error('Payroll record not found');
     return this.prisma.payroll.update({
       where: { id: payrollId },
       data: { isOnHold, holdReason: isOnHold ? holdReason : null, status: isOnHold ? 'ON_HOLD' : 'PROCESSED' },
@@ -337,6 +339,8 @@ export class PayrollEngineService {
   }
 
   async markAsPaid(companyId: string, payrollId: string) {
+    const existing = await this.prisma.payroll.findFirst({ where: { id: payrollId, companyId } });
+    if (!existing) throw new Error('Payroll record not found');
     const payroll = await this.prisma.payroll.update({
       where: { id: payrollId },
       data: { status: 'PAID', paidAt: new Date() },
