@@ -285,6 +285,7 @@ export default function ExamSchedule() {
   const [showNew, setShowNew] = useState(false);
   const [editEntry, setEditEntry] = useState(null);
   const [classFilter, setClassFilter] = useState('ALL');
+  const [examFilter, setExamFilter] = useState('ALL');
 
   const { data: classes = [] } = useQuery({
     queryKey: ['school-classes'],
@@ -310,15 +311,28 @@ export default function ExamSchedule() {
     onError: (e) => toast.error(e.response?.data?.message || t('examSchedule.failedToDelete', { defaultValue: 'Failed to delete' })),
   });
 
+  // Options come from whatever exam names actually exist in the data
+  // (not the canonical Exam list) — a typo'd exam name still needs to be
+  // filterable so it can be found and cleaned up.
+  const examNameOptions = useMemo(
+    () => Array.from(new Set(schedules.map(s => s.examName))).sort(),
+    [schedules],
+  );
+
+  const filteredSchedules = useMemo(
+    () => (examFilter === 'ALL' ? schedules : schedules.filter(s => s.examName === examFilter)),
+    [schedules, examFilter],
+  );
+
   // Group by exam name so a full date-sheet reads as one block per exam
   const grouped = useMemo(() => {
     const map = new Map();
-    for (const s of schedules) {
+    for (const s of filteredSchedules) {
       if (!map.has(s.examName)) map.set(s.examName, []);
       map.get(s.examName).push(s);
     }
     return [...map.entries()];
-  }, [schedules]);
+  }, [filteredSchedules]);
 
   const isPast = (d) => new Date(d) < new Date(new Date().toDateString());
 
@@ -340,6 +354,13 @@ export default function ExamSchedule() {
           <h1 className="text-2xl font-bold">{t('examSchedule.title', { defaultValue: 'Exam Schedule' })}</h1>
         </div>
         <div className="flex items-center gap-2">
+          <Select value={examFilter} onValueChange={setExamFilter}>
+            <SelectTrigger className="w-52"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ALL">{t('examSchedule.allExams', { defaultValue: 'All Exams' })}</SelectItem>
+              {examNameOptions.map(name => <SelectItem key={name} value={name}>{name}</SelectItem>)}
+            </SelectContent>
+          </Select>
           <Select value={classFilter} onValueChange={setClassFilter}>
             <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
             <SelectContent>
