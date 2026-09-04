@@ -322,6 +322,16 @@ export default function ExamSchedule() {
 
   const isPast = (d) => new Date(d) < new Date(new Date().toDateString());
 
+  // Only meaningful for a multi-day date-sheet — a single-paper test or a
+  // daily quiz has just one date, so there's no "range" worth showing.
+  const dateRange = (entries) => {
+    const dates = entries.map(e => new Date(e.examDate)).sort((a, b) => a - b);
+    const first = dates[0];
+    const last = dates[dates.length - 1];
+    if (!first || first.toDateString() === last.toDateString()) return null;
+    return `${format(first, 'dd MMM')} – ${format(last, 'dd MMM yyyy')}`;
+  };
+
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
@@ -352,7 +362,10 @@ export default function ExamSchedule() {
       ) : grouped.map(([examName, entries]) => (
         <div key={examName} className="bg-card border rounded-lg overflow-hidden">
           <div className="px-4 py-3 border-b bg-muted/50 flex items-center justify-between">
-            <h2 className="font-semibold">{examName}</h2>
+            <div className="flex items-center gap-2">
+              <h2 className="font-semibold">{examName}</h2>
+              {dateRange(entries) && <span className="text-xs text-muted-foreground">· {dateRange(entries)}</span>}
+            </div>
             <Badge variant="secondary">{entries.length > 1 ? t('examSchedule.papersCount', { count: entries.length, defaultValue: '{{count}} papers' }) : t('examSchedule.paperCount', { count: entries.length, defaultValue: '{{count}} paper' })}</Badge>
           </div>
           <div className="overflow-x-auto">
