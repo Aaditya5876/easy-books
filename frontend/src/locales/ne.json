@@ -784,7 +784,19 @@
     "total": "जम्मा",
     "allClasses": "सबै कक्षा",
     "editThisResult": "यो नतिजा सम्पादन गर्नुहोस्",
-    "delete": "मेटाउनुहोस्"
+    "delete": "मेटाउनुहोस्",
+    "bulkEnterMarks": "थोक अंक प्रविष्टि",
+    "bulkEnterMarksHint": "परीक्षा, कक्षा र विषय छान्नुहोस्, अनि हरेक विद्यार्थीलाई छुट्टाछुट्टै डायलगमा भन्दा एउटै स्क्रिनमा अंक राख्नुहोस्।",
+    "classRequired": "कक्षा *",
+    "selectClass": "कक्षा छान्नुहोस्…",
+    "selectClassFirst": "पहिले कक्षा छान्नुहोस्",
+    "enterTotalMarks": "पूर्णाङ्क राख्नुहोस्",
+    "enterAtLeastOneMark": "कम्तीमा एउटा विद्यार्थीको अंक राख्नुहोस्",
+    "marksExceedTotal": "कुनै अंक पूर्णाङ्कभन्दा बढी छ",
+    "bulkResultsSaved": "{{created}} थपियो, {{updated}} अद्यावधिक भयो",
+    "pickClassAndSubject": "विद्यार्थी लोड गर्न कक्षा र विषय छान्नुहोस्",
+    "noActiveStudentsInClass": "यो कक्षामा विद्यार्थी छैनन्",
+    "saveAllMarks": "सबै अंक सुरक्षित गर्नुहोस्"
   },
   "examSchedule": {
     "scheduleUpdated": "परीक्षा तालिका अद्यावधिक भयो",

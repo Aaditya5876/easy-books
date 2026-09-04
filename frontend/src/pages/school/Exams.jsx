@@ -1,6 +1,6 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Trophy, Pencil, Trash2, Eye, Sparkles } from 'lucide-react';
+import { Plus, Trophy, Pencil, Trash2, Eye, Sparkles, Table2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { examResultsApi, examsApi, subjectsApi, studentsApi, classesApi, aiApi } from '@/api';
 import { confirm } from '@/lib/confirm';
@@ -230,6 +230,178 @@ function ReportCardEntryDialog({ open, onClose, initial, exams, companyId }) {
   );
 }
 
+// ── Bulk Enter Marks (one subject, one class, every student in one screen) ─────
+
+function BulkResultEntryDialog({ open, onClose, exams, classes, companyId }) {
+  const { t } = useTranslation();
+  const qc = useQueryClient();
+  const [examId, setExamId] = useState('');
+  const [classId, setClassId] = useState('');
+  const [subjectId, setSubjectId] = useState('');
+  const [totalMarks, setTotalMarks] = useState('100');
+  const [examDate, setExamDate] = useState('');
+  const [marks, setMarks] = useState({});
+
+  const { data: subjects = [] } = useQuery({
+    queryKey: ['subjects', companyId],
+    queryFn: () => subjectsApi.list().then(r => r.data),
+  });
+  const classSubjects = filterSubjectsByClass(subjects, classId);
+  const selectedExam = exams.find(e => e.id === examId);
+
+  const { data: students = [], isLoading: loadingStudents } = useQuery({
+    queryKey: ['bulk-entry-students', classId],
+    queryFn: () => studentsApi.list({ classId }).then(r => r.data),
+    enabled: !!classId,
+  });
+
+  const { data: existingResults = [] } = useQuery({
+    queryKey: ['bulk-entry-existing', companyId, selectedExam?.name, classId, subjectId],
+    queryFn: () => examResultsApi.list({ examName: selectedExam.name, classId, subjectId }).then(r => r.data),
+    enabled: !!(selectedExam && classId && subjectId),
+  });
+
+  // Prefill from whatever's already on file — resaving a corrected sheet
+  // should update those rows, not create duplicates alongside them.
+  useEffect(() => {
+    if (!existingResults.length) return;
+    setMarks(m => {
+      const next = { ...m };
+      for (const r of existingResults) next[r.studentId] = String(Number(r.marksObtained));
+      return next;
+    });
+    setTotalMarks(String(Number(existingResults[0].totalMarks)));
+  }, [existingResults]);
+
+  useEffect(() => { setMarks({}); }, [classId, subjectId]);
+
+  const setMark = (studentId, v) => setMarks(m => ({ ...m, [studentId]: v }));
+
+  const save = useMutation({
+    mutationFn: (entries) => examResultsApi.bulkUpsert({
+      examId,
+      subjectId,
+      totalMarks: parseFloat(totalMarks),
+      examDate: examDate || undefined,
+      entries,
+    }),
+    onSuccess: (res) => {
+      qc.invalidateQueries({ queryKey: ['exam-results'] });
+      toast.success(t('exams.bulkResultsSaved', {
+        defaultValue: '{{created}} added, {{updated}} updated',
+        created: res.data.created,
+        updated: res.data.updated,
+      }));
+      onClose();
+    },
+    onError: (err) => toast.error(err?.response?.data?.message || t('exams.failedToSaveResult', { defaultValue: 'Failed to save result' })),
+  });
+
+  function handleSave() {
+    if (!examId) { toast.error(t('exams.selectAnExam', { defaultValue: 'Select an exam' })); return; }
+    if (!classId) { toast.error(t('exams.selectClassFirst', { defaultValue: 'Select a class' })); return; }
+    if (!subjectId) { toast.error(t('exams.selectASubject', { defaultValue: 'Select a subject' })); return; }
+    const total = parseFloat(totalMarks);
+    if (!total || total <= 0) { toast.error(t('exams.enterTotalMarks', { defaultValue: 'Enter total marks' })); return; }
+
+    const entries = students
+      .filter(s => marks[s.id] !== undefined && marks[s.id] !== '')
+      .map(s => ({ studentId: s.id, marksObtained: parseFloat(marks[s.id]) }));
+
+    if (!entries.length) { toast.error(t('exams.enterAtLeastOneMark', { defaultValue: 'Enter at least one mark' })); return; }
+    if (entries.some(e => e.marksObtained > total)) { toast.error(t('exams.marksExceedTotal', { defaultValue: 'A mark exceeds the total marks' })); return; }
+
+    save.mutate(entries);
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onClose}>
+      <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col">
+        <DialogHeader><DialogTitle>{t('exams.bulkEnterMarks', { defaultValue: 'Bulk Enter Marks' })}</DialogTitle></DialogHeader>
+        <p className="text-xs text-muted-foreground -mt-1">
+          {t('exams.bulkEnterMarksHint', { defaultValue: "Pick an exam, class, and subject, then enter every student's marks on one screen instead of one dialog per student." })}
+        </p>
+
+        <div className="grid grid-cols-2 gap-3 pt-1 shrink-0">
+          <div className="space-y-1.5">
+            <Label>{t('exams.examRequired', { defaultValue: 'Exam *' })}</Label>
+            <select className="w-full border rounded-md px-3 py-2 text-sm bg-background" value={examId} onChange={e => setExamId(e.target.value)}>
+              <option value="">{t('exams.selectExam', { defaultValue: 'Select exam…' })}</option>
+              {exams.map(ex => <option key={ex.id} value={ex.id}>{ex.name}</option>)}
+            </select>
+          </div>
+          <div className="space-y-1.5">
+            <Label>{t('exams.classRequired', { defaultValue: 'Class *' })}</Label>
+            <select className="w-full border rounded-md px-3 py-2 text-sm bg-background" value={classId} onChange={e => { setClassId(e.target.value); setSubjectId(''); }}>
+              <option value="">{t('exams.selectClass', { defaultValue: 'Select class…' })}</option>
+              {classes.map(c => <option key={c.id} value={c.id}>{classLabel(c)}</option>)}
+            </select>
+          </div>
+          <div className="space-y-1.5">
+            <Label>{t('exams.subjectRequired', { defaultValue: 'Subject *' })}</Label>
+            <select className="w-full border rounded-md px-3 py-2 text-sm bg-background" value={subjectId} onChange={e => setSubjectId(e.target.value)} disabled={!classId}>
+              <option value="">{t('exams.selectSubject', { defaultValue: 'Select subject…' })}</option>
+              {classSubjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </select>
+          </div>
+          <div className="space-y-1.5">
+            <Label>{t('exams.totalMarksRequired', { defaultValue: 'Total Marks *' })}</Label>
+            <Input type="number" value={totalMarks} onChange={e => setTotalMarks(e.target.value)} />
+          </div>
+          <div className="space-y-1.5">
+            <Label>{t('exams.examDate', { defaultValue: 'Exam Date' })}</Label>
+            <Input type="date" value={examDate} onChange={e => setExamDate(e.target.value)} />
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto border rounded-md mt-2 min-h-[200px]">
+          {!classId || !subjectId ? (
+            <div className="p-8 text-center text-sm text-muted-foreground">{t('exams.pickClassAndSubject', { defaultValue: 'Pick a class and subject to load students' })}</div>
+          ) : loadingStudents ? (
+            <div className="p-8 text-center text-sm text-muted-foreground">{t('exams.loadingStudents', { defaultValue: 'Loading students…' })}</div>
+          ) : students.length === 0 ? (
+            <div className="p-8 text-center text-sm text-muted-foreground">{t('exams.noActiveStudentsInClass', { defaultValue: 'No students in this class' })}</div>
+          ) : (
+            <table className="w-full text-sm">
+              <thead className="bg-muted/40 border-b border-border sticky top-0">
+                <tr>
+                  <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground uppercase">{t('exams.rollNumber', { defaultValue: 'Roll No.' })}</th>
+                  <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground uppercase">{t('exams.student', { defaultValue: 'Student' })}</th>
+                  <th className="text-right px-3 py-2 text-xs font-medium text-muted-foreground uppercase">{t('exams.marksObtainedRequired', { defaultValue: 'Marks Obtained' })}</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {students.map(s => (
+                  <tr key={s.id}>
+                    <td className="px-3 py-1.5 text-muted-foreground text-xs">{s.rollNumber || '—'}</td>
+                    <td className="px-3 py-1.5">{s.name}</td>
+                    <td className="px-3 py-1.5 text-right">
+                      <Input
+                        type="number"
+                        className="w-24 ml-auto text-right h-8"
+                        placeholder="—"
+                        value={marks[s.id] ?? ''}
+                        onChange={e => setMark(s.id, e.target.value)}
+                      />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+
+        <DialogFooter className="shrink-0">
+          <Button type="button" variant="outline" onClick={onClose}>{t('exams.cancel', { defaultValue: 'Cancel' })}</Button>
+          <Button onClick={handleSave} disabled={save.isPending}>
+            {save.isPending ? t('exams.saving', { defaultValue: 'Saving…' }) : t('exams.saveAllMarks', { defaultValue: 'Save All Marks' })}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // ── View Report Card (read-only, aggregates all subjects for one student+exam) ─
 
 function printReportCard(data, aiRemark) {
@@ -424,6 +596,7 @@ export default function Exams() {
   const companyId = getActiveCompanyId();
   const [examDialog, setExamDialog] = useState(false);
   const [entryDialog, setEntryDialog] = useState(null);
+  const [bulkEntryDialog, setBulkEntryDialog] = useState(false);
   const [viewDialog, setViewDialog] = useState(null);
   const [filterExam, setFilterExam] = useState('');
   const [filterClass, setFilterClass] = useState('ALL');
@@ -513,6 +686,9 @@ export default function Exams() {
             </Button>
             <Button onClick={() => setEntryDialog({ mode: 'add' })}>
               <Plus className="w-4 h-4 mr-2" /> {t('exams.addReportCard', { defaultValue: 'Add Report Card' })}
+            </Button>
+            <Button variant="outline" onClick={() => setBulkEntryDialog(true)}>
+              <Table2 className="w-4 h-4 mr-2" /> {t('exams.bulkEnterMarks', { defaultValue: 'Bulk Enter Marks' })}
             </Button>
           </div>
 
@@ -657,6 +833,16 @@ export default function Exams() {
           studentId={viewDialog.studentId}
           examName={viewDialog.examName}
           onEdit={(result) => setEntryDialog({ mode: 'edit', result })}
+        />
+      )}
+
+      {bulkEntryDialog && (
+        <BulkResultEntryDialog
+          open={bulkEntryDialog}
+          onClose={() => setBulkEntryDialog(false)}
+          exams={exams}
+          classes={classes}
+          companyId={companyId}
         />
       )}
     </div>

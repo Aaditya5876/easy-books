@@ -353,6 +353,7 @@ export const examResultsApi = {
     apiClient.put(`/api/v1/school/exam-results/${id}`, data, { params: { companyId: companyId() } }),
   remove: (id: string) =>
     apiClient.delete(`/api/v1/school/exam-results/${id}`, { params: { companyId: companyId() } }),
+  bulkUpsert: (data: object) => apiClient.post('/api/v1/school/exam-results/bulk', { ...data, companyId: companyId() }),
 };
 
 export const examsApi = {

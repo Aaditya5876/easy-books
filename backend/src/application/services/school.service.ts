@@ -726,13 +726,14 @@ export class SchoolService {
 
   // ── Exam Results ──────────────────────────────────────────────────────────────
 
-  async listExamResults(companyId: string, examName?: string, studentId?: string, classId?: string) {
+  async listExamResults(companyId: string, examName?: string, studentId?: string, classId?: string, subjectId?: string) {
     return this.prisma.examResult.findMany({
       where: {
         companyId,
         ...(examName ? { examName } : {}),
         ...(studentId ? { studentId } : {}),
         ...(classId ? { student: { classId } } : {}),
+        ...(subjectId ? { subjectId } : {}),
       },
       orderBy: { createdAt: 'desc' },
       include: {
@@ -854,6 +855,49 @@ export class SchoolService {
     const existing = await this.prisma.examResult.findFirst({ where: { id, companyId } });
     if (!existing) throw new NotFoundException('Exam result not found');
     return this.prisma.examResult.delete({ where: { id } });
+  }
+
+  // One subject's marks for a whole class in one call — a teacher entering
+  // marks for 40 students one-by-one via createExamResult doesn't scale.
+  // Re-uses create/updateExamResult per student so exam-name resolution and
+  // the portal notification stay in one place.
+  async bulkUpsertExamResults(
+    companyId: string,
+    data: {
+      examId: string;
+      subjectId: string;
+      totalMarks: number;
+      examDate?: string;
+      entries: { studentId: string; marksObtained: number }[];
+    },
+  ) {
+    const exam = await this.prisma.exam.findFirst({ where: { id: data.examId, companyId } });
+    if (!exam) throw new NotFoundException('Exam not found');
+
+    let created = 0;
+    let updated = 0;
+    for (const entry of data.entries) {
+      const existing = await this.prisma.examResult.findFirst({
+        where: { companyId, studentId: entry.studentId, subjectId: data.subjectId, examName: exam.name },
+      });
+      const payload = {
+        companyId,
+        studentId: entry.studentId,
+        subjectId: data.subjectId,
+        examId: data.examId,
+        marksObtained: entry.marksObtained,
+        totalMarks: data.totalMarks,
+        examDate: data.examDate,
+      };
+      if (existing) {
+        await this.updateExamResult(existing.id, companyId, payload);
+        updated++;
+      } else {
+        await this.createExamResult(payload);
+        created++;
+      }
+    }
+    return { created, updated };
   }
 
   // ── Exam Schedules ────────────────────────────────────────────────────────────

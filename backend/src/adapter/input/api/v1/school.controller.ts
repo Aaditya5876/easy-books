@@ -534,13 +534,15 @@ export class SchoolController {
   @ApiQuery({ name: 'examName', required: false })
   @ApiQuery({ name: 'studentId', required: false })
   @ApiQuery({ name: 'classId', required: false })
+  @ApiQuery({ name: 'subjectId', required: false })
   listExamResults(
     @Query('companyId') companyId: string,
     @Query('examName') examName?: string,
     @Query('studentId') studentId?: string,
     @Query('classId') classId?: string,
+    @Query('subjectId') subjectId?: string,
   ) {
-    return this.service.listExamResults(companyId, examName, studentId, classId);
+    return this.service.listExamResults(companyId, examName, studentId, classId, subjectId);
   }
 
   @Get('exam-results/report-card')
@@ -562,6 +564,13 @@ export class SchoolController {
   @RequiresModule('SCHOOL_ACADEMICS')
   createExamResult(@Body() body: any) {
     return this.service.createExamResult(body);
+  }
+
+  @Post('exam-results/bulk')
+  @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'TEACHER')
+  @RequiresModule('SCHOOL_ACADEMICS')
+  bulkUpsertExamResults(@Body() body: any) {
+    return this.service.bulkUpsertExamResults(body.companyId, body);
   }
 
   @Put('exam-results/:id')
