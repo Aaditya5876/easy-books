@@ -3,6 +3,7 @@ import { AppModule } from './modules/app.module';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { Logger } from 'nestjs-pino';
 import * as cookieParser from 'cookie-parser';
+import helmet from 'helmet';
 import { NestExpressApplication } from '@nestjs/platform-express';
 
 async function bootstrap() {
@@ -13,6 +14,12 @@ async function bootstrap() {
 
   app.useLogger(app.get(Logger));
   app.use(cookieParser());
+  // Standard security response headers (HSTS, X-Content-Type-Options,
+  // X-Frame-Options/clickjacking protection, Referrer-Policy, etc.). CSP is
+  // disabled: this is a pure JSON API plus the Swagger UI at /docs, and a
+  // default CSP blocks Swagger UI's own inline scripts/styles — the other
+  // headers still apply everywhere, including /docs.
+  app.use(helmet({ contentSecurityPolicy: false }));
 
   app.enableCors({
     origin: process.env.CORS_ORIGIN?.split(',').map(o => o.trim()) || ['http://localhost:5173'],
