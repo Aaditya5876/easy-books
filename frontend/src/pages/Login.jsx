@@ -470,24 +470,14 @@ export default function Login() {
           )}
 
           {/* ── LOGIN / REGISTER ── */}
+          {/* Self-registration is intentionally not offered to clients — new
+              companies are provisioned by GeoInfosys (see provisionClient) —
+              so the tab switcher is hidden and only the login form shows.
+              The register/OTP-verification code paths below are otherwise
+              unreachable from the UI now, left in place in case self-serve
+              signup is ever turned back on. */}
           {(mode === 'login' || mode === 'register') && (
             <>
-              {/* Tab switcher */}
-              <div className="flex rounded-lg bg-secondary p-1 mb-6">
-                <button
-                  className={`flex-1 text-sm py-1.5 rounded-md transition-colors ${mode === 'login' ? 'bg-background shadow-sm font-medium' : 'text-muted-foreground'}`}
-                  onClick={() => { setMode('login'); setError(''); setRegStep(1); }}
-                >
-                  {t('auth.login', { defaultValue: 'Login' })}
-                </button>
-                <button
-                  className={`flex-1 text-sm py-1.5 rounded-md transition-colors ${mode === 'register' ? 'bg-background shadow-sm font-medium' : 'text-muted-foreground'}`}
-                  onClick={() => { setMode('register'); setError(''); }}
-                >
-                  {t('auth.register', { defaultValue: 'Register' })}
-                </button>
-              </div>
-
               {/* ── LOGIN FORM ── */}
               {mode === 'login' && (
                 <form onSubmit={handleLogin} className="space-y-4">
