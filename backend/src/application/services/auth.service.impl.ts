@@ -5,6 +5,7 @@ import {
   ConflictException,
   BadRequestException,
   NotFoundException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
@@ -124,6 +125,11 @@ export class AuthServiceImpl implements IAuthService {
       throw new UnauthorizedException('Please verify your email before logging in');
     }
 
+    this.assertNotSuspended(user);
+    await this.assertHasActiveCompany(user.id, user.role);
+
+    await this.prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
+
     const tokens = await this.issueTokens(user.id, user.email, user.role, user.staffTags);
     return { ...tokens, mustChangePassword: user.mustChangePassword };
   }
@@ -144,6 +150,9 @@ export class AuthServiceImpl implements IAuthService {
       throw new UnauthorizedException('Please verify your email before logging in');
     }
 
+    this.assertNotSuspended(user);
+    await this.assertHasActiveCompany(user.id, user.role);
+
     const userCompany = await this.prisma.userCompany.findFirst({
       where: { userId: user.id },
       orderBy: { isDefault: 'desc' },
@@ -152,6 +161,34 @@ export class AuthServiceImpl implements IAuthService {
 
     const record = await markSelfAttendance(this.prisma, userCompany.companyId, user.email, action);
     return { success: true, record };
+  }
+
+  // GeoInfosys's suspend switch (Company.isActive, set via SUPER_ADMIN-only
+  // CompanyServiceImpl.setActive) previously only blocked companyId-scoped API
+  // calls (CompanyAccessGuard) — a suspended client could still sign in and
+  // poke around. Blocks sign-in outright once EVERY company this user belongs
+  // to is inactive; a user with at least one active company still gets in
+  // (e.g. SUPER_ADMIN, who is never blocked, or — in principle — someone
+  // belonging to more than one company where only some are suspended).
+  private async assertHasActiveCompany(userId: string, role: string): Promise<void> {
+    if (role === 'SUPER_ADMIN') return;
+    const userCompanies = await this.prisma.userCompany.findMany({
+      where: { userId },
+      select: { company: { select: { isActive: true } } },
+    });
+    if (userCompanies.length > 0 && userCompanies.every((uc) => !uc.company.isActive)) {
+      throw new ForbiddenException('This company has been deactivated. Contact GeoInfosys to reactivate it.');
+    }
+  }
+
+  // Per-user suspend switch (User.isActive, set via ADMIN/SUPER_ADMIN-only
+  // UserServiceImpl.setUserActive) — distinct from assertHasActiveCompany
+  // above, which suspends every user of a company at once. SUPER_ADMIN is
+  // never suspendable (setUserActive rejects it), so no bypass needed here.
+  private assertNotSuspended(user: { isActive: boolean }): void {
+    if (!user.isActive) {
+      throw new ForbiddenException('This account has been suspended. Contact your administrator.');
+    }
   }
 
   async changePassword(userId: string, currentPassword: string, newPassword: string): Promise<void> {
@@ -176,6 +213,15 @@ export class AuthServiceImpl implements IAuthService {
 
     const match = await bcrypt.compare(refreshToken, user.refreshToken);
     if (!match) throw new UnauthorizedException('Access denied');
+
+    // Suspending a user or deactivating their company both null out
+    // refreshToken (see setUserActive/resetPassword), which the check above
+    // already catches. This re-check is for Company.isActive specifically —
+    // that flip doesn't touch User rows, so without this a company deactivated
+    // mid-session would only fully log its users out after the 7-day refresh
+    // token expires instead of within the 15-minute access token window.
+    this.assertNotSuspended(user);
+    await this.assertHasActiveCompany(user.id, user.role);
 
     return this.issueTokens(user.id, user.email, user.role, user.staffTags);
   }

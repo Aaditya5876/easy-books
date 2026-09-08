@@ -12,6 +12,7 @@ import { PaymentService } from '../../../../application/services/payment.service
 import { PortalNotificationService } from '../../../../application/services/portal-notification.service';
 import { PortalGuard } from '../../../../modules/guards/portal.guard';
 import { Roles } from '../../../../modules/decorators/roles.decorator';
+import { RequiresStaffTag } from '../../../../modules/decorators/requires-staff-tag.decorator';
 import { makeUploadStorage, extensionFilter } from './upload.util';
 
 const PROOF_IMAGE_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.webp'];
@@ -35,8 +36,10 @@ export class PortalController {
 
   // Not @Public() — requires a staff login. Explicitly role-gated: setting a
   // student's portal password is an administrative action, not something
-  // every staff role (e.g. TEACHER, STAFF) should be able to do.
-  @Roles('ADMIN', 'ACCOUNTANT')
+  // every staff role (e.g. TEACHER, plain STAFF) should be able to do — a
+  // STAFF member tagged FRONT_OFFICE (admissions/front-desk) is the exception.
+  @Roles('ADMIN', 'ACCOUNTANT', 'STAFF')
+  @RequiresStaffTag('FRONT_OFFICE')
   @Post('set-password')
   setPassword(@Body() body: { studentId: string; phone: string; password: string; companyId: string }) {
     return this.portalService.setPortalPassword(body.studentId, body.phone, body.password, body.companyId);
@@ -45,7 +48,8 @@ export class PortalController {
   // Provisions every active student in the school that doesn't already have
   // a portal account — one call instead of the "Set Portal Access" dialog
   // repeated per student. Sends each guardian their phone+password by SMS.
-  @Roles('ADMIN', 'ACCOUNTANT')
+  @Roles('ADMIN', 'ACCOUNTANT', 'STAFF')
+  @RequiresStaffTag('FRONT_OFFICE')
   @Post('bulk-set-access')
   bulkSetAccess(@Body() body: { companyId: string; classId?: string }) {
     return this.portalService.bulkSetPortalAccess(body.companyId, body.classId);

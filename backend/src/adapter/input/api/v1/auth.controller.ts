@@ -9,6 +9,7 @@ import {
   HttpCode,
   HttpStatus,
   UnauthorizedException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiBody } from '@nestjs/swagger';
 import { Throttle, SkipThrottle } from '@nestjs/throttler';
@@ -24,12 +25,20 @@ import { Public } from '../../../../modules/decorators/public.decorator';
 export class AuthController {
   constructor(@Inject(AUTH_SERVICE) private readonly authService: IAuthService) {}
 
+  // Self-registration is switched off — every client is onboarded by
+  // GeoInfosys (UserServiceImpl.provisionClient, SUPER_ADMIN-only), and every
+  // company must be visible/governed from the Clients screen. The frontend
+  // entry point has been gone for a while; this keeps the route reachable
+  // (so it fails with an honest, on-brand message instead of a bare 404) but
+  // never falls through to authService.register(), which is left in the
+  // service layer only so this can be flipped back on in one line if
+  // self-serve signup ever returns.
   @Public()
   @Post('register')
   @Throttle({ default: { limit: 3, ttl: 60000 } })
-  @ApiOperation({ summary: 'Register new user and company — sends OTP for email verification (rate-limited: 3 per minute)' })
-  async register(@Body(new ZodValidationPipe(RegisterSchema)) dto: RegisterDTO) {
-    return this.authService.register(dto);
+  @ApiOperation({ summary: 'Disabled — every client is provisioned by GeoInfosys' })
+  async register(@Body(new ZodValidationPipe(RegisterSchema)) _dto: RegisterDTO) {
+    throw new ForbiddenException('Self-registration is not available. Contact GeoInfosys to get set up.');
   }
 
   @Public()

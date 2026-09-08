@@ -30,6 +30,16 @@ export class CompanyController {
     return this.service.getDefaultCompany(req.user.sub);
   }
 
+  // SUPER_ADMIN only — every company on the platform, not just ones this
+  // account happens to be linked to (unlike findAll above). Must stay ahead
+  // of the ':id' route below so 'all' isn't swallowed as a company id.
+  @Get('all')
+  @Roles('SUPER_ADMIN')
+  @ApiOperation({ summary: 'Get every company across the platform (SUPER_ADMIN client directory)' })
+  findAllForSuperAdmin() {
+    return this.service.findAllForSuperAdmin();
+  }
+
   @Get(':id')
   @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'TEACHER')
   @ApiOperation({ summary: 'Get a company by id' })
@@ -62,8 +72,17 @@ export class CompanyController {
     return this.service.updatePackage(id, enabledModules);
   }
 
+  // SUPER_ADMIN only — a client's own company ADMIN can no longer suspend or
+  // delete their own company (previously @Roles('ADMIN') on both).
+  @Patch(':id/active')
+  @Roles('SUPER_ADMIN')
+  @ApiOperation({ summary: "Suspend or restore a client company (blocks their users' login while inactive)" })
+  setActive(@Param('id') id: string, @Body('isActive') isActive: boolean) {
+    return this.service.setActive(id, isActive);
+  }
+
   @Delete(':id')
-  @Roles('ADMIN')
+  @Roles('SUPER_ADMIN')
   @ApiOperation({ summary: 'Delete a company' })
   remove(@Param('id') id: string, @Req() req: any) {
     return this.service.remove(id, req.user.sub, req.user.role);

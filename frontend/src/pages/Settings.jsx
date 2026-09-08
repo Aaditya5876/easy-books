@@ -22,7 +22,7 @@ import {
 import {
   Building2, Plus, Trash2, Save, ImagePlus, X, UserPlus, Copy, Check, Shield,
   Phone, Mail, MapPin, Hash, User, Palette, Type, Bell, RotateCcw, Upload,
-  Recycle, RotateCw, Lock, AlertTriangle, Clock, Zap, QrCode, Power, PowerOff, Layers, School
+  Recycle, RotateCw, Lock, AlertTriangle, Clock, Zap, QrCode, Power, PowerOff, Layers, School, KeyRound
 } from 'lucide-react';
 
 const SIDEBAR_PALETTE = ['#1e293b', '#1e3a5f', '#14532d', '#4c1d95', '#881337', '#7c2d12'];
@@ -64,6 +64,7 @@ const STAFF_TAGS = [
   { value: 'HOSTEL', i18n: 'settings.staffTagHostel', label: 'Hostel', desc: 'Rooms and student allocations' },
   { value: 'TRANSPORT', i18n: 'settings.staffTagTransport', label: 'Transport', desc: 'Routes and student assignments' },
   { value: 'HR', i18n: 'settings.staffTagHr', label: 'HR', desc: 'Employee records and attendance for all staff' },
+  { value: 'FRONT_OFFICE', i18n: 'settings.staffTagFrontOffice', label: 'Front Office', desc: 'Admissions — set up student/parent portal access' },
 ];
 
 const BUSINESS_TYPES = [
@@ -143,6 +144,8 @@ export default function Settings() {
   const [roleChanging, setRoleChanging] = useState(null);
   const [removingUserId, setRemovingUserId] = useState(null);
   const [maxCompaniesSaving, setMaxCompaniesSaving] = useState(null);
+  const [resettingPasswordId, setResettingPasswordId] = useState(null);
+  const [togglingUserActiveId, setTogglingUserActiveId] = useState(null);
 
   // ── Recycle Bin ───────────────────────────────────────────────────────────
   const [binAccessGranted, setBinAccessGranted] = useState(false);
@@ -162,10 +165,13 @@ export default function Settings() {
   const [prefsSaving, setPrefsSaving] = useState(false);
   const [prefsSaved, setPrefsSaved] = useState(false);
 
-  // ── Package (SUPER_ADMIN only) ────────────────────────────────────────────
-  const [companyEnabledModules, setCompanyEnabledModules] = useState([]);
-  const [packageSaving, setPackageSaving] = useState(false);
-  const [packageSaved, setPackageSaved] = useState(false);
+  // ── Clients — platform-wide client directory (SUPER_ADMIN only) ──────────
+  const [allClients, setAllClients] = useState([]);
+  const [allClientsLoading, setAllClientsLoading] = useState(false);
+  const [clientPackageSaving, setClientPackageSaving] = useState(null); // companyId mid-save
+  const [clientActiveSaving, setClientActiveSaving] = useState(null); // companyId mid-save
+  const [clientMaxCompaniesSaving, setClientMaxCompaniesSaving] = useState(null); // userId mid-save
+  const [clientResettingPasswordId, setClientResettingPasswordId] = useState(null); // admin userId mid-reset
 
   // ── Create Client (SUPER_ADMIN only — sales-led onboarding) ──────────────
   const [provisionForm, setProvisionForm] = useState({
@@ -252,7 +258,6 @@ export default function Settings() {
     ]);
     setCompanies(list);
     const active = list.find(c => c.id === activeCompanyId);
-    setCompanyEnabledModules(active?.enabledModules ?? []);
     setCompanyPrefs({
       abbreviation: active?.abbreviation || '',
       workingDaysPerMonth: payrollRes?.data?.workingDaysPerMonth ?? 26,
@@ -414,7 +419,7 @@ export default function Settings() {
       });
       if (!ok) return;
     }
-    await api.Company.update(company.id, { is_active: activating });
+    await companyApi.setActive(company.id, activating);
     loadCompanies();
   }
 
@@ -498,6 +503,54 @@ export default function Settings() {
     }
   }
 
+  async function handleResetPassword(u) {
+    const ok = await confirm({
+      title: t('settings.confirmResetPasswordTitle', { defaultValue: 'Reset password for {{name}}?', name: u.name || u.email }),
+      description: t('settings.confirmResetPasswordDesc', { defaultValue: 'Generates a new temporary password and signs them out of any active session. They will be required to change it on next login.' }),
+      confirmLabel: t('settings.resetPassword', { defaultValue: 'Reset Password' }),
+      variant: 'destructive',
+    });
+    if (!ok) return;
+    setResettingPasswordId(u.id);
+    try {
+      const res = await usersApi.resetPassword(u.id, activeCompanyId);
+      if (res.data.emailSent) {
+        toast.success(t('settings.passwordResetEmailed', { defaultValue: 'Password reset — new credentials emailed to {{email}}', email: u.email }));
+      } else {
+        // Email delivery failed — this is the only remaining way to hand over
+        // the password, so fall back to showing it (same pattern as invite/provision).
+        toast.error(t('settings.passwordResetEmailFailed', { defaultValue: 'Password reset, but the email failed to send — share this password manually' }));
+        setTempPassword(res.data.tempPassword);
+      }
+    } catch (err) {
+      toast.error(err?.response?.data?.message || t('settings.failedResetPassword', { defaultValue: 'Failed to reset password' }));
+    } finally {
+      setResettingPasswordId(null);
+    }
+  }
+
+  async function handleToggleUserActive(u) {
+    const activating = u.isActive === false;
+    if (!activating) {
+      const ok = await confirm({
+        title: t('settings.confirmSuspendUserTitle', { defaultValue: 'Suspend {{name}}?', name: u.name || u.email }),
+        description: t('settings.confirmSuspendUserDesc', { defaultValue: 'They will be signed out immediately and unable to log back in until reactivated. The rest of the company is unaffected.' }),
+        confirmLabel: t('settings.suspend', { defaultValue: 'Suspend' }),
+        variant: 'destructive',
+      });
+      if (!ok) return;
+    }
+    setTogglingUserActiveId(u.id);
+    try {
+      await usersApi.setStatus(u.id, activeCompanyId, activating);
+      loadUsers();
+    } catch (err) {
+      toast.error(err?.response?.data?.message || t('settings.failedToggleUserActive', { defaultValue: 'Failed to update status' }));
+    } finally {
+      setTogglingUserActiveId(null);
+    }
+  }
+
   function copyTempPassword() {
     navigator.clipboard.writeText(tempPassword);
     setCopied(true);
@@ -534,33 +587,124 @@ export default function Settings() {
     }
   }
 
-  // ── Package (SUPER_ADMIN only) ────────────────────────────────────────────
+  // ── Clients — platform-wide client directory (SUPER_ADMIN only) ──────────
   const PACKAGE_MODULES = {
     BASE: ['BASE'],
     STANDARD: ['BASE', 'SCHOOL_ACADEMICS'],
     PREMIUM: ['BASE', 'SCHOOL_ACADEMICS', 'FACILITIES', 'HRMS', 'AI', 'BULK_IMPORT', 'FINANCE', 'INVENTORY'],
   };
 
-  function currentPackageTier() {
-    if (companyEnabledModules.length === 0) return null; // legacy/unrestricted — not on a tier yet
-    if (companyEnabledModules.includes('FACILITIES')) return 'PREMIUM';
-    if (companyEnabledModules.includes('SCHOOL_ACADEMICS')) return 'STANDARD';
+  function packageTierOf(enabledModules) {
+    if (!enabledModules || enabledModules.length === 0) return null; // legacy/unrestricted — not on a tier yet
+    if (enabledModules.includes('FACILITIES')) return 'PREMIUM';
+    if (enabledModules.includes('SCHOOL_ACADEMICS')) return 'STANDARD';
     return 'BASE';
   }
 
-  async function savePackage(tier) {
-    if (!activeCompanyId) return;
-    setPackageSaving(true);
+  async function loadAllClients() {
+    if (!isSuperAdmin) return;
+    setAllClientsLoading(true);
+    try {
+      const res = await companyApi.listAll();
+      setAllClients(res.data);
+    } catch {
+      setAllClients([]);
+    } finally {
+      setAllClientsLoading(false);
+    }
+  }
+
+  async function handleClientPackageChange(company, tier) {
+    setClientPackageSaving(company.id);
     try {
       const modules = PACKAGE_MODULES[tier];
-      await companyApi.updatePackage(activeCompanyId, modules);
-      setCompanyEnabledModules(modules);
-      setPackageSaved(true);
-      setTimeout(() => setPackageSaved(false), 2000);
+      await companyApi.updatePackage(company.id, modules);
+      setAllClients(list => list.map(c => c.id === company.id ? { ...c, enabledModules: modules } : c));
     } catch (err) {
       toast.error(err?.response?.data?.message || t('settings.packageSaveFailed', { defaultValue: 'Failed to update package' }));
     } finally {
-      setPackageSaving(false);
+      setClientPackageSaving(null);
+    }
+  }
+
+  async function handleClientActiveToggle(company) {
+    const activating = !company.isActive;
+    if (!activating) {
+      const ok = await confirm({
+        title: t('settings.confirmDeactivateTitle', { defaultValue: 'Deactivate this school?' }),
+        description: t('settings.confirmDeactivateDescription', { defaultValue: 'The nightly automation (fee billing, payroll, reconciliation) will stop running and their users will be signed out and unable to log back in. You can reactivate it anytime.' }),
+        confirmLabel: t('settings.deactivate', { defaultValue: 'Deactivate' }),
+        variant: 'destructive',
+      });
+      if (!ok) return;
+    }
+    setClientActiveSaving(company.id);
+    try {
+      await companyApi.setActive(company.id, activating);
+      setAllClients(list => list.map(c => c.id === company.id ? { ...c, isActive: activating } : c));
+    } catch (err) {
+      toast.error(err?.response?.data?.message || t('settings.failedToggleActive', { defaultValue: 'Failed to update status' }));
+    } finally {
+      setClientActiveSaving(null);
+    }
+  }
+
+  async function handleClientDelete(company) {
+    const ok = await confirm({
+      title: t('settings.confirmDeleteCompanyTitle', { defaultValue: 'Delete this company?' }),
+      description: t('settings.confirmDeleteCompany', { defaultValue: 'This permanently deletes the company and cannot be undone. If you just want to pause a school that stopped using OneBook, use Deactivate instead.' }),
+      confirmLabel: t('settings.delete', { defaultValue: 'Delete' }),
+      variant: 'destructive',
+    });
+    if (!ok) return;
+    try {
+      await api.Company.delete(company.id);
+      setAllClients(list => list.filter(c => c.id !== company.id));
+      if (getActiveCompanyId() === company.id) loadCompanies();
+    } catch (err) {
+      toast.error(err?.response?.data?.message || t('settings.failedDeleteCompany', { defaultValue: 'Failed to delete company' }));
+    }
+  }
+
+  async function handleClientMaxCompaniesChange(userId, value) {
+    const n = parseInt(value, 10);
+    if (!n || n < 1) return;
+    setClientMaxCompaniesSaving(userId);
+    try {
+      await usersApi.updateMaxCompanies(userId, n);
+      setAllClients(list => list.map(c => ({
+        ...c,
+        admins: c.admins.map(a => a.id === userId ? { ...a, maxCompanies: n } : a),
+      })));
+      toast.success(t('settings.maxCompaniesUpdated', { defaultValue: 'Company limit updated' }));
+    } catch (err) {
+      toast.error(err?.response?.data?.message || t('settings.failedUpdateMaxCompanies', { defaultValue: 'Failed to update company limit' }));
+    } finally {
+      setClientMaxCompaniesSaving(null);
+    }
+  }
+
+  async function handleClientAdminResetPassword(company, admin) {
+    const ok = await confirm({
+      title: t('settings.confirmResetPasswordTitle', { defaultValue: 'Reset password for {{name}}?', name: admin.name || admin.email }),
+      description: t('settings.confirmResetPasswordDesc', { defaultValue: 'Generates a new temporary password and signs them out of any active session. They will be required to change it on next login.' }),
+      confirmLabel: t('settings.resetPassword', { defaultValue: 'Reset Password' }),
+      variant: 'destructive',
+    });
+    if (!ok) return;
+    setClientResettingPasswordId(admin.id);
+    try {
+      const res = await usersApi.resetPassword(admin.id, company.id);
+      if (res.data.emailSent) {
+        toast.success(t('settings.passwordResetEmailed', { defaultValue: 'Password reset — new credentials emailed to {{email}}', email: admin.email }));
+      } else {
+        toast.error(t('settings.passwordResetEmailFailed', { defaultValue: 'Password reset, but the email failed to send — share this password manually' }));
+        setTempPassword(res.data.tempPassword);
+      }
+    } catch (err) {
+      toast.error(err?.response?.data?.message || t('settings.failedResetPassword', { defaultValue: 'Failed to reset password' }));
+    } finally {
+      setClientResettingPasswordId(null);
     }
   }
 
@@ -585,6 +729,7 @@ export default function Settings() {
       }
       setProvisionForm({ companyName: '', businessType: 'SCHOOL', adminName: '', adminEmail: '', package: 'STANDARD' });
       loadCompanies();
+      loadAllClients();
     } catch (err) {
       toast.error(err?.response?.data?.message || t('settings.provisionFailed', { defaultValue: 'Failed to create client' }));
     } finally {
@@ -671,6 +816,11 @@ export default function Settings() {
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList>
+          {isSuperAdmin && (
+            <TabsTrigger value="clients" onClick={loadAllClients} className="gap-1.5">
+              <Layers className="w-3.5 h-3.5" />{t('settings.tabClients', { defaultValue: 'Clients' })}
+            </TabsTrigger>
+          )}
           <TabsTrigger value="companies">{t('settings.tabCompanies', { defaultValue: 'Companies' })}</TabsTrigger>
           <TabsTrigger value="users" onClick={loadUsers}>{t('settings.tabUsers', { defaultValue: 'Users' })}</TabsTrigger>
           <TabsTrigger value="preferences">{t('settings.tabPreferences', { defaultValue: 'Preferences' })}</TabsTrigger>
@@ -681,6 +831,163 @@ export default function Settings() {
             </TabsTrigger>
           )}
         </TabsList>
+
+        {/* ── Clients Tab (SUPER_ADMIN only) ────────────────────────────────
+            Platform-wide client directory — every company GeoInfosys has sold,
+            regardless of whether this SUPER_ADMIN account is personally linked
+            to it. Package/company-limit/active-status are all editable inline,
+            without needing to "Set Active" into that client's company first
+            (unlike the Companies tab below, which only lists linked companies). */}
+        {isSuperAdmin && (
+          <TabsContent value="clients" className="mt-4 space-y-6">
+            {allClientsLoading ? (
+              <div className="flex justify-center py-10">
+                <div className="w-6 h-6 border-4 border-primary/20 border-t-primary rounded-full animate-spin" />
+              </div>
+            ) : (
+              <div className="grid gap-3">
+                {allClients.map(c => {
+                  const admin = c.admins?.[0];
+                  const tier = packageTierOf(c.enabledModules);
+                  return (
+                    <div key={c.id} className="bg-card rounded-xl border p-5 space-y-3">
+                      <div className="flex items-start justify-between gap-4">
+                        <div>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <h3 className="font-semibold">{c.name}</h3>
+                            <span className="text-xs bg-secondary text-muted-foreground px-2 py-0.5 rounded-full">
+                              {businessTypeLabel(c.businessType) || c.businessType}
+                            </span>
+                            {c.isActive === false && (
+                              <span className="text-xs bg-red-50 text-red-600 px-2 py-0.5 rounded-full font-medium">
+                                {t('settings.deactivated', { defaultValue: 'Deactivated' })}
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-sm text-muted-foreground mt-0.5">
+                            {admin ? `${admin.name} · ${admin.email}` : t('settings.noAdminYet', { defaultValue: 'No admin user found' })}
+                          </p>
+                          {admin && (
+                            <p className="text-[11px] text-muted-foreground">
+                              {admin.lastLoginAt
+                                ? t('settings.lastLoginAt', { defaultValue: 'Last login: {{date}}', date: new Date(admin.lastLoginAt).toLocaleString('en-NP', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) })
+                                : t('settings.neverLoggedIn', { defaultValue: 'Never logged in' })}
+                            </p>
+                          )}
+                        </div>
+                        <div className="flex gap-2 shrink-0">
+                          {admin && (
+                            <Button size="sm" variant="outline" onClick={() => handleClientAdminResetPassword(c, admin)} disabled={clientResettingPasswordId === admin.id}>
+                              <KeyRound className="w-3.5 h-3.5 mr-1.5" />{t('settings.resetPassword', { defaultValue: 'Reset Password' })}
+                            </Button>
+                          )}
+                          <Button size="sm" variant="outline" onClick={() => handleClientActiveToggle(c)}>
+                            {c.isActive === false
+                              ? <><Power className="w-3.5 h-3.5 mr-1.5" />{t('settings.reactivate', { defaultValue: 'Reactivate' })}</>
+                              : <><PowerOff className="w-3.5 h-3.5 mr-1.5" />{t('settings.deactivate', { defaultValue: 'Deactivate' })}</>}
+                          </Button>
+                          <Button size="icon" variant="ghost" onClick={() => handleClientDelete(c)}>
+                            <Trash2 className="w-4 h-4 text-destructive" />
+                          </Button>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-4 pt-2 border-t">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-xs text-muted-foreground">{t('settings.packageHeading', { defaultValue: 'Package' })}</span>
+                          {['BASE', 'STANDARD', 'PREMIUM'].map(pt => (
+                            <button
+                              key={pt}
+                              type="button"
+                              disabled={clientPackageSaving === c.id}
+                              onClick={() => handleClientPackageChange(c, pt)}
+                              className={`px-2 py-1 rounded-md border text-xs font-medium transition-colors disabled:opacity-50 ${
+                                tier === pt ? 'border-primary bg-primary/10 text-primary' : 'border-border hover:bg-muted'
+                              }`}
+                            >
+                              {t(`settings.package${pt}`, { defaultValue: pt.charAt(0) + pt.slice(1).toLowerCase() })}
+                            </button>
+                          ))}
+                          {!tier && <span className="text-xs text-muted-foreground">{t('settings.noPackageSetShort', { defaultValue: '(unrestricted/legacy)' })}</span>}
+                        </div>
+
+                        {admin && (
+                          <div className="flex items-center gap-1.5" title={t('settings.maxCompaniesHint', { defaultValue: 'How many companies this admin may self-serve create' })}>
+                            <span className="text-xs text-muted-foreground">{t('settings.maxCompaniesLabel', { defaultValue: 'Max Companies' })}</span>
+                            <input
+                              type="number"
+                              min={1}
+                              className="w-14 text-xs border rounded-md px-1.5 py-1 bg-background focus:outline-none focus:ring-1 focus:ring-ring"
+                              defaultValue={admin.maxCompanies ?? 1}
+                              disabled={clientMaxCompaniesSaving === admin.id}
+                              onBlur={e => { if (Number(e.target.value) !== admin.maxCompanies) handleClientMaxCompaniesChange(admin.id, e.target.value); }}
+                            />
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+                {allClients.length === 0 && (
+                  <div className="text-center py-12 text-muted-foreground">{t('settings.noCompaniesYet', { defaultValue: 'No companies yet' })}</div>
+                )}
+              </div>
+            )}
+
+            {/* Create Client — sales-led onboarding: creates the company + its
+                first ADMIN login, instead of self-registration. */}
+            <div className="bg-card rounded-xl border p-6 space-y-4 max-w-lg">
+              <div>
+                <h3 className="font-semibold flex items-center gap-1.5"><UserPlus className="w-4 h-4 text-primary" />{t('settings.createClientHeading', { defaultValue: 'Create Client' })}</h3>
+                <p className="text-sm text-muted-foreground mt-0.5">{t('settings.createClientSubtitle', { defaultValue: "Sets up a new client's company and their first admin login — for after they've paid, instead of self-registration." })}</p>
+              </div>
+              <form onSubmit={handleProvisionClient} className="space-y-3">
+                <div className="space-y-1.5">
+                  <Label>{t('settings.companyNameLabel', { defaultValue: 'Company / School Name' })}</Label>
+                  <Input required value={provisionForm.companyName} onChange={e => setProvisionForm(f => ({ ...f, companyName: e.target.value }))} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>{t('settings.productLabel', { defaultValue: 'Product' })}</Label>
+                  <select
+                    className="w-full border rounded-md px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring"
+                    value={provisionForm.businessType}
+                    onChange={e => setProvisionForm(f => ({ ...f, businessType: e.target.value }))}
+                  >
+                    <option value="SCHOOL">{t('settings.productSchool', { defaultValue: 'School Management System' })}</option>
+                    <option value="OTHER">{t('settings.productOneBook', { defaultValue: 'OneBook (Business)' })}</option>
+                  </select>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label>{t('settings.adminNameLabel', { defaultValue: "Admin's Name" })}</Label>
+                    <Input required value={provisionForm.adminName} onChange={e => setProvisionForm(f => ({ ...f, adminName: e.target.value }))} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>{t('settings.adminEmailLabel', { defaultValue: "Admin's Email" })}</Label>
+                    <Input type="email" required value={provisionForm.adminEmail} onChange={e => setProvisionForm(f => ({ ...f, adminEmail: e.target.value }))} />
+                  </div>
+                </div>
+                {provisionForm.businessType === 'SCHOOL' && (
+                  <div className="space-y-1.5">
+                    <Label>{t('settings.packageLabel', { defaultValue: 'Package' })}</Label>
+                    <select
+                      className="w-full border rounded-md px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring"
+                      value={provisionForm.package}
+                      onChange={e => setProvisionForm(f => ({ ...f, package: e.target.value }))}
+                    >
+                      <option value="BASE">{t('settings.packageBASE', { defaultValue: 'Base' })}</option>
+                      <option value="STANDARD">{t('settings.packageSTANDARD', { defaultValue: 'Standard' })}</option>
+                      <option value="PREMIUM">{t('settings.packagePREMIUM', { defaultValue: 'Premium' })}</option>
+                    </select>
+                  </div>
+                )}
+                <Button type="submit" disabled={provisioning} className="w-full">
+                  {provisioning ? t('settings.creatingClient', { defaultValue: 'Creating…' }) : t('settings.createClientButton', { defaultValue: 'Create Client & Send Login' })}
+                </Button>
+              </form>
+            </div>
+          </TabsContent>
+        )}
 
         {/* ── Companies Tab ─────────────────────────────────────────────── */}
         <TabsContent value="companies" className="mt-4 space-y-4">
@@ -724,14 +1031,16 @@ export default function Settings() {
                   {c.id !== activeCompanyId && (
                     <Button size="sm" variant="outline" onClick={() => { setActiveCompanyId(c.id); window.location.href = '/'; }}>{t('settings.setActive', { defaultValue: 'Set Active' })}</Button>
                   )}
-                  {canDelete && (
+                  {/* Suspend/delete a company is GeoInfosys's call, not the
+                      client's own admin's — SUPER_ADMIN-only, enforced server-side too. */}
+                  {isSuperAdmin && (
                     <Button size="sm" variant="outline" onClick={() => toggleCompanyActive(c)}>
                       {c.is_active === false
                         ? <><Power className="w-3.5 h-3.5 mr-1.5" />{t('settings.reactivate', { defaultValue: 'Reactivate' })}</>
                         : <><PowerOff className="w-3.5 h-3.5 mr-1.5" />{t('settings.deactivate', { defaultValue: 'Deactivate' })}</>}
                     </Button>
                   )}
-                  {canDelete && (
+                  {isSuperAdmin && (
                     <Button size="icon" variant="ghost" onClick={() => deleteCompany(c.id)}>
                       <Trash2 className="w-4 h-4 text-destructive" />
                     </Button>
@@ -776,8 +1085,20 @@ export default function Settings() {
                           {u.name?.[0]?.toUpperCase() || 'U'}
                         </div>
                         <div>
-                          <p className="font-medium text-sm">{u.name || t('settings.unknownUser', { defaultValue: 'Unknown' })}</p>
+                          <div className="flex items-center gap-1.5">
+                            <p className="font-medium text-sm">{u.name || t('settings.unknownUser', { defaultValue: 'Unknown' })}</p>
+                            {u.isActive === false && (
+                              <span className="text-[10px] bg-red-50 text-red-600 px-1.5 py-0.5 rounded-full font-medium">
+                                {t('settings.suspended', { defaultValue: 'Suspended' })}
+                              </span>
+                            )}
+                          </div>
                           <p className="text-xs text-muted-foreground">{u.email}</p>
+                          <p className="text-[11px] text-muted-foreground">
+                            {u.lastLoginAt
+                              ? t('settings.lastLoginAt', { defaultValue: 'Last login: {{date}}', date: new Date(u.lastLoginAt).toLocaleString('en-NP', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) })
+                              : t('settings.neverLoggedIn', { defaultValue: 'Never logged in' })}
+                          </p>
                         </div>
                       </div>
                       <div className="flex items-center gap-3">
@@ -834,6 +1155,28 @@ export default function Settings() {
                               </div>
                             )}
                           </div>
+                        )}
+                        {canManageUsers && u.id !== user?.id && u.role !== 'SUPER_ADMIN' && (
+                          <button
+                            onClick={() => handleResetPassword(u)}
+                            disabled={resettingPasswordId === u.id}
+                            className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
+                            title={t('settings.resetPassword', { defaultValue: 'Reset Password' })}
+                          >
+                            <KeyRound className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                        {canManageUsers && u.id !== user?.id && u.role !== 'SUPER_ADMIN' && (
+                          <button
+                            onClick={() => handleToggleUserActive(u)}
+                            disabled={togglingUserActiveId === u.id}
+                            className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
+                            title={u.isActive === false
+                              ? t('settings.reactivateUser', { defaultValue: 'Reactivate' })
+                              : t('settings.suspend', { defaultValue: 'Suspend' })}
+                          >
+                            {u.isActive === false ? <Power className="w-3.5 h-3.5" /> : <PowerOff className="w-3.5 h-3.5" />}
+                          </button>
                         )}
                         {canManageUsers && u.id !== user?.id && u.role !== 'SUPER_ADMIN' && (
                           <button
@@ -1021,92 +1364,6 @@ export default function Settings() {
             </Button>
             {!isAdmin && <p className="text-xs text-muted-foreground text-center">{t('settings.adminOnlyPreferences', { defaultValue: 'Only Admins can change preferences.' })}</p>}
           </div>
-
-          {/* Package — SUPER_ADMIN only (platform-operator control, not self-service for the school's own admin) */}
-          {isSuperAdmin && (
-            <div className="bg-card rounded-xl border p-6 space-y-4 max-w-lg">
-              <div>
-                <h3 className="font-semibold flex items-center gap-1.5"><Layers className="w-4 h-4 text-primary" />{t('settings.packageHeading', { defaultValue: 'Package' })}</h3>
-                <p className="text-sm text-muted-foreground mt-0.5">{t('settings.packageSubtitle', { defaultValue: 'Which features this company can access. Super-admin only — not visible to the school\'s own admin.' })}</p>
-              </div>
-              <div className="grid grid-cols-3 gap-2">
-                {['BASE', 'STANDARD', 'PREMIUM'].map(tier => (
-                  <button
-                    key={tier}
-                    type="button"
-                    disabled={packageSaving}
-                    onClick={() => savePackage(tier)}
-                    className={`rounded-lg border p-3 text-center text-sm font-medium transition-colors disabled:opacity-50 ${
-                      currentPackageTier() === tier ? 'border-primary bg-primary/10 text-primary' : 'border-border hover:bg-muted'
-                    }`}
-                  >
-                    {t(`settings.package${tier}`, { defaultValue: tier.charAt(0) + tier.slice(1).toLowerCase() })}
-                  </button>
-                ))}
-              </div>
-              <p className="text-xs text-muted-foreground">
-                {currentPackageTier()
-                  ? t('settings.currentPackage', { defaultValue: 'Current: {{tier}}', tier: currentPackageTier() })
-                  : t('settings.noPackageSet', { defaultValue: 'No package set yet — this company currently has unrestricted (legacy) access to everything.' })}
-                {packageSaved && <span className="text-emerald-600 ml-2 inline-flex items-center gap-1"><Check className="w-3 h-3" />{t('settings.saved', { defaultValue: 'Saved!' })}</span>}
-              </p>
-            </div>
-          )}
-
-          {/* Create Client — SUPER_ADMIN only (sales-led onboarding: creates the
-              company + its first ADMIN login, instead of self-registration) */}
-          {isSuperAdmin && (
-            <div className="bg-card rounded-xl border p-6 space-y-4 max-w-lg">
-              <div>
-                <h3 className="font-semibold flex items-center gap-1.5"><UserPlus className="w-4 h-4 text-primary" />{t('settings.createClientHeading', { defaultValue: 'Create Client' })}</h3>
-                <p className="text-sm text-muted-foreground mt-0.5">{t('settings.createClientSubtitle', { defaultValue: "Sets up a new client's company and their first admin login — for after they've paid, instead of self-registration." })}</p>
-              </div>
-              <form onSubmit={handleProvisionClient} className="space-y-3">
-                <div className="space-y-1.5">
-                  <Label>{t('settings.companyNameLabel', { defaultValue: 'Company / School Name' })}</Label>
-                  <Input required value={provisionForm.companyName} onChange={e => setProvisionForm(f => ({ ...f, companyName: e.target.value }))} />
-                </div>
-                <div className="space-y-1.5">
-                  <Label>{t('settings.productLabel', { defaultValue: 'Product' })}</Label>
-                  <select
-                    className="w-full border rounded-md px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring"
-                    value={provisionForm.businessType}
-                    onChange={e => setProvisionForm(f => ({ ...f, businessType: e.target.value }))}
-                  >
-                    <option value="SCHOOL">{t('settings.productSchool', { defaultValue: 'School Management System' })}</option>
-                    <option value="OTHER">{t('settings.productOneBook', { defaultValue: 'OneBook (Business)' })}</option>
-                  </select>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1.5">
-                    <Label>{t('settings.adminNameLabel', { defaultValue: "Admin's Name" })}</Label>
-                    <Input required value={provisionForm.adminName} onChange={e => setProvisionForm(f => ({ ...f, adminName: e.target.value }))} />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label>{t('settings.adminEmailLabel', { defaultValue: "Admin's Email" })}</Label>
-                    <Input type="email" required value={provisionForm.adminEmail} onChange={e => setProvisionForm(f => ({ ...f, adminEmail: e.target.value }))} />
-                  </div>
-                </div>
-                {provisionForm.businessType === 'SCHOOL' && (
-                  <div className="space-y-1.5">
-                    <Label>{t('settings.packageLabel', { defaultValue: 'Package' })}</Label>
-                    <select
-                      className="w-full border rounded-md px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring"
-                      value={provisionForm.package}
-                      onChange={e => setProvisionForm(f => ({ ...f, package: e.target.value }))}
-                    >
-                      <option value="BASE">{t('settings.packageBASE', { defaultValue: 'Base' })}</option>
-                      <option value="STANDARD">{t('settings.packageSTANDARD', { defaultValue: 'Standard' })}</option>
-                      <option value="PREMIUM">{t('settings.packagePREMIUM', { defaultValue: 'Premium' })}</option>
-                    </select>
-                  </div>
-                )}
-                <Button type="submit" disabled={provisioning} className="w-full">
-                  {provisioning ? t('settings.creatingClient', { defaultValue: 'Creating…' }) : t('settings.createClientButton', { defaultValue: 'Create Client & Send Login' })}
-                </Button>
-              </form>
-            </div>
-          )}
 
           {/* Appearance */}
           <div className="bg-card rounded-xl border p-6 space-y-6 max-w-lg">

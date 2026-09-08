@@ -190,6 +190,17 @@ model User {
   // whitelist: LIBRARY, HOSTEL, TRANSPORT, HR). ADMIN/ACCOUNTANT/TEACHER are
   // never tag-gated, so this stays empty for them.
   staffTags          String[]  @default([])
+  // Per-user suspend switch — distinct from Company.isActive (which suspends
+  // every user of a company at once, GeoInfosys's own call). This lets an
+  // ADMIN lock out a single staff login without touching the company.
+  // Enforced at login/refresh in AuthServiceImpl, never at the SUPER_ADMIN
+  // role (see assertHasActiveCompany-style checks there).
+  isActive           Boolean   @default(true)
+  // Set on every successful login() — surfaced in Settings (Users tab, and
+  // the SUPER_ADMIN Clients tab) so an ADMIN/GeoInfosys can tell whether an
+  // account is actually being used. Not touched by quickAttendance (that's a
+  // one-off check-in, not a real session).
+  lastLoginAt        DateTime?
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
 

@@ -19,9 +19,11 @@ export class BulkImportController {
     @Body() body: { companyId: string; rows: any[] },
     @Req() req: any,
   ) {
-    // Employees carry salary data — mirror the employee controller's ACCOUNTANT/ADMIN restriction
-    if (entity === 'employees' && !['ACCOUNTANT', 'ADMIN', 'SUPER_ADMIN'].includes(req.user?.role)) {
-      throw new ForbiddenException('Only ACCOUNTANT or ADMIN can import employees');
+    // Employees carry salary data — mirror employee.controller.ts's
+    // ACCOUNTANT/ADMIN(/HR-tagged STAFF) restriction.
+    const isHrStaff = req.user?.role === 'STAFF' && (req.user?.tags || []).includes('HR');
+    if (entity === 'employees' && !['ACCOUNTANT', 'ADMIN', 'SUPER_ADMIN'].includes(req.user?.role) && !isHrStaff) {
+      throw new ForbiddenException('Only ACCOUNTANT, ADMIN, or HR-tagged STAFF can import employees');
     }
     return this.service.import(entity, body.companyId, body.rows);
   }

@@ -232,6 +232,10 @@ export const companyApi = {
   upsertPayrollSettings: (id: string, data: object) => apiClient.patch(`/api/v1/companies/${id}/payroll-settings`, data),
   // SUPER_ADMIN only — sets which package (Base/Standard/Premium) a company is on.
   updatePackage: (id: string, enabledModules: string[]) => apiClient.patch(`/api/v1/companies/${id}/package`, { enabledModules }),
+  // SUPER_ADMIN only — every company on the platform (client directory), not just ones this account is linked to.
+  listAll: () => apiClient.get('/api/v1/companies/all'),
+  // SUPER_ADMIN only — suspend/restore a client company (blocks their users' login while inactive).
+  setActive: (id: string, isActive: boolean) => apiClient.patch(`/api/v1/companies/${id}/active`, { isActive }),
 };
 
 // File Upload
@@ -526,6 +530,12 @@ export const usersApi = {
   // SUPER_ADMIN only — how many companies this user may self-serve create.
   updateMaxCompanies: (userId: string, maxCompanies: number) =>
     apiClient.patch(`/api/v1/users/${userId}/max-companies`, { maxCompanies }),
+  // ADMIN (or SUPER_ADMIN) — generates a fresh temp password for a user who lost theirs.
+  resetPassword: (userId: string, cid: string) =>
+    apiClient.post(`/api/v1/users/${userId}/reset-password`, {}, { params: { companyId: cid } }),
+  // ADMIN (or SUPER_ADMIN) — suspend/restore a single user login.
+  setStatus: (userId: string, cid: string, isActive: boolean) =>
+    apiClient.patch(`/api/v1/users/${userId}/status`, { isActive }, { params: { companyId: cid } }),
 };
 
 // ── Portal API (parent/student token-based auth) ─────────────────────────────

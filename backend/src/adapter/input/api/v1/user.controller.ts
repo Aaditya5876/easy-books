@@ -63,6 +63,31 @@ export class UserController {
     return this.service.updateMaxCompanies(id, maxCompanies);
   }
 
+  @Post(':id/reset-password')
+  @Roles('ADMIN')
+  @ApiOperation({ summary: "Generate a new temp password for a user who lost theirs (forces a change on next login)" })
+  @ApiQuery({ name: 'companyId', required: true })
+  resetPassword(
+    @Param('id') userId: string,
+    @Query('companyId') companyId: string,
+    @Req() req: any,
+  ) {
+    return this.service.resetPassword(userId, companyId, req.user.role);
+  }
+
+  @Patch(':id/status')
+  @Roles('ADMIN')
+  @ApiOperation({ summary: 'Suspend or restore a single user login without touching the rest of the company' })
+  @ApiQuery({ name: 'companyId', required: true })
+  setUserActive(
+    @Param('id') userId: string,
+    @Query('companyId') companyId: string,
+    @Body('isActive') isActive: boolean,
+    @Req() req: any,
+  ) {
+    return this.service.setUserActive(userId, companyId, isActive, req.user.role, req.user.sub);
+  }
+
   @Delete(':id')
   @Roles('ADMIN')
   @ApiOperation({ summary: 'Remove a user from the company' })

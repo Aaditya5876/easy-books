@@ -218,10 +218,80 @@ export class UserServiceImpl {
     return { message: 'User removed from company' };
   }
 
+  // ADMIN (within their company) or SUPER_ADMIN — generates a fresh temp
+  // password, forces a change on next login, and kills any existing session
+  // (nulling refreshToken) so a lost/compromised password can't still be used
+  // to refresh. Mirrors inviteUser's temp-password/email-with-fallback pattern.
+  async resetPassword(targetUserId: string, companyId: string, requesterRole: string) {
+    const user = await this.prisma.user.findUnique({ where: { id: targetUserId } });
+    if (!user) throw new NotFoundException('User not found');
+
+    if (user.role === 'SUPER_ADMIN') {
+      throw new ForbiddenException('Cannot reset the password of a SUPER_ADMIN');
+    }
+    if (requesterRole === 'ADMIN' && !ADMIN_GRANTABLE.includes(user.role)) {
+      throw new ForbiddenException('ADMIN can only reset passwords for STAFF, TEACHER or ACCOUNTANT users');
+    }
+
+    const link = await this.prisma.userCompany.findUnique({
+      where: { userId_companyId: { userId: targetUserId, companyId } },
+    });
+    if (!link) throw new NotFoundException('User does not belong to this company');
+
+    const company = await this.prisma.company.findUnique({ where: { id: companyId } });
+
+    const tempPassword = Math.random().toString(36).slice(-10);
+    const hashed = await bcrypt.hash(tempPassword, 10);
+    await this.prisma.user.update({
+      where: { id: targetUserId },
+      data: { password: hashed, mustChangePassword: true, refreshToken: null },
+    });
+
+    const emailSent = await this.mailService.sendPasswordReset(user.email, user.name, company?.name ?? '', tempPassword);
+    // tempPassword returned regardless, same fallback rationale as provisionClient.
+    return { message: 'Password reset', tempPassword, emailSent };
+  }
+
+  // ADMIN (within their company) or SUPER_ADMIN — suspends/restores a single
+  // login without touching the company (see Company.isActive for the
+  // whole-company equivalent). Suspending also kills the existing session.
+  async setUserActive(targetUserId: string, companyId: string, isActive: boolean, changedByRole: string, requesterId: string) {
+    if (targetUserId === requesterId) {
+      throw new BadRequestException('You cannot suspend yourself');
+    }
+    const user = await this.prisma.user.findUnique({ where: { id: targetUserId } });
+    if (!user) throw new NotFoundException('User not found');
+
+    if (user.role === 'SUPER_ADMIN') {
+      throw new ForbiddenException('Cannot suspend a SUPER_ADMIN');
+    }
+    if (changedByRole === 'ADMIN' && !ADMIN_GRANTABLE.includes(user.role)) {
+      throw new ForbiddenException('ADMIN can only suspend STAFF, TEACHER or ACCOUNTANT users');
+    }
+
+    const link = await this.prisma.userCompany.findUnique({
+      where: { userId_companyId: { userId: targetUserId, companyId } },
+    });
+    if (!link) throw new NotFoundException('User does not belong to this company');
+
+    return this.prisma.user.update({
+      where: { id: targetUserId },
+      data: { isActive, ...(isActive ? {} : { refreshToken: null }) },
+      select: { id: true, email: true, name: true, role: true, isActive: true },
+    });
+  }
+
   async listCompanyUsers(companyId: string) {
     const links = await this.prisma.userCompany.findMany({
       where: { companyId },
-      include: { user: { select: { id: true, email: true, name: true, role: true, staffTags: true, createdAt: true, maxCompanies: true } } },
+      include: {
+        user: {
+          select: {
+            id: true, email: true, name: true, role: true, staffTags: true,
+            createdAt: true, maxCompanies: true, isActive: true, lastLoginAt: true,
+          },
+        },
+      },
     });
     return links.map((l) => ({ ...l.user, isDefault: l.isDefault }));
   }
