@@ -112,6 +112,7 @@ export default function Login() {
   // Login
   const [loginForm, setLoginForm] = useState({ email: '', password: '' });
   const [showLoginPw, setShowLoginPw] = useState(false);
+  const [agreedToLoginTerms, setAgreedToLoginTerms] = useState(false);
 
   // Quick attendance (login-page check in/out — no session started)
   const [attAction, setAttAction] = useState('IN');
@@ -519,9 +520,29 @@ export default function Login() {
                     </div>
                   </div>
 
+                  <label htmlFor="agree-login-terms" className="flex items-center gap-2 cursor-pointer select-none">
+                    <Checkbox
+                      id="agree-login-terms"
+                      checked={agreedToLoginTerms}
+                      onCheckedChange={(v) => setAgreedToLoginTerms(v === true)}
+                    />
+                    <span className="text-xs text-muted-foreground">
+                      {t('auth.agreeToTermsPrefix', { defaultValue: 'I agree to the' })}{' '}
+                      <Link
+                        to="/terms"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-primary hover:underline font-medium"
+                        onClick={e => e.stopPropagation()}
+                      >
+                        {t('auth.termsAndAgreement', { defaultValue: 'Terms and Agreement' })}
+                      </Link>
+                    </span>
+                  </label>
+
                   {error && <p className="text-sm text-destructive">{error}</p>}
 
-                  <Button type="submit" className="w-full" disabled={loading}>
+                  <Button type="submit" className="w-full" disabled={loading || !agreedToLoginTerms}>
                     {loading ? t('auth.signingIn', { defaultValue: 'Signing in...' }) : t('auth.signIn', { defaultValue: 'Sign In' })}
                   </Button>
 
@@ -794,11 +815,13 @@ export default function Login() {
           )}
         </CardContent>
       </Card>
-      <p className="text-center text-xs text-muted-foreground mt-4">
-        <Link to="/terms" target="_blank" rel="noopener noreferrer" className="underline hover:text-foreground">
-          {t('auth.termsAndAgreement', { defaultValue: 'Terms and Agreement' })}
-        </Link>
-      </p>
+      {mode !== 'login' && (
+        <p className="text-center text-xs text-muted-foreground mt-4">
+          <Link to="/terms" target="_blank" rel="noopener noreferrer" className="underline hover:text-foreground">
+            {t('auth.termsAndAgreement', { defaultValue: 'Terms and Agreement' })}
+          </Link>
+        </p>
+      )}
       </div>
     </div>
   );

@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
 import { api } from '@/api/adapter';
@@ -67,6 +68,21 @@ const STAFF_TAGS = [
   { value: 'FRONT_OFFICE', i18n: 'settings.staffTagFrontOffice', label: 'Front Office', desc: 'Admissions — set up student/parent portal access' },
 ];
 
+// Every toggleable module a company's package can include — mirrors backend
+// core/modules/module-keys.ts. 'BASE' is deliberately excluded: it's a no-op
+// sentinel (see that file) that only exists so a scoped package's
+// enabledModules is never empty — it's added automatically whenever any
+// module here is selected, never shown as its own checkbox.
+const MODULE_CATALOG = [
+  { value: 'SCHOOL_ACADEMICS', i18n: 'settings.moduleSchoolAcademics', label: 'Academics', desc: 'Exams, homework, study materials, routine/timetable' },
+  { value: 'FACILITIES', i18n: 'settings.moduleFacilities', label: 'Facilities', desc: 'Library, hostel, transport' },
+  { value: 'HRMS', i18n: 'settings.moduleHrms', label: 'HR & Payroll', desc: 'Employees, staff attendance, leave, payroll' },
+  { value: 'FINANCE', i18n: 'settings.moduleFinance', label: 'Finance', desc: 'Ledger, transactions, accounting' },
+  { value: 'INVENTORY', i18n: 'settings.moduleInventory', label: 'Inventory', desc: 'Stock and item tracking' },
+  { value: 'AI', i18n: 'settings.moduleAi', label: 'AI Tools', desc: 'Gemini-powered notices, insights, report-card comments' },
+  { value: 'BULK_IMPORT', i18n: 'settings.moduleBulkImport', label: 'Bulk Import', desc: 'CSV/sheet import for students, employees, etc.' },
+];
+
 const BUSINESS_TYPES = [
   { value: 'RETAIL', label: 'Retail / General Store' },
   { value: 'PHARMACY', label: 'Pharmacy / Medical' },
@@ -91,6 +107,7 @@ const BUSINESS_TYPE_I18N_KEY = {
 
 export default function Settings() {
   const { t } = useTranslation();
+  const location = useLocation();
   const { user } = useAuth();
   const { canEdit, canDelete, canManageUsers } = useRole();
   const { prefs, updatePref, resetPrefs } = usePreferences();
@@ -116,7 +133,17 @@ export default function Settings() {
   // loadCompanies(), which flips loading true→false, unmounting and remounting an
   // uncontrolled <Tabs defaultValue="preferences"> each time and resetting it back
   // to Preferences. Lifting the selection into state here fixes that for all of them.
-  const [activeTab, setActiveTab] = useState('preferences');
+  const [activeTab, setActiveTab] = useState(location.state?.tab || 'preferences');
+
+  // TopBar links here with e.g. navigate('/settings', { state: { tab: 'clients',
+  // openAddCompany: true } }) — a useEffect (not just the lazy initial state
+  // above) so it still takes effect on an in-place navigation to a route
+  // that's already mounted (state change without a remount).
+  useEffect(() => {
+    if (location.state?.tab) setActiveTab(location.state.tab);
+    if (location.state?.openAddCompany) setShowAddCompany(true);
+    if (location.state?.tab === 'clients') loadAllClients();
+  }, [location.state]);
 
   // ── Companies ─────────────────────────────────────────────────────────────
   const [companies, setCompanies] = useState([]);
@@ -175,7 +202,8 @@ export default function Settings() {
 
   // ── Create Client (SUPER_ADMIN only — sales-led onboarding) ──────────────
   const [provisionForm, setProvisionForm] = useState({
-    companyName: '', businessType: 'SCHOOL', adminName: '', adminEmail: '', package: 'STANDARD',
+    companyName: '', businessType: 'SCHOOL', adminName: '', adminEmail: '',
+    enabledModules: ['BASE', 'SCHOOL_ACADEMICS'], // Standard tier by default
   });
   const [provisioning, setProvisioning] = useState(false);
 
@@ -627,6 +655,25 @@ export default function Settings() {
     }
   }
 
+  // Fine-grained alternative to the tier buttons — toggles one module on/off
+  // for this company. BASE is force-included whenever the resulting set is
+  // non-empty (an empty enabledModules means "unrestricted/legacy" to
+  // ModuleAccessGuard — the opposite of what unchecking everything should mean).
+  async function handleClientModuleToggle(company, moduleKey) {
+    const current = company.enabledModules || [];
+    const next = current.includes(moduleKey) ? current.filter(m => m !== moduleKey) : [...current, moduleKey];
+    const modules = next.filter(m => m !== 'BASE').length > 0 ? [...new Set(['BASE', ...next])] : [];
+    setClientPackageSaving(company.id);
+    try {
+      await companyApi.updatePackage(company.id, modules);
+      setAllClients(list => list.map(c => c.id === company.id ? { ...c, enabledModules: modules } : c));
+    } catch (err) {
+      toast.error(err?.response?.data?.message || t('settings.packageSaveFailed', { defaultValue: 'Failed to update package' }));
+    } finally {
+      setClientPackageSaving(null);
+    }
+  }
+
   async function handleClientActiveToggle(company) {
     const activating = !company.isActive;
     if (!activating) {
@@ -717,7 +764,7 @@ export default function Settings() {
         businessType: provisionForm.businessType,
         adminName: provisionForm.adminName,
         adminEmail: provisionForm.adminEmail,
-        enabledModules: PACKAGE_MODULES[provisionForm.package] || [],
+        enabledModules: provisionForm.businessType === 'SCHOOL' ? provisionForm.enabledModules : [],
       });
       if (res.data.emailSent) {
         toast.success(t('settings.clientCreatedEmailed', { defaultValue: 'Client created — login details emailed to {{email}}', email: provisionForm.adminEmail }));
@@ -727,7 +774,7 @@ export default function Settings() {
         toast.error(t('settings.clientCreatedEmailFailed', { defaultValue: 'Client created, but the invite email failed to send — share this password manually' }));
         setTempPassword(res.data.tempPassword);
       }
-      setProvisionForm({ companyName: '', businessType: 'SCHOOL', adminName: '', adminEmail: '', package: 'STANDARD' });
+      setProvisionForm({ companyName: '', businessType: 'SCHOOL', adminName: '', adminEmail: '', enabledModules: ['BASE', 'SCHOOL_ACADEMICS'] });
       loadCompanies();
       loadAllClients();
     } catch (err) {
@@ -816,12 +863,12 @@ export default function Settings() {
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList>
+          <TabsTrigger value="companies">{t('settings.tabCompanies', { defaultValue: 'Companies' })}</TabsTrigger>
           {isSuperAdmin && (
             <TabsTrigger value="clients" onClick={loadAllClients} className="gap-1.5">
               <Layers className="w-3.5 h-3.5" />{t('settings.tabClients', { defaultValue: 'Clients' })}
             </TabsTrigger>
           )}
-          <TabsTrigger value="companies">{t('settings.tabCompanies', { defaultValue: 'Companies' })}</TabsTrigger>
           <TabsTrigger value="users" onClick={loadUsers}>{t('settings.tabUsers', { defaultValue: 'Users' })}</TabsTrigger>
           <TabsTrigger value="preferences">{t('settings.tabPreferences', { defaultValue: 'Preferences' })}</TabsTrigger>
           <TabsTrigger value="automation" onClick={loadBankAccounts}>{t('settings.tabAutomation', { defaultValue: 'Automation' })}</TabsTrigger>
@@ -854,6 +901,15 @@ export default function Settings() {
                       <div className="flex items-start justify-between gap-4">
                         <div>
                           <div className="flex items-center gap-2 flex-wrap">
+                            {/* Green = this is the company currently selected in the header
+                                switcher (matches that dot exactly) — NOT "not deactivated";
+                                the red "Deactivated" pill below already covers that. */}
+                            {c.id === activeCompanyId && (
+                              <span
+                                className="w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-emerald-500/25 shadow-[0_0_4px_rgba(16,185,129,0.7)] shrink-0"
+                                title={t('settings.currentlyActiveCompany', { defaultValue: 'Currently active company' })}
+                              />
+                            )}
                             <h3 className="font-semibold">{c.name}</h3>
                             <span className="text-xs bg-secondary text-muted-foreground px-2 py-0.5 rounded-full">
                               {businessTypeLabel(c.businessType) || c.businessType}
@@ -925,6 +981,31 @@ export default function Settings() {
                           </div>
                         )}
                       </div>
+
+                      {/* Fine-grained alternative to the tier buttons above —
+                          tick any combination of services for this company. */}
+                      <div className="flex flex-wrap gap-1.5">
+                        {MODULE_CATALOG.map(mod => {
+                          const active = (c.enabledModules || []).includes(mod.value);
+                          return (
+                            <button
+                              key={mod.value}
+                              type="button"
+                              disabled={clientPackageSaving === c.id}
+                              onClick={() => handleClientModuleToggle(c, mod.value)}
+                              title={t(`${mod.i18n}Desc`, { defaultValue: mod.desc })}
+                              className={`flex items-center gap-1.5 px-2 py-1 rounded-full border text-xs transition-colors disabled:opacity-50 ${
+                                active ? 'bg-primary/10 border-primary text-primary' : 'border-border text-muted-foreground hover:border-primary/50'
+                              }`}
+                            >
+                              <span className={`w-3 h-3 rounded-sm border flex items-center justify-center ${active ? 'bg-primary border-primary' : 'border-muted-foreground/40'}`}>
+                                {active && <Check className="w-2.5 h-2.5 text-primary-foreground" />}
+                              </span>
+                              {t(mod.i18n, { defaultValue: mod.label })}
+                            </button>
+                          );
+                        })}
+                      </div>
                     </div>
                   );
                 })}
@@ -970,15 +1051,45 @@ export default function Settings() {
                 {provisionForm.businessType === 'SCHOOL' && (
                   <div className="space-y-1.5">
                     <Label>{t('settings.packageLabel', { defaultValue: 'Package' })}</Label>
-                    <select
-                      className="w-full border rounded-md px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring"
-                      value={provisionForm.package}
-                      onChange={e => setProvisionForm(f => ({ ...f, package: e.target.value }))}
-                    >
-                      <option value="BASE">{t('settings.packageBASE', { defaultValue: 'Base' })}</option>
-                      <option value="STANDARD">{t('settings.packageSTANDARD', { defaultValue: 'Standard' })}</option>
-                      <option value="PREMIUM">{t('settings.packagePREMIUM', { defaultValue: 'Premium' })}</option>
-                    </select>
+                    <div className="flex gap-2">
+                      {['BASE', 'STANDARD', 'PREMIUM'].map(pt => (
+                        <button
+                          key={pt}
+                          type="button"
+                          onClick={() => setProvisionForm(f => ({ ...f, enabledModules: PACKAGE_MODULES[pt] }))}
+                          className={`px-2.5 py-1 rounded-md border text-xs font-medium transition-colors ${
+                            packageTierOf(provisionForm.enabledModules) === pt ? 'border-primary bg-primary/10 text-primary' : 'border-border hover:bg-muted'
+                          }`}
+                        >
+                          {t(`settings.package${pt}`, { defaultValue: pt.charAt(0) + pt.slice(1).toLowerCase() })}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="flex flex-wrap gap-1.5 pt-1">
+                      {MODULE_CATALOG.map(mod => {
+                        const active = provisionForm.enabledModules.includes(mod.value);
+                        return (
+                          <button
+                            key={mod.value}
+                            type="button"
+                            title={t(`${mod.i18n}Desc`, { defaultValue: mod.desc })}
+                            onClick={() => setProvisionForm(f => {
+                              const next = active ? f.enabledModules.filter(m => m !== mod.value) : [...f.enabledModules, mod.value];
+                              const modules = next.filter(m => m !== 'BASE').length > 0 ? [...new Set(['BASE', ...next])] : [];
+                              return { ...f, enabledModules: modules };
+                            })}
+                            className={`flex items-center gap-1.5 px-2 py-1 rounded-full border text-xs transition-colors ${
+                              active ? 'bg-primary/10 border-primary text-primary' : 'border-border text-muted-foreground hover:border-primary/50'
+                            }`}
+                          >
+                            <span className={`w-3 h-3 rounded-sm border flex items-center justify-center ${active ? 'bg-primary border-primary' : 'border-muted-foreground/40'}`}>
+                              {active && <Check className="w-2.5 h-2.5 text-primary-foreground" />}
+                            </span>
+                            {t(mod.i18n, { defaultValue: mod.label })}
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
                 )}
                 <Button type="submit" disabled={provisioning} className="w-full">

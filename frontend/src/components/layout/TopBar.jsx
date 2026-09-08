@@ -23,10 +23,20 @@ import { getActiveCompanyId, setActiveCompanyId } from '@/lib/companyContext';
 import { getTodayBS } from '@/lib/nepaliDate';
 import { useRole } from '@/lib/useRole';
 
+// Mirrors Settings.jsx's ROLE_I18N_KEY — kept local since it's the only other
+// place a role label is shown in the chrome.
+const ROLE_LABEL_KEY = {
+  STAFF: 'settings.roleStaff',
+  ACCOUNTANT: 'settings.roleAccountant',
+  TEACHER: 'settings.roleTeacher',
+  ADMIN: 'settings.roleAdmin',
+  SUPER_ADMIN: 'settings.roleSuperAdmin',
+};
+
 export default function TopBar({ onMobileMenuToggle, onToolOpen }) {
   const navigate = useNavigate();
-  const { isAdmin, isAccountant, canViewPayroll } = useRole();
-  const { i18n } = useTranslation();
+  const { isAdmin, isAccountant, isSuperAdmin, canViewPayroll } = useRole();
+  const { t, i18n } = useTranslation();
   const { resolvedTheme, setTheme } = useTheme();
   const { prefs } = usePreferences();
   const [user, setUser] = useState(null);
@@ -127,6 +137,20 @@ export default function TopBar({ onMobileMenuToggle, onToolOpen }) {
     window.location.reload();
   }
 
+  // SUPER_ADMIN's real work on another company is managing it (package,
+  // active status), not browsing its data — so route to Settings → Clients
+  // instead of switching context + landing on that company's Dashboard.
+  // Still updates the active company id so the rest of the app agrees on it.
+  function handleCompanyClick(company) {
+    if (isSuperAdmin) {
+      setActiveCompanyId(company.id);
+      navigate('/settings', { state: { tab: 'clients' } });
+      return;
+    }
+    if (company.is_active === false) return;
+    switchCompany(company);
+  }
+
   function closeSearch() {
     setSearchOpen(false);
     setSearchQuery('');
@@ -199,20 +223,36 @@ export default function TopBar({ onMobileMenuToggle, onToolOpen }) {
               <span className="hidden sm:inline max-w-[160px] truncate">
                 {activeCompany?.name || 'Select Company'}
               </span>
+              {activeCompany && (
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-emerald-500/25 shadow-[0_0_4px_rgba(16,185,129,0.7)] shrink-0" title="Active" />
+              )}
               <ChevronDown className="w-3 h-3 text-muted-foreground" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" className="w-56">
-            {companies.filter(c => c.is_active).map(c => (
-              <DropdownMenuItem key={c.id} onClick={() => switchCompany(c)}>
+            {companies.map(c => (
+              <DropdownMenuItem
+                key={c.id}
+                onClick={() => handleCompanyClick(c)}
+                disabled={!isSuperAdmin && c.is_active === false}
+                className={c.is_active === false ? 'opacity-60' : ''}
+              >
                 <Building2 className="w-4 h-4 mr-2" />
                 {c.name}
+                <span
+                  className={`ml-2 w-2.5 h-2.5 rounded-full shrink-0 ${
+                    c.is_active === false
+                      ? 'bg-muted-foreground/40'
+                      : 'bg-emerald-500 ring-2 ring-emerald-500/25 shadow-[0_0_4px_rgba(16,185,129,0.7)]'
+                  }`}
+                  title={c.is_active === false ? 'Deactivated' : 'Active'}
+                />
                 {c.isDefault && <span className="ml-auto text-[10px] text-muted-foreground">default</span>}
               </DropdownMenuItem>
             ))}
             {isAdmin && companies.length > 0 && <DropdownMenuSeparator />}
             {isAdmin && (
-              <DropdownMenuItem onClick={() => navigate('/settings')}>
+              <DropdownMenuItem onClick={() => navigate('/settings', { state: { tab: 'companies', openAddCompany: true } })}>
                 <Plus className="w-4 h-4 mr-2" />
                 Add Company
               </DropdownMenuItem>
@@ -438,8 +478,13 @@ export default function TopBar({ onMobileMenuToggle, onToolOpen }) {
                   {user?.full_name?.[0]?.toUpperCase() || 'U'}
                 </span>
               </div>
-              <span className="hidden md:inline text-sm font-medium max-w-[120px] truncate">
-                {user?.full_name || 'User'}
+              <span className="hidden md:flex flex-col items-start leading-tight">
+                <span className="text-sm font-medium max-w-[120px] truncate">{user?.full_name || 'User'}</span>
+                {user?.role && (
+                  <span className="text-[10px] text-muted-foreground max-w-[120px] truncate">
+                    {ROLE_LABEL_KEY[user.role] ? t(ROLE_LABEL_KEY[user.role], { defaultValue: user.role }) : user.role}
+                  </span>
+                )}
               </span>
             </Button>
           </DropdownMenuTrigger>
