@@ -75,12 +75,12 @@ const navSections = [
     label: 'HR',
     labelColor: 'text-sky-400',
     activeClass: 'bg-sky-600 text-white shadow-sm shadow-sky-900/30',
-    // visible to ACCOUNTANT + ADMIN
-    minRole: 'accountant',
+    // Employees/Attendance: ACCOUNTANT + ADMIN, or a STAFF member tagged HR
+    // (orStaffTag). Payroll stays ACCOUNTANT/ADMIN-only (minRole).
     items: [
-      { icon: UserCircle, label: 'Employees', path: '/employees', module: 'HRMS' },
-      { icon: CalendarCheck, label: 'Attendance', path: '/attendance', module: 'HRMS' },
-      { icon: Banknote, label: 'Payroll', path: '/payroll', module: 'HRMS' },
+      { icon: UserCircle, label: 'Employees', path: '/employees', module: 'HRMS', orStaffTag: 'HR' },
+      { icon: CalendarCheck, label: 'Attendance', path: '/attendance', module: 'HRMS', orStaffTag: 'HR' },
+      { icon: Banknote, label: 'Payroll', path: '/payroll', module: 'HRMS', minRole: 'accountant' },
     ]
   },
   {
@@ -95,7 +95,7 @@ const navSections = [
   },
 ];
 
-// `roles` on an item = also visible to these restricted roles (TEACHER / LIBRARIAN).
+// `roles` on an item = also visible to the restricted TEACHER role.
 // Items without `roles` are hidden from restricted roles entirely.
 // `minRole` on an item mirrors the section-level gate (admin / accountant).
 // Sections are ordered by first-run dependency: Setup holds what everything
@@ -106,12 +106,12 @@ const schoolNavSections = [
     labelColor: 'text-sidebar-muted',
     activeClass: 'bg-sidebar-primary text-sidebar-primary-foreground shadow-sm',
     items: [
-      { icon: LayoutDashboard, label: 'Dashboard', path: '/', roles: ['TEACHER', 'LIBRARIAN'] },
-      { icon: Fingerprint, label: 'My Attendance', path: '/my-attendance', roles: ['TEACHER', 'LIBRARIAN'], module: 'HRMS' },
-      { icon: CalendarDays, label: 'My Leave', path: '/my-leave', roles: ['TEACHER', 'LIBRARIAN'], module: 'HRMS' },
+      { icon: LayoutDashboard, label: 'Dashboard', path: '/', roles: ['TEACHER'] },
+      { icon: Fingerprint, label: 'My Attendance', path: '/my-attendance', roles: ['TEACHER'], module: 'HRMS' },
+      { icon: CalendarDays, label: 'My Leave', path: '/my-leave', roles: ['TEACHER'], module: 'HRMS' },
       // Reports is split by tab for TEACHER (see SchoolReports.jsx) — the backend
       // only grants TEACHER the Attendance/Academics analytics endpoints, not
-      // Fees/Operations/Audit. LIBRARIAN has no backend access to any tab, so stays hidden.
+      // Fees/Operations/Audit.
       { icon: BarChart2, label: 'Reports', path: '/reports', roles: ['TEACHER'] },
     ]
   },
@@ -120,8 +120,8 @@ const schoolNavSections = [
     labelColor: 'text-rose-400',
     activeClass: 'bg-rose-600 text-white shadow-sm shadow-rose-900/30',
     items: [
-      { icon: CalendarDays, label: 'Calendar and Events', path: '/calendar-events', roles: ['TEACHER', 'LIBRARIAN'] },
-      { icon: UserCircle, label: 'Teachers', path: '/employees', minRole: 'accountant' },
+      { icon: CalendarDays, label: 'Calendar and Events', path: '/calendar-events', roles: ['TEACHER'] },
+      { icon: UserCircle, label: 'Teachers', path: '/employees', orStaffTag: 'HR' },
       { icon: School, label: 'Classes', path: '/classes', roles: ['TEACHER'] },
       { icon: BookMarked, label: 'Subjects', path: '/subjects', roles: ['TEACHER'] },
     ]
@@ -131,7 +131,7 @@ const schoolNavSections = [
     labelColor: 'text-emerald-400',
     activeClass: 'bg-emerald-600 text-white shadow-sm shadow-emerald-900/30',
     items: [
-      { icon: GraduationCap, label: 'Students', path: '/students', roles: ['TEACHER', 'LIBRARIAN'] },
+      { icon: GraduationCap, label: 'Students', path: '/students', roles: ['TEACHER'] },
       { icon: CalendarCheck2, label: 'Attendance', path: '/student-attendance', roles: ['TEACHER'] },
       { icon: CalendarDays, label: 'Routine', path: '/routine', roles: ['TEACHER'], module: 'SCHOOL_ACADEMICS' },
       { icon: Trophy, label: 'Exam', path: '/exams', roles: ['TEACHER'], module: 'SCHOOL_ACADEMICS' },
@@ -160,7 +160,7 @@ const schoolNavSections = [
       // (client/vendor task tracking, quotation/bill filing) don't reach students
       // or parents and are deliberately excluded here; both stay intact for
       // business companies via the non-school sidebar/routes.
-      { icon: Megaphone, label: 'Notices', path: '/notices', roles: ['TEACHER', 'LIBRARIAN'] },
+      { icon: Megaphone, label: 'Notices', path: '/notices', roles: ['TEACHER'] },
     ]
   },
   {
@@ -168,19 +168,18 @@ const schoolNavSections = [
     labelColor: 'text-violet-400',
     activeClass: 'bg-violet-600 text-white shadow-sm shadow-violet-900/30',
     items: [
-      { icon: Library, label: 'Library', path: '/library', roles: ['LIBRARIAN'], module: 'FACILITIES' },
-      { icon: Home, label: 'Hostel', path: '/hostel', module: 'FACILITIES' },
-      { icon: Bus, label: 'Transport', path: '/transport', module: 'FACILITIES' },
+      { icon: Library, label: 'Library', path: '/library', requiresStaffTag: 'LIBRARY', module: 'FACILITIES' },
+      { icon: Home, label: 'Hostel', path: '/hostel', requiresStaffTag: 'HOSTEL', module: 'FACILITIES' },
+      { icon: Bus, label: 'Transport', path: '/transport', requiresStaffTag: 'TRANSPORT', module: 'FACILITIES' },
     ]
   },
   {
     label: 'HR',
     labelColor: 'text-sky-400',
     activeClass: 'bg-sky-600 text-white shadow-sm shadow-sky-900/30',
-    minRole: 'accountant',
     items: [
-      { icon: CalendarCheck, label: 'Staff Attendance', path: '/attendance', module: 'HRMS' },
-      { icon: Banknote, label: 'Payroll', path: '/payroll', module: 'HRMS' },
+      { icon: CalendarCheck, label: 'Staff Attendance', path: '/attendance', module: 'HRMS', orStaffTag: 'HR' },
+      { icon: Banknote, label: 'Payroll', path: '/payroll', module: 'HRMS', minRole: 'accountant' },
     ]
   },
   {
@@ -199,7 +198,7 @@ export default function SidebarNav({ collapsed, onToggle }) {
   const location = useLocation();
   const { t } = useTranslation();
   const nt = (label) => t(`nav.${label}`, { defaultValue: label });
-  const { isAdmin, canViewPayroll, isTeacher, isLibrarian, role } = useRole();
+  const { isAdmin, canViewPayroll, isTeacher, isStaff, staffTags, role } = useRole();
   const { prefs } = usePreferences();
   const { user } = useAuth();
   const isSchool = user?.defaultCompany?.businessType === 'SCHOOL';
@@ -224,8 +223,9 @@ export default function SidebarNav({ collapsed, onToggle }) {
 
   const activeSections = isSchool ? schoolNavSections : navSections;
 
-  // TEACHER / LIBRARIAN only see items explicitly tagged with their role
-  const restrictedRole = isTeacher || isLibrarian;
+  // TEACHER only sees items explicitly tagged with their role
+  const restrictedRole = isTeacher;
+  const hasStaffTag = (tag) => isStaff && staffTags.includes(tag);
 
   const visibleSections = activeSections
     .filter(section => {
@@ -238,6 +238,14 @@ export default function SidebarNav({ collapsed, onToggle }) {
       items: section.items.filter(item => {
         if (item.minRole === 'admin' && !isAdmin) return false;
         if (item.minRole === 'accountant' && !canViewPayroll) return false;
+        // Visible to ACCOUNTANT/ADMIN as usual, OR a STAFF member carrying
+        // this tag (e.g. HR) — an addition on top of minRole, not a narrowing.
+        if (item.orStaffTag && !(canViewPayroll || isAdmin || hasStaffTag(item.orStaffTag))) return false;
+        // Narrows a module already open to STAFF down to STAFF members
+        // carrying this tag (e.g. LIBRARY/HOSTEL/TRANSPORT) — only applies
+        // when the caller's role is literally STAFF; ADMIN/ACCOUNTANT/TEACHER
+        // are unaffected.
+        if (item.requiresStaffTag && isStaff && !staffTags.includes(item.requiresStaffTag)) return false;
         if (!isModuleEnabled(item.module)) return false;
         return !restrictedRole || item.roles?.includes(role);
       }),

@@ -15,7 +15,7 @@ export class LeaveController {
   // roles above where narrower) ────────────────────────────────────────────────
 
   @Get('self/context')
-  @Roles('ADMIN', 'ACCOUNTANT', 'STAFF', 'TEACHER', 'LIBRARIAN')
+  @Roles('ADMIN', 'ACCOUNTANT', 'STAFF', 'TEACHER')
   @ApiOperation({ summary: "Get the current user's own leave balances" })
   @ApiQuery({ name: 'companyId', required: true })
   selfContext(@Request() req: any, @Query('companyId') companyId: string) {
@@ -23,7 +23,7 @@ export class LeaveController {
   }
 
   @Get('self/requests')
-  @Roles('ADMIN', 'ACCOUNTANT', 'STAFF', 'TEACHER', 'LIBRARIAN')
+  @Roles('ADMIN', 'ACCOUNTANT', 'STAFF', 'TEACHER')
   @ApiOperation({ summary: "Get the current user's own leave requests" })
   @ApiQuery({ name: 'companyId', required: true })
   selfRequests(@Request() req: any, @Query('companyId') companyId: string) {
@@ -31,7 +31,7 @@ export class LeaveController {
   }
 
   @Post('self/requests')
-  @Roles('ADMIN', 'ACCOUNTANT', 'STAFF', 'TEACHER', 'LIBRARIAN')
+  @Roles('ADMIN', 'ACCOUNTANT', 'STAFF', 'TEACHER')
   @ApiOperation({ summary: 'Submit a leave request for the current user' })
   @ApiQuery({ name: 'companyId', required: true })
   createSelfRequest(
@@ -43,7 +43,7 @@ export class LeaveController {
   }
 
   @Patch('self/requests/:id/cancel')
-  @Roles('ADMIN', 'ACCOUNTANT', 'STAFF', 'TEACHER', 'LIBRARIAN')
+  @Roles('ADMIN', 'ACCOUNTANT', 'STAFF', 'TEACHER')
   @ApiOperation({ summary: "Cancel one of the current user's own leave requests" })
   @ApiQuery({ name: 'companyId', required: true })
   cancelSelfRequest(@Request() req: any, @Param('id') id: string, @Query('companyId') companyId: string) {

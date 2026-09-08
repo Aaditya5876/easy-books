@@ -22,6 +22,24 @@ export function confirm(options) {
   });
 }
 
+/**
+ * Single-button informational popup (no Cancel) built on the same dialog —
+ * for messages that need more visibility than a corner toast, e.g. "contact
+ * GeoInfosys" errors. Usage: await alertPopup({ title: '...', description: '...' })
+ * Accepts a plain string too: alertPopup('Something happened')
+ */
+export function alertPopup(options) {
+  const opts = typeof options === 'string' ? { description: options } : options;
+  return new Promise((resolve) => {
+    if (!listener) {
+      window.alert(opts.description || opts.title || '');
+      resolve(true);
+      return;
+    }
+    listener({ ...opts, alertOnly: true, resolve });
+  });
+}
+
 export function ConfirmDialogHost() {
   const [state, setState] = useState(null);
 
@@ -45,14 +63,16 @@ export function ConfirmDialogHost() {
           )}
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel onClick={() => close(false)}>
-            {state?.cancelLabel || 'Cancel'}
-          </AlertDialogCancel>
+          {!state?.alertOnly && (
+            <AlertDialogCancel onClick={() => close(false)}>
+              {state?.cancelLabel || 'Cancel'}
+            </AlertDialogCancel>
+          )}
           <AlertDialogAction
             onClick={() => close(true)}
             className={state?.variant === 'destructive' ? 'bg-red-600 hover:bg-red-700 focus:ring-red-600' : ''}
           >
-            {state?.confirmLabel || 'Confirm'}
+            {state?.confirmLabel || (state?.alertOnly ? 'OK' : 'Confirm')}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

@@ -9,7 +9,7 @@ import { useAuth } from '@/lib/AuthContext';
 import { useRole } from "@/lib/useRole";
 import { usePreferences } from '@/lib/PreferencesContext';
 import { getActiveCompanyId, setActiveCompanyId } from '@/lib/companyContext';
-import { confirm } from '@/lib/confirm';
+import { confirm, alertPopup } from '@/lib/confirm';
 import PageHeader from '../components/shared/PageHeader';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,7 +22,7 @@ import {
 import {
   Building2, Plus, Trash2, Save, ImagePlus, X, UserPlus, Copy, Check, Shield,
   Phone, Mail, MapPin, Hash, User, Palette, Type, Bell, RotateCcw, Upload,
-  Recycle, RotateCw, Lock, AlertTriangle, Clock, Zap, QrCode, Power, PowerOff, Layers
+  Recycle, RotateCw, Lock, AlertTriangle, Clock, Zap, QrCode, Power, PowerOff, Layers, School
 } from 'lucide-react';
 
 const SIDEBAR_PALETTE = ['#1e293b', '#1e3a5f', '#14532d', '#4c1d95', '#881337', '#7c2d12'];
@@ -46,7 +46,6 @@ const ROLE_COLORS = {
   ACCOUNTANT: 'bg-blue-100 text-blue-700',
   STAFF: 'bg-green-100 text-green-700',
   TEACHER: 'bg-amber-100 text-amber-700',
-  LIBRARIAN: 'bg-teal-100 text-teal-700',
   SUPER_ADMIN: 'bg-purple-100 text-purple-700',
 };
 
@@ -54,10 +53,18 @@ const ROLE_I18N_KEY = {
   STAFF: 'settings.roleStaff',
   ACCOUNTANT: 'settings.roleAccountant',
   TEACHER: 'settings.roleTeacher',
-  LIBRARIAN: 'settings.roleLibrarian',
   ADMIN: 'settings.roleAdmin',
   SUPER_ADMIN: 'settings.roleSuperAdmin',
 };
+
+// Assignable duties within the shared STAFF role — mirrors backend
+// core/modules/staff-tags.ts. Only meaningful when role === 'STAFF'.
+const STAFF_TAGS = [
+  { value: 'LIBRARY', i18n: 'settings.staffTagLibrary', label: 'Library', desc: 'Books, issues and returns' },
+  { value: 'HOSTEL', i18n: 'settings.staffTagHostel', label: 'Hostel', desc: 'Rooms and student allocations' },
+  { value: 'TRANSPORT', i18n: 'settings.staffTagTransport', label: 'Transport', desc: 'Routes and student assignments' },
+  { value: 'HR', i18n: 'settings.staffTagHr', label: 'HR', desc: 'Employee records and attendance for all staff' },
+];
 
 const BUSINESS_TYPES = [
   { value: 'RETAIL', label: 'Retail / General Store' },
@@ -116,9 +123,12 @@ export default function Settings() {
   const [showAddCompany, setShowAddCompany] = useState(false);
   const [editingCompany, setEditingCompany] = useState(null);
   const [uploadingLogo, setUploadingLogo] = useState(false);
+  // Self-registration is off (see Login.jsx) — the "Add Company" dialog below
+  // is now the only self-serve path to a new company, and every client
+  // onboarded through it is a school, so it defaults to and locks on SCHOOL.
   const [companyForm, setCompanyForm] = useState({
     name: '', address: '', phone: '', email: '', pan_vat: '',
-    registration_number: '', business_type: '', default_unit_type: '',
+    registration_number: '', business_type: 'SCHOOL', default_unit_type: '',
     currency: 'NPR', logo_url: '',
   });
 
@@ -126,7 +136,7 @@ export default function Settings() {
   const [users, setUsers] = useState([]);
   const [usersLoading, setUsersLoading] = useState(false);
   const [showInvite, setShowInvite] = useState(false);
-  const [inviteForm, setInviteForm] = useState({ name: '', email: '', role: 'STAFF' });
+  const [inviteForm, setInviteForm] = useState({ name: '', email: '', role: 'STAFF', staffTags: [] });
   const [inviteLoading, setInviteLoading] = useState(false);
   const [tempPassword, setTempPassword] = useState(null);
   const [copied, setCopied] = useState(false);
@@ -346,11 +356,24 @@ export default function Settings() {
   async function addCompany() {
     try {
       await api.Company.create({ ...companyForm, is_active: true });
-      setCompanyForm({ name: '', address: '', phone: '', email: '', pan_vat: '', registration_number: '', business_type: '', default_unit_type: '', currency: 'NPR', logo_url: '' });
+      setCompanyForm({ name: '', address: '', phone: '', email: '', pan_vat: '', registration_number: '', business_type: 'SCHOOL', default_unit_type: '', currency: 'NPR', logo_url: '' });
       setShowAddCompany(false);
       loadCompanies();
     } catch (err) {
-      toast.error(err?.response?.data?.message || t('settings.failedAddCompany', { defaultValue: 'Failed to add company' }));
+      const message = err?.response?.data?.message || t('settings.failedAddCompany', { defaultValue: 'Failed to add company' });
+      // The company-limit message ("Contact GeoInfosys to add another") is
+      // easy to miss as a corner toast — it needs a real popup so the user
+      // actually sees why nothing happened.
+      if (message.includes('Contact GeoInfosys')) {
+        setShowAddCompany(false);
+        await alertPopup({
+          title: t('settings.companyLimitReachedTitle', { defaultValue: 'Company limit reached' }),
+          description: message,
+          confirmLabel: t('settings.gotIt', { defaultValue: 'Got it' }),
+        });
+      } else {
+        toast.error(message);
+      }
     }
   }
 
@@ -413,7 +436,7 @@ export default function Settings() {
     try {
       const res = await usersApi.invite(activeCompanyId, inviteForm);
       if (res.data.tempPassword) setTempPassword(res.data.tempPassword);
-      else { setShowInvite(false); setInviteForm({ name: '', email: '', role: 'STAFF' }); }
+      else { setShowInvite(false); setInviteForm({ name: '', email: '', role: 'STAFF', staffTags: [] }); }
       loadUsers();
     } catch (err) {
       toast.error(err?.response?.data?.message || t('settings.failedInviteUser', { defaultValue: 'Failed to invite user' }));
@@ -422,16 +445,23 @@ export default function Settings() {
     }
   }
 
-  async function handleRoleChange(userId, newRole) {
+  async function handleRoleChange(userId, newRole, staffTags) {
     setRoleChanging(userId);
     try {
-      await usersApi.changeRole(userId, activeCompanyId, newRole);
+      await usersApi.changeRole(userId, activeCompanyId, newRole, staffTags);
       loadUsers();
     } catch (err) {
       toast.error(err?.response?.data?.message || t('settings.failedChangeRole', { defaultValue: 'Failed to change role' }));
     } finally {
       setRoleChanging(null);
     }
+  }
+
+  function toggleUserStaffTag(u, tag) {
+    const next = (u.staffTags || []).includes(tag)
+      ? u.staffTags.filter(tg => tg !== tag)
+      : [...(u.staffTags || []), tag];
+    handleRoleChange(u.id, 'STAFF', next);
   }
 
   async function handleMaxCompaniesChange(userId, value) {
@@ -477,7 +507,7 @@ export default function Settings() {
   function closeTempPasswordDialog() {
     setTempPassword(null);
     setShowInvite(false);
-    setInviteForm({ name: '', email: '', role: 'STAFF' });
+    setInviteForm({ name: '', email: '', role: 'STAFF', staffTags: [] });
   }
 
   // ── Preferences ───────────────────────────────────────────────────────────
@@ -771,18 +801,39 @@ export default function Settings() {
                         ) : u.role === 'SUPER_ADMIN' ? (
                           <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${ROLE_COLORS.SUPER_ADMIN}`}>{roleLabel('SUPER_ADMIN')}</span>
                         ) : (
-                          <select
-                            className="text-xs border rounded-md px-2 py-1 bg-background focus:outline-none focus:ring-1 focus:ring-ring"
-                            value={u.role}
-                            disabled={roleChanging === u.id}
-                            onChange={e => handleRoleChange(u.id, e.target.value)}
-                          >
-                            <option value="STAFF">{roleLabel('STAFF')}</option>
-                            <option value="ACCOUNTANT">{roleLabel('ACCOUNTANT')}</option>
-                            {isSchool && <option value="TEACHER">{roleLabel('TEACHER')}</option>}
-                            {isSchool && <option value="LIBRARIAN">{roleLabel('LIBRARIAN')}</option>}
-                            <option value="ADMIN">{roleLabel('ADMIN')}</option>
-                          </select>
+                          <div className="flex flex-col items-end gap-1">
+                            <select
+                              className="text-xs border rounded-md px-2 py-1 bg-background focus:outline-none focus:ring-1 focus:ring-ring"
+                              value={u.role}
+                              disabled={roleChanging === u.id}
+                              onChange={e => handleRoleChange(u.id, e.target.value, [])}
+                            >
+                              <option value="STAFF">{roleLabel('STAFF')}</option>
+                              <option value="ACCOUNTANT">{roleLabel('ACCOUNTANT')}</option>
+                              {isSchool && <option value="TEACHER">{roleLabel('TEACHER')}</option>}
+                              <option value="ADMIN">{roleLabel('ADMIN')}</option>
+                            </select>
+                            {u.role === 'STAFF' && (
+                              <div className="flex flex-wrap justify-end gap-1 max-w-[220px]">
+                                {STAFF_TAGS.map(tag => (
+                                  <button
+                                    key={tag.value}
+                                    type="button"
+                                    disabled={roleChanging === u.id}
+                                    onClick={() => toggleUserStaffTag(u, tag.value)}
+                                    className={`text-[10px] px-1.5 py-0.5 rounded-full border transition-colors ${
+                                      (u.staffTags || []).includes(tag.value)
+                                        ? 'bg-primary/10 border-primary text-primary'
+                                        : 'border-border text-muted-foreground hover:border-primary/50'
+                                    }`}
+                                    title={t(`${tag.i18n}Desc`, { defaultValue: tag.desc })}
+                                  >
+                                    {t(tag.i18n, { defaultValue: tag.label })}
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </div>
                         )}
                         {canManageUsers && u.id !== user?.id && u.role !== 'SUPER_ADMIN' && (
                           <button
@@ -1602,22 +1653,13 @@ export default function Settings() {
 
               <div className="space-y-1">
                 <Label>{t('settings.businessTypeLabel', { defaultValue: 'Business Type' })}</Label>
-                <select
-                  className="w-full border rounded-md px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring mt-1"
-                  value={BUSINESS_TYPES.some(b => b.value === companyForm.business_type) ? companyForm.business_type : (companyForm.business_type ? 'OTHER' : '')}
-                  onChange={e => setCompanyForm({ ...companyForm, business_type: e.target.value })}
-                >
-                  <option value="">{t('settings.selectBusinessType', { defaultValue: 'Select business type…' })}</option>
-                  {BUSINESS_TYPES.map(bt => <option key={bt.value} value={bt.value}>{businessTypeLabel(bt.value)}</option>)}
-                </select>
-                {companyForm.business_type === 'OTHER' && (
-                  <Input className="mt-2" placeholder={t('settings.describeBusinessPlaceholder', { defaultValue: 'Describe your business (e.g. Tailoring Shop, Laundry)' })} autoFocus
-                    value='' onChange={e => setCompanyForm({ ...companyForm, business_type: e.target.value })} />
-                )}
-                {companyForm.business_type && !BUSINESS_TYPES.some(b => b.value === companyForm.business_type) && companyForm.business_type !== 'OTHER' && (
-                  <Input className="mt-2" placeholder={t('settings.describeBusinessShortPlaceholder', { defaultValue: 'Describe your business' })}
-                    value={companyForm.business_type} onChange={e => setCompanyForm({ ...companyForm, business_type: e.target.value })} />
-                )}
+                <div className="w-full border rounded-md px-3 py-2 text-sm bg-muted/50 text-muted-foreground flex items-center gap-2 mt-1">
+                  <School className="w-3.5 h-3.5" />
+                  {t('settings.businessTypeSchoolLocked', { defaultValue: 'School / Educational Institution' })}
+                </div>
+                <p className="text-[11px] text-muted-foreground">
+                  {t('settings.businessTypeSchoolLockedHint', { defaultValue: 'Every company added here is a school — contact GeoInfosys if you need our business/ERP product instead.' })}
+                </p>
               </div>
 
               <div className="space-y-1">
@@ -1797,7 +1839,7 @@ export default function Settings() {
       </Dialog>
 
       {/* ── Invite User Dialog ────────────────────────────────────────────── */}
-      <Dialog open={showInvite && !tempPassword} onOpenChange={v => { if (!v) { setShowInvite(false); setInviteForm({ name: '', email: '', role: 'STAFF' }); } }}>
+      <Dialog open={showInvite && !tempPassword} onOpenChange={v => { if (!v) { setShowInvite(false); setInviteForm({ name: '', email: '', role: 'STAFF', staffTags: [] }); } }}>
         <DialogContent className="glass-dialog max-w-md overflow-hidden">
           <div className="h-1 bg-gradient-to-r from-blue-800 to-blue-500 -mx-6 -mt-6 mb-4" />
           <DialogHeader>
@@ -1853,13 +1895,12 @@ export default function Settings() {
                     { v: 'ACCOUNTANT', label: t('settings.roleAccountantLabel', { defaultValue: 'Accountant' }), desc: t('settings.roleAccountantDesc', { defaultValue: 'Full financial access' }) },
                     ...(isSchool ? [
                       { v: 'TEACHER', label: t('settings.roleTeacherLabel', { defaultValue: 'Teacher' }), desc: t('settings.roleTeacherDesc', { defaultValue: 'Attendance, exams, homework, materials' }) },
-                      { v: 'LIBRARIAN', label: t('settings.roleLibrarianLabel', { defaultValue: 'Librarian' }), desc: t('settings.roleLibrarianDesc', { defaultValue: 'Library books, issues and returns' }) },
                     ] : []),
                   ].map(r => (
                     <button
                       key={r.v}
                       type="button"
-                      onClick={() => setInviteForm({ ...inviteForm, role: r.v })}
+                      onClick={() => setInviteForm({ ...inviteForm, role: r.v, staffTags: [] })}
                       className={`flex flex-col items-start p-3 rounded-lg border-2 transition-all text-left w-full ${inviteForm.role === r.v ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/50'}`}
                     >
                       <span className="text-sm font-semibold">{r.label}</span>
@@ -1869,11 +1910,42 @@ export default function Settings() {
                 </div>
               </div>
 
+              {/* Staff duty tags — only meaningful for STAFF (e.g. a librarian is
+                  now "Staff" + the Library tag rather than a separate role). */}
+              {inviteForm.role === 'STAFF' && (
+                <div className="space-y-2">
+                  <Label>{t('settings.staffDutiesLabel', { defaultValue: 'Duties (optional)' })}</Label>
+                  <div className="flex flex-wrap gap-2">
+                    {STAFF_TAGS.map(tag => {
+                      const active = inviteForm.staffTags.includes(tag.value);
+                      return (
+                        <button
+                          key={tag.value}
+                          type="button"
+                          onClick={() => setInviteForm({
+                            ...inviteForm,
+                            staffTags: active
+                              ? inviteForm.staffTags.filter(tg => tg !== tag.value)
+                              : [...inviteForm.staffTags, tag.value],
+                          })}
+                          className={`px-2.5 py-1 rounded-full border text-xs transition-colors ${
+                            active ? 'bg-primary/10 border-primary text-primary' : 'border-border text-muted-foreground hover:border-primary/50'
+                          }`}
+                          title={t(`${tag.i18n}Desc`, { defaultValue: tag.desc })}
+                        >
+                          {t(tag.i18n, { defaultValue: tag.label })}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
               <p className="text-xs text-muted-foreground">{t('settings.tempPasswordNotice', { defaultValue: 'A temporary password will be generated. Share it with the user so they can log in.' })}</p>
             </motion.div>
 
             <DialogFooter className="mt-4">
-              <Button type="button" variant="outline" onClick={() => { setShowInvite(false); setInviteForm({ name: '', email: '', role: 'STAFF' }); }}>{t('settings.cancel', { defaultValue: 'Cancel' })}</Button>
+              <Button type="button" variant="outline" onClick={() => { setShowInvite(false); setInviteForm({ name: '', email: '', role: 'STAFF', staffTags: [] }); }}>{t('settings.cancel', { defaultValue: 'Cancel' })}</Button>
               <Button type="submit" disabled={inviteLoading}>{inviteLoading ? t('settings.invitingEllipsis', { defaultValue: 'Inviting…' }) : t('settings.sendInvite', { defaultValue: 'Send Invite' })}</Button>
             </DialogFooter>
           </form>

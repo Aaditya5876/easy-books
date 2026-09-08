@@ -3,20 +3,26 @@ import { useAuth } from './AuthContext';
 export function useRole() {
   const { user } = useAuth();
   const role = user?.role || 'STAFF';
+  const staffTags = user?.staffTags || [];
 
   const isAdmin      = role === 'ADMIN' || role === 'SUPER_ADMIN';
   const isAccountant = role === 'ACCOUNTANT';
   const isStaff      = role === 'STAFF';
   const isTeacher    = role === 'TEACHER';
-  const isLibrarian  = role === 'LIBRARIAN';
+
+  // Only meaningful when isStaff — narrows the shared STAFF role down to
+  // specific facility/HR duties (see backend core/modules/staff-tags.ts for
+  // the whitelist). ADMIN/ACCOUNTANT are never tag-gated.
+  const hasStaffTag = (tag) => isStaff && staffTags.includes(tag);
 
   return {
     role,
+    staffTags,
+    hasStaffTag,
     isAdmin,
     isAccountant,
     isStaff,
     isTeacher,
-    isLibrarian,
     isSuperAdmin: role === 'SUPER_ADMIN',
     // What each level can do
     canCreate:      isAdmin || isAccountant,  // ADMIN + ACCOUNTANT
@@ -44,5 +50,12 @@ export function useRole() {
     canManageUsers: isAdmin,                  // ADMIN only
     canProcessPayroll: isAdmin,               // ADMIN only
     canViewPayroll: isAdmin || isAccountant,  // ADMIN + ACCOUNTANT
+    // Employees (full record) + Staff Attendance (mark/correct for others) —
+    // ADMIN/ACCOUNTANT always, or a STAFF member tagged HR (covers non-login
+    // employees like drivers/guards/janitors who only exist as Employee rows).
+    // Leave approval deliberately stays ADMIN/ACCOUNTANT-only — HR does not
+    // get it, matching the backend's leave.controller.ts.
+    canManageEmployees: isAdmin || isAccountant || hasStaffTag('HR'),
+    canManageStaffAttendance: isAdmin || isAccountant || hasStaffTag('HR'),
   };
 }

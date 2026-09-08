@@ -33,7 +33,7 @@ export class EmployeeServiceImpl {
 
   // Name-only listing for pickers/labels (e.g. "assign class teacher") that need to
   // resolve an employee id to a display name without exposing salary/PAN/bank data
-  // to roles that shouldn't see the full HR record (TEACHER, LIBRARIAN, STAFF).
+  // to roles that shouldn't see the full HR record (TEACHER, plain STAFF).
   async findAllDirectory(companyId: string) {
     return this.prisma.employee.findMany({
       where: { companyId, deletedAt: null },

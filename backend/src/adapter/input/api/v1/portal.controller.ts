@@ -35,7 +35,7 @@ export class PortalController {
 
   // Not @Public() — requires a staff login. Explicitly role-gated: setting a
   // student's portal password is an administrative action, not something
-  // every staff role (e.g. TEACHER, LIBRARIAN) should be able to do.
+  // every staff role (e.g. TEACHER, STAFF) should be able to do.
   @Roles('ADMIN', 'ACCOUNTANT')
   @Post('set-password')
   setPassword(@Body() body: { studentId: string; phone: string; password: string; companyId: string }) {

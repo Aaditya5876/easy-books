@@ -321,7 +321,7 @@ const PAGE_SIZE = 50;
 export default function Students() {
   const { t } = useTranslation();
   const companyId = getActiveCompanyId();
-  const { canCreateRecords, canEditRecords, canDeleteRecords, isAdmin, isAccountant, isTeacher, isLibrarian } = useRole();
+  const { canCreateRecords, canEditRecords, canDeleteRecords, isAdmin, isAccountant, isTeacher } = useRole();
   const qc = useQueryClient();
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
@@ -407,7 +407,7 @@ export default function Students() {
           <p className="text-muted-foreground text-sm mt-1">{t('students.enrolled', { defaultValue: '{{count}} enrolled', count: total })}</p>
         </div>
         <div className="flex gap-2">
-          {!isTeacher && !isLibrarian && (
+          {!isTeacher && (
             <Button variant="outline" onClick={() => setImportOpen(true)}>
               <Upload className="w-4 h-4 mr-1" /> {t('students.import', { defaultValue: 'Import' })}
             </Button>

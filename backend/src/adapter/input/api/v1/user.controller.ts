@@ -37,7 +37,7 @@ export class UserController {
   @ApiQuery({ name: 'companyId', required: true })
   invite(
     @Query('companyId') companyId: string,
-    @Body() body: { email: string; name: string; role: string },
+    @Body() body: { email: string; name: string; role: string; staffTags?: string[] },
     @Req() req: any,
   ) {
     return this.service.inviteUser(companyId, body, req.user.role);
@@ -50,10 +50,10 @@ export class UserController {
   changeRole(
     @Param('id') userId: string,
     @Query('companyId') companyId: string,
-    @Body() body: { role: string },
+    @Body() body: { role: string; staffTags?: string[] },
     @Req() req: any,
   ) {
-    return this.service.changeRole(userId, companyId, body.role, req.user.role);
+    return this.service.changeRole(userId, companyId, body.role, req.user.role, body.staffTags);
   }
 
   @Patch(':id/max-companies')

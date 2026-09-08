@@ -96,7 +96,7 @@ export class AuthServiceImpl implements IAuthService {
       data: { emailVerified: true, verificationOtp: null, otpExpiresAt: null },
     });
 
-    return this.issueTokens(user.id, user.email, user.role);
+    return this.issueTokens(user.id, user.email, user.role, user.staffTags);
   }
 
   async resendOtp(email: string): Promise<void> {
@@ -124,7 +124,7 @@ export class AuthServiceImpl implements IAuthService {
       throw new UnauthorizedException('Please verify your email before logging in');
     }
 
-    const tokens = await this.issueTokens(user.id, user.email, user.role);
+    const tokens = await this.issueTokens(user.id, user.email, user.role, user.staffTags);
     return { ...tokens, mustChangePassword: user.mustChangePassword };
   }
 
@@ -177,7 +177,7 @@ export class AuthServiceImpl implements IAuthService {
     const match = await bcrypt.compare(refreshToken, user.refreshToken);
     if (!match) throw new UnauthorizedException('Access denied');
 
-    return this.issueTokens(user.id, user.email, user.role);
+    return this.issueTokens(user.id, user.email, user.role, user.staffTags);
   }
 
   async logout(userId: string): Promise<void> {
@@ -198,6 +198,7 @@ export class AuthServiceImpl implements IAuthService {
       email: user.email,
       name: user.name,
       role: user.role,
+      staffTags: user.staffTags,
       mustChangePassword: user.mustChangePassword,
       defaultCompanyId: defaultUC?.company.id || null,
       defaultCompany: defaultUC?.company || null,
@@ -208,8 +209,8 @@ export class AuthServiceImpl implements IAuthService {
     return Math.floor(100000 + Math.random() * 900000).toString();
   }
 
-  private async issueTokens(userId: string, email: string, role: string): Promise<AuthTokens> {
-    const payload = { sub: userId, email, role };
+  private async issueTokens(userId: string, email: string, role: string, staffTags: string[] = []): Promise<AuthTokens> {
+    const payload = { sub: userId, email, role, tags: staffTags };
 
     const accessToken = this.jwtService.sign(payload, {
       secret: this.config.get<string>('JWT_ACCESS_SECRET'),

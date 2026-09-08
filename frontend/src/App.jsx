@@ -68,24 +68,24 @@ import PortalExamSchedule from './pages/portal/PortalExamSchedule';
 import PortalEvents from './pages/portal/PortalEvents';
 import PaymentReturn from './pages/portal/PaymentReturn';
 
-// `roles` = also available to these restricted roles (TEACHER / LIBRARIAN).
+// `roles` = also available to the restricted TEACHER role.
 // Routes without `roles` are not registered for restricted roles.
 const schoolRoutes = [
-  { path: '/', page: SchoolDashboard, roles: ['TEACHER', 'LIBRARIAN'] },
-  { path: '/my-attendance', page: MyAttendance, roles: ['TEACHER', 'LIBRARIAN'] },
-  { path: '/my-leave', page: MyLeave, roles: ['TEACHER', 'LIBRARIAN'] },
-  { path: '/students', page: Students, roles: ['TEACHER', 'LIBRARIAN'] },
+  { path: '/', page: SchoolDashboard, roles: ['TEACHER'] },
+  { path: '/my-attendance', page: MyAttendance, roles: ['TEACHER'] },
+  { path: '/my-leave', page: MyLeave, roles: ['TEACHER'] },
+  { path: '/students', page: Students, roles: ['TEACHER'] },
   { path: '/classes', page: Classes, roles: ['TEACHER'] },
   { path: '/subjects', page: Subjects, roles: ['TEACHER'] },
   { path: '/fees', page: Fees },
   { path: '/exams', page: Exams, roles: ['TEACHER'] },
   { path: '/student-attendance', page: StudentAttendance, roles: ['TEACHER'] },
-  { path: '/calendar-events', page: CalendarEvents, roles: ['TEACHER', 'LIBRARIAN'] },
+  { path: '/calendar-events', page: CalendarEvents, roles: ['TEACHER'] },
   { path: '/routine', page: Routine, roles: ['TEACHER'] },
-  { path: '/notices', page: Notices, roles: ['TEACHER', 'LIBRARIAN'] },
+  { path: '/notices', page: Notices, roles: ['TEACHER'] },
   { path: '/study-materials', page: StudyMaterial, roles: ['TEACHER'] },
   { path: '/homework', page: Homework, roles: ['TEACHER'] },
-  { path: '/library', page: Library, roles: ['LIBRARIAN'] },
+  { path: '/library', page: Library },
   { path: '/hostel', page: Hostel },
   { path: '/transport', page: Transport },
   // Communication and Memo are business-ERP modules (client/vendor task
@@ -107,7 +107,7 @@ const AuthenticatedApp = () => {
   const { isLoadingAuth, isAuthenticated, navigateToLogin, user } = useAuth();
   const isSchool = user?.defaultCompany?.businessType === 'SCHOOL';
   const role = user?.role;
-  const restrictedRole = role === 'TEACHER' || role === 'LIBRARIAN';
+  const restrictedRole = role === 'TEACHER';
 
   if (isLoadingAuth) {
     return (

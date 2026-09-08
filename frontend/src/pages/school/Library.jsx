@@ -7,7 +7,6 @@ import BorrowerCombobox from '@/components/shared/BorrowerCombobox';
 import { BOOK_FIELDS } from '@/components/shared/bulkImportFields';
 import { libraryApi } from '@/api';
 import { getActiveCompanyId } from '@/lib/companyContext';
-import { useRole } from '@/lib/useRole';
 import { confirm } from '@/lib/confirm';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -212,7 +211,6 @@ function ReturnDialog({ open, onClose, issue: issueRecord }) {
 
 export default function Library() {
   const { t } = useTranslation();
-  const { isLibrarian } = useRole();
   const companyId = getActiveCompanyId();
   const qc = useQueryClient();
   const [tab, setTab] = useState('books');
@@ -251,7 +249,7 @@ export default function Library() {
           <p className="text-muted-foreground text-sm mt-1">{t('library.booksInCatalog', { defaultValue: '{{count}} books in catalog', count: books.length })}</p>
         </div>
         <div className="flex gap-2">
-          {tab === 'books' && !isLibrarian && (
+          {tab === 'books' && (
             <Button variant="outline" onClick={() => setImportOpen(true)}>
               <Upload className="w-4 h-4 mr-2" /> {t('library.import', { defaultValue: 'Import' })}
             </Button>

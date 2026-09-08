@@ -2,6 +2,7 @@ import { Controller, Get, Post, Put, Patch, Delete, Body, Param, Query, Req } fr
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { Roles } from '../../../../modules/decorators/roles.decorator';
 import { RequiresModule } from '../../../../modules/decorators/requires-module.decorator';
+import { RequiresStaffTag } from '../../../../modules/decorators/requires-staff-tag.decorator';
 import { SchoolService } from '../../../../application/services/school.service';
 import { SchoolAnalyticsService } from '../../../../application/services/school-analytics.service';
 import { SchoolFinanceService } from '../../../../application/services/school-finance.service';
@@ -20,7 +21,7 @@ export class SchoolController {
   // ── Dashboard ────────────────────────────────────────────────────────────────
 
   @Get('dashboard')
-  @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'TEACHER', 'LIBRARIAN')
+  @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'TEACHER')
   @ApiOperation({ summary: 'School dashboard summary with analytics extras' })
   @ApiQuery({ name: 'companyId', required: true })
   async getDashboard(@Query('companyId') companyId: string) {
@@ -110,7 +111,7 @@ export class SchoolController {
   // ── Classes ──────────────────────────────────────────────────────────────────
 
   @Get('classes')
-  @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'TEACHER', 'LIBRARIAN')
+  @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'TEACHER')
   @ApiQuery({ name: 'companyId', required: true })
   listClasses(@Query('companyId') companyId: string) {
     return this.service.listClasses(companyId);
@@ -139,7 +140,7 @@ export class SchoolController {
   // ── Students ─────────────────────────────────────────────────────────────────
 
   @Get('students')
-  @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'TEACHER', 'LIBRARIAN')
+  @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'TEACHER')
   @ApiQuery({ name: 'companyId', required: true })
   @ApiQuery({ name: 'classId', required: false })
   @ApiQuery({ name: 'search', required: false, description: 'Search by name or roll number — used by search-as-you-type pickers' })
@@ -164,7 +165,7 @@ export class SchoolController {
   }
 
   @Get('students/:id')
-  @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'TEACHER', 'LIBRARIAN')
+  @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'TEACHER')
   @ApiQuery({ name: 'companyId', required: true })
   getStudent(@Param('id') id: string, @Query('companyId') companyId: string) {
     return this.service.getStudent(id, companyId);
@@ -597,7 +598,7 @@ export class SchoolController {
   // ── Exam Schedules ────────────────────────────────────────────────────────────
 
   @Get('exam-schedules')
-  @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'TEACHER', 'LIBRARIAN')
+  @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'TEACHER')
   @RequiresModule('SCHOOL_ACADEMICS')
   @ApiQuery({ name: 'companyId', required: true })
   @ApiQuery({ name: 'classId', required: false })
@@ -674,7 +675,7 @@ export class SchoolController {
   // ── Notices ───────────────────────────────────────────────────────────────────
 
   @Get('notices')
-  @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'TEACHER', 'LIBRARIAN')
+  @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'TEACHER')
   @ApiQuery({ name: 'companyId', required: true })
   listNotices(@Query('companyId') companyId: string) {
     return this.service.listNotices(companyId);
@@ -714,7 +715,7 @@ export class SchoolController {
   // ── Events ────────────────────────────────────────────────────────────────────
 
   @Get('events')
-  @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'TEACHER', 'LIBRARIAN')
+  @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'TEACHER')
   @ApiQuery({ name: 'companyId', required: true })
   @ApiQuery({ name: 'month', required: false })
   listEvents(@Query('companyId') companyId: string, @Query('month') month?: string) {
@@ -813,7 +814,8 @@ export class SchoolController {
   // Premium tier — see MODULE_KEYS in core/modules/module-keys.ts.
 
   @Get('library/books')
-  @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'LIBRARIAN')
+  @Roles('STAFF', 'ACCOUNTANT', 'ADMIN')
+  @RequiresStaffTag('LIBRARY')
   @RequiresModule('FACILITIES')
   @ApiQuery({ name: 'companyId', required: true })
   listBooks(@Query('companyId') companyId: string) {
@@ -821,14 +823,16 @@ export class SchoolController {
   }
 
   @Post('library/books')
-  @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'LIBRARIAN')
+  @Roles('STAFF', 'ACCOUNTANT', 'ADMIN')
+  @RequiresStaffTag('LIBRARY')
   @RequiresModule('FACILITIES')
   createBook(@Body() body: any) {
     return this.service.createBook(body);
   }
 
   @Put('library/books/:id')
-  @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'LIBRARIAN')
+  @Roles('STAFF', 'ACCOUNTANT', 'ADMIN')
+  @RequiresStaffTag('LIBRARY')
   @RequiresModule('FACILITIES')
   @ApiQuery({ name: 'companyId', required: true })
   updateBook(@Param('id') id: string, @Query('companyId') companyId: string, @Body() body: any) {
@@ -836,7 +840,8 @@ export class SchoolController {
   }
 
   @Delete('library/books/:id')
-  @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'LIBRARIAN')
+  @Roles('STAFF', 'ACCOUNTANT', 'ADMIN')
+  @RequiresStaffTag('LIBRARY')
   @RequiresModule('FACILITIES')
   @ApiQuery({ name: 'companyId', required: true })
   deleteBook(@Param('id') id: string, @Query('companyId') companyId: string) {
@@ -844,7 +849,8 @@ export class SchoolController {
   }
 
   @Get('library/issues')
-  @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'LIBRARIAN')
+  @Roles('STAFF', 'ACCOUNTANT', 'ADMIN')
+  @RequiresStaffTag('LIBRARY')
   @RequiresModule('FACILITIES')
   @ApiQuery({ name: 'companyId', required: true })
   @ApiQuery({ name: 'status', required: false })
@@ -853,14 +859,16 @@ export class SchoolController {
   }
 
   @Post('library/issues')
-  @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'LIBRARIAN')
+  @Roles('STAFF', 'ACCOUNTANT', 'ADMIN')
+  @RequiresStaffTag('LIBRARY')
   @RequiresModule('FACILITIES')
   issueBook(@Body() body: any) {
     return this.service.issueBook(body);
   }
 
   @Patch('library/issues/:id/return')
-  @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'LIBRARIAN')
+  @Roles('STAFF', 'ACCOUNTANT', 'ADMIN')
+  @RequiresStaffTag('LIBRARY')
   @RequiresModule('FACILITIES')
   @ApiQuery({ name: 'companyId', required: true })
   returnBook(@Param('id') id: string, @Query('companyId') companyId: string, @Body() body: { fine?: number }) {
@@ -871,6 +879,7 @@ export class SchoolController {
   // Premium tier — see MODULE_KEYS in core/modules/module-keys.ts.
 
   @Get('hostel/rooms')
+  @RequiresStaffTag('HOSTEL')
   @RequiresModule('FACILITIES')
   @ApiQuery({ name: 'companyId', required: true })
   listHostelRooms(@Query('companyId') companyId: string) {
@@ -878,12 +887,14 @@ export class SchoolController {
   }
 
   @Post('hostel/rooms')
+  @RequiresStaffTag('HOSTEL')
   @RequiresModule('FACILITIES')
   createHostelRoom(@Body() body: any) {
     return this.service.createHostelRoom(body);
   }
 
   @Put('hostel/rooms/:id')
+  @RequiresStaffTag('HOSTEL')
   @RequiresModule('FACILITIES')
   @ApiQuery({ name: 'companyId', required: true })
   updateHostelRoom(@Param('id') id: string, @Query('companyId') companyId: string, @Body() body: any) {
@@ -891,6 +902,7 @@ export class SchoolController {
   }
 
   @Delete('hostel/rooms/:id')
+  @RequiresStaffTag('HOSTEL')
   @RequiresModule('FACILITIES')
   @ApiQuery({ name: 'companyId', required: true })
   deleteHostelRoom(@Param('id') id: string, @Query('companyId') companyId: string) {
@@ -898,6 +910,7 @@ export class SchoolController {
   }
 
   @Get('hostel/allocations')
+  @RequiresStaffTag('HOSTEL')
   @RequiresModule('FACILITIES')
   @ApiQuery({ name: 'companyId', required: true })
   @ApiQuery({ name: 'roomId', required: false })
@@ -906,12 +919,14 @@ export class SchoolController {
   }
 
   @Post('hostel/allocations')
+  @RequiresStaffTag('HOSTEL')
   @RequiresModule('FACILITIES')
   allocateStudent(@Body() body: any) {
     return this.service.allocateStudent(body);
   }
 
   @Delete('hostel/allocations/:id')
+  @RequiresStaffTag('HOSTEL')
   @RequiresModule('FACILITIES')
   @ApiQuery({ name: 'companyId', required: true })
   deallocateStudent(@Param('id') id: string, @Query('companyId') companyId: string) {
@@ -922,6 +937,7 @@ export class SchoolController {
   // Premium tier — see MODULE_KEYS in core/modules/module-keys.ts.
 
   @Get('transport/routes')
+  @RequiresStaffTag('TRANSPORT')
   @RequiresModule('FACILITIES')
   @ApiQuery({ name: 'companyId', required: true })
   listTransportRoutes(@Query('companyId') companyId: string) {
@@ -929,12 +945,14 @@ export class SchoolController {
   }
 
   @Post('transport/routes')
+  @RequiresStaffTag('TRANSPORT')
   @RequiresModule('FACILITIES')
   createTransportRoute(@Body() body: any) {
     return this.service.createTransportRoute(body);
   }
 
   @Put('transport/routes/:id')
+  @RequiresStaffTag('TRANSPORT')
   @RequiresModule('FACILITIES')
   @ApiQuery({ name: 'companyId', required: true })
   updateTransportRoute(@Param('id') id: string, @Query('companyId') companyId: string, @Body() body: any) {
@@ -942,6 +960,7 @@ export class SchoolController {
   }
 
   @Delete('transport/routes/:id')
+  @RequiresStaffTag('TRANSPORT')
   @RequiresModule('FACILITIES')
   @ApiQuery({ name: 'companyId', required: true })
   deleteTransportRoute(@Param('id') id: string, @Query('companyId') companyId: string) {
@@ -949,6 +968,7 @@ export class SchoolController {
   }
 
   @Get('transport/assignments')
+  @RequiresStaffTag('TRANSPORT')
   @RequiresModule('FACILITIES')
   @ApiQuery({ name: 'companyId', required: true })
   @ApiQuery({ name: 'routeId', required: false })
@@ -957,12 +977,14 @@ export class SchoolController {
   }
 
   @Post('transport/assignments')
+  @RequiresStaffTag('TRANSPORT')
   @RequiresModule('FACILITIES')
   assignStudentTransport(@Body() body: any) {
     return this.service.assignStudentTransport(body);
   }
 
   @Delete('transport/assignments/:id')
+  @RequiresStaffTag('TRANSPORT')
   @RequiresModule('FACILITIES')
   @ApiQuery({ name: 'companyId', required: true })
   removeStudentTransport(@Param('id') id: string, @Query('companyId') companyId: string) {

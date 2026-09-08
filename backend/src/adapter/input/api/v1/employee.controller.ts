@@ -2,6 +2,7 @@ import { Controller, Get, Post, Put, Delete, Body, Param, Query } from '@nestjs/
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { EmployeeServiceImpl } from '../../../../application/services/employee.service.impl';
 import { Roles } from '../../../../modules/decorators/roles.decorator';
+import { RequiresStaffTag } from '../../../../modules/decorators/requires-staff-tag.decorator';
 import { ZodValidationPipe } from '../../../../modules/pipes/zod-validation.pipe';
 import { CreateEmployeeSchema, UpdateEmployeeSchema, CreateEmployeeDTO, UpdateEmployeeDTO } from '@easy-books/shared';
 
@@ -15,8 +16,12 @@ import { CreateEmployeeSchema, UpdateEmployeeSchema, CreateEmployeeDTO, UpdateEm
 export class EmployeeController {
   constructor(private readonly service: EmployeeServiceImpl) {}
 
+  // A STAFF member tagged HR manages Employee records (including non-login
+  // staff like drivers/guards/janitors, who only ever exist as Employee rows)
+  // on top of the usual ACCOUNTANT/ADMIN access — see RolesGuard.
   @Get()
-  @Roles('ACCOUNTANT', 'ADMIN')
+  @Roles('ACCOUNTANT', 'ADMIN', 'STAFF')
+  @RequiresStaffTag('HR')
   @ApiOperation({ summary: 'Get all employees' })
   @ApiQuery({ name: 'companyId', required: true })
   findAll(@Query('companyId') companyId: string) {
@@ -24,7 +29,7 @@ export class EmployeeController {
   }
 
   @Get('directory')
-  @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'TEACHER', 'LIBRARIAN')
+  @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'TEACHER')
   @ApiOperation({ summary: 'Name-only employee list for pickers (no salary/PAN/bank data)' })
   @ApiQuery({ name: 'companyId', required: true })
   findAllDirectory(@Query('companyId') companyId: string) {
@@ -32,7 +37,8 @@ export class EmployeeController {
   }
 
   @Get(':id')
-  @Roles('ACCOUNTANT', 'ADMIN')
+  @Roles('ACCOUNTANT', 'ADMIN', 'STAFF')
+  @RequiresStaffTag('HR')
   @ApiOperation({ summary: 'Get an employee by id' })
   @ApiQuery({ name: 'companyId', required: true })
   findOne(@Param('id') id: string, @Query('companyId') companyId: string) {
@@ -40,14 +46,16 @@ export class EmployeeController {
   }
 
   @Post()
-  @Roles('ACCOUNTANT', 'ADMIN')
+  @Roles('ACCOUNTANT', 'ADMIN', 'STAFF')
+  @RequiresStaffTag('HR')
   @ApiOperation({ summary: 'Create an employee' })
   create(@Body(new ZodValidationPipe(CreateEmployeeSchema)) dto: CreateEmployeeDTO) {
     return this.service.create(dto);
   }
 
   @Put(':id')
-  @Roles('ACCOUNTANT', 'ADMIN')
+  @Roles('ACCOUNTANT', 'ADMIN', 'STAFF')
+  @RequiresStaffTag('HR')
   @ApiOperation({ summary: 'Update an employee' })
   @ApiQuery({ name: 'companyId', required: true })
   update(
@@ -58,6 +66,8 @@ export class EmployeeController {
     return this.service.update(id, companyId, dto);
   }
 
+  // Soft-delete stays ADMIN-only — deliberately not extended to HR-tagged
+  // STAFF, unlike the read/write endpoints above.
   @Delete(':id')
   @Roles('ADMIN')
   @ApiOperation({ summary: 'Soft-delete an employee (sets status to INACTIVE)' })

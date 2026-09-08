@@ -67,8 +67,8 @@ export default function TopBar({ onMobileMenuToggle, onToolOpen }) {
       // Pre-load search data in background — Clients/Vendors/Inventory are
       // business-ERP-only modules (don't exist for school companies) and are
       // also role-gated to STAFF/ACCOUNTANT/ADMIN, so skip entirely for school
-      // companies or for TEACHER/LIBRARIAN to avoid pointless 403s.
-      const canSearchBusinessData = resolved.business_type !== 'SCHOOL' && me?.role !== 'TEACHER' && me?.role !== 'LIBRARIAN';
+      // companies or for TEACHER to avoid pointless 403s.
+      const canSearchBusinessData = resolved.business_type !== 'SCHOOL' && me?.role !== 'TEACHER';
       if (canSearchBusinessData) {
         Promise.all([
           api.Client.filter({ company_id: resolved.id }),

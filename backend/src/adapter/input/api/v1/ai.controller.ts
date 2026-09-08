@@ -9,7 +9,7 @@ import { RequiresModule } from '../../../../modules/decorators/requires-module.d
 // company to check the AI module's license against.
 @ApiTags('AI')
 @ApiBearerAuth()
-@Roles('ADMIN', 'ACCOUNTANT', 'STAFF', 'TEACHER', 'LIBRARIAN')
+@Roles('ADMIN', 'ACCOUNTANT', 'STAFF', 'TEACHER')
 @RequiresModule('AI')
 @Controller('api/v1/ai')
 export class AiController {

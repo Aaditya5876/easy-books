@@ -9,6 +9,7 @@ export class UserEntity {
   verificationOtp: string | null;
   otpExpiresAt: Date | null;
   mustChangePassword: boolean;
+  staffTags: string[];
   createdAt: Date;
   updatedAt: Date;
 }

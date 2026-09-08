@@ -540,16 +540,24 @@ export default function Login() {
                   <p className="text-xs font-medium text-muted-foreground mb-2">
                     {t('auth.quickAttendance', { defaultValue: 'Quick Attendance' })}
                   </p>
-                  <div className="flex gap-2">
-                    <select
-                      className="h-9 flex-1 rounded-md border border-input bg-background px-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                      value={attAction}
-                      onChange={e => setAttAction(e.target.value)}
-                    >
-                      <option value="IN">{t('auth.checkIn', { defaultValue: 'Check In' })}</option>
-                      <option value="OUT">{t('auth.checkOut', { defaultValue: 'Check Out' })}</option>
-                    </select>
-                    <Button type="button" variant="outline" className="h-9 shrink-0" onClick={handleQuickAttendance} disabled={attLoading}>
+                  <div className="flex items-center gap-4 h-9">
+                    {[
+                      { v: 'IN', label: t('auth.checkIn', { defaultValue: 'Check In' }) },
+                      { v: 'OUT', label: t('auth.checkOut', { defaultValue: 'Check Out' }) },
+                    ].map(opt => (
+                      <label key={opt.v} className="flex items-center gap-1.5 text-sm cursor-pointer select-none">
+                        <input
+                          type="radio"
+                          name="quick-attendance-action"
+                          value={opt.v}
+                          checked={attAction === opt.v}
+                          onChange={() => setAttAction(opt.v)}
+                          className="w-3.5 h-3.5 accent-primary cursor-pointer"
+                        />
+                        {opt.label}
+                      </label>
+                    ))}
+                    <Button type="button" variant="outline" className="h-9 shrink-0 ml-auto" onClick={handleQuickAttendance} disabled={attLoading}>
                       {attLoading ? t('auth.marking', { defaultValue: 'Marking…' }) : t('auth.markAttendance', { defaultValue: 'Mark Attendance' })}
                     </Button>
                   </div>

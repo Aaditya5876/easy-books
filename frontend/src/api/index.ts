@@ -71,7 +71,7 @@ export const vendorApi = {
 // Employees
 export const employeeApi = {
   list: () => apiClient.get('/api/v1/employees', { params: { companyId: companyId() } }),
-  // Name-only listing — safe for roles (TEACHER, LIBRARIAN, STAFF) that shouldn't
+  // Name-only listing — safe for roles (TEACHER, plain STAFF) that shouldn't
   // see salary/PAN/bank data but still need to resolve/pick an employee by name.
   directory: () => apiClient.get('/api/v1/employees/directory', { params: { companyId: companyId() } }),
   get: (id: string) => apiClient.get(`/api/v1/employees/${id}`, { params: { companyId: companyId() } }),
@@ -516,8 +516,8 @@ export const transportApi = {
 export const usersApi = {
   list: (cid: string) => apiClient.get('/api/v1/users', { params: { companyId: cid } }),
   invite: (cid: string, data: object) => apiClient.post('/api/v1/users/invite', data, { params: { companyId: cid } }),
-  changeRole: (userId: string, cid: string, role: string) =>
-    apiClient.patch(`/api/v1/users/${userId}/role`, { role }, { params: { companyId: cid } }),
+  changeRole: (userId: string, cid: string, role: string, staffTags?: string[]) =>
+    apiClient.patch(`/api/v1/users/${userId}/role`, { role, staffTags }, { params: { companyId: cid } }),
   remove: (userId: string, cid: string) =>
     apiClient.delete(`/api/v1/users/${userId}`, { params: { companyId: cid } }),
   // SUPER_ADMIN only — sales-led onboarding: new company + its first ADMIN login.

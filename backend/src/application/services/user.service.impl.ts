@@ -2,11 +2,24 @@ import { Injectable, NotFoundException, BadRequestException, ForbiddenException,
 import { PrismaService } from '../../../core/db/psql/prisma.client';
 import { MailService } from './mail.service';
 import { MODULE_KEYS, ModuleKey } from '../../../core/modules/module-keys';
+import { STAFF_TAGS } from '../../../core/modules/staff-tags';
 import * as bcrypt from 'bcrypt';
 
-const ROLE_HIERARCHY = ['STAFF', 'TEACHER', 'LIBRARIAN', 'ACCOUNTANT', 'ADMIN', 'SUPER_ADMIN'];
+const ROLE_HIERARCHY = ['STAFF', 'TEACHER', 'ACCOUNTANT', 'ADMIN', 'SUPER_ADMIN'];
 // Roles an ADMIN may grant (everything below ADMIN)
-const ADMIN_GRANTABLE = ['STAFF', 'TEACHER', 'LIBRARIAN', 'ACCOUNTANT'];
+const ADMIN_GRANTABLE = ['STAFF', 'TEACHER', 'ACCOUNTANT'];
+
+// staffTags is only meaningful for role === 'STAFF' — validated against the
+// whitelist and silently cleared for every other role so a demote-then-
+// promote cycle never leaves stale tags (e.g. an ex-librarian who becomes
+// ACCOUNTANT then STAFF again shouldn't quietly regain LIBRARY access).
+function resolveStaffTags(role: string, staffTags: unknown): string[] {
+  if (role !== 'STAFF') return [];
+  const tags = Array.isArray(staffTags) ? staffTags : [];
+  const invalid = tags.filter((tg) => !STAFF_TAGS.includes(tg as any));
+  if (invalid.length > 0) throw new BadRequestException(`Unknown staff tag(s): ${invalid.join(', ')}`);
+  return [...new Set(tags)];
+}
 
 @Injectable()
 export class UserServiceImpl {
@@ -15,21 +28,27 @@ export class UserServiceImpl {
     private readonly mailService: MailService,
   ) {}
 
-  async inviteUser(companyId: string, data: { email: string; name: string; role: string }, invitedByRole: string) {
+  async inviteUser(
+    companyId: string,
+    data: { email: string; name: string; role: string; staffTags?: string[] },
+    invitedByRole: string,
+  ) {
     if (!ROLE_HIERARCHY.includes(data.role)) {
       throw new BadRequestException(`Invalid role: ${data.role}`);
     }
 
     if (invitedByRole === 'ADMIN' && !ADMIN_GRANTABLE.includes(data.role)) {
-      throw new ForbiddenException('ADMIN can only invite STAFF, TEACHER, LIBRARIAN or ACCOUNTANT');
+      throw new ForbiddenException('ADMIN can only invite STAFF, TEACHER or ACCOUNTANT');
     }
 
     const company = await this.prisma.company.findUnique({ where: { id: companyId } });
     if (!company) throw new NotFoundException('Company not found');
 
-    if ((data.role === 'TEACHER' || data.role === 'LIBRARIAN') && company.businessType !== 'SCHOOL') {
-      throw new BadRequestException('TEACHER and LIBRARIAN roles are only valid for school companies');
+    if (data.role === 'TEACHER' && company.businessType !== 'SCHOOL') {
+      throw new BadRequestException('TEACHER role is only valid for school companies');
     }
+
+    const staffTags = resolveStaffTags(data.role, data.staffTags);
 
     const existing = await this.prisma.user.findUnique({ where: { email: data.email } });
 
@@ -61,13 +80,14 @@ export class UserServiceImpl {
         name: data.name,
         password: hashed,
         role: data.role as any,
+        staffTags,
         emailVerified: true,
         mustChangePassword: true,
         userCompanies: {
           create: { companyId, isDefault: true },
         },
       },
-      select: { id: true, email: true, name: true, role: true },
+      select: { id: true, email: true, name: true, role: true, staffTags: true },
     });
 
     await this.mailService.sendInvitation(data.email, data.name, company.name, tempPassword);
@@ -127,13 +147,19 @@ export class UserServiceImpl {
     return { company, admin, tempPassword, emailSent };
   }
 
-  async changeRole(targetUserId: string, companyId: string, newRole: string, changedByRole: string) {
+  async changeRole(
+    targetUserId: string,
+    companyId: string,
+    newRole: string,
+    changedByRole: string,
+    newStaffTags?: string[],
+  ) {
     if (!ROLE_HIERARCHY.includes(newRole)) {
       throw new BadRequestException(`Invalid role: ${newRole}`);
     }
 
     if (changedByRole === 'ADMIN' && !ADMIN_GRANTABLE.includes(newRole)) {
-      throw new ForbiddenException('ADMIN can only assign STAFF, TEACHER, LIBRARIAN or ACCOUNTANT roles');
+      throw new ForbiddenException('ADMIN can only assign STAFF, TEACHER or ACCOUNTANT roles');
     }
 
     const user = await this.prisma.user.findUnique({ where: { id: targetUserId } });
@@ -148,17 +174,19 @@ export class UserServiceImpl {
     });
     if (!link) throw new NotFoundException('User does not belong to this company');
 
-    if (newRole === 'TEACHER' || newRole === 'LIBRARIAN') {
+    if (newRole === 'TEACHER') {
       const company = await this.prisma.company.findUnique({ where: { id: companyId } });
       if (company?.businessType !== 'SCHOOL') {
-        throw new BadRequestException('TEACHER and LIBRARIAN roles are only valid for school companies');
+        throw new BadRequestException('TEACHER role is only valid for school companies');
       }
     }
 
+    const staffTags = resolveStaffTags(newRole, newStaffTags);
+
     const updated = await this.prisma.user.update({
       where: { id: targetUserId },
-      data: { role: newRole as any },
-      select: { id: true, email: true, name: true, role: true },
+      data: { role: newRole as any, staffTags },
+      select: { id: true, email: true, name: true, role: true, staffTags: true },
     });
 
     return updated;
@@ -177,7 +205,7 @@ export class UserServiceImpl {
     }
 
     if (removedByRole === 'ADMIN' && !ADMIN_GRANTABLE.includes(user.role)) {
-      throw new ForbiddenException('ADMIN can only remove STAFF, TEACHER, LIBRARIAN or ACCOUNTANT users');
+      throw new ForbiddenException('ADMIN can only remove STAFF, TEACHER or ACCOUNTANT users');
     }
 
     const link = await this.prisma.userCompany.findUnique({
@@ -193,7 +221,7 @@ export class UserServiceImpl {
   async listCompanyUsers(companyId: string) {
     const links = await this.prisma.userCompany.findMany({
       where: { companyId },
-      include: { user: { select: { id: true, email: true, name: true, role: true, createdAt: true, maxCompanies: true } } },
+      include: { user: { select: { id: true, email: true, name: true, role: true, staffTags: true, createdAt: true, maxCompanies: true } } },
     });
     return links.map((l) => ({ ...l.user, isDefault: l.isDefault }));
   }

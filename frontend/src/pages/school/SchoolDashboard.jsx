@@ -212,13 +212,14 @@ const fmtRs = (n) => `Rs. ${Number(n ?? 0).toLocaleString('en-NP')}`;
 export default function SchoolDashboard() {
   const { t } = useTranslation();
   const companyId = getActiveCompanyId();
-  const { isTeacher, isLibrarian, isAdmin, isAccountant } = useRole();
-  // Teachers/librarians don't have visibility into Fees anywhere else in the app
-  // (see SidebarNav.jsx) — keep the dashboard consistent with that instead of
+  const { isTeacher, isAdmin, isAccountant } = useRole();
+  // Teachers don't have visibility into Fees anywhere else in the app (see
+  // SidebarNav.jsx) — keep the dashboard consistent with that instead of
   // leading with money figures they can't act on or drill into. STAFF does have
-  // Fees access (front-desk cashier use case) so stays "financial" here, but NOT
+  // Fees access (front-desk cashier use case, and covers the former LIBRARIAN
+  // role now folded into STAFF+LIBRARY tag) so stays "financial" here, but NOT
   // Ledger/Transactions access — that query is gated separately below.
-  const showFinancials = !isTeacher && !isLibrarian;
+  const showFinancials = !isTeacher;
   const canViewTransactions = isAdmin || isAccountant;
   const [insightsDialog, setInsightsDialog] = useState(false);
   const [insights, setInsights] = useState(null);

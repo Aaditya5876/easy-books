@@ -15,7 +15,6 @@ enum UserRole {
   ACCOUNTANT
   STAFF
   TEACHER
-  LIBRARIAN
 }
 
 enum EmployeeStatus {
@@ -186,6 +185,11 @@ model User {
   // flow — each one beyond this is a separate sale, set by a GeoInfosys
   // SUPER_ADMIN (mirrors Company.enabledModules: manual, no billing system).
   maxCompanies       Int       @default(1)
+  // Only meaningful when role === STAFF — narrows the shared STAFF bucket down
+  // to specific facility/HR duties (see core/modules/staff-tags.ts for the
+  // whitelist: LIBRARY, HOSTEL, TRANSPORT, HR). ADMIN/ACCOUNTANT/TEACHER are
+  // never tag-gated, so this stays empty for them.
+  staffTags          String[]  @default([])
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
 
