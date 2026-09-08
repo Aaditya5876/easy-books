@@ -199,6 +199,7 @@ export default function Settings() {
   const [clientActiveSaving, setClientActiveSaving] = useState(null); // companyId mid-save
   const [clientMaxCompaniesSaving, setClientMaxCompaniesSaving] = useState(null); // userId mid-save
   const [clientResettingPasswordId, setClientResettingPasswordId] = useState(null); // admin userId mid-reset
+  const [pendingClientModules, setPendingClientModules] = useState({}); // { [companyId]: string[] } — staged, unsaved package edits
 
   // ── Create Client (SUPER_ADMIN only — sales-led onboarding) ──────────────
   const [provisionForm, setProvisionForm] = useState({
@@ -642,31 +643,49 @@ export default function Settings() {
     }
   }
 
-  async function handleClientPackageChange(company, tier) {
-    setClientPackageSaving(company.id);
-    try {
-      const modules = PACKAGE_MODULES[tier];
-      await companyApi.updatePackage(company.id, modules);
-      setAllClients(list => list.map(c => c.id === company.id ? { ...c, enabledModules: modules } : c));
-    } catch (err) {
-      toast.error(err?.response?.data?.message || t('settings.packageSaveFailed', { defaultValue: 'Failed to update package' }));
-    } finally {
-      setClientPackageSaving(null);
-    }
+  // Tier buttons and module checkboxes below only stage a change locally —
+  // nothing is sent to the server until "Save" is clicked and confirmed.
+  // pendingClientModules[companyId] undefined = no staged change, show the
+  // company's actual saved enabledModules instead.
+  function stageClientTier(company, tier) {
+    setPendingClientModules(p => ({ ...p, [company.id]: PACKAGE_MODULES[tier] }));
   }
 
-  // Fine-grained alternative to the tier buttons — toggles one module on/off
-  // for this company. BASE is force-included whenever the resulting set is
-  // non-empty (an empty enabledModules means "unrestricted/legacy" to
-  // ModuleAccessGuard — the opposite of what unchecking everything should mean).
-  async function handleClientModuleToggle(company, moduleKey) {
-    const current = company.enabledModules || [];
-    const next = current.includes(moduleKey) ? current.filter(m => m !== moduleKey) : [...current, moduleKey];
-    const modules = next.filter(m => m !== 'BASE').length > 0 ? [...new Set(['BASE', ...next])] : [];
+  // BASE is force-included whenever the resulting set is non-empty (an empty
+  // enabledModules means "unrestricted/legacy" to ModuleAccessGuard — the
+  // opposite of what unchecking everything should mean).
+  function stageClientModuleToggle(company, moduleKey) {
+    setPendingClientModules(p => {
+      const current = p[company.id] ?? company.enabledModules ?? [];
+      const next = current.includes(moduleKey) ? current.filter(m => m !== moduleKey) : [...current, moduleKey];
+      const modules = next.filter(m => m !== 'BASE').length > 0 ? [...new Set(['BASE', ...next])] : [];
+      return { ...p, [company.id]: modules };
+    });
+  }
+
+  function discardClientPackageChange(company) {
+    setPendingClientModules(p => {
+      const next = { ...p };
+      delete next[company.id];
+      return next;
+    });
+  }
+
+  async function handleSaveClientPackage(company) {
+    const modules = pendingClientModules[company.id];
+    if (modules === undefined) return;
+    const ok = await confirm({
+      title: t('settings.confirmSavePackageTitle', { defaultValue: 'Save package changes for {{name}}?', name: company.name }),
+      description: t('settings.confirmSavePackageDesc', { defaultValue: 'This changes which features they can access immediately.' }),
+      confirmLabel: t('settings.save', { defaultValue: 'Save' }),
+    });
+    if (!ok) return;
     setClientPackageSaving(company.id);
     try {
       await companyApi.updatePackage(company.id, modules);
       setAllClients(list => list.map(c => c.id === company.id ? { ...c, enabledModules: modules } : c));
+      discardClientPackageChange(company);
+      toast.success(t('settings.packageSaved', { defaultValue: 'Package updated' }));
     } catch (err) {
       toast.error(err?.response?.data?.message || t('settings.packageSaveFailed', { defaultValue: 'Failed to update package' }));
     } finally {
@@ -895,7 +914,9 @@ export default function Settings() {
               <div className="grid gap-3">
                 {allClients.map(c => {
                   const admin = c.admins?.[0];
-                  const tier = packageTierOf(c.enabledModules);
+                  const hasPendingChange = pendingClientModules[c.id] !== undefined;
+                  const effectiveModules = pendingClientModules[c.id] ?? c.enabledModules;
+                  const tier = packageTierOf(effectiveModules);
                   return (
                     <div key={c.id} className="bg-card rounded-xl border p-5 space-y-3">
                       <div className="flex items-start justify-between gap-4">
@@ -956,7 +977,7 @@ export default function Settings() {
                               key={pt}
                               type="button"
                               disabled={clientPackageSaving === c.id}
-                              onClick={() => handleClientPackageChange(c, pt)}
+                              onClick={() => stageClientTier(c, pt)}
                               className={`px-2 py-1 rounded-md border text-xs font-medium transition-colors disabled:opacity-50 ${
                                 tier === pt ? 'border-primary bg-primary/10 text-primary' : 'border-border hover:bg-muted'
                               }`}
@@ -984,15 +1005,15 @@ export default function Settings() {
 
                       {/* Fine-grained alternative to the tier buttons above —
                           tick any combination of services for this company. */}
-                      <div className="flex flex-wrap gap-1.5">
+                      <div className="flex flex-wrap items-center gap-1.5">
                         {MODULE_CATALOG.map(mod => {
-                          const active = (c.enabledModules || []).includes(mod.value);
+                          const active = (effectiveModules || []).includes(mod.value);
                           return (
                             <button
                               key={mod.value}
                               type="button"
                               disabled={clientPackageSaving === c.id}
-                              onClick={() => handleClientModuleToggle(c, mod.value)}
+                              onClick={() => stageClientModuleToggle(c, mod.value)}
                               title={t(`${mod.i18n}Desc`, { defaultValue: mod.desc })}
                               className={`flex items-center gap-1.5 px-2 py-1 rounded-full border text-xs transition-colors disabled:opacity-50 ${
                                 active ? 'bg-primary/10 border-primary text-primary' : 'border-border text-muted-foreground hover:border-primary/50'
@@ -1005,6 +1026,26 @@ export default function Settings() {
                             </button>
                           );
                         })}
+
+                        {hasPendingChange && (
+                          <>
+                            <span className="text-xs text-amber-600 ml-1">
+                              {t('settings.unsavedChanges', { defaultValue: 'Unsaved changes' })}
+                            </span>
+                            <Button size="sm" onClick={() => handleSaveClientPackage(c)} disabled={clientPackageSaving === c.id}>
+                              <Save className="w-3.5 h-3.5 mr-1.5" />
+                              {clientPackageSaving === c.id ? t('settings.savingEllipsis', { defaultValue: 'Saving…' }) : t('settings.save', { defaultValue: 'Save' })}
+                            </Button>
+                            <button
+                              type="button"
+                              onClick={() => discardClientPackageChange(c)}
+                              disabled={clientPackageSaving === c.id}
+                              className="text-xs text-muted-foreground hover:text-foreground underline disabled:opacity-50"
+                            >
+                              {t('settings.cancel', { defaultValue: 'Cancel' })}
+                            </button>
+                          </>
+                        )}
                       </div>
                     </div>
                   );
