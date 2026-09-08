@@ -239,14 +239,14 @@ export default function TopBar({ onMobileMenuToggle, onToolOpen }) {
               >
                 <Building2 className="w-4 h-4 mr-2" />
                 {c.name}
-                <span
-                  className={`ml-2 w-2.5 h-2.5 rounded-full shrink-0 ${
-                    c.is_active === false
-                      ? 'bg-muted-foreground/40'
-                      : 'bg-emerald-500 ring-2 ring-emerald-500/25 shadow-[0_0_4px_rgba(16,185,129,0.7)]'
-                  }`}
-                  title={c.is_active === false ? 'Deactivated' : 'Active'}
-                />
+                {/* Green = this is the currently active/selected company (matches
+                    the button dot exactly) — not "not deactivated". */}
+                {c.id === activeCompany?.id && (
+                  <span
+                    className="ml-2 w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-emerald-500/25 shadow-[0_0_4px_rgba(16,185,129,0.7)] shrink-0"
+                    title="Currently active company"
+                  />
+                )}
                 {c.isDefault && <span className="ml-auto text-[10px] text-muted-foreground">default</span>}
               </DropdownMenuItem>
             ))}

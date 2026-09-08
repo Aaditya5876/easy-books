@@ -202,9 +202,12 @@ export default function Settings() {
   const [pendingClientModules, setPendingClientModules] = useState({}); // { [companyId]: string[] } — staged, unsaved package edits
 
   // ── Create Client (SUPER_ADMIN only — sales-led onboarding) ──────────────
+  // No package picker here — every new client starts on BASE (never
+  // "unrestricted", which is what an empty enabledModules means to
+  // ModuleAccessGuard) and gets its real package set from the Clients tab
+  // right after, where the full tier + checklist editor already lives.
   const [provisionForm, setProvisionForm] = useState({
     companyName: '', businessType: 'SCHOOL', adminName: '', adminEmail: '',
-    enabledModules: ['BASE', 'SCHOOL_ACADEMICS'], // Standard tier by default
   });
   const [provisioning, setProvisioning] = useState(false);
 
@@ -783,7 +786,7 @@ export default function Settings() {
         businessType: provisionForm.businessType,
         adminName: provisionForm.adminName,
         adminEmail: provisionForm.adminEmail,
-        enabledModules: provisionForm.businessType === 'SCHOOL' ? provisionForm.enabledModules : [],
+        enabledModules: provisionForm.businessType === 'SCHOOL' ? ['BASE'] : [],
       });
       if (res.data.emailSent) {
         toast.success(t('settings.clientCreatedEmailed', { defaultValue: 'Client created — login details emailed to {{email}}', email: provisionForm.adminEmail }));
@@ -793,7 +796,7 @@ export default function Settings() {
         toast.error(t('settings.clientCreatedEmailFailed', { defaultValue: 'Client created, but the invite email failed to send — share this password manually' }));
         setTempPassword(res.data.tempPassword);
       }
-      setProvisionForm({ companyName: '', businessType: 'SCHOOL', adminName: '', adminEmail: '', enabledModules: ['BASE', 'SCHOOL_ACADEMICS'] });
+      setProvisionForm({ companyName: '', businessType: 'SCHOOL', adminName: '', adminEmail: '' });
       loadCompanies();
       loadAllClients();
     } catch (err) {
@@ -1089,50 +1092,9 @@ export default function Settings() {
                     <Input type="email" required value={provisionForm.adminEmail} onChange={e => setProvisionForm(f => ({ ...f, adminEmail: e.target.value }))} />
                   </div>
                 </div>
-                {provisionForm.businessType === 'SCHOOL' && (
-                  <div className="space-y-1.5">
-                    <Label>{t('settings.packageLabel', { defaultValue: 'Package' })}</Label>
-                    <div className="flex gap-2">
-                      {['BASE', 'STANDARD', 'PREMIUM'].map(pt => (
-                        <button
-                          key={pt}
-                          type="button"
-                          onClick={() => setProvisionForm(f => ({ ...f, enabledModules: PACKAGE_MODULES[pt] }))}
-                          className={`px-2.5 py-1 rounded-md border text-xs font-medium transition-colors ${
-                            packageTierOf(provisionForm.enabledModules) === pt ? 'border-primary bg-primary/10 text-primary' : 'border-border hover:bg-muted'
-                          }`}
-                        >
-                          {t(`settings.package${pt}`, { defaultValue: pt.charAt(0) + pt.slice(1).toLowerCase() })}
-                        </button>
-                      ))}
-                    </div>
-                    <div className="flex flex-wrap gap-1.5 pt-1">
-                      {MODULE_CATALOG.map(mod => {
-                        const active = provisionForm.enabledModules.includes(mod.value);
-                        return (
-                          <button
-                            key={mod.value}
-                            type="button"
-                            title={t(`${mod.i18n}Desc`, { defaultValue: mod.desc })}
-                            onClick={() => setProvisionForm(f => {
-                              const next = active ? f.enabledModules.filter(m => m !== mod.value) : [...f.enabledModules, mod.value];
-                              const modules = next.filter(m => m !== 'BASE').length > 0 ? [...new Set(['BASE', ...next])] : [];
-                              return { ...f, enabledModules: modules };
-                            })}
-                            className={`flex items-center gap-1.5 px-2 py-1 rounded-full border text-xs transition-colors ${
-                              active ? 'bg-primary/10 border-primary text-primary' : 'border-border text-muted-foreground hover:border-primary/50'
-                            }`}
-                          >
-                            <span className={`w-3 h-3 rounded-sm border flex items-center justify-center ${active ? 'bg-primary border-primary' : 'border-muted-foreground/40'}`}>
-                              {active && <Check className="w-2.5 h-2.5 text-primary-foreground" />}
-                            </span>
-                            {t(mod.i18n, { defaultValue: mod.label })}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
+                <p className="text-xs text-muted-foreground -mt-1">
+                  {t('settings.packageSetAfterCreation', { defaultValue: 'Starts on the Base package — set their real package from the Clients list right after creating them.' })}
+                </p>
                 <Button type="submit" disabled={provisioning} className="w-full">
                   {provisioning ? t('settings.creatingClient', { defaultValue: 'Creating…' }) : t('settings.createClientButton', { defaultValue: 'Create Client & Send Login' })}
                 </Button>
