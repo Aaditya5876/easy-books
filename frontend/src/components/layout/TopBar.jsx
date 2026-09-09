@@ -63,16 +63,23 @@ export default function TopBar({ onMobileMenuToggle, onToolOpen }) {
     setUser(me);
     const companyList = await api.Company.list();
     setCompanies(companyList);
-    // SUPER_ADMIN never operates "inside" a company of their own — companies
-    // they're linked to (e.g. via Create Client) belong to the client, not
-    // them, and Create Client deliberately never marks one as their default.
-    // Settings/SidebarNav/App.jsx all gate their "does SUPER_ADMIN have a
-    // company" check on that same default, for that same reason — so the
-    // header must agree, or it shows a company name while everything else
-    // still treats SUPER_ADMIN as company-less (exactly the header/sidebar
-    // mismatch the removed "View" feature caused).
+    // SUPER_ADMIN has no company of their own by default (no baseline
+    // "active company" the way a real user has) — but they can explicitly
+    // step into a client's view (Settings -> Clients -> View), which sets
+    // activeCompanyId to a company they're often NOT linked to via
+    // UserCompany at all (e.g. one the client self-served a second branch
+    // for). The bug last time: this resolution only ever searched their OWN
+    // linked companyList, didn't find an unlinked one, and "self-healed"
+    // back to a linked company — fighting the switch. Fetch it directly
+    // instead of assuming it must be in companyList.
     if (me?.role === 'SUPER_ADMIN') {
-      setActiveCompany(null);
+      const activeId = getActiveCompanyId();
+      let resolved = activeId ? companyList.find(c => c.id === activeId) : null;
+      if (activeId && !resolved) {
+        resolved = await api.Company.get(activeId).catch(() => null);
+      }
+      if (resolved?.is_active === false) resolved = null;
+      setActiveCompany(resolved || null);
       if (import.meta.env.VITE_ENABLE_NOTIFICATIONS === 'true') {
         notificationsApi.unreadCount().then(res => setUnreadCount(res?.data ?? 0)).catch(() => {});
       }

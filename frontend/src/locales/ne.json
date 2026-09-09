@@ -2556,6 +2556,7 @@
     "lastLoginAt": "पछिल्लो लगइन: {{date}}",
     "neverLoggedIn": "कहिल्यै लगइन गरेको छैन",
     "resetPassword": "पासवर्ड रिसेट गर्नुहोस्",
+    "switchToCompany": "यसमा जानुहोस्",
     "confirmResetPasswordTitle": "{{name}} को पासवर्ड रिसेट गर्ने?",
     "confirmResetPasswordDesc": "नयाँ अस्थायी पासवर्ड सिर्जना गर्छ र कुनै पनि सक्रिय सत्र लगआउट गर्छ। अर्को लगइनमा उनीहरूले यो परिवर्तन गर्नुपर्नेछ।",
     "passwordResetEmailed": "पासवर्ड रिसेट भयो — नयाँ विवरण {{email}} लाई इमेल गरियो",

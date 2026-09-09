@@ -23,7 +23,7 @@ import {
 import {
   Building2, Plus, Trash2, Save, ImagePlus, X, UserPlus, Copy, Check, Shield,
   Phone, Mail, MapPin, Hash, User, Palette, Type, Bell, RotateCcw, Upload,
-  Recycle, RotateCw, Lock, AlertTriangle, Clock, Zap, QrCode, Power, PowerOff, Layers, School, KeyRound
+  Recycle, RotateCw, Lock, AlertTriangle, Clock, Zap, QrCode, Power, PowerOff, Layers, School, KeyRound, ExternalLink
 } from 'lucide-react';
 
 const SIDEBAR_PALETTE = ['#1e293b', '#1e3a5f', '#14532d', '#4c1d95', '#881337', '#7c2d12'];
@@ -1010,11 +1010,17 @@ export default function Settings() {
                           )}
                         </div>
                         <div className="flex gap-2 shrink-0">
-                          {/* Deliberately no "View"/switch-into-this-company button —
-                              SUPER_ADMIN is often not even linked to a client's company
-                              (e.g. one the client self-served a second branch for), so
-                              the header's own company resolution just snaps back to
-                              whatever SUPER_ADMIN IS linked to. Manage from here instead. */}
+                          {/* Switches your active company to this client's — same as
+                              their own admin sees, not a read-only preview (named
+                              "Switch To" rather than "View" for that reason). The
+                              header now resolves this correctly even when SUPER_ADMIN
+                              isn't personally linked to the company — see TopBar.jsx
+                              loadData() and AuthContext.jsx's resolveActiveCompanyOverride. */}
+                          {c.isActive !== false && (
+                            <Button size="sm" variant="outline" onClick={() => { setActiveCompanyId(c.id); window.location.href = '/'; }}>
+                              <ExternalLink className="w-3.5 h-3.5 mr-1.5" />{t('settings.switchToCompany', { defaultValue: 'Switch To' })}
+                            </Button>
+                          )}
                           {admin && (
                             <Button size="sm" variant="outline" onClick={() => handleClientAdminResetPassword(c, admin)} disabled={clientResettingPasswordId === admin.id}>
                               <KeyRound className="w-3.5 h-3.5 mr-1.5" />{t('settings.resetPassword', { defaultValue: 'Reset Password' })}
