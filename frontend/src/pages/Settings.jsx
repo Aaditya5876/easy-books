@@ -168,7 +168,10 @@ export default function Settings() {
   // loadCompanies(), which flips loading true→false, unmounting and remounting an
   // uncontrolled <Tabs defaultValue="preferences"> each time and resetting it back
   // to Preferences. Lifting the selection into state here fixes that for all of them.
-  const [activeTab, setActiveTab] = useState(location.state?.tab || 'preferences');
+  // SUPER_ADMIN never owns a company of their own — Preferences (company
+  // branding/fiscal year/etc.) is meaningless for them, so land on Clients
+  // instead whenever they open Settings with no explicit tab requested.
+  const [activeTab, setActiveTab] = useState(location.state?.tab || (isSuperAdmin ? 'clients' : 'preferences'));
 
   // TopBar links here with e.g. navigate('/settings', { state: { tab: 'clients',
   // openAddCompany: true } }) — a useEffect (not just the lazy initial state
@@ -285,6 +288,10 @@ export default function Settings() {
   const [addBankSaving, setAddBankSaving] = useState(false);
 
   useEffect(() => { loadCompanies(); }, []);
+  // Clients is now SUPER_ADMIN's default landing tab (see activeTab above),
+  // not just something loaded on an explicit navigate-with-state — so it
+  // needs its own mount-time load instead of only firing from that effect.
+  useEffect(() => { if (isSuperAdmin) loadAllClients(); }, []);
   useEffect(() => { loadFiscalYearStatus(); }, [activeCompanyId]);
 
   async function loadFiscalYearStatus() {
