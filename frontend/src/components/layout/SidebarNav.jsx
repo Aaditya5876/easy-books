@@ -213,7 +213,7 @@ export default function SidebarNav({ collapsed, onToggle }) {
   const location = useLocation();
   const { t } = useTranslation();
   const nt = (label) => t(`nav.${label}`, { defaultValue: label });
-  const { isAdmin, canViewPayroll, isTeacher, isStaff, staffTags, role } = useRole();
+  const { isAdmin, isSuperAdmin, canViewPayroll, isTeacher, isStaff, staffTags, role } = useRole();
   const { prefs } = usePreferences();
   const { user } = useAuth();
   const isSchool = user?.defaultCompany?.businessType === 'SCHOOL';
@@ -295,7 +295,13 @@ export default function SidebarNav({ collapsed, onToggle }) {
             <p className={cn(
               "text-[10px] leading-none",
               hasBgColor ? (bgIsDark ? "text-white/50" : "text-gray-600") : "text-sidebar-muted"
-            )}>{isSchool ? 'School Management' : 'ERP · CRM · HRM'}</p>
+            )}>
+              {/* SUPER_ADMIN's identity isn't tied to whichever client they
+                  happen to be switched into — a school today, a pharmacy or
+                  tea shop tomorrow. Only a real company's own admin should
+                  see the branding rebrand around their business type. */}
+              {isSuperAdmin ? t('nav.clientManagement', { defaultValue: 'Client Management' }) : (isSchool ? 'School Management' : 'ERP · CRM · HRM')}
+            </p>
           </div>
         )}
       </div>
