@@ -4,23 +4,27 @@ import { setActiveCompanyId, clearActiveCompany, getActiveCompanyId } from '@/li
 
 const AuthContext = createContext();
 
-// SUPER_ADMIN never has a default company of their own (see Settings ->
-// Clients — they manage clients, they don't own a school/business). But they
-// can switch into a client's actual view via the "View" button there, which
-// only sets the local activeCompanyId — /auth/me has no notion of "active
-// company" and always returns the caller's own permanent default (null for
-// SUPER_ADMIN). Without this patch, every place that reads user.defaultCompany
-// (isSchool routing in App.jsx, the sidebar) would still think SUPER_ADMIN has
-// nothing selected and bounce them back to Settings even after "View". This
-// resolves it once, here, instead of duplicating the fetch in every consumer.
+// /auth/me has no notion of "active company" — it always returns the
+// caller's own permanent DB default (from UserCompany.isDefault; null for
+// SUPER_ADMIN, who never owns one). But a user can be switched onto a
+// *different* company than that permanent default: SUPER_ADMIN via "Switch
+// To" in Settings -> Clients, or a regular multi-company ADMIN via "Set
+// Active" in Settings -> Companies / the header company switcher — both just
+// set the local activeCompanyId. Every place that reads user.defaultCompany
+// (isSchool routing in App.jsx, the sidebar, Settings, Ledger) needs to see
+// THAT company, not the permanent one, or switching silently does nothing
+// (school/business nav, "Client Management" branding, etc. never update).
+// companyApi.get() 403s if the caller isn't actually a member (or SUPER_ADMIN,
+// who bypasses that check) so this can't be used to peek at someone else's
+// company — on any failure we just fall back to the real default.
 // (TopBar.jsx has its own equivalent fetch for the header — see loadData()
 // there — since it reads companies via a differently-shaped API client.)
 async function resolveActiveCompanyOverride(meData) {
-  if (meData?.role !== 'SUPER_ADMIN' || meData?.defaultCompanyId) return meData;
   const activeId = getActiveCompanyId();
-  if (!activeId) return meData;
+  if (!activeId || activeId === meData?.defaultCompanyId) return meData;
   try {
     const res = await companyApi.get(activeId);
+    if (res.data.isActive === false) return meData;
     return { ...meData, defaultCompanyId: res.data.id, defaultCompany: res.data };
   } catch {
     return meData;
