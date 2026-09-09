@@ -137,14 +137,16 @@ export default function TopBar({ onMobileMenuToggle, onToolOpen }) {
     window.location.reload();
   }
 
-  // SUPER_ADMIN's real work on another company is managing it (package,
-  // active status), not browsing its data — so route to Settings → Clients
-  // instead of switching context + landing on that company's Dashboard.
-  // Still updates the active company id so the rest of the app agrees on it.
+  // The dropdown's whole job is picking which company is active — so for
+  // SUPER_ADMIN it routes to Settings → Companies, which has the actual
+  // "Set Active" control, rather than switching a click into a full reload
+  // straight into that company's Dashboard. Deliberately does NOT touch the
+  // active company id itself here — that only happens when they click "Set
+  // Active" on the Companies tab (or use this same dropdown as a non-SUPER_ADMIN,
+  // below), never as a side effect of just opening the dropdown.
   function handleCompanyClick(company) {
     if (isSuperAdmin) {
-      setActiveCompanyId(company.id);
-      navigate('/settings', { state: { tab: 'clients' } });
+      navigate('/settings', { state: { tab: 'companies' } });
       return;
     }
     if (company.is_active === false) return;
