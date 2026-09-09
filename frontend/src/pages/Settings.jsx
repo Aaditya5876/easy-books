@@ -75,14 +75,47 @@ const STAFF_TAGS = [
 // enabledModules is never empty — it's added automatically whenever any
 // module here is selected, never shown as its own checkbox.
 const MODULE_CATALOG = [
-  { value: 'SCHOOL_ACADEMICS', i18n: 'settings.moduleSchoolAcademics', label: 'Academics', desc: 'Exams, homework, study materials, routine/timetable' },
-  { value: 'FACILITIES', i18n: 'settings.moduleFacilities', label: 'Facilities', desc: 'Library, hostel, transport' },
+  { value: 'SCHOOL_ACADEMICS', i18n: 'settings.moduleSchoolAcademics', label: 'Academics', desc: 'Exams, homework, study materials, routine/timetable', schoolOnly: true },
+  { value: 'FACILITIES', i18n: 'settings.moduleFacilities', label: 'Facilities', desc: 'Library, hostel, transport', schoolOnly: true },
   { value: 'HRMS', i18n: 'settings.moduleHrms', label: 'HR & Payroll', desc: 'Employees, staff attendance, leave, payroll' },
   { value: 'FINANCE', i18n: 'settings.moduleFinance', label: 'Finance', desc: 'Ledger, transactions, accounting' },
   { value: 'INVENTORY', i18n: 'settings.moduleInventory', label: 'Inventory', desc: 'Stock and item tracking' },
   { value: 'AI', i18n: 'settings.moduleAi', label: 'AI Tools', desc: 'Gemini-powered notices, insights, report-card comments' },
   { value: 'BULK_IMPORT', i18n: 'settings.moduleBulkImport', label: 'Bulk Import', desc: 'CSV/sheet import for students, employees, etc.' },
 ];
+
+// A client's add-on checklist should only offer modules that mean something
+// for their product — Academics/Facilities have no backend routes at all for
+// a non-school company, so offering them there would be a toggle that lies.
+function moduleCatalogFor(company) {
+  const isSchoolClient = company?.businessType === 'SCHOOL';
+  return isSchoolClient ? MODULE_CATALOG : MODULE_CATALOG.filter(m => !m.schoolOnly);
+}
+
+// Core tools that ship with every company on any package and have no
+// @RequiresModule gate at all (see school.controller.ts / sales, purchase,
+// vendor, client, quotation controllers) — shown as read-only chips so
+// SUPER_ADMIN sees the whole picture instead of a Base-tier client looking
+// like it has nothing, and isn't tempted to "toggle" something that was
+// never actually a switch.
+const CORE_TOOLS_SCHOOL = [
+  { i18n: 'settings.coreStudents', label: 'Students' },
+  { i18n: 'settings.coreClassesSubjects', label: 'Classes & Subjects' },
+  { i18n: 'settings.coreAttendance', label: 'Attendance' },
+  { i18n: 'settings.coreFees', label: 'Fees' },
+  { i18n: 'settings.coreTeachersStaff', label: 'Teachers & Staff' },
+  { i18n: 'settings.coreNoticesEvents', label: 'Notices & Events' },
+];
+const CORE_TOOLS_BUSINESS = [
+  { i18n: 'settings.coreSales', label: 'Sales' },
+  { i18n: 'settings.corePurchase', label: 'Purchase' },
+  { i18n: 'settings.coreVendors', label: 'Vendors' },
+  { i18n: 'settings.coreClients', label: 'Clients' },
+  { i18n: 'settings.coreQuotations', label: 'Quotations' },
+];
+function coreToolsFor(company) {
+  return company?.businessType === 'SCHOOL' ? CORE_TOOLS_SCHOOL : CORE_TOOLS_BUSINESS;
+}
 
 const BUSINESS_TYPES = [
   { value: 'RETAIL', label: 'Retail / General Store' },
@@ -450,6 +483,17 @@ export default function Settings() {
     loadCompanies();
   }
 
+  async function switchActiveCompany(company) {
+    const ok = await confirm({
+      title: t('settings.confirmSetActiveTitle', { defaultValue: 'Switch active company?' }),
+      description: t('settings.confirmSetActiveDescription', { defaultValue: "You'll be switched into {{name}} — the app will reload showing that company's data instead.", name: company.name }),
+      confirmLabel: t('settings.setActive', { defaultValue: 'Set Active' }),
+    });
+    if (!ok) return;
+    setActiveCompanyId(company.id);
+    window.location.href = '/';
+  }
+
   async function toggleCompanyActive(company) {
     const activating = !company.is_active;
     if (!activating) {
@@ -738,9 +782,14 @@ export default function Settings() {
   async function handleClientActiveToggle(company) {
     const activating = !company.isActive;
     if (!activating) {
+      // Real-time, not just "at next login" — CompanyAccessGuard checks
+      // isActive fresh on every companyId-scoped request, so this locks out
+      // an already-logged-in session immediately, not only new sign-ins.
+      // Reactivating flips it back and access resumes just as instantly —
+      // this is the actual subscription pause/resume switch, not cosmetic.
       const ok = await confirm({
-        title: t('settings.confirmDeactivateTitle', { defaultValue: 'Deactivate this school?' }),
-        description: t('settings.confirmDeactivateDescription', { defaultValue: 'The nightly automation (fee billing, payroll, reconciliation) will stop running and their users will be signed out and unable to log back in. You can reactivate it anytime.' }),
+        title: t('settings.confirmDeactivateClientTitle', { defaultValue: 'Deactivate {{name}}?', name: company.name }),
+        description: t('settings.confirmDeactivateClientDescription', { defaultValue: "Their users are signed out immediately and locked out of every module — everything they do stops working right away, not just at their next login. Any nightly automation (billing, payroll, reconciliation) for them stops too. Reactivate any time to resume instantly, e.g. once they've paid." }),
         confirmLabel: t('settings.deactivate', { defaultValue: 'Deactivate' }),
         variant: 'destructive',
       });
@@ -1109,102 +1158,141 @@ export default function Settings() {
                                     </Button>
                                   </div>
 
-                                  <div className="flex flex-wrap items-center gap-4 pt-2 border-t">
-                                    <div className="flex items-center gap-1.5">
-                                      <span className="text-xs text-muted-foreground">{t('settings.packageHeading', { defaultValue: 'Package' })}</span>
-                                      {['BASE', 'STANDARD', 'PREMIUM'].map(pt => (
-                                        <button
-                                          key={pt}
-                                          type="button"
-                                          disabled={clientPackageSaving === c.id}
-                                          onClick={() => stageClientTier(c, pt)}
-                                          className={`px-2 py-1 rounded-md border text-xs font-medium transition-colors disabled:opacity-50 ${
-                                            tier === pt ? 'border-primary bg-primary/10 text-primary' : 'border-border hover:bg-muted'
-                                          }`}
-                                        >
-                                          {t(`settings.package${pt}`, { defaultValue: pt.charAt(0) + pt.slice(1).toLowerCase() })}
-                                        </button>
-                                      ))}
-                                      {!tier && <span className="text-xs text-muted-foreground">{t('settings.noPackageSetShort', { defaultValue: '(unrestricted/legacy)' })}</span>}
+                                  <div className="rounded-lg border divide-y overflow-hidden mt-1">
+                                    {/* Plan row */}
+                                    <div className="flex flex-wrap items-center gap-4 px-3 py-2.5 bg-card">
+                                      <div className="flex items-center gap-1.5">
+                                        <span className="text-xs font-medium text-muted-foreground">{t('settings.packageHeading', { defaultValue: 'Package' })}</span>
+                                        {['BASE', 'STANDARD', 'PREMIUM'].map(pt => (
+                                          <button
+                                            key={pt}
+                                            type="button"
+                                            disabled={clientPackageSaving === c.id}
+                                            onClick={() => stageClientTier(c, pt)}
+                                            className={`px-2 py-1 rounded-md border text-xs font-medium transition-colors disabled:opacity-50 ${
+                                              tier === pt ? 'border-primary bg-primary/10 text-primary' : 'border-border hover:bg-muted'
+                                            }`}
+                                          >
+                                            {t(`settings.package${pt}`, { defaultValue: pt.charAt(0) + pt.slice(1).toLowerCase() })}
+                                          </button>
+                                        ))}
+                                        {!tier && <span className="text-xs text-muted-foreground">{t('settings.noPackageSetShort', { defaultValue: '(unrestricted/legacy)' })}</span>}
+                                      </div>
+
+                                      {admin && (() => {
+                                        const maxCompaniesPending = pendingMaxCompanies[admin.id] !== undefined;
+                                        return (
+                                          <div className="flex items-center gap-1.5" title={t('settings.maxCompaniesHint', { defaultValue: 'How many companies this admin may self-serve create' })}>
+                                            <span className="text-xs font-medium text-muted-foreground">{t('settings.maxCompaniesLabel', { defaultValue: 'Max Companies' })}</span>
+                                            <input
+                                              type="number"
+                                              min={1}
+                                              className="w-14 text-xs border rounded-md px-1.5 py-1 bg-background focus:outline-none focus:ring-1 focus:ring-ring"
+                                              value={pendingMaxCompanies[admin.id] ?? admin.maxCompanies ?? 1}
+                                              disabled={clientMaxCompaniesSaving === admin.id}
+                                              onChange={e => setPendingMaxCompanies(p => ({ ...p, [admin.id]: Number(e.target.value) }))}
+                                            />
+                                            {maxCompaniesPending && (
+                                              <>
+                                                <Button size="sm" onClick={() => handleSaveMaxCompanies(admin)} disabled={clientMaxCompaniesSaving === admin.id}>
+                                                  <Save className="w-3.5 h-3.5 mr-1.5" />
+                                                  {clientMaxCompaniesSaving === admin.id ? t('settings.savingEllipsis', { defaultValue: 'Saving…' }) : t('settings.save', { defaultValue: 'Save' })}
+                                                </Button>
+                                                <button
+                                                  type="button"
+                                                  onClick={() => discardMaxCompaniesChange(admin.id)}
+                                                  disabled={clientMaxCompaniesSaving === admin.id}
+                                                  className="text-xs text-muted-foreground hover:text-foreground underline disabled:opacity-50"
+                                                >
+                                                  {t('settings.cancel', { defaultValue: 'Cancel' })}
+                                                </button>
+                                              </>
+                                            )}
+                                          </div>
+                                        );
+                                      })()}
                                     </div>
 
-                                    {admin && (() => {
-                                      const maxCompaniesPending = pendingMaxCompanies[admin.id] !== undefined;
-                                      return (
-                                        <div className="flex items-center gap-1.5" title={t('settings.maxCompaniesHint', { defaultValue: 'How many companies this admin may self-serve create' })}>
-                                          <span className="text-xs text-muted-foreground">{t('settings.maxCompaniesLabel', { defaultValue: 'Max Companies' })}</span>
-                                          <input
-                                            type="number"
-                                            min={1}
-                                            className="w-14 text-xs border rounded-md px-1.5 py-1 bg-background focus:outline-none focus:ring-1 focus:ring-ring"
-                                            value={pendingMaxCompanies[admin.id] ?? admin.maxCompanies ?? 1}
-                                            disabled={clientMaxCompaniesSaving === admin.id}
-                                            onChange={e => setPendingMaxCompanies(p => ({ ...p, [admin.id]: Number(e.target.value) }))}
-                                          />
-                                          {maxCompaniesPending && (
-                                            <>
-                                              <Button size="sm" onClick={() => handleSaveMaxCompanies(admin)} disabled={clientMaxCompaniesSaving === admin.id}>
-                                                <Save className="w-3.5 h-3.5 mr-1.5" />
-                                                {clientMaxCompaniesSaving === admin.id ? t('settings.savingEllipsis', { defaultValue: 'Saving…' }) : t('settings.save', { defaultValue: 'Save' })}
-                                              </Button>
-                                              <button
-                                                type="button"
-                                                onClick={() => discardMaxCompaniesChange(admin.id)}
-                                                disabled={clientMaxCompaniesSaving === admin.id}
-                                                className="text-xs text-muted-foreground hover:text-foreground underline disabled:opacity-50"
-                                              >
-                                                {t('settings.cancel', { defaultValue: 'Cancel' })}
-                                              </button>
-                                            </>
-                                          )}
-                                        </div>
-                                      );
-                                    })()}
-                                  </div>
-
-                                  {/* Fine-grained alternative to the tier buttons above —
-                                      tick any combination of services for this company. */}
-                                  <div className="flex flex-wrap items-center gap-1.5">
-                                    {MODULE_CATALOG.map(mod => {
-                                      const active = (effectiveModules || []).includes(mod.value);
-                                      return (
-                                        <button
-                                          key={mod.value}
-                                          type="button"
-                                          disabled={clientPackageSaving === c.id}
-                                          onClick={() => stageClientModuleToggle(c, mod.value)}
-                                          title={t(`${mod.i18n}Desc`, { defaultValue: mod.desc })}
-                                          className={`flex items-center gap-1.5 px-2 py-1 rounded-full border text-xs transition-colors disabled:opacity-50 ${
-                                            active ? 'bg-primary/10 border-primary text-primary' : 'border-border text-muted-foreground hover:border-primary/50'
-                                          }`}
-                                        >
-                                          <span className={`w-3 h-3 rounded-sm border flex items-center justify-center ${active ? 'bg-primary border-primary' : 'border-muted-foreground/40'}`}>
-                                            {active && <Check className="w-2.5 h-2.5 text-primary-foreground" />}
-                                          </span>
-                                          {t(mod.i18n, { defaultValue: mod.label })}
-                                        </button>
-                                      );
-                                    })}
-
-                                    {hasPendingChange && (
-                                      <>
-                                        <span className="text-xs text-amber-600 ml-1">
-                                          {t('settings.unsavedChanges', { defaultValue: 'Unsaved changes' })}
+                                    {/* Core tools — ship with every company on any package, no
+                                        backend toggle exists for them (see moduleCatalogFor /
+                                        coreToolsFor above), shown read-only so the picture is
+                                        complete instead of a Base client looking bare. Split by
+                                        product: a school's core has nothing to do with a
+                                        business's core. */}
+                                    <div className="px-3 py-2.5 bg-muted/20">
+                                      <div className="flex items-center gap-1.5 mb-1.5">
+                                        <Lock className="w-3 h-3 text-muted-foreground" />
+                                        <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                                          {t('settings.coreToolsHeading', { defaultValue: 'Always Included' })}
                                         </span>
-                                        <Button size="sm" onClick={() => handleSaveClientPackage(c)} disabled={clientPackageSaving === c.id}>
-                                          <Save className="w-3.5 h-3.5 mr-1.5" />
-                                          {clientPackageSaving === c.id ? t('settings.savingEllipsis', { defaultValue: 'Saving…' }) : t('settings.save', { defaultValue: 'Save' })}
-                                        </Button>
-                                        <button
-                                          type="button"
-                                          onClick={() => discardClientPackageChange(c)}
-                                          disabled={clientPackageSaving === c.id}
-                                          className="text-xs text-muted-foreground hover:text-foreground underline disabled:opacity-50"
-                                        >
-                                          {t('settings.cancel', { defaultValue: 'Cancel' })}
-                                        </button>
-                                      </>
-                                    )}
+                                      </div>
+                                      <div className="flex flex-wrap gap-1.5">
+                                        {coreToolsFor(c).map(tool => (
+                                          <span
+                                            key={tool.i18n}
+                                            title={t('settings.coreToolHint', { defaultValue: 'Included on every plan — not a toggle' })}
+                                            className="px-2 py-1 rounded-full bg-secondary text-muted-foreground text-xs cursor-default"
+                                          >
+                                            {t(tool.i18n, { defaultValue: tool.label })}
+                                          </span>
+                                        ))}
+                                      </div>
+                                    </div>
+
+                                    {/* Add-on modules — the fine-grained, toggleable alternative
+                                        to the tier buttons above; filtered per product so a
+                                        business client is never offered a School Academics/
+                                        Facilities checkbox that has nothing behind it. */}
+                                    <div className="px-3 py-2.5 bg-card">
+                                      <div className="flex items-center gap-1.5 mb-1.5">
+                                        <Layers className="w-3 h-3 text-muted-foreground" />
+                                        <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                                          {t('settings.addOnModulesHeading', { defaultValue: 'Add-on Modules' })}
+                                        </span>
+                                      </div>
+                                      <div className="flex flex-wrap items-center gap-1.5">
+                                        {moduleCatalogFor(c).map(mod => {
+                                          const active = (effectiveModules || []).includes(mod.value);
+                                          return (
+                                            <button
+                                              key={mod.value}
+                                              type="button"
+                                              disabled={clientPackageSaving === c.id}
+                                              onClick={() => stageClientModuleToggle(c, mod.value)}
+                                              title={t(`${mod.i18n}Desc`, { defaultValue: mod.desc })}
+                                              className={`flex items-center gap-1.5 px-2 py-1 rounded-full border text-xs transition-colors disabled:opacity-50 ${
+                                                active ? 'bg-primary/10 border-primary text-primary' : 'border-border text-muted-foreground hover:border-primary/50'
+                                              }`}
+                                            >
+                                              <span className={`w-3 h-3 rounded-sm border flex items-center justify-center ${active ? 'bg-primary border-primary' : 'border-muted-foreground/40'}`}>
+                                                {active && <Check className="w-2.5 h-2.5 text-primary-foreground" />}
+                                              </span>
+                                              {t(mod.i18n, { defaultValue: mod.label })}
+                                            </button>
+                                          );
+                                        })}
+
+                                        {hasPendingChange && (
+                                          <>
+                                            <span className="text-xs text-amber-600 ml-1">
+                                              {t('settings.unsavedChanges', { defaultValue: 'Unsaved changes' })}
+                                            </span>
+                                            <Button size="sm" onClick={() => handleSaveClientPackage(c)} disabled={clientPackageSaving === c.id}>
+                                              <Save className="w-3.5 h-3.5 mr-1.5" />
+                                              {clientPackageSaving === c.id ? t('settings.savingEllipsis', { defaultValue: 'Saving…' }) : t('settings.save', { defaultValue: 'Save' })}
+                                            </Button>
+                                            <button
+                                              type="button"
+                                              onClick={() => discardClientPackageChange(c)}
+                                              disabled={clientPackageSaving === c.id}
+                                              className="text-xs text-muted-foreground hover:text-foreground underline disabled:opacity-50"
+                                            >
+                                              {t('settings.cancel', { defaultValue: 'Cancel' })}
+                                            </button>
+                                          </>
+                                        )}
+                                      </div>
+                                    </div>
                                   </div>
                                 </div>
                               )}
@@ -1327,7 +1415,7 @@ export default function Settings() {
                     <Button size="sm" variant="outline" onClick={() => setEditingCompany({ ...c })}>{t('settings.edit', { defaultValue: 'Edit' })}</Button>
                   )}
                   {c.id !== activeCompanyId && (
-                    <Button size="sm" variant="outline" onClick={() => { setActiveCompanyId(c.id); window.location.href = '/'; }}>{t('settings.setActive', { defaultValue: 'Set Active' })}</Button>
+                    <Button size="sm" variant="outline" onClick={() => switchActiveCompany(c)}>{t('settings.setActive', { defaultValue: 'Set Active' })}</Button>
                   )}
                   {/* Suspend/delete a company is GeoInfosys's call, not the
                       client's own admin's — SUPER_ADMIN-only, enforced server-side too. */}
