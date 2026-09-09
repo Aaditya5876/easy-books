@@ -23,7 +23,8 @@ import {
 import {
   Building2, Plus, Trash2, Save, ImagePlus, X, UserPlus, Copy, Check, Shield,
   Phone, Mail, MapPin, Hash, User, Palette, Type, Bell, RotateCcw, Upload,
-  Recycle, RotateCw, Lock, AlertTriangle, Clock, Zap, QrCode, Power, PowerOff, Layers, School, KeyRound, ExternalLink
+  Recycle, RotateCw, Lock, AlertTriangle, Clock, Zap, QrCode, Power, PowerOff, Layers, School, KeyRound, ExternalLink,
+  Search, ChevronRight, UserCircle
 } from 'lucide-react';
 
 const SIDEBAR_PALETTE = ['#1e293b', '#1e3a5f', '#14532d', '#4c1d95', '#881337', '#7c2d12'];
@@ -207,6 +208,8 @@ export default function Settings() {
   const [pendingMaxCompanies, setPendingMaxCompanies] = useState({}); // { [userId]: number } — staged, unsaved
   const [clientResettingPasswordId, setClientResettingPasswordId] = useState(null); // admin userId mid-reset
   const [pendingClientModules, setPendingClientModules] = useState({}); // { [companyId]: string[] } — staged, unsaved package edits
+  const [expandedClientId, setExpandedClientId] = useState(null); // companyId whose package editor is open — one at a time
+  const [clientSearch, setClientSearch] = useState('');
 
   // ── Create Client (SUPER_ADMIN only — sales-led onboarding) ──────────────
   // No package picker here — every new client starts on BASE (never
@@ -641,14 +644,23 @@ export default function Settings() {
   }
 
   // Same admin can end up running more than one company (e.g. they self-serve
-  // "Add Company" for a second branch via their own Companies tab) — nothing
-  // else on the card shows that connection, so surface it explicitly here.
-  function relatedCompanyNames(company) {
-    const email = company.admins?.[0]?.email;
-    if (!email) return [];
-    return allClients
-      .filter(other => other.id !== company.id && other.admins?.[0]?.email === email)
-      .map(other => other.name);
+  // "Add Company" for a second branch via their own Companies tab). Grouping
+  // by admin surfaces that directly in the layout instead of a text hint on
+  // each card, and doubles as the only thing keeping the list readable once
+  // there are dozens of clients — most groups are one row, not a full card.
+  function groupClientsByAdmin(clients) {
+    const groups = [];
+    const indexByKey = {};
+    clients.forEach(c => {
+      const admin = c.admins?.[0] || null;
+      const key = admin?.email || `__no-admin-${c.id}`;
+      if (indexByKey[key] === undefined) {
+        indexByKey[key] = groups.length;
+        groups.push({ key, admin, companies: [] });
+      }
+      groups[indexByKey[key]].companies.push(c);
+    });
+    return groups;
   }
 
   async function loadAllClients() {
@@ -962,184 +974,241 @@ export default function Settings() {
                 <div className="w-6 h-6 border-4 border-primary/20 border-t-primary rounded-full animate-spin" />
               </div>
             ) : (
-              <div className="grid gap-3">
-                {allClients.map(c => {
-                  const admin = c.admins?.[0];
-                  const hasPendingChange = pendingClientModules[c.id] !== undefined;
-                  const effectiveModules = pendingClientModules[c.id] ?? c.enabledModules;
-                  const tier = packageTierOf(effectiveModules);
-                  const related = relatedCompanyNames(c);
-                  return (
-                    <div key={c.id} className="bg-card rounded-xl border p-5 space-y-3">
-                      <div className="flex items-start justify-between gap-4">
-                        <div>
-                          <div className="flex items-center gap-2 flex-wrap">
-                            {/* Green = this is the company currently selected in the header
-                                switcher (matches that dot exactly) — NOT "not deactivated";
-                                the red "Deactivated" pill below already covers that. */}
-                            {c.id === activeCompanyId && (
-                              <span
-                                className="w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-emerald-500/25 shadow-[0_0_4px_rgba(16,185,129,0.7)] shrink-0"
-                                title={t('settings.currentlyActiveCompany', { defaultValue: 'Currently active company' })}
-                              />
-                            )}
-                            <h3 className="font-semibold">{c.name}</h3>
-                            <span className="text-xs bg-secondary text-muted-foreground px-2 py-0.5 rounded-full">
-                              {businessTypeLabel(c.businessType) || c.businessType}
-                            </span>
-                            {c.isActive === false && (
-                              <span className="text-xs bg-red-50 text-red-600 px-2 py-0.5 rounded-full font-medium">
-                                {t('settings.deactivated', { defaultValue: 'Deactivated' })}
-                              </span>
-                            )}
-                          </div>
-                          <p className="text-sm text-muted-foreground mt-0.5">
-                            {admin ? `${admin.name} · ${admin.email}` : t('settings.noAdminYet', { defaultValue: 'No admin user found' })}
-                          </p>
-                          {related.length > 0 && (
-                            <p className="text-[11px] text-primary">
-                              {t('settings.alsoManages', { defaultValue: 'Same admin also runs: {{names}}', names: related.join(', ') })}
-                            </p>
-                          )}
-                          {admin && (
-                            <p className="text-[11px] text-muted-foreground">
-                              {admin.lastLoginAt
-                                ? t('settings.lastLoginAt', { defaultValue: 'Last login: {{date}}', date: new Date(admin.lastLoginAt).toLocaleString('en-NP', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) })
-                                : t('settings.neverLoggedIn', { defaultValue: 'Never logged in' })}
-                            </p>
-                          )}
-                        </div>
-                        <div className="flex gap-2 shrink-0">
-                          {/* Switches your active company to this client's — same as
-                              their own admin sees, not a read-only preview (named
-                              "Switch To" rather than "View" for that reason). The
-                              header now resolves this correctly even when SUPER_ADMIN
-                              isn't personally linked to the company — see TopBar.jsx
-                              loadData() and AuthContext.jsx's resolveActiveCompanyOverride. */}
-                          {c.isActive !== false && (
-                            <Button size="sm" variant="outline" onClick={() => { setActiveCompanyId(c.id); window.location.href = '/'; }}>
-                              <ExternalLink className="w-3.5 h-3.5 mr-1.5" />{t('settings.switchToCompany', { defaultValue: 'Switch To' })}
-                            </Button>
-                          )}
-                          {admin && (
-                            <Button size="sm" variant="outline" onClick={() => handleClientAdminResetPassword(c, admin)} disabled={clientResettingPasswordId === admin.id}>
-                              <KeyRound className="w-3.5 h-3.5 mr-1.5" />{t('settings.resetPassword', { defaultValue: 'Reset Password' })}
-                            </Button>
-                          )}
-                          <Button size="sm" variant="outline" onClick={() => handleClientActiveToggle(c)}>
-                            {c.isActive === false
-                              ? <><Power className="w-3.5 h-3.5 mr-1.5" />{t('settings.reactivate', { defaultValue: 'Reactivate' })}</>
-                              : <><PowerOff className="w-3.5 h-3.5 mr-1.5" />{t('settings.deactivate', { defaultValue: 'Deactivate' })}</>}
-                          </Button>
-                          <Button size="icon" variant="ghost" onClick={() => handleClientDelete(c)}>
-                            <Trash2 className="w-4 h-4 text-destructive" />
-                          </Button>
-                        </div>
+              <div className="space-y-3">
+                {allClients.length > 5 && (
+                  <div className="relative max-w-sm">
+                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                    <Input
+                      className="pl-8 h-9 text-sm"
+                      placeholder={t('settings.searchClients', { defaultValue: 'Search by school or admin…' })}
+                      value={clientSearch}
+                      onChange={e => setClientSearch(e.target.value)}
+                    />
+                  </div>
+                )}
+
+                {(() => {
+                  const q = clientSearch.trim().toLowerCase();
+                  const filtered = !q ? allClients : allClients.filter(c => {
+                    const admin = c.admins?.[0];
+                    return c.name.toLowerCase().includes(q)
+                      || admin?.name?.toLowerCase().includes(q)
+                      || admin?.email?.toLowerCase().includes(q);
+                  });
+                  const groups = groupClientsByAdmin(filtered);
+
+                  if (groups.length === 0) {
+                    return (
+                      <div className="text-center py-12 text-muted-foreground">
+                        {allClients.length === 0
+                          ? t('settings.noCompaniesYet', { defaultValue: 'No companies yet' })
+                          : t('settings.noClientsMatch', { defaultValue: 'No clients match "{{query}}"', query: clientSearch })}
                       </div>
+                    );
+                  }
 
-                      <div className="flex flex-wrap items-center gap-4 pt-2 border-t">
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-xs text-muted-foreground">{t('settings.packageHeading', { defaultValue: 'Package' })}</span>
-                          {['BASE', 'STANDARD', 'PREMIUM'].map(pt => (
-                            <button
-                              key={pt}
-                              type="button"
-                              disabled={clientPackageSaving === c.id}
-                              onClick={() => stageClientTier(c, pt)}
-                              className={`px-2 py-1 rounded-md border text-xs font-medium transition-colors disabled:opacity-50 ${
-                                tier === pt ? 'border-primary bg-primary/10 text-primary' : 'border-border hover:bg-muted'
-                              }`}
-                            >
-                              {t(`settings.package${pt}`, { defaultValue: pt.charAt(0) + pt.slice(1).toLowerCase() })}
-                            </button>
-                          ))}
-                          {!tier && <span className="text-xs text-muted-foreground">{t('settings.noPackageSetShort', { defaultValue: '(unrestricted/legacy)' })}</span>}
+                  return groups.map(group => (
+                    <div key={group.key} className="bg-card rounded-xl border overflow-hidden">
+                      {/* Only shown when the same admin runs more than one company —
+                          a single-company client just gets a plain row, no group header. */}
+                      {group.companies.length > 1 && (
+                        <div className="px-4 py-2 bg-muted/40 border-b flex items-center gap-2 text-xs">
+                          <UserCircle className="w-3.5 h-3.5 text-muted-foreground" />
+                          <span className="font-medium">{group.admin?.name}</span>
+                          <span className="text-muted-foreground">{group.admin?.email}</span>
+                          <span className="ml-auto text-muted-foreground">
+                            {t('settings.schoolCount', { defaultValue: '{{count}} schools', count: group.companies.length })}
+                          </span>
                         </div>
-
-                        {admin && (() => {
-                          const maxCompaniesPending = pendingMaxCompanies[admin.id] !== undefined;
+                      )}
+                      <div className="divide-y">
+                        {group.companies.map(c => {
+                          const admin = group.admin;
+                          const isExpanded = expandedClientId === c.id;
+                          const hasPendingChange = pendingClientModules[c.id] !== undefined;
+                          const effectiveModules = pendingClientModules[c.id] ?? c.enabledModules;
+                          const tier = packageTierOf(effectiveModules);
                           return (
-                            <div className="flex items-center gap-1.5" title={t('settings.maxCompaniesHint', { defaultValue: 'How many companies this admin may self-serve create' })}>
-                              <span className="text-xs text-muted-foreground">{t('settings.maxCompaniesLabel', { defaultValue: 'Max Companies' })}</span>
-                              <input
-                                type="number"
-                                min={1}
-                                className="w-14 text-xs border rounded-md px-1.5 py-1 bg-background focus:outline-none focus:ring-1 focus:ring-ring"
-                                value={pendingMaxCompanies[admin.id] ?? admin.maxCompanies ?? 1}
-                                disabled={clientMaxCompaniesSaving === admin.id}
-                                onChange={e => setPendingMaxCompanies(p => ({ ...p, [admin.id]: Number(e.target.value) }))}
-                              />
-                              {maxCompaniesPending && (
-                                <>
-                                  <Button size="sm" onClick={() => handleSaveMaxCompanies(admin)} disabled={clientMaxCompaniesSaving === admin.id}>
-                                    <Save className="w-3.5 h-3.5 mr-1.5" />
-                                    {clientMaxCompaniesSaving === admin.id ? t('settings.savingEllipsis', { defaultValue: 'Saving…' }) : t('settings.save', { defaultValue: 'Save' })}
-                                  </Button>
-                                  <button
-                                    type="button"
-                                    onClick={() => discardMaxCompaniesChange(admin.id)}
-                                    disabled={clientMaxCompaniesSaving === admin.id}
-                                    className="text-xs text-muted-foreground hover:text-foreground underline disabled:opacity-50"
-                                  >
-                                    {t('settings.cancel', { defaultValue: 'Cancel' })}
-                                  </button>
-                                </>
+                            <div key={c.id}>
+                              {/* Compact row — this is ALL that renders per client until expanded,
+                                  which is what keeps a 100-client list scrollable instead of 100
+                                  fully-expanded package editors stacked on top of each other. */}
+                              <button
+                                type="button"
+                                onClick={() => setExpandedClientId(isExpanded ? null : c.id)}
+                                className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-muted/30 transition-colors"
+                              >
+                                <ChevronRight className={`w-3.5 h-3.5 text-muted-foreground shrink-0 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
+                                {c.id === activeCompanyId && (
+                                  <span
+                                    className="w-2 h-2 rounded-full bg-emerald-500 ring-2 ring-emerald-500/25 shrink-0"
+                                    title={t('settings.currentlyActiveCompany', { defaultValue: 'Currently active company' })}
+                                  />
+                                )}
+                                <span className="font-medium text-sm truncate">{c.name}</span>
+                                <span className="text-[10px] bg-secondary text-muted-foreground px-1.5 py-0.5 rounded-full shrink-0">
+                                  {businessTypeLabel(c.businessType) || c.businessType}
+                                </span>
+                                {tier && (
+                                  <span className="text-[10px] border px-1.5 py-0.5 rounded-full text-muted-foreground shrink-0">
+                                    {t(`settings.package${tier}`, { defaultValue: tier.charAt(0) + tier.slice(1).toLowerCase() })}
+                                  </span>
+                                )}
+                                {c.isActive === false && (
+                                  <span className="text-[10px] bg-red-50 text-red-600 px-1.5 py-0.5 rounded-full font-medium shrink-0">
+                                    {t('settings.deactivated', { defaultValue: 'Deactivated' })}
+                                  </span>
+                                )}
+                                {group.companies.length === 1 && (
+                                  <span className="text-xs text-muted-foreground truncate ml-auto">
+                                    {admin ? `${admin.name} · ${admin.email}` : t('settings.noAdminYet', { defaultValue: 'No admin user found' })}
+                                  </span>
+                                )}
+                              </button>
+
+                              {isExpanded && (
+                                <div className="px-4 pb-4 space-y-3 border-t bg-muted/10">
+                                  {admin && (
+                                    <p className="text-[11px] text-muted-foreground pt-3">
+                                      {admin.lastLoginAt
+                                        ? t('settings.lastLoginAt', { defaultValue: 'Last login: {{date}}', date: new Date(admin.lastLoginAt).toLocaleString('en-NP', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) })
+                                        : t('settings.neverLoggedIn', { defaultValue: 'Never logged in' })}
+                                    </p>
+                                  )}
+
+                                  <div className="flex flex-wrap gap-2 pt-1">
+                                    {/* Switches your active company to this client's — same as
+                                        their own admin sees, not a read-only preview (named
+                                        "Switch To" rather than "View" for that reason). The
+                                        header resolves this correctly even when SUPER_ADMIN
+                                        isn't personally linked to the company — see TopBar.jsx
+                                        loadData() and AuthContext.jsx's resolveActiveCompanyOverride. */}
+                                    {c.isActive !== false && (
+                                      <Button size="sm" variant="outline" onClick={() => { setActiveCompanyId(c.id); window.location.href = '/'; }}>
+                                        <ExternalLink className="w-3.5 h-3.5 mr-1.5" />{t('settings.switchToCompany', { defaultValue: 'Switch To' })}
+                                      </Button>
+                                    )}
+                                    {admin && (
+                                      <Button size="sm" variant="outline" onClick={() => handleClientAdminResetPassword(c, admin)} disabled={clientResettingPasswordId === admin.id}>
+                                        <KeyRound className="w-3.5 h-3.5 mr-1.5" />{t('settings.resetPassword', { defaultValue: 'Reset Password' })}
+                                      </Button>
+                                    )}
+                                    <Button size="sm" variant="outline" onClick={() => handleClientActiveToggle(c)}>
+                                      {c.isActive === false
+                                        ? <><Power className="w-3.5 h-3.5 mr-1.5" />{t('settings.reactivate', { defaultValue: 'Reactivate' })}</>
+                                        : <><PowerOff className="w-3.5 h-3.5 mr-1.5" />{t('settings.deactivate', { defaultValue: 'Deactivate' })}</>}
+                                    </Button>
+                                    <Button size="icon" variant="ghost" onClick={() => handleClientDelete(c)}>
+                                      <Trash2 className="w-4 h-4 text-destructive" />
+                                    </Button>
+                                  </div>
+
+                                  <div className="flex flex-wrap items-center gap-4 pt-2 border-t">
+                                    <div className="flex items-center gap-1.5">
+                                      <span className="text-xs text-muted-foreground">{t('settings.packageHeading', { defaultValue: 'Package' })}</span>
+                                      {['BASE', 'STANDARD', 'PREMIUM'].map(pt => (
+                                        <button
+                                          key={pt}
+                                          type="button"
+                                          disabled={clientPackageSaving === c.id}
+                                          onClick={() => stageClientTier(c, pt)}
+                                          className={`px-2 py-1 rounded-md border text-xs font-medium transition-colors disabled:opacity-50 ${
+                                            tier === pt ? 'border-primary bg-primary/10 text-primary' : 'border-border hover:bg-muted'
+                                          }`}
+                                        >
+                                          {t(`settings.package${pt}`, { defaultValue: pt.charAt(0) + pt.slice(1).toLowerCase() })}
+                                        </button>
+                                      ))}
+                                      {!tier && <span className="text-xs text-muted-foreground">{t('settings.noPackageSetShort', { defaultValue: '(unrestricted/legacy)' })}</span>}
+                                    </div>
+
+                                    {admin && (() => {
+                                      const maxCompaniesPending = pendingMaxCompanies[admin.id] !== undefined;
+                                      return (
+                                        <div className="flex items-center gap-1.5" title={t('settings.maxCompaniesHint', { defaultValue: 'How many companies this admin may self-serve create' })}>
+                                          <span className="text-xs text-muted-foreground">{t('settings.maxCompaniesLabel', { defaultValue: 'Max Companies' })}</span>
+                                          <input
+                                            type="number"
+                                            min={1}
+                                            className="w-14 text-xs border rounded-md px-1.5 py-1 bg-background focus:outline-none focus:ring-1 focus:ring-ring"
+                                            value={pendingMaxCompanies[admin.id] ?? admin.maxCompanies ?? 1}
+                                            disabled={clientMaxCompaniesSaving === admin.id}
+                                            onChange={e => setPendingMaxCompanies(p => ({ ...p, [admin.id]: Number(e.target.value) }))}
+                                          />
+                                          {maxCompaniesPending && (
+                                            <>
+                                              <Button size="sm" onClick={() => handleSaveMaxCompanies(admin)} disabled={clientMaxCompaniesSaving === admin.id}>
+                                                <Save className="w-3.5 h-3.5 mr-1.5" />
+                                                {clientMaxCompaniesSaving === admin.id ? t('settings.savingEllipsis', { defaultValue: 'Saving…' }) : t('settings.save', { defaultValue: 'Save' })}
+                                              </Button>
+                                              <button
+                                                type="button"
+                                                onClick={() => discardMaxCompaniesChange(admin.id)}
+                                                disabled={clientMaxCompaniesSaving === admin.id}
+                                                className="text-xs text-muted-foreground hover:text-foreground underline disabled:opacity-50"
+                                              >
+                                                {t('settings.cancel', { defaultValue: 'Cancel' })}
+                                              </button>
+                                            </>
+                                          )}
+                                        </div>
+                                      );
+                                    })()}
+                                  </div>
+
+                                  {/* Fine-grained alternative to the tier buttons above —
+                                      tick any combination of services for this company. */}
+                                  <div className="flex flex-wrap items-center gap-1.5">
+                                    {MODULE_CATALOG.map(mod => {
+                                      const active = (effectiveModules || []).includes(mod.value);
+                                      return (
+                                        <button
+                                          key={mod.value}
+                                          type="button"
+                                          disabled={clientPackageSaving === c.id}
+                                          onClick={() => stageClientModuleToggle(c, mod.value)}
+                                          title={t(`${mod.i18n}Desc`, { defaultValue: mod.desc })}
+                                          className={`flex items-center gap-1.5 px-2 py-1 rounded-full border text-xs transition-colors disabled:opacity-50 ${
+                                            active ? 'bg-primary/10 border-primary text-primary' : 'border-border text-muted-foreground hover:border-primary/50'
+                                          }`}
+                                        >
+                                          <span className={`w-3 h-3 rounded-sm border flex items-center justify-center ${active ? 'bg-primary border-primary' : 'border-muted-foreground/40'}`}>
+                                            {active && <Check className="w-2.5 h-2.5 text-primary-foreground" />}
+                                          </span>
+                                          {t(mod.i18n, { defaultValue: mod.label })}
+                                        </button>
+                                      );
+                                    })}
+
+                                    {hasPendingChange && (
+                                      <>
+                                        <span className="text-xs text-amber-600 ml-1">
+                                          {t('settings.unsavedChanges', { defaultValue: 'Unsaved changes' })}
+                                        </span>
+                                        <Button size="sm" onClick={() => handleSaveClientPackage(c)} disabled={clientPackageSaving === c.id}>
+                                          <Save className="w-3.5 h-3.5 mr-1.5" />
+                                          {clientPackageSaving === c.id ? t('settings.savingEllipsis', { defaultValue: 'Saving…' }) : t('settings.save', { defaultValue: 'Save' })}
+                                        </Button>
+                                        <button
+                                          type="button"
+                                          onClick={() => discardClientPackageChange(c)}
+                                          disabled={clientPackageSaving === c.id}
+                                          className="text-xs text-muted-foreground hover:text-foreground underline disabled:opacity-50"
+                                        >
+                                          {t('settings.cancel', { defaultValue: 'Cancel' })}
+                                        </button>
+                                      </>
+                                    )}
+                                  </div>
+                                </div>
                               )}
                             </div>
                           );
-                        })()}
-                      </div>
-
-                      {/* Fine-grained alternative to the tier buttons above —
-                          tick any combination of services for this company. */}
-                      <div className="flex flex-wrap items-center gap-1.5">
-                        {MODULE_CATALOG.map(mod => {
-                          const active = (effectiveModules || []).includes(mod.value);
-                          return (
-                            <button
-                              key={mod.value}
-                              type="button"
-                              disabled={clientPackageSaving === c.id}
-                              onClick={() => stageClientModuleToggle(c, mod.value)}
-                              title={t(`${mod.i18n}Desc`, { defaultValue: mod.desc })}
-                              className={`flex items-center gap-1.5 px-2 py-1 rounded-full border text-xs transition-colors disabled:opacity-50 ${
-                                active ? 'bg-primary/10 border-primary text-primary' : 'border-border text-muted-foreground hover:border-primary/50'
-                              }`}
-                            >
-                              <span className={`w-3 h-3 rounded-sm border flex items-center justify-center ${active ? 'bg-primary border-primary' : 'border-muted-foreground/40'}`}>
-                                {active && <Check className="w-2.5 h-2.5 text-primary-foreground" />}
-                              </span>
-                              {t(mod.i18n, { defaultValue: mod.label })}
-                            </button>
-                          );
                         })}
-
-                        {hasPendingChange && (
-                          <>
-                            <span className="text-xs text-amber-600 ml-1">
-                              {t('settings.unsavedChanges', { defaultValue: 'Unsaved changes' })}
-                            </span>
-                            <Button size="sm" onClick={() => handleSaveClientPackage(c)} disabled={clientPackageSaving === c.id}>
-                              <Save className="w-3.5 h-3.5 mr-1.5" />
-                              {clientPackageSaving === c.id ? t('settings.savingEllipsis', { defaultValue: 'Saving…' }) : t('settings.save', { defaultValue: 'Save' })}
-                            </Button>
-                            <button
-                              type="button"
-                              onClick={() => discardClientPackageChange(c)}
-                              disabled={clientPackageSaving === c.id}
-                              className="text-xs text-muted-foreground hover:text-foreground underline disabled:opacity-50"
-                            >
-                              {t('settings.cancel', { defaultValue: 'Cancel' })}
-                            </button>
-                          </>
-                        )}
                       </div>
                     </div>
-                  );
-                })}
-                {allClients.length === 0 && (
-                  <div className="text-center py-12 text-muted-foreground">{t('settings.noCompaniesYet', { defaultValue: 'No companies yet' })}</div>
-                )}
+                  ));
+                })()}
               </div>
             )}
 
