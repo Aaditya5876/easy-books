@@ -23,7 +23,7 @@ import {
 import {
   Building2, Plus, Trash2, Save, ImagePlus, X, UserPlus, Copy, Check, Shield,
   Phone, Mail, MapPin, Hash, User, Palette, Type, Bell, RotateCcw, Upload,
-  Recycle, RotateCw, Lock, AlertTriangle, Clock, Zap, QrCode, Power, PowerOff, Layers, School, KeyRound, ExternalLink,
+  Recycle, RotateCw, Lock, AlertTriangle, Clock, Zap, QrCode, Power, PowerOff, Layers, KeyRound, ExternalLink,
   Search, ChevronRight, UserCircle
 } from 'lucide-react';
 
@@ -217,7 +217,7 @@ export default function Settings() {
   // ModuleAccessGuard) and gets its real package set from the Clients tab
   // right after, where the full tier + checklist editor already lives.
   const [provisionForm, setProvisionForm] = useState({
-    companyName: '', businessType: 'SCHOOL', adminName: '', adminEmail: '',
+    companyName: '', product: 'SCHOOL', businessType: '', otherBusinessDesc: '', adminName: '', adminEmail: '',
   });
   const [provisioning, setProvisioning] = useState(false);
 
@@ -836,12 +836,18 @@ export default function Settings() {
     e.preventDefault();
     setProvisioning(true);
     try {
+      let businessType = 'SCHOOL';
+      if (provisionForm.product === 'BUSINESS') {
+        businessType = provisionForm.businessType === 'OTHER' && provisionForm.otherBusinessDesc.trim()
+          ? provisionForm.otherBusinessDesc.trim()
+          : provisionForm.businessType;
+      }
       const res = await usersApi.provisionClient({
         companyName: provisionForm.companyName,
-        businessType: provisionForm.businessType,
+        businessType,
         adminName: provisionForm.adminName,
         adminEmail: provisionForm.adminEmail,
-        enabledModules: provisionForm.businessType === 'SCHOOL' ? ['BASE'] : [],
+        enabledModules: businessType === 'SCHOOL' ? ['BASE'] : [],
       });
       if (res.data.emailSent) {
         toast.success(t('settings.clientCreatedEmailed', { defaultValue: 'Client created — login details emailed to {{email}}', email: provisionForm.adminEmail }));
@@ -851,7 +857,7 @@ export default function Settings() {
         toast.error(t('settings.clientCreatedEmailFailed', { defaultValue: 'Client created, but the invite email failed to send — share this password manually' }));
         setTempPassword(res.data.tempPassword);
       }
-      setProvisionForm({ companyName: '', businessType: 'SCHOOL', adminName: '', adminEmail: '' });
+      setProvisionForm({ companyName: '', product: 'SCHOOL', businessType: '', otherBusinessDesc: '', adminName: '', adminEmail: '' });
       loadCompanies();
       loadAllClients();
     } catch (err) {
@@ -1228,13 +1234,38 @@ export default function Settings() {
                   <Label>{t('settings.productLabel', { defaultValue: 'Product' })}</Label>
                   <select
                     className="w-full border rounded-md px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring"
-                    value={provisionForm.businessType}
-                    onChange={e => setProvisionForm(f => ({ ...f, businessType: e.target.value }))}
+                    value={provisionForm.product}
+                    onChange={e => setProvisionForm(f => ({ ...f, product: e.target.value, businessType: '', otherBusinessDesc: '' }))}
                   >
                     <option value="SCHOOL">{t('settings.productSchool', { defaultValue: 'School Management System' })}</option>
-                    <option value="OTHER">{t('settings.productOneBook', { defaultValue: 'OneBook (Business)' })}</option>
+                    <option value="BUSINESS">{t('settings.productOneBook', { defaultValue: 'OneBook (Business)' })}</option>
                   </select>
                 </div>
+                {provisionForm.product === 'BUSINESS' && (
+                  <div className="space-y-1.5">
+                    <Label>{t('settings.businessTypeLabel', { defaultValue: 'Business Type' })}</Label>
+                    <select
+                      required
+                      className="w-full border rounded-md px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring"
+                      value={provisionForm.businessType}
+                      onChange={e => setProvisionForm(f => ({ ...f, businessType: e.target.value, otherBusinessDesc: '' }))}
+                    >
+                      <option value="">{t('auth.selectBusinessTypeEllipsis', { defaultValue: 'Select business type…' })}</option>
+                      {BUSINESS_TYPES.map(bt => (
+                        <option key={bt.value} value={bt.value}>{businessTypeLabel(bt.value)}</option>
+                      ))}
+                    </select>
+                    {provisionForm.businessType === 'OTHER' && (
+                      <Input
+                        required
+                        placeholder={t('auth.describeBusinessPlaceholder', { defaultValue: 'Describe your business (e.g. Tailoring Shop, Laundry)' })}
+                        value={provisionForm.otherBusinessDesc}
+                        onChange={e => setProvisionForm(f => ({ ...f, otherBusinessDesc: e.target.value }))}
+                        autoFocus
+                      />
+                    )}
+                  </div>
+                )}
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1.5">
                     <Label>{t('settings.adminNameLabel', { defaultValue: "Admin's Name" })}</Label>
@@ -2177,18 +2208,27 @@ export default function Settings() {
 
               <div className="space-y-1">
                 <Label>{t('settings.businessTypeLabel', { defaultValue: 'Business Type' })}</Label>
-                {/* Always locked to SCHOOL — self-registration is off, and
-                    SUPER_ADMIN no longer reaches this dialog at all (they use
-                    Create Client instead, see TopBar.jsx), so a regular ADMIN
-                    is the only one who ever gets here, always adding another
-                    school branch, never a new product line. */}
-                <div className="w-full border rounded-md px-3 py-2 text-sm bg-muted/50 text-muted-foreground flex items-center gap-2 mt-1">
-                  <School className="w-3.5 h-3.5" />
-                  {t('settings.businessTypeSchoolLocked', { defaultValue: 'School / Educational Institution' })}
-                </div>
-                <p className="text-[11px] text-muted-foreground">
-                  {t('settings.businessTypeSchoolLockedHint', { defaultValue: 'Every company added here is a school — contact GeoInfosys if you need our business/ERP product instead.' })}
-                </p>
+                {/* SUPER_ADMIN no longer reaches this dialog (they use Create
+                    Client instead, see TopBar.jsx) — only a regular ADMIN gets
+                    here, and they may run any business as long as they pay,
+                    so let them pick freely instead of locking to SCHOOL. */}
+                <select
+                  className="w-full border rounded-md px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring mt-1"
+                  value={BUSINESS_TYPES.some(b => b.value === companyForm.business_type) ? companyForm.business_type : (companyForm.business_type ? 'OTHER' : '')}
+                  onChange={e => setCompanyForm({ ...companyForm, business_type: e.target.value })}
+                >
+                  <option value="">{t('settings.selectBusinessType', { defaultValue: 'Select business type…' })}</option>
+                  <option value="SCHOOL">{t('settings.businessTypeSchoolLocked', { defaultValue: 'School / Educational Institution' })}</option>
+                  {BUSINESS_TYPES.map(bt => <option key={bt.value} value={bt.value}>{businessTypeLabel(bt.value)}</option>)}
+                </select>
+                {companyForm.business_type === 'OTHER' && (
+                  <Input className="mt-2" placeholder={t('settings.describeBusinessPlaceholder', { defaultValue: 'Describe your business (e.g. Tailoring Shop, Laundry)' })} autoFocus
+                    value='' onChange={e => setCompanyForm({ ...companyForm, business_type: e.target.value })} />
+                )}
+                {companyForm.business_type && companyForm.business_type !== 'SCHOOL' && !BUSINESS_TYPES.some(b => b.value === companyForm.business_type) && companyForm.business_type !== 'OTHER' && (
+                  <Input className="mt-2" placeholder={t('settings.describeBusinessShortPlaceholder', { defaultValue: 'Describe your business' })}
+                    value={companyForm.business_type} onChange={e => setCompanyForm({ ...companyForm, business_type: e.target.value })} />
+                )}
               </div>
 
               <div className="space-y-1">
