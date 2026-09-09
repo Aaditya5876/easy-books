@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import {
-  LayoutDashboard, BookOpen, ArrowLeftRight, Users, UserCheck,
+  LayoutDashboard, BookOpen, ArrowLeftRight, Users, UserCheck, Layers,
   Package, ShoppingCart, Receipt, FileText, MessageSquare,
   FileSpreadsheet, CalendarCheck, Banknote,
   ChevronLeft, ChevronRight, ChevronDown, ClipboardList, BarChart2,
@@ -91,6 +91,21 @@ const navSections = [
     items: [
       { icon: Settings, label: 'Settings', path: '/settings' },
       { icon: Shield, label: 'Audit Log', path: '/audit-log' },
+    ]
+  },
+];
+
+// SUPER_ADMIN with no company at all — App.jsx routes every path to
+// Settings -> Clients for this state, so the normal business/school nav
+// (Dashboard, Ledger, Vendors, ...) would just be dead links that bounce
+// straight back. Show only what's actually reachable.
+const superAdminNoCompanySections = [
+  {
+    label: 'Platform',
+    labelColor: 'text-sidebar-muted',
+    activeClass: 'bg-sidebar-primary text-sidebar-primary-foreground shadow-sm',
+    items: [
+      { icon: Layers, label: 'Clients', path: '/settings' },
     ]
   },
 ];
@@ -221,7 +236,8 @@ export default function SidebarNav({ collapsed, onToggle }) {
     });
   };
 
-  const activeSections = isSchool ? schoolNavSections : navSections;
+  const isSuperAdminNoCompany = role === 'SUPER_ADMIN' && !user?.defaultCompanyId;
+  const activeSections = isSuperAdminNoCompany ? superAdminNoCompanySections : (isSchool ? schoolNavSections : navSections);
 
   // TEACHER only sees items explicitly tagged with their role
   const restrictedRole = isTeacher;

@@ -63,6 +63,21 @@ export default function TopBar({ onMobileMenuToggle, onToolOpen }) {
     setUser(me);
     const companyList = await api.Company.list();
     setCompanies(companyList);
+    // SUPER_ADMIN never operates "inside" a company of their own — companies
+    // they're linked to (e.g. via Create Client) belong to the client, not
+    // them, and Create Client deliberately never marks one as their default.
+    // Settings/SidebarNav/App.jsx all gate their "does SUPER_ADMIN have a
+    // company" check on that same default, for that same reason — so the
+    // header must agree, or it shows a company name while everything else
+    // still treats SUPER_ADMIN as company-less (exactly the header/sidebar
+    // mismatch the removed "View" feature caused).
+    if (me?.role === 'SUPER_ADMIN') {
+      setActiveCompany(null);
+      if (import.meta.env.VITE_ENABLE_NOTIFICATIONS === 'true') {
+        notificationsApi.unreadCount().then(res => setUnreadCount(res?.data ?? 0)).catch(() => {});
+      }
+      return;
+    }
     // A deactivated company is now hard-blocked server-side (CompanyAccessGuard),
     // so never let the switcher land on one — pick among active companies only.
     const activeCompanies = companyList.filter(c => c.is_active);
@@ -137,16 +152,14 @@ export default function TopBar({ onMobileMenuToggle, onToolOpen }) {
     window.location.reload();
   }
 
-  // The dropdown's whole job is picking which company is active — so for
-  // SUPER_ADMIN it routes to Settings → Companies, which has the actual
-  // "Set Active" control, rather than switching a click into a full reload
-  // straight into that company's Dashboard. Deliberately does NOT touch the
-  // active company id itself here — that only happens when they click "Set
-  // Active" on the Companies tab (or use this same dropdown as a non-SUPER_ADMIN,
-  // below), never as a side effect of just opening the dropdown.
+  // SUPER_ADMIN has no Companies tab (they never own a company to switch
+  // between or edit — see Settings.jsx) so this routes to Clients instead,
+  // where their actual tools live (package, admin, reset password, activate/
+  // deactivate). Deliberately does NOT touch the active company id — SUPER_ADMIN
+  // doesn't "browse into" a client's data this way, only manages the client.
   function handleCompanyClick(company) {
     if (isSuperAdmin) {
-      navigate('/settings', { state: { tab: 'companies' } });
+      navigate('/settings', { state: { tab: 'clients' } });
       return;
     }
     if (company.is_active === false) return;
@@ -252,8 +265,12 @@ export default function TopBar({ onMobileMenuToggle, onToolOpen }) {
                 {c.isDefault && <span className="ml-auto text-[10px] text-muted-foreground">default</span>}
               </DropdownMenuItem>
             ))}
-            {isAdmin && companies.length > 0 && <DropdownMenuSeparator />}
-            {isAdmin && (
+            {isAdmin && !isSuperAdmin && companies.length > 0 && <DropdownMenuSeparator />}
+            {/* Not for SUPER_ADMIN — this self-serve flow would make the new
+                company owned by them, no separate client admin, same mistake
+                as the old "GeoInfosys School" test company. Create Client
+                (Settings -> Clients) is the only correct way for them. */}
+            {isAdmin && !isSuperAdmin && (
               <DropdownMenuItem onClick={() => navigate('/settings', { state: { tab: 'companies', openAddCompany: true } })}>
                 <Plus className="w-4 h-4 mr-2" />
                 Add Company

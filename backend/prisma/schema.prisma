@@ -336,7 +336,7 @@ model Company {
 model FiscalYearClose {
   id               String    @id @default(uuid())
   companyId        String
-  company          Company   @relation(fields: [companyId], references: [id])
+  company          Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
   fiscalYear       String // e.g. "2082-83" (BS, Shrawan-Ashadh)
   closedAt         DateTime  @default(now())
   closedByUserId   String
@@ -371,7 +371,7 @@ model UserCompany {
 model CompanyPayrollSettings {
   id                         String   @id @default(uuid())
   companyId                  String   @unique
-  company                    Company  @relation(fields: [companyId], references: [id])
+  company                    Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   ssfApplicable              Boolean  @default(true)
   ssfEmployeeRate            Decimal  @default(11) @db.Decimal(5, 2) // % of basic
   ssfEmployerRate            Decimal  @default(20) @db.Decimal(5, 2) // % of basic
@@ -397,7 +397,7 @@ model CompanyPayrollSettings {
 model Employee {
   id                    String         @id @default(uuid())
   companyId             String
-  company               Company        @relation(fields: [companyId], references: [id])
+  company               Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
   name                  String
   employeeId            String
   department            String?
@@ -433,7 +433,7 @@ model Employee {
 model Attendance {
   id            String           @id @default(uuid())
   companyId     String
-  company       Company          @relation(fields: [companyId], references: [id])
+  company       Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
   employeeId    String
   employee      Employee         @relation(fields: [employeeId], references: [id])
   date          DateTime
@@ -452,7 +452,7 @@ model Attendance {
 model LeaveType {
   id          String   @id @default(uuid())
   companyId   String
-  company     Company  @relation(fields: [companyId], references: [id])
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   name        String // "Annual Leave", "Sick Leave", "Maternity Leave"
   daysPerYear Decimal  @default(0) @db.Decimal(5, 1)
   isPaid      Boolean  @default(true)
@@ -507,7 +507,7 @@ model LeaveRequest {
 model Payroll {
   id                       String        @id @default(uuid())
   companyId                String
-  company                  Company       @relation(fields: [companyId], references: [id])
+  company                  Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
   employeeId               String
   employee                 Employee      @relation(fields: [employeeId], references: [id])
   month                    String // "2081-01" (BS year-month)
@@ -545,7 +545,7 @@ model Payroll {
 model BankAccount {
   id             String                 @id @default(uuid())
   companyId      String
-  company        Company                @relation(fields: [companyId], references: [id])
+  company        Company                @relation(fields: [companyId], references: [id], onDelete: Cascade)
   bankName       String
   accountNumber  String
   accountType    String? // free-text detail (Savings, Current…) — unrelated to paymentType below
@@ -573,7 +573,7 @@ enum BankAccountPaymentType {
 model Transaction {
   id              String              @id @default(uuid())
   companyId       String
-  company         Company             @relation(fields: [companyId], references: [id])
+  company         Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
   bankAccountId   String?
   bankAccount     BankAccount?        @relation(fields: [bankAccountId], references: [id])
   // Every transaction is a balanced double-entry: debitAccount/creditAccount are
@@ -611,7 +611,7 @@ model Transaction {
 model Cheque {
   id            String       @id @default(uuid())
   companyId     String
-  company       Company      @relation(fields: [companyId], references: [id])
+  company       Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
   bankAccountId String?
   bankAccount   BankAccount? @relation(fields: [bankAccountId], references: [id])
   chequeNumber  String
@@ -634,7 +634,7 @@ model Cheque {
 model BankGuarantee {
   id           String              @id @default(uuid())
   companyId    String
-  company      Company             @relation(fields: [companyId], references: [id])
+  company      Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
   bgNumber     String
   partyName    String
   bankName     String
@@ -655,7 +655,7 @@ model BankGuarantee {
 model PettyCashVoucher {
   id          String   @id @default(uuid())
   companyId   String
-  company     Company  @relation(fields: [companyId], references: [id])
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   voucherNo   String
   dateAd      DateTime
   dateBs      String?
@@ -683,7 +683,7 @@ enum FixedAssetStatus {
 model FixedAsset {
   id                      String           @id @default(uuid())
   companyId               String
-  company                 Company          @relation(fields: [companyId], references: [id])
+  company                 Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
   assetName               String
   assetCode               String?
   category                String?
@@ -707,7 +707,7 @@ model FixedAsset {
 model LedgerAccount {
   id               String            @id @default(uuid())
   companyId        String
-  company          Company           @relation(fields: [companyId], references: [id])
+  company          Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
   accountName      String
   accountCode      String?
   accountType      LedgerAccountType
@@ -734,7 +734,7 @@ model LedgerAccount {
 model LedgerEntry {
   id            String        @id @default(uuid())
   companyId     String
-  company       Company       @relation(fields: [companyId], references: [id])
+  company       Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
   accountId     String
   account       LedgerAccount @relation(fields: [accountId], references: [id])
   dateAd        DateTime
@@ -756,7 +756,7 @@ model LedgerEntry {
 model InventoryItem {
   id                     String    @id @default(uuid())
   companyId              String
-  company                Company   @relation(fields: [companyId], references: [id])
+  company                Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
   partNumber             String?
   itemName               String?
   brand                  String?
@@ -789,7 +789,7 @@ model InventoryItem {
 model Client {
   id            String       @id @default(uuid())
   companyId     String
-  company       Company      @relation(fields: [companyId], references: [id])
+  company       Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
   name          String
   abbreviation  String? // for invoice numbering
   contactPerson String?
@@ -813,7 +813,7 @@ model Client {
 model Vendor {
   id            String    @id @default(uuid())
   companyId     String
-  company       Company   @relation(fields: [companyId], references: [id])
+  company       Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
   name          String
   abbreviation  String?
   contactPerson String?
@@ -837,7 +837,7 @@ model Vendor {
 model SalesOrder {
   id            String        @id @default(uuid())
   companyId     String
-  company       Company       @relation(fields: [companyId], references: [id])
+  company       Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
   clientId      String?
   client        Client?       @relation(fields: [clientId], references: [id])
   clientName    String
@@ -889,7 +889,7 @@ model SalesOrderItem {
 model PurchaseOrder {
   id            String        @id @default(uuid())
   companyId     String
-  company       Company       @relation(fields: [companyId], references: [id])
+  company       Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
   vendorId      String?
   vendor        Vendor?       @relation(fields: [vendorId], references: [id])
   vendorName    String
@@ -940,7 +940,7 @@ model PurchaseOrderItem {
 model Payment {
   id              String         @id @default(uuid())
   companyId       String
-  company         Company        @relation(fields: [companyId], references: [id])
+  company         Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
   salesOrderId    String?
   salesOrder      SalesOrder?    @relation(fields: [salesOrderId], references: [id])
   purchaseOrderId String?
@@ -960,7 +960,7 @@ model Payment {
 model CreditNote {
   id               String           @id @default(uuid())
   companyId        String
-  company          Company          @relation(fields: [companyId], references: [id])
+  company          Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
   clientId         String?
   client           Client?          @relation(fields: [clientId], references: [id])
   creditNoteNumber String
@@ -981,7 +981,7 @@ model CreditNote {
 model DebitNote {
   id              String           @id @default(uuid())
   companyId       String
-  company         Company          @relation(fields: [companyId], references: [id])
+  company         Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
   vendorId        String?
   vendor          Vendor?          @relation(fields: [vendorId], references: [id])
   debitNoteNumber String
@@ -1002,7 +1002,7 @@ model DebitNote {
 model Quotation {
   id              String          @id @default(uuid())
   companyId       String
-  company         Company         @relation(fields: [companyId], references: [id])
+  company         Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
   clientId        String?
   client          Client?         @relation(fields: [clientId], references: [id])
   clientName      String
@@ -1029,7 +1029,7 @@ model Quotation {
 model MemoDocument {
   id              String    @id @default(uuid())
   companyId       String
-  company         Company   @relation(fields: [companyId], references: [id])
+  company         Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
   category        String? // quotation | purchase_bill | sales_bill | job_card | order_slip | extra_work | supporting_doc
   title           String?
   content         String?
@@ -1066,7 +1066,7 @@ model MemoDocument {
 model Task {
   id          String       @id @default(uuid())
   companyId   String
-  company     Company      @relation(fields: [companyId], references: [id])
+  company     Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
   title       String
   description String?
   assignedTo  String?
@@ -1121,7 +1121,7 @@ enum SchoolEventType {
 model SchoolClass {
   id             String   @id @default(uuid())
   companyId      String
-  company        Company  @relation(fields: [companyId], references: [id])
+  company        Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   name           String // "Grade 1", "Class 10"
   section        String? // "A", "B", "C"
   classTeacherId String? // → Employee.id
@@ -1144,7 +1144,7 @@ model SchoolClass {
 model Student {
   id             String        @id @default(uuid())
   companyId      String
-  company        Company       @relation(fields: [companyId], references: [id])
+  company        Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
   classId        String?
   class          SchoolClass?  @relation(fields: [classId], references: [id])
   name           String
@@ -1185,7 +1185,7 @@ model Student {
 model PortalNotification {
   id            String   @id @default(uuid())
   companyId     String
-  company       Company  @relation(fields: [companyId], references: [id])
+  company       Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   studentId     String
   student       Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
   title         String
@@ -1203,7 +1203,7 @@ model PortalNotification {
 model Subject {
   id            String   @id @default(uuid())
   companyId     String
-  company       Company  @relation(fields: [companyId], references: [id])
+  company       Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   name          String
   code          String?
   bookReference String?
@@ -1241,7 +1241,7 @@ model SubjectClass {
 model FeeHead {
   id        String   @id @default(uuid())
   companyId String
-  company   Company  @relation(fields: [companyId], references: [id])
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   name      String
   code      String?
   type      String   @default("GENERAL") // GENERAL | TRANSPORT | HOSTEL
@@ -1261,7 +1261,7 @@ model FeeHead {
 model FeeStructure {
   id        String       @id @default(uuid())
   companyId String
-  company   Company      @relation(fields: [companyId], references: [id])
+  company   Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
   classId   String?
   class     SchoolClass? @relation(fields: [classId], references: [id])
   feeHeadId String?
@@ -1278,7 +1278,7 @@ model FeeStructure {
 model FeeInvoice {
   id          String           @id @default(uuid())
   companyId   String
-  company     Company          @relation(fields: [companyId], references: [id])
+  company     Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
   studentId   String
   student     Student          @relation(fields: [studentId], references: [id])
   invoiceNo   String? // "INV-<BSyear>-NNNN" — assigned at creation, null on invoices created before this field existed
@@ -1327,7 +1327,7 @@ model FeeInvoiceItem {
 model FeePayment {
   id                 String           @id @default(uuid())
   companyId          String
-  company            Company          @relation(fields: [companyId], references: [id])
+  company            Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
   invoiceId          String
   invoice            FeeInvoice       @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
   receiptNo          String?
@@ -1359,7 +1359,7 @@ enum FeePaymentStatus {
 model StudentScholarship {
   id        String   @id @default(uuid())
   companyId String
-  company   Company  @relation(fields: [companyId], references: [id])
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   studentId String
   student   Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
   feeHeadId String? // null = applies to the whole bill
@@ -1377,7 +1377,7 @@ model StudentScholarship {
 model FeePackage {
   id        String   @id @default(uuid())
   companyId String
-  company   Company  @relation(fields: [companyId], references: [id])
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   name      String // "Day Scholar", "Full Boarder"
   price     Decimal? @db.Decimal(12, 2) // null = sum of member head amounts
   isActive  Boolean  @default(true)
@@ -1405,7 +1405,7 @@ model FeePackageHead {
 model ExamSchedule {
   id         String      @id @default(uuid())
   companyId  String
-  company    Company     @relation(fields: [companyId], references: [id])
+  company    Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
   classId    String
   class      SchoolClass @relation(fields: [classId], references: [id])
   subjectId  String?
@@ -1425,7 +1425,7 @@ model ExamSchedule {
 model Exam {
   id        String    @id @default(uuid())
   companyId String
-  company   Company   @relation(fields: [companyId], references: [id])
+  company   Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
   name      String // "First Terminal", "Second Terminal", "Final"
   examDate  DateTime? @db.Date
   notes     String?
@@ -1441,7 +1441,7 @@ model Exam {
 model ExamResult {
   id            String    @id @default(uuid())
   companyId     String
-  company       Company   @relation(fields: [companyId], references: [id])
+  company       Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
   studentId     String
   student       Student   @relation(fields: [studentId], references: [id])
   subjectId     String?
@@ -1465,7 +1465,7 @@ model ExamResult {
 model AcademicYear {
   id        String   @id @default(uuid())
   companyId String
-  company   Company  @relation(fields: [companyId], references: [id])
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   name      String // "2081-82", "2082-83"
   startDate DateTime
   endDate   DateTime
@@ -1482,7 +1482,7 @@ model AcademicYear {
 model StudentAttendance {
   id             String                  @id @default(uuid())
   companyId      String
-  company        Company                 @relation(fields: [companyId], references: [id])
+  company        Company                 @relation(fields: [companyId], references: [id], onDelete: Cascade)
   studentId      String
   student        Student                 @relation(fields: [studentId], references: [id])
   classId        String
@@ -1501,7 +1501,7 @@ model StudentAttendance {
 model TimetableEntry {
   id           String      @id @default(uuid())
   companyId    String
-  company      Company     @relation(fields: [companyId], references: [id])
+  company      Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
   classId      String
   class        SchoolClass @relation(fields: [classId], references: [id])
   subjectId    String?
@@ -1522,7 +1522,7 @@ model TimetableEntry {
 model SchoolNotice {
   id             String    @id @default(uuid())
   companyId      String
-  company        Company   @relation(fields: [companyId], references: [id])
+  company        Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
   title          String
   content        String    @db.Text
   targetAudience String    @default("ALL")
@@ -1538,7 +1538,7 @@ model SchoolNotice {
 model SchoolEvent {
   id          String          @id @default(uuid())
   companyId   String
-  company     Company         @relation(fields: [companyId], references: [id])
+  company     Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
   title       String
   description String?         @db.Text
   startDate   DateTime
@@ -1555,7 +1555,7 @@ model SchoolEvent {
 model InventoryAdjustment {
   id              String        @id @default(uuid())
   companyId       String
-  company         Company       @relation(fields: [companyId], references: [id])
+  company         Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
   inventoryItemId String
   inventoryItem   InventoryItem @relation(fields: [inventoryItemId], references: [id])
   adjustmentType  String // "ADDITION" | "SUBTRACTION" | "RECOUNT"
@@ -1576,7 +1576,7 @@ model InventoryAdjustment {
 model StudyMaterial {
   id          String       @id @default(uuid())
   companyId   String
-  company     Company      @relation(fields: [companyId], references: [id])
+  company     Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
   classId     String?
   class       SchoolClass? @relation(fields: [classId], references: [id])
   subjectId   String?
@@ -1595,7 +1595,7 @@ model StudyMaterial {
 model Homework {
   id          String      @id @default(uuid())
   companyId   String
-  company     Company     @relation(fields: [companyId], references: [id])
+  company     Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
   classId     String
   class       SchoolClass @relation(fields: [classId], references: [id])
   subjectId   String?
@@ -1613,7 +1613,7 @@ model Homework {
 model Book {
   id              String   @id @default(uuid())
   companyId       String
-  company         Company  @relation(fields: [companyId], references: [id])
+  company         Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   title           String
   author          String?
   isbn            String?
@@ -1632,7 +1632,7 @@ model Book {
 model BookIssue {
   id         String    @id @default(uuid())
   companyId  String
-  company    Company   @relation(fields: [companyId], references: [id])
+  company    Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
   bookId     String
   book       Book      @relation(fields: [bookId], references: [id])
   studentId  String?
@@ -1652,7 +1652,7 @@ model BookIssue {
 model HostelRoom {
   id         String   @id @default(uuid())
   companyId  String
-  company    Company  @relation(fields: [companyId], references: [id])
+  company    Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   roomNumber String
   floor      String?
   capacity   Int      @default(4)
@@ -1670,7 +1670,7 @@ model HostelRoom {
 model HostelAllocation {
   id        String     @id @default(uuid())
   companyId String
-  company   Company    @relation(fields: [companyId], references: [id])
+  company   Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
   roomId    String
   room      HostelRoom @relation(fields: [roomId], references: [id])
   studentId String
@@ -1687,7 +1687,7 @@ model HostelAllocation {
 model TransportRoute {
   id            String   @id @default(uuid())
   companyId     String
-  company       Company  @relation(fields: [companyId], references: [id])
+  company       Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   routeName     String
   description   String?
   stops         String?
@@ -1705,7 +1705,7 @@ model TransportRoute {
 model StudentTransport {
   id         String         @id @default(uuid())
   companyId  String
-  company    Company        @relation(fields: [companyId], references: [id])
+  company    Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
   routeId    String
   route      TransportRoute @relation(fields: [routeId], references: [id])
   studentId  String
@@ -1721,7 +1721,7 @@ model StudentTransport {
 model PortalUser {
   id                 String   @id @default(uuid())
   companyId          String
-  company            Company  @relation(fields: [companyId], references: [id])
+  company            Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   studentId          String   @unique
   student            Student  @relation(fields: [studentId], references: [id])
   phone              String
@@ -1739,7 +1739,7 @@ model PortalUser {
 model Notification {
   id            String           @id @default(uuid())
   companyId     String
-  company       Company          @relation(fields: [companyId], references: [id])
+  company       Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
   userId        String
   user          User             @relation(fields: [userId], references: [id], onDelete: Cascade)
   type          NotificationType

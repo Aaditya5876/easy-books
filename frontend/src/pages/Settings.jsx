@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
 import { api } from '@/api/adapter';
@@ -108,6 +108,7 @@ const BUSINESS_TYPE_I18N_KEY = {
 export default function Settings() {
   const { t } = useTranslation();
   const location = useLocation();
+  const navigate = useNavigate();
   const { user } = useAuth();
   const { canEdit, canDelete, canManageUsers } = useRole();
   const { prefs, updatePref, resetPrefs } = usePreferences();
@@ -140,9 +141,14 @@ export default function Settings() {
   // above) so it still takes effect on an in-place navigation to a route
   // that's already mounted (state change without a remount).
   useEffect(() => {
+    if (!location.state) return;
     if (location.state?.tab) setActiveTab(location.state.tab);
     if (location.state?.openAddCompany) setShowAddCompany(true);
     if (location.state?.tab === 'clients') loadAllClients();
+    // Consume it once — react-router keeps this state attached to the
+    // current history entry, so without clearing it here, hitting refresh
+    // replays the same "open this tab / pop this dialog" instruction forever.
+    navigate(location.pathname, { replace: true, state: null });
   }, [location.state]);
 
   // ── Companies ─────────────────────────────────────────────────────────────
@@ -198,6 +204,7 @@ export default function Settings() {
   const [clientPackageSaving, setClientPackageSaving] = useState(null); // companyId mid-save
   const [clientActiveSaving, setClientActiveSaving] = useState(null); // companyId mid-save
   const [clientMaxCompaniesSaving, setClientMaxCompaniesSaving] = useState(null); // userId mid-save
+  const [pendingMaxCompanies, setPendingMaxCompanies] = useState({}); // { [userId]: number } — staged, unsaved
   const [clientResettingPasswordId, setClientResettingPasswordId] = useState(null); // admin userId mid-reset
   const [pendingClientModules, setPendingClientModules] = useState({}); // { [companyId]: string[] } — staged, unsaved package edits
 
@@ -633,6 +640,17 @@ export default function Settings() {
     return 'BASE';
   }
 
+  // Same admin can end up running more than one company (e.g. they self-serve
+  // "Add Company" for a second branch via their own Companies tab) — nothing
+  // else on the card shows that connection, so surface it explicitly here.
+  function relatedCompanyNames(company) {
+    const email = company.admins?.[0]?.email;
+    if (!email) return [];
+    return allClients
+      .filter(other => other.id !== company.id && other.admins?.[0]?.email === email)
+      .map(other => other.name);
+  }
+
   async function loadAllClients() {
     if (!isSuperAdmin) return;
     setAllClientsLoading(true);
@@ -686,6 +704,15 @@ export default function Settings() {
     setClientPackageSaving(company.id);
     try {
       await companyApi.updatePackage(company.id, modules);
+      // If this is the company we're currently "viewing" (via the View
+      // button), our own sidebar/enabledModules snapshot is now stale —
+      // user.defaultCompany was fetched once at login and won't refetch
+      // itself. A different client admin's own separate session still won't
+      // see this until THEY reload/relogin (no live push between sessions).
+      if (company.id === activeCompanyId) {
+        window.location.reload();
+        return;
+      }
       setAllClients(list => list.map(c => c.id === company.id ? { ...c, enabledModules: modules } : c));
       discardClientPackageChange(company);
       toast.success(t('settings.packageSaved', { defaultValue: 'Package updated' }));
@@ -735,16 +762,32 @@ export default function Settings() {
     }
   }
 
-  async function handleClientMaxCompaniesChange(userId, value) {
-    const n = parseInt(value, 10);
+  function discardMaxCompaniesChange(userId) {
+    setPendingMaxCompanies(p => {
+      const next = { ...p };
+      delete next[userId];
+      return next;
+    });
+  }
+
+  async function handleSaveMaxCompanies(admin) {
+    const n = pendingMaxCompanies[admin.id];
+    if (n === undefined) return;
+    const ok = await confirm({
+      title: t('settings.confirmSaveMaxCompaniesTitle', { defaultValue: 'Update company limit for {{name}}?', name: admin.name || admin.email }),
+      description: t('settings.confirmSaveMaxCompaniesDesc', { defaultValue: 'They will be able to self-serve create up to {{n}} companies.', n }),
+      confirmLabel: t('settings.save', { defaultValue: 'Save' }),
+    });
+    if (!ok) return;
     if (!n || n < 1) return;
-    setClientMaxCompaniesSaving(userId);
+    setClientMaxCompaniesSaving(admin.id);
     try {
-      await usersApi.updateMaxCompanies(userId, n);
+      await usersApi.updateMaxCompanies(admin.id, n);
       setAllClients(list => list.map(c => ({
         ...c,
-        admins: c.admins.map(a => a.id === userId ? { ...a, maxCompanies: n } : a),
+        admins: c.admins.map(a => a.id === admin.id ? { ...a, maxCompanies: n } : a),
       })));
+      discardMaxCompaniesChange(admin.id);
       toast.success(t('settings.maxCompaniesUpdated', { defaultValue: 'Company limit updated' }));
     } catch (err) {
       toast.error(err?.response?.data?.message || t('settings.failedUpdateMaxCompanies', { defaultValue: 'Failed to update company limit' }));
@@ -885,7 +928,12 @@ export default function Settings() {
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList>
-          <TabsTrigger value="companies">{t('settings.tabCompanies', { defaultValue: 'Companies' })}</TabsTrigger>
+          {/* SUPER_ADMIN never has a company of their own to switch between or
+              edit — that's the whole point of Clients (below) instead — so
+              this tab would only ever be empty and confusing for them. */}
+          {!isSuperAdmin && (
+            <TabsTrigger value="companies">{t('settings.tabCompanies', { defaultValue: 'Companies' })}</TabsTrigger>
+          )}
           {isSuperAdmin && (
             <TabsTrigger value="clients" onClick={loadAllClients} className="gap-1.5">
               <Layers className="w-3.5 h-3.5" />{t('settings.tabClients', { defaultValue: 'Clients' })}
@@ -920,6 +968,7 @@ export default function Settings() {
                   const hasPendingChange = pendingClientModules[c.id] !== undefined;
                   const effectiveModules = pendingClientModules[c.id] ?? c.enabledModules;
                   const tier = packageTierOf(effectiveModules);
+                  const related = relatedCompanyNames(c);
                   return (
                     <div key={c.id} className="bg-card rounded-xl border p-5 space-y-3">
                       <div className="flex items-start justify-between gap-4">
@@ -947,6 +996,11 @@ export default function Settings() {
                           <p className="text-sm text-muted-foreground mt-0.5">
                             {admin ? `${admin.name} · ${admin.email}` : t('settings.noAdminYet', { defaultValue: 'No admin user found' })}
                           </p>
+                          {related.length > 0 && (
+                            <p className="text-[11px] text-primary">
+                              {t('settings.alsoManages', { defaultValue: 'Same admin also runs: {{names}}', names: related.join(', ') })}
+                            </p>
+                          )}
                           {admin && (
                             <p className="text-[11px] text-muted-foreground">
                               {admin.lastLoginAt
@@ -956,6 +1010,11 @@ export default function Settings() {
                           )}
                         </div>
                         <div className="flex gap-2 shrink-0">
+                          {/* Deliberately no "View"/switch-into-this-company button —
+                              SUPER_ADMIN is often not even linked to a client's company
+                              (e.g. one the client self-served a second branch for), so
+                              the header's own company resolution just snaps back to
+                              whatever SUPER_ADMIN IS linked to. Manage from here instead. */}
                           {admin && (
                             <Button size="sm" variant="outline" onClick={() => handleClientAdminResetPassword(c, admin)} disabled={clientResettingPasswordId === admin.id}>
                               <KeyRound className="w-3.5 h-3.5 mr-1.5" />{t('settings.resetPassword', { defaultValue: 'Reset Password' })}
@@ -991,19 +1050,38 @@ export default function Settings() {
                           {!tier && <span className="text-xs text-muted-foreground">{t('settings.noPackageSetShort', { defaultValue: '(unrestricted/legacy)' })}</span>}
                         </div>
 
-                        {admin && (
-                          <div className="flex items-center gap-1.5" title={t('settings.maxCompaniesHint', { defaultValue: 'How many companies this admin may self-serve create' })}>
-                            <span className="text-xs text-muted-foreground">{t('settings.maxCompaniesLabel', { defaultValue: 'Max Companies' })}</span>
-                            <input
-                              type="number"
-                              min={1}
-                              className="w-14 text-xs border rounded-md px-1.5 py-1 bg-background focus:outline-none focus:ring-1 focus:ring-ring"
-                              defaultValue={admin.maxCompanies ?? 1}
-                              disabled={clientMaxCompaniesSaving === admin.id}
-                              onBlur={e => { if (Number(e.target.value) !== admin.maxCompanies) handleClientMaxCompaniesChange(admin.id, e.target.value); }}
-                            />
-                          </div>
-                        )}
+                        {admin && (() => {
+                          const maxCompaniesPending = pendingMaxCompanies[admin.id] !== undefined;
+                          return (
+                            <div className="flex items-center gap-1.5" title={t('settings.maxCompaniesHint', { defaultValue: 'How many companies this admin may self-serve create' })}>
+                              <span className="text-xs text-muted-foreground">{t('settings.maxCompaniesLabel', { defaultValue: 'Max Companies' })}</span>
+                              <input
+                                type="number"
+                                min={1}
+                                className="w-14 text-xs border rounded-md px-1.5 py-1 bg-background focus:outline-none focus:ring-1 focus:ring-ring"
+                                value={pendingMaxCompanies[admin.id] ?? admin.maxCompanies ?? 1}
+                                disabled={clientMaxCompaniesSaving === admin.id}
+                                onChange={e => setPendingMaxCompanies(p => ({ ...p, [admin.id]: Number(e.target.value) }))}
+                              />
+                              {maxCompaniesPending && (
+                                <>
+                                  <Button size="sm" onClick={() => handleSaveMaxCompanies(admin)} disabled={clientMaxCompaniesSaving === admin.id}>
+                                    <Save className="w-3.5 h-3.5 mr-1.5" />
+                                    {clientMaxCompaniesSaving === admin.id ? t('settings.savingEllipsis', { defaultValue: 'Saving…' }) : t('settings.save', { defaultValue: 'Save' })}
+                                  </Button>
+                                  <button
+                                    type="button"
+                                    onClick={() => discardMaxCompaniesChange(admin.id)}
+                                    disabled={clientMaxCompaniesSaving === admin.id}
+                                    className="text-xs text-muted-foreground hover:text-foreground underline disabled:opacity-50"
+                                  >
+                                    {t('settings.cancel', { defaultValue: 'Cancel' })}
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          );
+                        })()}
                       </div>
 
                       {/* Fine-grained alternative to the tier buttons above —
@@ -2024,6 +2102,11 @@ export default function Settings() {
 
               <div className="space-y-1">
                 <Label>{t('settings.businessTypeLabel', { defaultValue: 'Business Type' })}</Label>
+                {/* Always locked to SCHOOL — self-registration is off, and
+                    SUPER_ADMIN no longer reaches this dialog at all (they use
+                    Create Client instead, see TopBar.jsx), so a regular ADMIN
+                    is the only one who ever gets here, always adding another
+                    school branch, never a new product line. */}
                 <div className="w-full border rounded-md px-3 py-2 text-sm bg-muted/50 text-muted-foreground flex items-center gap-2 mt-1">
                   <School className="w-3.5 h-3.5" />
                   {t('settings.businessTypeSchoolLocked', { defaultValue: 'School / Educational Institution' })}

@@ -122,6 +122,29 @@ const AuthenticatedApp = () => {
     return null;
   }
 
+  // SUPER_ADMIN's job is creating/managing client companies, not running one
+  // themselves — they should never be forced to own a business/school just to
+  // have somewhere to land. With no default company, route everything to
+  // Settings → Clients (empty-state + "Create Client" form live there) instead
+  // of falling through to an empty/broken business-ERP dashboard.
+  if (role === 'SUPER_ADMIN' && !user?.defaultCompanyId) {
+    return (
+      <Routes>
+        <Route element={<Layout />}>
+          <Route path="/settings" element={<Settings />} />
+          <Route path="*" element={<Navigate to="/settings" replace state={{ tab: 'clients' }} />} />
+        </Route>
+      </Routes>
+    );
+  }
+
+  // Any other role with no company at all can't do anything in the app —
+  // surface that clearly instead of falling through to the same broken
+  // business-ERP dashboard (this was previously unreachable dead code).
+  if (role !== 'SUPER_ADMIN' && !user?.defaultCompanyId) {
+    return <UserNotRegisteredError />;
+  }
+
   return (
     <Routes>
       <Route element={<Layout />}>
