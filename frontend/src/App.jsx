@@ -6,6 +6,7 @@ import { queryClientInstance } from '@/lib/query-client'
 import { ThemeProvider } from 'next-themes'
 import { BrowserRouter as Router, Navigate, Route, Routes } from 'react-router-dom';
 import PageNotFound from './lib/PageNotFound';
+import ErrorBoundary from '@/components/ErrorBoundary';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import { PreferencesProvider } from '@/lib/PreferencesContext';
 import UserNotRegisteredError from '@/components/UserNotRegisteredError';
@@ -198,27 +199,29 @@ function App() {
       <AuthProvider>
         <QueryClientProvider client={queryClientInstance}>
           <Router>
-            <Routes>
-              <Route path="/login" element={<Login />} />
-              <Route path="/terms" element={<Terms />} />
-              {/* Portal — completely separate auth from admin */}
-              <Route path="/portal/login" element={<PortalLogin />} />
-              <Route path="/portal/change-password" element={<PortalChangePassword />} />
-              <Route path="/portal" element={<PortalLayout />}>
-                <Route index element={<PortalDashboard />} />
-                <Route path="attendance" element={<PortalAttendance />} />
-                <Route path="fees" element={<PortalFees />} />
-                <Route path="results" element={<PortalResults />} />
-                <Route path="homework" element={<PortalHomework />} />
-                <Route path="notices" element={<PortalNotices />} />
-                <Route path="timetable" element={<PortalTimetable />} />
-                <Route path="study-materials" element={<PortalStudyMaterials />} />
-                <Route path="exam-schedule" element={<PortalExamSchedule />} />
-                <Route path="events" element={<PortalEvents />} />
-              </Route>
-              <Route path="/portal/payment/return" element={<PaymentReturn />} />
-              <Route path="*" element={<AuthenticatedApp />} />
-            </Routes>
+            <ErrorBoundary>
+              <Routes>
+                <Route path="/login" element={<Login />} />
+                <Route path="/terms" element={<Terms />} />
+                {/* Portal — completely separate auth from admin */}
+                <Route path="/portal/login" element={<PortalLogin />} />
+                <Route path="/portal/change-password" element={<PortalChangePassword />} />
+                <Route path="/portal" element={<PortalLayout />}>
+                  <Route index element={<PortalDashboard />} />
+                  <Route path="attendance" element={<PortalAttendance />} />
+                  <Route path="fees" element={<PortalFees />} />
+                  <Route path="results" element={<PortalResults />} />
+                  <Route path="homework" element={<PortalHomework />} />
+                  <Route path="notices" element={<PortalNotices />} />
+                  <Route path="timetable" element={<PortalTimetable />} />
+                  <Route path="study-materials" element={<PortalStudyMaterials />} />
+                  <Route path="exam-schedule" element={<PortalExamSchedule />} />
+                  <Route path="events" element={<PortalEvents />} />
+                </Route>
+                <Route path="/portal/payment/return" element={<PaymentReturn />} />
+                <Route path="*" element={<AuthenticatedApp />} />
+              </Routes>
+            </ErrorBoundary>
           </Router>
           <Toaster />
           <SonnerToaster position="top-right" richColors />

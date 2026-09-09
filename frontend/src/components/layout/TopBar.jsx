@@ -2,14 +2,15 @@ import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from 'next-themes';
 import { api, apiAuth } from '@/api/adapter';
-import { notificationsApi } from '@/api';
+import { notificationsApi, companyApi } from '@/api';
 import {
   Search, Bell, Settings, LogOut, Building2, ChevronDown, Plus, Menu,
   Wrench, Calculator, RefreshCw, CalendarDays, UserCircle, CalendarCheck,
   UsersRound, Banknote, Sun, Moon, X, Package, Users, UserCheck, Globe,
-  Sparkles,
+  Sparkles, AlertTriangle, ShieldCheck, Send,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { toast } from 'sonner';
 import { toggleLanguage } from '@/i18n';
 import { usePreferences } from '@/lib/PreferencesContext';
 import { Button } from "@/components/ui/button";
@@ -19,7 +20,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { getActiveCompanyId, setActiveCompanyId } from '@/lib/companyContext';
+import { getActiveCompanyId, setActiveCompanyId, isCompanyAccessible } from '@/lib/companyContext';
 import { getTodayBS } from '@/lib/nepaliDate';
 import { useRole } from '@/lib/useRole';
 
@@ -53,6 +54,7 @@ export default function TopBar({ onMobileMenuToggle, onToolOpen }) {
   const [unreadCount, setUnreadCount] = useState(0);
   const [notifLoading, setNotifLoading] = useState(false);
   const [autoDetail, setAutoDetail] = useState(null);
+  const [requestingRenewal, setRequestingRenewal] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -78,28 +80,38 @@ export default function TopBar({ onMobileMenuToggle, onToolOpen }) {
       if (activeId && !resolved) {
         resolved = await api.Company.get(activeId).catch(() => null);
       }
-      if (resolved?.is_active === false) resolved = null;
+      // Deliberately NOT nulled out when inaccessible (deactivated/expired) —
+      // SUPER_ADMIN bypasses CompanyAccessGuard entirely and needs to keep
+      // seeing/managing a suspended client's view, not have the header go
+      // blank on them. The banner below (isCompanyAccessible check) still
+      // flags it, just without hiding the company itself.
       setActiveCompany(resolved || null);
       if (import.meta.env.VITE_ENABLE_NOTIFICATIONS === 'true') {
         notificationsApi.unreadCount().then(res => setUnreadCount(res?.data ?? 0)).catch(() => {});
       }
       return;
     }
-    // A deactivated company is now hard-blocked server-side (CompanyAccessGuard),
-    // so never let the switcher land on one — pick among active companies only.
-    const activeCompanies = companyList.filter(c => c.is_active);
+    // Only fall back to a different company when there's genuinely no
+    // explicit selection (first-ever login, or the previously-selected one
+    // isn't in this user's list at all e.g. removed). A selection that IS
+    // found but has since lost access (deactivated/expired) is deliberately
+    // kept, not swapped away from — the whole point is to keep showing that
+    // company (cached data, familiar header) with a locked/expired banner,
+    // not silently teleport the admin to a different one of their companies.
     const activeId = getActiveCompanyId();
     let resolved = activeId ? companyList.find(c => c.id === activeId) : null;
-    if (!resolved?.is_active) {
-      resolved = activeCompanies[0] || null;
+    if (!resolved) {
+      resolved = companyList.find(isCompanyAccessible) || companyList[0] || null;
       if (resolved) setActiveCompanyId(resolved.id);
     }
     setActiveCompany(resolved);
-    if (resolved) {
+    if (resolved && isCompanyAccessible(resolved)) {
       // Pre-load search data in background — Clients/Vendors/Inventory are
       // business-ERP-only modules (don't exist for school companies) and are
       // also role-gated to STAFF/ACCOUNTANT/ADMIN, so skip entirely for school
-      // companies or for TEACHER to avoid pointless 403s.
+      // companies or for TEACHER to avoid pointless 403s. Also skipped
+      // outright once the company itself is locked out — every one of these
+      // calls would just 403.
       const canSearchBusinessData = resolved.business_type !== 'SCHOOL' && me?.role !== 'TEACHER';
       if (canSearchBusinessData) {
         Promise.all([
@@ -150,6 +162,10 @@ export default function TopBar({ onMobileMenuToggle, onToolOpen }) {
       setAutoDetail(n);
       return;
     }
+    if (n.type === 'SUBSCRIPTION_RENEWAL_REQUESTED' && n.referenceId) {
+      navigate('/settings', { state: { tab: 'clients', highlightCompanyId: n.referenceId } });
+      return;
+    }
     if (n.link) navigate(n.link);
   }
 
@@ -169,8 +185,35 @@ export default function TopBar({ onMobileMenuToggle, onToolOpen }) {
       navigate('/settings', { state: { tab: 'clients' } });
       return;
     }
-    if (company.is_active === false) return;
+    // Switching TO a deactivated/expired company is allowed — that's the
+    // whole point of the "show it as-is with a banner" design (see loadData
+    // above). It's still blocked once already selected, at the point every
+    // actual data request 403s server-side; this is just picking which
+    // company to look at, not an action that itself needs to succeed.
     switchCompany(company);
+  }
+
+  // 1-hour cooldown, driven by Company.lastRenewalRequestedAt — keeps one
+  // ADMIN from mashing the button and flooding every SUPER_ADMIN's inbox.
+  const RENEWAL_COOLDOWN_MS = 60 * 60 * 1000;
+  function renewalCooldownRemainingMs(company) {
+    const last = company?.last_renewal_requested_at;
+    if (!last) return 0;
+    return Math.max(0, new Date(last).getTime() + RENEWAL_COOLDOWN_MS - Date.now());
+  }
+
+  async function handleRequestRenewal() {
+    if (!activeCompany || requestingRenewal) return;
+    setRequestingRenewal(true);
+    try {
+      await companyApi.requestRenewal(activeCompany.id);
+      setActiveCompany(c => c ? { ...c, last_renewal_requested_at: new Date().toISOString() } : c);
+      toast.success(t('settings.renewalRequestSent', { defaultValue: 'GeoInfosys has been notified — you\'ll hear back once your subscription is renewed.' }));
+    } catch (err) {
+      toast.error(err?.response?.data?.message || t('settings.renewalRequestFailed', { defaultValue: 'Failed to send request' }));
+    } finally {
+      setRequestingRenewal(false);
+    }
   }
 
   function closeSearch() {
@@ -204,6 +247,9 @@ export default function TopBar({ onMobileMenuToggle, onToolOpen }) {
     LEAVE_REQUEST: { Icon: CalendarCheck, bg: 'bg-blue-50', color: 'text-blue-500' },
     PAYROLL_PAID: { Icon: Banknote, bg: 'bg-green-50', color: 'text-green-500' },
     SYSTEM_AUTOMATION: { Icon: Sparkles, bg: 'bg-violet-50', color: 'text-violet-500' },
+    ACCESS_SUSPENDED: { Icon: AlertTriangle, bg: 'bg-red-50', color: 'text-red-500' },
+    ACCESS_RESTORED: { Icon: ShieldCheck, bg: 'bg-green-50', color: 'text-green-500' },
+    SUBSCRIPTION_RENEWAL_REQUESTED: { Icon: Send, bg: 'bg-blue-50', color: 'text-blue-500' },
   };
 
   function timeAgo(iso) {
@@ -256,8 +302,7 @@ export default function TopBar({ onMobileMenuToggle, onToolOpen }) {
               <DropdownMenuItem
                 key={c.id}
                 onClick={() => handleCompanyClick(c)}
-                disabled={!isSuperAdmin && c.is_active === false}
-                className={c.is_active === false ? 'opacity-60' : ''}
+                className={!isCompanyAccessible(c) ? 'opacity-60' : ''}
               >
                 <Building2 className="w-4 h-4 mr-2" />
                 {c.name}
@@ -530,6 +575,52 @@ export default function TopBar({ onMobileMenuToggle, onToolOpen }) {
         </DropdownMenu>
       </div>
     </header>
+
+    {/* Suspended/expired banner — the company stays fully visible (name,
+        cached data, nav) per design: losing access shouldn't feel like the
+        page broke, it should read as "paused, here's why, here's what to do". */}
+    {activeCompany && !isCompanyAccessible(activeCompany) && (
+      <div className="px-4 lg:px-6 py-2.5 bg-red-50 border-b border-red-200 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm">
+        <AlertTriangle className="w-4 h-4 text-red-600 shrink-0" />
+        <span className="text-red-800 font-medium">
+          {activeCompany.is_active === false
+            ? t('settings.companyDeactivatedBanner', { defaultValue: 'This company has been deactivated.' })
+            : t('settings.subscriptionExpiredBanner', { defaultValue: "This company's subscription has expired." })}
+        </span>
+        <span className="text-red-600">
+          {t('settings.servicesPausedHint', { defaultValue: 'All services are paused until renewed — please contact GeoInfosys.' })}
+        </span>
+        {isAdmin && !isSuperAdmin && (() => {
+          const onCooldown = renewalCooldownRemainingMs(activeCompany) > 0;
+          return (
+            <Button
+              size="sm"
+              variant="outline"
+              className="ml-auto border-red-300 text-red-700 hover:bg-red-100 hover:text-red-800 shrink-0"
+              onClick={handleRequestRenewal}
+              disabled={requestingRenewal || onCooldown}
+            >
+              <Send className="w-3.5 h-3.5 mr-1.5" />
+              {onCooldown
+                ? t('settings.renewalRequested', { defaultValue: 'Request Sent — GeoInfosys Notified' })
+                : requestingRenewal
+                  ? t('settings.requestingEllipsis', { defaultValue: 'Requesting…' })
+                  : t('settings.requestRenewal', { defaultValue: 'Request Subscription Renewal' })}
+            </Button>
+          );
+        })()}
+        {isSuperAdmin && (
+          <Button
+            size="sm"
+            variant="outline"
+            className="ml-auto border-red-300 text-red-700 hover:bg-red-100 hover:text-red-800 shrink-0"
+            onClick={() => navigate('/settings', { state: { tab: 'clients', highlightCompanyId: activeCompany.id } })}
+          >
+            {t('settings.manageInSettings', { defaultValue: 'Manage in Settings' })}
+          </Button>
+        )}
+      </div>
+    )}
 
     {/* Nightly automation detail — shown when a SYSTEM_AUTOMATION notification is clicked */}
     <Dialog open={!!autoDetail} onOpenChange={(open) => !open && setAutoDetail(null)}>

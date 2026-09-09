@@ -95,6 +95,16 @@ export class CompanyController {
     return this.service.remove(id, req.user.sub, req.user.role);
   }
 
+  // ADMIN only — the "Request Renewal" button shown once a company loses
+  // access. Deliberately reachable even while suspended: uses "id", not
+  // "companyId", so CompanyAccessGuard never sees it.
+  @Post(':id/request-renewal')
+  @Roles('ADMIN')
+  @ApiOperation({ summary: "Notify every SUPER_ADMIN that this company's admin wants their subscription renewed" })
+  requestRenewal(@Param('id') id: string, @Req() req: any) {
+    return this.service.requestRenewal(id, req.user.sub, req.user.role);
+  }
+
   // ─── Payroll Settings ────────────────────────────────────────────────────────
 
   @Get(':id/payroll-settings')

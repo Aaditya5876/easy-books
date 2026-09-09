@@ -16,7 +16,12 @@ const AuthContext = createContext();
 // (school/business nav, "Client Management" branding, etc. never update).
 // companyApi.get() 403s if the caller isn't actually a member (or SUPER_ADMIN,
 // who bypasses that check) so this can't be used to peek at someone else's
-// company — on any failure we just fall back to the real default.
+// company — on any failure we just fall back to the real default. Deliberately
+// does NOT skip the override for a deactivated/expired company — losing
+// access should keep the app looking like itself (same company name, same
+// school/business nav, cached data still visible) with TopBar.jsx's banner
+// explaining why writes/fresh reads are failing, not silently swap the admin
+// onto a different company or a broken generic dashboard.
 // (TopBar.jsx has its own equivalent fetch for the header — see loadData()
 // there — since it reads companies via a differently-shaped API client.)
 async function resolveActiveCompanyOverride(meData) {
@@ -24,7 +29,6 @@ async function resolveActiveCompanyOverride(meData) {
   if (!activeId || activeId === meData?.defaultCompanyId) return meData;
   try {
     const res = await companyApi.get(activeId);
-    if (res.data.isActive === false) return meData;
     return { ...meData, defaultCompanyId: res.data.id, defaultCompany: res.data };
   } catch {
     return meData;

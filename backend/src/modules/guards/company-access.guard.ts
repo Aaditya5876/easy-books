@@ -3,6 +3,7 @@ import { Reflector } from '@nestjs/core';
 import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
 import { PrismaService } from '../../../core/db/psql/prisma.client';
 import { isCompanyAccessible } from '../../../core/modules/company-access';
+import { NotificationServiceImpl } from '../../application/services/notification.service.impl';
 
 // Global, runs on every staff-authenticated request. Neither RolesGuard (only
 // checks the user's global role string) nor ModuleAccessGuard (only checks
@@ -20,6 +21,7 @@ export class CompanyAccessGuard implements CanActivate {
   constructor(
     private readonly reflector: Reflector,
     private readonly prisma: PrismaService,
+    private readonly notifications: NotificationServiceImpl,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -65,6 +67,13 @@ export class CompanyAccessGuard implements CanActivate {
       // they're untouched by this — an ADMIN can still view/reactivate their
       // own deactivated company from Settings.
       if (company && !isCompanyAccessible(company)) {
+        // Fire-and-forget, not awaited — the block itself must not wait on
+        // it. Manual deactivation already notifies synchronously from
+        // CompanyServiceImpl.setActive(), which also sets
+        // accessBlockedNotifiedAt up front — so this only actually fires the
+        // first time a subscription lapses passively (nothing else triggers
+        // that moment), and never twice for the same lapse.
+        this.notifyAccessSuspendedOnce(companyId).catch(() => {});
         const message = !company.isActive
           ? 'This company has been deactivated. Contact GeoInfosys to reactivate it.'
           : 'This company\'s subscription has expired. Contact GeoInfosys to renew it.';
@@ -72,5 +81,24 @@ export class CompanyAccessGuard implements CanActivate {
       }
     }
     return true;
+  }
+
+  // Atomic claim-and-notify: the conditional updateMany only matches (and
+  // returns count 1) for whichever concurrent request gets there first, so
+  // even a burst of simultaneous blocked requests only ever sends one
+  // ACCESS_SUSPENDED notification per lapse.
+  private async notifyAccessSuspendedOnce(companyId: string): Promise<void> {
+    const claimed = await this.prisma.company.updateMany({
+      where: { id: companyId, accessBlockedNotifiedAt: null },
+      data: { accessBlockedNotifiedAt: new Date() },
+    });
+    if (claimed.count === 0) return;
+    const company = await this.prisma.company.findUnique({ where: { id: companyId }, select: { name: true } });
+    await this.notifications.notifyRole(companyId, ['ADMIN'], {
+      type: 'ACCESS_SUSPENDED',
+      title: 'Subscription expired',
+      message: `${company?.name ?? 'Your company'}'s subscription has expired. Contact GeoInfosys to renew and restore access.`,
+      link: '/settings',
+    });
   }
 }

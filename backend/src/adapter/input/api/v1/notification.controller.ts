@@ -1,5 +1,6 @@
 import { Controller, Get, Patch, Put, Body, Param, Query, Request } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
+import { NotificationType } from '@prisma/client';
 import { NotificationServiceImpl } from '../../../../application/services/notification.service.impl';
 
 // No class-level @Roles(...) — every authenticated user reads their own inbox;
@@ -19,16 +20,19 @@ export class NotificationController {
   @ApiQuery({ name: 'page', required: false, type: Number })
   @ApiQuery({ name: 'pageSize', required: false, type: Number })
   @ApiQuery({ name: 'unreadOnly', required: false, type: Boolean })
+  @ApiQuery({ name: 'type', required: false, enum: NotificationType })
   list(
     @Request() req: any,
     @Query('page') page?: string,
     @Query('pageSize') pageSize?: string,
     @Query('unreadOnly') unreadOnly?: string,
+    @Query('type') type?: NotificationType,
   ) {
     return this.service.listForUser(req.user.sub, {
       page: page ? parseInt(page) : undefined,
       pageSize: pageSize ? parseInt(pageSize) : undefined,
       unreadOnly: unreadOnly === 'true',
+      type,
     });
   }
 

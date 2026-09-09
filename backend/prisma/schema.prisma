@@ -166,6 +166,13 @@ enum NotificationType {
   LEAVE_REQUEST
   PAYROLL_PAID
   SYSTEM_AUTOMATION
+  // Sent to a company's ADMIN(s) the moment their access gets cut off —
+  // either GeoInfosys manually deactivating them, or their subscription
+  // expiry passing on its own — and again once it's restored.
+  ACCESS_SUSPENDED
+  ACCESS_RESTORED
+  // Sent to every SUPER_ADMIN when an ADMIN clicks "Request Renewal".
+  SUBSCRIPTION_RENEWAL_REQUESTED
 }
 
 // ─── Models ──────────────────────────────────────────────────────────────────
@@ -250,6 +257,16 @@ model Company {
   // every request rather than flipped by a nightly job, so it takes effect
   // to the second. Set/cleared only via SUPER_ADMIN's CompanyServiceImpl.setSubscriptionExpiry.
   subscriptionExpiresAt     DateTime?
+  // Set the first time CompanyAccessGuard actually blocks a request because
+  // this company is inaccessible (deactivated or expired) — dedupes the
+  // ACCESS_SUSPENDED notification so a flood of blocked requests doesn't
+  // flood the admin's inbox. Cleared back to null whenever SUPER_ADMIN
+  // restores access (setActive(true) or a cleared/future subscription
+  // expiry), so the next time it lapses, they're notified again.
+  accessBlockedNotifiedAt   DateTime?
+  // Cooldown for the ADMIN-facing "Request Renewal" button — prevents
+  // spamming SUPER_ADMIN with repeat notifications for the same lapse.
+  lastRenewalRequestedAt    DateTime?
   // Auto-increment counters for invoice numbering (reset each fiscal year)
   invoiceSequence           Int      @default(0)
   purchaseSequence          Int      @default(0)

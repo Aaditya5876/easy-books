@@ -1,10 +1,14 @@
 import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../../../core/db/psql/prisma.client';
 import { MODULE_KEYS, ModuleKey } from '../../../core/modules/module-keys';
+import { NotificationServiceImpl } from './notification.service.impl';
 
 @Injectable()
 export class CompanyServiceImpl {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notifications: NotificationServiceImpl,
+  ) {}
 
   async findAll(userId: string) {
     const userCompanies = await this.prisma.userCompany.findMany({
@@ -111,6 +115,9 @@ export class CompanyServiceImpl {
       // subscription. Only setSubscriptionExpiry() below, SUPER_ADMIN-gated
       // at the controller, may change it.
       subscriptionExpiresAt,
+      // Internal bookkeeping only setActive/setSubscriptionExpiry/requestRenewal
+      // above are meant to touch — never settable directly.
+      accessBlockedNotifiedAt, lastRenewalRequestedAt,
       ...updateData
     } = data;
     return this.prisma.company.update({ where: { id }, data: updateData });
@@ -130,11 +137,23 @@ export class CompanyServiceImpl {
 
   // SUPER_ADMIN-only (enforced by @Roles('SUPER_ADMIN') on the controller
   // route) — suspends/restores a client company. AuthServiceImpl.login()
-  // blocks sign-in once every company a user belongs to is inactive.
+  // blocks sign-in once every company a user belongs to is inactive. Notifies
+  // the company's ADMIN(s) synchronously either way — unlike the passive
+  // subscription-expiry lapse (nothing "happens" at that instant unless a
+  // request happens to hit CompanyAccessGuard), this is an explicit action
+  // with a clear moment to notify from.
   async setActive(id: string, isActive: boolean) {
     const company = await this.prisma.company.findFirst({ where: { id } });
     if (!company) throw new NotFoundException('Company not found');
-    return this.prisma.company.update({ where: { id }, data: { isActive } });
+    const updated = await this.prisma.company.update({
+      where: { id },
+      // Deactivating sets accessBlockedNotifiedAt up front so
+      // CompanyAccessGuard's lazy expiry-notify never fires a second,
+      // redundant notification for this same suspension.
+      data: { isActive, accessBlockedNotifiedAt: isActive ? null : new Date() },
+    });
+    await this.notifyAccessChange(id, company.name, isActive);
+    return updated;
   }
 
   // SUPER_ADMIN-only (enforced by @Roles('SUPER_ADMIN') on the controller
@@ -147,7 +166,58 @@ export class CompanyServiceImpl {
   async setSubscriptionExpiry(id: string, expiresAt: Date | null) {
     const company = await this.prisma.company.findFirst({ where: { id } });
     if (!company) throw new NotFoundException('Company not found');
-    return this.prisma.company.update({ where: { id }, data: { subscriptionExpiresAt: expiresAt } });
+    const restoring = !expiresAt || expiresAt.getTime() > Date.now();
+    const updated = await this.prisma.company.update({
+      where: { id },
+      data: { subscriptionExpiresAt: expiresAt, ...(restoring ? { accessBlockedNotifiedAt: null } : {}) },
+    });
+    if (restoring && company.isActive) await this.notifyAccessChange(id, company.name, true);
+    return updated;
+  }
+
+  private async notifyAccessChange(companyId: string, companyName: string, restored: boolean): Promise<void> {
+    await this.notifications.notifyRole(companyId, ['ADMIN'], restored
+      ? {
+          type: 'ACCESS_RESTORED',
+          title: 'Access restored',
+          message: `${companyName}'s access has been restored — you're all set.`,
+          link: '/settings',
+        }
+      : {
+          type: 'ACCESS_SUSPENDED',
+          title: 'Company deactivated',
+          message: `${companyName} has been deactivated by GeoInfosys. Contact them to reactivate it.`,
+          link: '/settings',
+        });
+  }
+
+  // ADMIN-only (enforced by @Roles('ADMIN') on the controller route) — the
+  // "Request Renewal" button shown once a company's access is suspended
+  // (deactivated or subscription expired). Notifies every SUPER_ADMIN;
+  // lastRenewalRequestedAt drives a client-side cooldown on the button so
+  // one ADMIN mashing it doesn't flood SUPER_ADMIN's inbox.
+  async requestRenewal(id: string, requestedByUserId: string, role: string) {
+    // Not covered by CompanyAccessGuard (this route's param is "id", not
+    // "companyId" — deliberately, so a locked-out ADMIN can still reach it)
+    // so membership is checked here instead, same as findOne/update/remove
+    // above — otherwise any ADMIN could spam a renewal "request" for a
+    // company they have nothing to do with just by guessing its id.
+    await this.assertMembership(id, requestedByUserId, role);
+    const [company, requester] = await Promise.all([
+      this.prisma.company.findFirst({ where: { id } }),
+      this.prisma.user.findUnique({ where: { id: requestedByUserId }, select: { name: true, email: true } }),
+    ]);
+    if (!company) throw new NotFoundException('Company not found');
+    await this.prisma.company.update({ where: { id }, data: { lastRenewalRequestedAt: new Date() } });
+    await this.notifications.notifySuperAdmins(id, {
+      type: 'SUBSCRIPTION_RENEWAL_REQUESTED',
+      title: 'Subscription renewal requested',
+      message: `${requester?.name ?? requester?.email ?? 'An admin'} (${company.name}) requested a subscription renewal.`,
+      link: '/settings',
+      referenceType: 'COMPANY',
+      referenceId: id,
+    });
+    return { requested: true };
   }
 
   // SUPER_ADMIN-only — every company across the whole platform, regardless of

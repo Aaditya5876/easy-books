@@ -61,6 +61,35 @@ export class NotificationServiceImpl {
     });
   }
 
+  // Platform-level notifications (subscription lapsed/renewal requested) have
+  // no natural companyId to scope UserCompany lookups by on the recipient
+  // side — SUPER_ADMIN isn't necessarily a member of the client company this
+  // is about. Goes straight to User instead of notifyRole's UserCompany join.
+  // The client's companyId is still stored on the row (Notification.companyId
+  // is mandatory) purely for context — cascade-deletes with that company,
+  // which is correct: no point keeping a notification about a company that
+  // no longer exists.
+  async notifySuperAdmins(companyId: string, payload: NotifyPayload): Promise<void> {
+    const superAdmins = await this.prisma.user.findMany({
+      where: { role: 'SUPER_ADMIN' },
+      select: { id: true },
+    });
+    if (superAdmins.length === 0) return;
+    await this.prisma.notification.createMany({
+      data: superAdmins.map((u) => ({
+        companyId,
+        userId: u.id,
+        type: payload.type,
+        title: payload.title,
+        message: payload.message,
+        link: payload.link,
+        referenceType: payload.referenceType,
+        referenceId: payload.referenceId,
+        details: payload.details as any,
+      })),
+    });
+  }
+
   async getPreference(userId: string) {
     const pref = await this.prisma.notificationPreference.findUnique({ where: { userId } });
     return pref ?? { transactions: true, reminders: true, system: true };
@@ -74,10 +103,10 @@ export class NotificationServiceImpl {
     });
   }
 
-  async listForUser(userId: string, opts: { page?: number; pageSize?: number; unreadOnly?: boolean }) {
+  async listForUser(userId: string, opts: { page?: number; pageSize?: number; unreadOnly?: boolean; type?: NotificationType }) {
     const page = opts.page ?? 1;
     const pageSize = opts.pageSize ?? 20;
-    const where = { userId, ...(opts.unreadOnly ? { isRead: false } : {}) };
+    const where = { userId, ...(opts.unreadOnly ? { isRead: false } : {}), ...(opts.type ? { type: opts.type } : {}) };
 
     const [items, total] = await Promise.all([
       this.prisma.notification.findMany({

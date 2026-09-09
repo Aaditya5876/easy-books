@@ -182,6 +182,15 @@ export default function Settings() {
     if (location.state?.tab) setActiveTab(location.state.tab);
     if (location.state?.openAddCompany) setShowAddCompany(true);
     if (location.state?.tab === 'clients') loadAllClients();
+    // Landed here from a SUBSCRIPTION_RENEWAL_REQUESTED notification click —
+    // jump straight to that client's row instead of leaving SUPER_ADMIN to
+    // hunt for it in a list that can run to 100+ companies.
+    if (location.state?.highlightCompanyId) {
+      setExpandedClientId(location.state.highlightCompanyId);
+      setTimeout(() => {
+        document.getElementById(`client-row-${location.state.highlightCompanyId}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 200);
+    }
     // Consume it once — react-router keeps this state attached to the
     // current history entry, so without clearing it here, hitting refresh
     // replays the same "open this tab / pop this dialog" instruction forever.
@@ -1160,7 +1169,7 @@ export default function Settings() {
                           const tier = packageTierOf(effectiveModules);
                           const isExpired = c.subscriptionExpiresAt && new Date(c.subscriptionExpiresAt).getTime() <= nowTick;
                           return (
-                            <div key={c.id}>
+                            <div key={c.id} id={`client-row-${c.id}`}>
                               {/* Compact row — this is ALL that renders per client until expanded,
                                   which is what keeps a 100-client list scrollable instead of 100
                                   fully-expanded package editors stacked on top of each other. */}
