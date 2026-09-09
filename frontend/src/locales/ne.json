@@ -2727,7 +2727,7 @@
     "renewalRequestFailed": "अनुरोध पठाउन असफल",
     "companyDeactivatedBanner": "यो कम्पनी निष्क्रिय पारिएको छ।",
     "subscriptionExpiredBanner": "यो कम्पनीको सदस्यताको म्याद सकिएको छ।",
-    "servicesPausedHint": "नवीकरण नभएसम्म सबै सेवाहरू रोकिएका छन् — कृपया GeoInfosys लाई सम्पर्क गर्नुहोस्।",
+    "servicesPausedHint": "अहिलेको लागि सेवाहरू रोकिएका छन्, तर तपाईंको डाटा सुरक्षित छ — छिट्टै फेरि सुचारु हुनेछ। कृपया GeoInfosys लाई सम्पर्क गर्नुहोस्।",
     "renewalRequested": "अनुरोध पठाइयो — GeoInfosys लाई सूचित गरियो",
     "requestingEllipsis": "अनुरोध गर्दै…",
     "requestRenewal": "सदस्यता नवीकरण अनुरोध गर्नुहोस्",

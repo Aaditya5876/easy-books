@@ -3,6 +3,11 @@ import { PrismaService } from '../../../core/db/psql/prisma.client';
 import { MODULE_KEYS, ModuleKey } from '../../../core/modules/module-keys';
 import { NotificationServiceImpl } from './notification.service.impl';
 
+// Every role a company can have besides SUPER_ADMIN (who never belongs to a
+// client company as a member) — CompanyAccessGuard locks all of them out
+// identically, so an access-change notification goes to all of them too.
+const COMPANY_ROLES = ['ADMIN', 'ACCOUNTANT', 'STAFF', 'TEACHER'];
+
 @Injectable()
 export class CompanyServiceImpl {
   constructor(
@@ -175,19 +180,25 @@ export class CompanyServiceImpl {
     return updated;
   }
 
+  // Every non-SUPER_ADMIN role at the company loses access the same way
+  // (CompanyAccessGuard doesn't distinguish STAFF/ACCOUNTANT/TEACHER from
+  // ADMIN — only SUPER_ADMIN bypasses it), so everyone who's actually locked
+  // out should hear about it, not just the ADMIN. No `link` here on purpose:
+  // /settings isn't even a route TEACHER has (App.jsx's schoolRoutes only
+  // gives them an explicit allowlist) — clicking would 404 them. There's
+  // nothing role-specific to navigate to anyway; the banner already covers
+  // the actionable part (Request Renewal) for whoever can use it.
   private async notifyAccessChange(companyId: string, companyName: string, restored: boolean): Promise<void> {
-    await this.notifications.notifyRole(companyId, ['ADMIN'], restored
+    await this.notifications.notifyRole(companyId, COMPANY_ROLES, restored
       ? {
           type: 'ACCESS_RESTORED',
-          title: 'Access restored',
-          message: `${companyName}'s access has been restored — you're all set.`,
-          link: '/settings',
+          title: 'Welcome back!',
+          message: `${companyName} is back up and running — everything's working again. Thanks for your patience!`,
         }
       : {
           type: 'ACCESS_SUSPENDED',
-          title: 'Company deactivated',
-          message: `${companyName} has been deactivated by GeoInfosys. Contact them to reactivate it.`,
-          link: '/settings',
+          title: 'Temporarily paused',
+          message: `${companyName} has been paused by GeoInfosys. Your data is safe and untouched — we'll be back up and running again as soon as this is sorted out. Contact GeoInfosys for details.`,
         });
   }
 

@@ -94,11 +94,16 @@ export class CompanyAccessGuard implements CanActivate {
     });
     if (claimed.count === 0) return;
     const company = await this.prisma.company.findUnique({ where: { id: companyId }, select: { name: true } });
-    await this.notifications.notifyRole(companyId, ['ADMIN'], {
+    // Every non-SUPER_ADMIN role at the company is equally locked out by
+    // this guard (only SUPER_ADMIN bypasses it above) — everyone actually
+    // affected hears about it, not just the ADMIN. No `link` here on
+    // purpose — TEACHER has no /settings route at all (App.jsx's
+    // schoolRoutes only gives them an explicit allowlist), so it would 404
+    // them, and there's nothing role-specific to send anyone to anyway.
+    await this.notifications.notifyRole(companyId, ['ADMIN', 'ACCOUNTANT', 'STAFF', 'TEACHER'], {
       type: 'ACCESS_SUSPENDED',
-      title: 'Subscription expired',
-      message: `${company?.name ?? 'Your company'}'s subscription has expired. Contact GeoInfosys to renew and restore access.`,
-      link: '/settings',
+      title: 'Temporarily paused',
+      message: `${company?.name ?? 'Your company'}'s subscription has expired. Your data is safe and untouched — we'll be back up and running again as soon as this is renewed. Contact GeoInfosys to renew.`,
     });
   }
 }

@@ -588,7 +588,7 @@ export default function TopBar({ onMobileMenuToggle, onToolOpen }) {
             : t('settings.subscriptionExpiredBanner', { defaultValue: "This company's subscription has expired." })}
         </span>
         <span className="text-red-600">
-          {t('settings.servicesPausedHint', { defaultValue: 'All services are paused until renewed — please contact GeoInfosys.' })}
+          {t('settings.servicesPausedHint', { defaultValue: "Services are paused for now, but your data is safe — we'll be back up and running again soon. Please contact GeoInfosys." })}
         </span>
         {isAdmin && !isSuperAdmin && (() => {
           const onCooldown = renewalCooldownRemainingMs(activeCompany) > 0;
