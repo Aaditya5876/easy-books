@@ -2,6 +2,7 @@ import { Injectable, CanActivate, ExecutionContext, ForbiddenException } from '@
 import { Reflector } from '@nestjs/core';
 import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
 import { PrismaService } from '../../../core/db/psql/prisma.client';
+import { isCompanyAccessible } from '../../../core/modules/company-access';
 
 // Global, runs on every staff-authenticated request. Neither RolesGuard (only
 // checks the user's global role string) nor ModuleAccessGuard (only checks
@@ -50,19 +51,24 @@ export class CompanyAccessGuard implements CanActivate {
     for (const companyId of companyIds) {
       const [membership, company] = await Promise.all([
         this.prisma.userCompany.findFirst({ where: { userId: user.sub, companyId }, select: { id: true } }),
-        this.prisma.company.findUnique({ where: { id: companyId }, select: { isActive: true } }),
+        this.prisma.company.findUnique({ where: { id: companyId }, select: { isActive: true, subscriptionExpiresAt: true } }),
       ]);
       if (!membership) {
         throw new ForbiddenException('You do not have access to this company');
       }
-      // isActive is a real access gate here (unlike the nightly-automation-only
-      // read it gets elsewhere) — a deactivated company is fully locked out of
-      // every companyId-scoped route this guard covers. The company-by-:id
-      // routes (company.controller.ts) never pass a "companyId"-named param,
-      // so they're untouched by this — an ADMIN can still view/reactivate their
+      // isActive/subscriptionExpiresAt are a real access gate here (unlike the
+      // nightly-automation-only read isActive gets elsewhere) — a deactivated
+      // or expired company is fully locked out of every companyId-scoped route
+      // this guard covers, checked live so expiry takes effect to the second
+      // rather than waiting for a nightly job. The company-by-:id routes
+      // (company.controller.ts) never pass a "companyId"-named param, so
+      // they're untouched by this — an ADMIN can still view/reactivate their
       // own deactivated company from Settings.
-      if (company && !company.isActive) {
-        throw new ForbiddenException('This company has been deactivated. Contact GeoInfosys to reactivate it.');
+      if (company && !isCompanyAccessible(company)) {
+        const message = !company.isActive
+          ? 'This company has been deactivated. Contact GeoInfosys to reactivate it.'
+          : 'This company\'s subscription has expired. Contact GeoInfosys to renew it.';
+        throw new ForbiddenException(message);
       }
     }
     return true;

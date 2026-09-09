@@ -243,6 +243,13 @@ model Company {
   isVatRegistered           Boolean  @default(false)
   vatSubmissionFreq         String? // "MONTHLY" | "TRIMESTERLY"
   isActive                  Boolean  @default(true)
+  // Automatic, time-based access gate — distinct from isActive (the manual
+  // suspend switch). Null = no expiry (legacy/unrestricted). Once past, this
+  // company is locked out exactly like a deactivated one (see
+  // isCompanyAccessible in core/modules/company-access.ts), checked live on
+  // every request rather than flipped by a nightly job, so it takes effect
+  // to the second. Set/cleared only via SUPER_ADMIN's CompanyServiceImpl.setSubscriptionExpiry.
+  subscriptionExpiresAt     DateTime?
   // Auto-increment counters for invoice numbering (reset each fiscal year)
   invoiceSequence           Int      @default(0)
   purchaseSequence          Int      @default(0)

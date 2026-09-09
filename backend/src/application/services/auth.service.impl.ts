@@ -17,6 +17,7 @@ import { IUserRepository, USER_REPOSITORY } from '../../domain/repositories';
 import { PrismaService } from '../../../core/db/psql/prisma.client';
 import { MailService } from './mail.service';
 import { markSelfAttendance } from './self-attendance.util';
+import { isCompanyAccessible } from '../../../core/modules/company-access';
 
 @Injectable()
 export class AuthServiceImpl implements IAuthService {
@@ -164,19 +165,22 @@ export class AuthServiceImpl implements IAuthService {
   }
 
   // GeoInfosys's suspend switch (Company.isActive, set via SUPER_ADMIN-only
-  // CompanyServiceImpl.setActive) previously only blocked companyId-scoped API
-  // calls (CompanyAccessGuard) — a suspended client could still sign in and
-  // poke around. Blocks sign-in outright once EVERY company this user belongs
-  // to is inactive; a user with at least one active company still gets in
-  // (e.g. SUPER_ADMIN, who is never blocked, or — in principle — someone
-  // belonging to more than one company where only some are suspended).
+  // CompanyServiceImpl.setActive) and the automatic subscriptionExpiresAt gate
+  // previously only blocked companyId-scoped API calls (CompanyAccessGuard) —
+  // a suspended/expired client could still sign in and poke around. Blocks
+  // sign-in outright once EVERY company this user belongs to fails
+  // isCompanyAccessible; a user with at least one accessible company still
+  // gets in (e.g. SUPER_ADMIN, who is never blocked, or someone belonging to
+  // more than one company where only some are suspended/expired — those
+  // others keep working normally, this only ever blocks sign-in entirely
+  // when NONE of their companies are usable).
   private async assertHasActiveCompany(userId: string, role: string): Promise<void> {
     if (role === 'SUPER_ADMIN') return;
     const userCompanies = await this.prisma.userCompany.findMany({
       where: { userId },
-      select: { company: { select: { isActive: true } } },
+      select: { company: { select: { isActive: true, subscriptionExpiresAt: true } } },
     });
-    if (userCompanies.length > 0 && userCompanies.every((uc) => !uc.company.isActive)) {
+    if (userCompanies.length > 0 && userCompanies.every((uc) => !isCompanyAccessible(uc.company))) {
       throw new ForbiddenException('This company has been deactivated. Contact GeoInfosys to reactivate it.');
     }
   }

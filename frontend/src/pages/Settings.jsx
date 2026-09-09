@@ -243,6 +243,17 @@ export default function Settings() {
   const [pendingClientModules, setPendingClientModules] = useState({}); // { [companyId]: string[] } — staged, unsaved package edits
   const [expandedClientId, setExpandedClientId] = useState(null); // companyId whose package editor is open — one at a time
   const [clientSearch, setClientSearch] = useState('');
+  const [clientSubscriptionSaving, setClientSubscriptionSaving] = useState(null); // companyId mid-save
+  const [pendingSubscriptionExpiry, setPendingSubscriptionExpiry] = useState({}); // { [companyId]: string (datetime-local) | '' } — staged, unsaved
+  // Only ticks while a client row is expanded (that's the only place a
+  // remaining-time/expired badge is shown) — no point running a timer for a
+  // collapsed list nobody's looking at.
+  const [nowTick, setNowTick] = useState(() => Date.now());
+  useEffect(() => {
+    if (!expandedClientId) return;
+    const id = setInterval(() => setNowTick(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [expandedClientId]);
 
   // ── Create Client (SUPER_ADMIN only — sales-led onboarding) ──────────────
   // No package picker here — every new client starts on BASE (never
@@ -806,6 +817,63 @@ export default function Settings() {
     }
   }
 
+  // datetime-local inputs show/take local wall-clock time with no offset —
+  // convert to/from the ISO string the API and Date() both expect.
+  function toDatetimeLocalValue(iso) {
+    if (!iso) return '';
+    const d = new Date(iso);
+    const pad = n => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+  }
+
+  // Short "2d 4h" / "45s" countdown for the subscription badge — precise
+  // enough down to seconds so a test expiry a few seconds out is visibly
+  // ticking, not just "today".
+  function formatRemaining(ms) {
+    if (ms <= 0) return t('settings.subscriptionExpired', { defaultValue: 'Expired' });
+    const totalSeconds = Math.floor(ms / 1000);
+    const days = Math.floor(totalSeconds / 86400);
+    const hours = Math.floor((totalSeconds % 86400) / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+    if (days > 0) return `${days}d ${hours}h`;
+    if (hours > 0) return `${hours}h ${minutes}m`;
+    if (minutes > 0) return `${minutes}m ${seconds}s`;
+    return `${seconds}s`;
+  }
+
+  function discardSubscriptionExpiryChange(companyId) {
+    setPendingSubscriptionExpiry(p => {
+      const next = { ...p };
+      delete next[companyId];
+      return next;
+    });
+  }
+
+  async function handleSaveSubscriptionExpiry(company) {
+    const staged = pendingSubscriptionExpiry[company.id];
+    if (staged === undefined) return;
+    const expiresAt = staged ? new Date(staged).toISOString() : null;
+    const ok = await confirm({
+      title: t('settings.confirmSaveSubscriptionTitle', { defaultValue: 'Update subscription for {{name}}?', name: company.name }),
+      description: expiresAt
+        ? t('settings.confirmSaveSubscriptionDesc', { defaultValue: 'Access locks out automatically at {{date}} unless renewed before then.', date: new Date(expiresAt).toLocaleString() })
+        : t('settings.confirmClearSubscriptionDesc', { defaultValue: 'Removes the automatic expiry — access stays on until manually deactivated.' }),
+    });
+    if (!ok) return;
+    setClientSubscriptionSaving(company.id);
+    try {
+      await companyApi.setSubscriptionExpiry(company.id, expiresAt);
+      setAllClients(list => list.map(c => c.id === company.id ? { ...c, subscriptionExpiresAt: expiresAt } : c));
+      discardSubscriptionExpiryChange(company.id);
+      toast.success(t('settings.subscriptionSaved', { defaultValue: 'Subscription updated' }));
+    } catch (err) {
+      toast.error(err?.response?.data?.message || t('settings.subscriptionSaveFailed', { defaultValue: 'Failed to update subscription' }));
+    } finally {
+      setClientSubscriptionSaving(null);
+    }
+  }
+
   async function handleClientDelete(company) {
     const ok = await confirm({
       title: t('settings.confirmDeleteCompanyTitle', { defaultValue: 'Delete this company?' }),
@@ -1083,6 +1151,7 @@ export default function Settings() {
                           const hasPendingChange = pendingClientModules[c.id] !== undefined;
                           const effectiveModules = pendingClientModules[c.id] ?? c.enabledModules;
                           const tier = packageTierOf(effectiveModules);
+                          const isExpired = c.subscriptionExpiresAt && new Date(c.subscriptionExpiresAt).getTime() <= nowTick;
                           return (
                             <div key={c.id}>
                               {/* Compact row — this is ALL that renders per client until expanded,
@@ -1112,6 +1181,11 @@ export default function Settings() {
                                 {c.isActive === false && (
                                   <span className="text-[10px] bg-red-50 text-red-600 px-1.5 py-0.5 rounded-full font-medium shrink-0">
                                     {t('settings.deactivated', { defaultValue: 'Deactivated' })}
+                                  </span>
+                                )}
+                                {c.isActive !== false && isExpired && (
+                                  <span className="text-[10px] bg-amber-50 text-amber-600 px-1.5 py-0.5 rounded-full font-medium shrink-0" title={t('settings.subscriptionExpiredHint', { defaultValue: 'Subscription expiry has passed — locked out the same as Deactivated' })}>
+                                    {t('settings.subscriptionExpired', { defaultValue: 'Expired' })}
                                   </span>
                                 )}
                                 {group.companies.length === 1 && (
@@ -1211,6 +1285,60 @@ export default function Settings() {
                                           </div>
                                         );
                                       })()}
+                                    </div>
+
+                                    {/* Subscription expiry — automatic, time-based counterpart to
+                                        the Deactivate button above. Checked live server-side (not
+                                        a nightly job), so it locks the company out to the second —
+                                        set a few seconds out here to watch it happen. */}
+                                    <div className="flex flex-wrap items-center gap-2 px-3 py-2.5 bg-card">
+                                      <Clock className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                                      <span className="text-xs font-medium text-muted-foreground">{t('settings.subscriptionExpiryLabel', { defaultValue: 'Subscription Expiry' })}</span>
+                                      <input
+                                        type="datetime-local"
+                                        step="1"
+                                        className="text-xs border rounded-md px-1.5 py-1 bg-background focus:outline-none focus:ring-1 focus:ring-ring"
+                                        value={pendingSubscriptionExpiry[c.id] ?? toDatetimeLocalValue(c.subscriptionExpiresAt)}
+                                        disabled={clientSubscriptionSaving === c.id}
+                                        onChange={e => setPendingSubscriptionExpiry(p => ({ ...p, [c.id]: e.target.value }))}
+                                      />
+                                      {(pendingSubscriptionExpiry[c.id] ?? toDatetimeLocalValue(c.subscriptionExpiresAt)) && (
+                                        <button
+                                          type="button"
+                                          disabled={clientSubscriptionSaving === c.id}
+                                          onClick={() => setPendingSubscriptionExpiry(p => ({ ...p, [c.id]: '' }))}
+                                          className="text-xs text-muted-foreground hover:text-foreground underline disabled:opacity-50"
+                                        >
+                                          {t('settings.clear', { defaultValue: 'Clear' })}
+                                        </button>
+                                      )}
+                                      {!c.subscriptionExpiresAt && pendingSubscriptionExpiry[c.id] === undefined && (
+                                        <span className="text-xs text-muted-foreground">{t('settings.noExpirySet', { defaultValue: 'No expiry set' })}</span>
+                                      )}
+                                      {c.subscriptionExpiresAt && pendingSubscriptionExpiry[c.id] === undefined && (
+                                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${isExpired ? 'bg-amber-50 text-amber-600' : 'bg-secondary text-muted-foreground'}`}>
+                                          {isExpired
+                                            ? t('settings.subscriptionExpired', { defaultValue: 'Expired' })
+                                            : t('settings.subscriptionRemaining', { defaultValue: '{{time}} left', time: formatRemaining(new Date(c.subscriptionExpiresAt).getTime() - nowTick) })}
+                                        </span>
+                                      )}
+                                      {pendingSubscriptionExpiry[c.id] !== undefined && (
+                                        <>
+                                          <span className="text-xs text-amber-600">{t('settings.unsavedChanges', { defaultValue: 'Unsaved changes' })}</span>
+                                          <Button size="sm" onClick={() => handleSaveSubscriptionExpiry(c)} disabled={clientSubscriptionSaving === c.id}>
+                                            <Save className="w-3.5 h-3.5 mr-1.5" />
+                                            {clientSubscriptionSaving === c.id ? t('settings.savingEllipsis', { defaultValue: 'Saving…' }) : t('settings.save', { defaultValue: 'Save' })}
+                                          </Button>
+                                          <button
+                                            type="button"
+                                            onClick={() => discardSubscriptionExpiryChange(c.id)}
+                                            disabled={clientSubscriptionSaving === c.id}
+                                            className="text-xs text-muted-foreground hover:text-foreground underline disabled:opacity-50"
+                                          >
+                                            {t('settings.cancel', { defaultValue: 'Cancel' })}
+                                          </button>
+                                        </>
+                                      )}
                                     </div>
 
                                     {/* Core tools — ship with every company on any package, no

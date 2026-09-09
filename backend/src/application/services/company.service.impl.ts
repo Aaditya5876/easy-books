@@ -107,6 +107,10 @@ export class CompanyServiceImpl {
       // own company through this general-purpose endpoint. Only setActive()
       // below, SUPER_ADMIN-gated at the controller, may change it.
       isActive,
+      // Same reasoning — an ADMIN must not be able to extend their own
+      // subscription. Only setSubscriptionExpiry() below, SUPER_ADMIN-gated
+      // at the controller, may change it.
+      subscriptionExpiresAt,
       ...updateData
     } = data;
     return this.prisma.company.update({ where: { id }, data: updateData });
@@ -131,6 +135,19 @@ export class CompanyServiceImpl {
     const company = await this.prisma.company.findFirst({ where: { id } });
     if (!company) throw new NotFoundException('Company not found');
     return this.prisma.company.update({ where: { id }, data: { isActive } });
+  }
+
+  // SUPER_ADMIN-only (enforced by @Roles('SUPER_ADMIN') on the controller
+  // route) — the automatic, time-based counterpart to setActive() above. Null
+  // clears the expiry (no auto-lockout). Checked live by CompanyAccessGuard
+  // and AuthServiceImpl.assertHasActiveCompany via isCompanyAccessible, not
+  // flipped by a nightly job, so it takes effect to the second — the actual
+  // subscription pause/resume mechanism, distinct from the manual isActive
+  // suspend switch.
+  async setSubscriptionExpiry(id: string, expiresAt: Date | null) {
+    const company = await this.prisma.company.findFirst({ where: { id } });
+    if (!company) throw new NotFoundException('Company not found');
+    return this.prisma.company.update({ where: { id }, data: { subscriptionExpiresAt: expiresAt } });
   }
 
   // SUPER_ADMIN-only — every company across the whole platform, regardless of

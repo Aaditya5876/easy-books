@@ -236,6 +236,8 @@ export const companyApi = {
   listAll: () => apiClient.get('/api/v1/companies/all'),
   // SUPER_ADMIN only — suspend/restore a client company (blocks their users' login while inactive).
   setActive: (id: string, isActive: boolean) => apiClient.patch(`/api/v1/companies/${id}/active`, { isActive }),
+  // SUPER_ADMIN only — set (ISO string) or clear (null) a company's automatic subscription expiry.
+  setSubscriptionExpiry: (id: string, expiresAt: string | null) => apiClient.patch(`/api/v1/companies/${id}/subscription`, { expiresAt }),
 };
 
 // File Upload

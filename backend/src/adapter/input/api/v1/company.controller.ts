@@ -81,6 +81,13 @@ export class CompanyController {
     return this.service.setActive(id, isActive);
   }
 
+  @Patch(':id/subscription')
+  @Roles('SUPER_ADMIN')
+  @ApiOperation({ summary: "Set or clear a client company's automatic subscription expiry (blocks access once past, independent of isActive)" })
+  setSubscriptionExpiry(@Param('id') id: string, @Body('expiresAt') expiresAt: string | null) {
+    return this.service.setSubscriptionExpiry(id, expiresAt ? new Date(expiresAt) : null);
+  }
+
   @Delete(':id')
   @Roles('SUPER_ADMIN')
   @ApiOperation({ summary: 'Delete a company' })
