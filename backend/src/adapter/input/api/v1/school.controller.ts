@@ -276,6 +276,7 @@ export class SchoolController {
   // ── Fee Structures ────────────────────────────────────────────────────────────
 
   @Get('fee-structures')
+  @RequiresModule('FINANCE_FEES')
   @ApiQuery({ name: 'companyId', required: true })
   @ApiQuery({ name: 'classId', required: false })
   listFeeStructures(@Query('companyId') companyId: string, @Query('classId') classId?: string) {
@@ -283,17 +284,20 @@ export class SchoolController {
   }
 
   @Post('fee-structures')
+  @RequiresModule('FINANCE_FEES')
   createFeeStructure(@Body() body: any) {
     return this.service.createFeeStructure(body);
   }
 
   @Put('fee-structures/:id')
+  @RequiresModule('FINANCE_FEES')
   @ApiQuery({ name: 'companyId', required: true })
   updateFeeStructure(@Param('id') id: string, @Query('companyId') companyId: string, @Body() body: any) {
     return this.service.updateFeeStructure(id, companyId, body);
   }
 
   @Delete('fee-structures/:id')
+  @RequiresModule('FINANCE_FEES')
   @Roles('ADMIN')
   @ApiQuery({ name: 'companyId', required: true })
   deleteFeeStructure(@Param('id') id: string, @Query('companyId') companyId: string) {
@@ -303,6 +307,7 @@ export class SchoolController {
   // ── Fee Invoices ──────────────────────────────────────────────────────────────
 
   @Get('fee-invoices')
+  @RequiresModule('FINANCE_FEES')
   @ApiQuery({ name: 'companyId', required: true })
   @ApiQuery({ name: 'status', required: false })
   @ApiQuery({ name: 'studentId', required: false })
@@ -328,17 +333,20 @@ export class SchoolController {
   }
 
   @Post('fee-invoices')
+  @RequiresModule('FINANCE_FEES')
   createFeeInvoice(@Body() body: any) {
     return this.service.createFeeInvoice(body);
   }
 
   @Post('fee-invoices/bulk')
+  @RequiresModule('FINANCE_FEES')
   @Roles('ADMIN', 'ACCOUNTANT')
   generateBulkInvoices(@Body() body: { companyId: string; classId: string; month: string; feeStructureIds: string[] }) {
     return this.service.generateBulkInvoices(body.companyId, body.classId, body.month, body.feeStructureIds);
   }
 
   @Patch('fee-invoices/:id/payment')
+  @RequiresModule('FINANCE_FEES')
   @ApiQuery({ name: 'companyId', required: true })
   recordPayment(
     @Param('id') id: string,
@@ -349,12 +357,14 @@ export class SchoolController {
   }
 
   @Get('fee-invoices/:id/payments')
+  @RequiresModule('FINANCE_FEES')
   @ApiQuery({ name: 'companyId', required: true })
   listInvoicePayments(@Param('id') id: string, @Query('companyId') companyId: string) {
     return this.finance.listPayments(companyId, id);
   }
 
   @Get('fee-payments/pending')
+  @RequiresModule('FINANCE_FEES')
   @Roles('ADMIN', 'ACCOUNTANT')
   @ApiQuery({ name: 'companyId', required: true })
   listPendingPaymentProofs(@Query('companyId') companyId: string) {
@@ -362,6 +372,7 @@ export class SchoolController {
   }
 
   @Get('fee-payments/verify/:code')
+  @RequiresModule('FINANCE_FEES')
   @Roles('ADMIN', 'ACCOUNTANT')
   @ApiQuery({ name: 'companyId', required: true })
   verifyPaymentByCode(@Param('code') code: string, @Query('companyId') companyId: string) {
@@ -369,6 +380,7 @@ export class SchoolController {
   }
 
   @Patch('fee-payments/:id/confirm')
+  @RequiresModule('FINANCE_FEES')
   @Roles('ADMIN', 'ACCOUNTANT')
   @ApiQuery({ name: 'companyId', required: true })
   confirmPaymentProof(@Param('id') id: string, @Query('companyId') companyId: string, @Req() req: any) {
@@ -376,6 +388,7 @@ export class SchoolController {
   }
 
   @Patch('fee-payments/:id/reject')
+  @RequiresModule('FINANCE_FEES')
   @Roles('ADMIN', 'ACCOUNTANT')
   @ApiQuery({ name: 'companyId', required: true })
   rejectPaymentProof(
@@ -388,6 +401,7 @@ export class SchoolController {
   }
 
   @Patch('fee-invoices/:id/release')
+  @RequiresModule('FINANCE_FEES')
   @Roles('ADMIN', 'ACCOUNTANT')
   @ApiQuery({ name: 'companyId', required: true })
   releaseInvoice(@Param('id') id: string, @Query('companyId') companyId: string) {
@@ -395,6 +409,7 @@ export class SchoolController {
   }
 
   @Post('fee-invoices/release-bulk')
+  @RequiresModule('FINANCE_FEES')
   @Roles('ADMIN', 'ACCOUNTANT')
   releaseBulkInvoices(@Body() body: { companyId: string }) {
     return this.finance.releaseBulk(body.companyId);
@@ -403,24 +418,28 @@ export class SchoolController {
   // ── Fee Heads ─────────────────────────────────────────────────────────────────
 
   @Get('fee-heads')
+  @RequiresModule('FINANCE_FEES')
   @ApiQuery({ name: 'companyId', required: true })
   listFeeHeads(@Query('companyId') companyId: string) {
     return this.finance.listFeeHeads(companyId);
   }
 
   @Post('fee-heads')
+  @RequiresModule('FINANCE_FEES')
   @Roles('ADMIN', 'ACCOUNTANT')
   createFeeHead(@Body() body: any) {
     return this.finance.createFeeHead(body);
   }
 
   @Post('fee-heads/defaults')
+  @RequiresModule('FINANCE_FEES')
   @Roles('ADMIN', 'ACCOUNTANT')
   createDefaultFeeHeads(@Body() body: { companyId: string }) {
     return this.finance.createDefaultFeeHeads(body.companyId);
   }
 
   @Put('fee-heads/:id')
+  @RequiresModule('FINANCE_FEES')
   @Roles('ADMIN', 'ACCOUNTANT')
   @ApiQuery({ name: 'companyId', required: true })
   updateFeeHead(@Param('id') id: string, @Query('companyId') companyId: string, @Body() body: any) {
@@ -428,6 +447,7 @@ export class SchoolController {
   }
 
   @Delete('fee-heads/:id')
+  @RequiresModule('FINANCE_FEES')
   @Roles('ADMIN')
   @ApiQuery({ name: 'companyId', required: true })
   deleteFeeHead(@Param('id') id: string, @Query('companyId') companyId: string) {
@@ -437,12 +457,14 @@ export class SchoolController {
   // ── Student Fee Profile / Scholarships / Packages ────────────────────────────
 
   @Get('students/:id/fee-profile')
+  @RequiresModule('FINANCE_FEES')
   @ApiQuery({ name: 'companyId', required: true })
   getStudentFeeProfile(@Param('id') id: string, @Query('companyId') companyId: string) {
     return this.finance.getStudentFeeProfile(companyId, id);
   }
 
   @Post('students/:id/scholarships')
+  @RequiresModule('FINANCE_FEES')
   @Roles('ADMIN', 'ACCOUNTANT')
   @ApiQuery({ name: 'companyId', required: true })
   addScholarship(@Param('id') id: string, @Query('companyId') companyId: string, @Body() body: any) {
@@ -450,6 +472,7 @@ export class SchoolController {
   }
 
   @Delete('scholarships/:id')
+  @RequiresModule('FINANCE_FEES')
   @Roles('ADMIN', 'ACCOUNTANT')
   @ApiQuery({ name: 'companyId', required: true })
   removeScholarship(@Param('id') id: string, @Query('companyId') companyId: string) {
@@ -457,18 +480,21 @@ export class SchoolController {
   }
 
   @Get('fee-packages')
+  @RequiresModule('FINANCE_FEES')
   @ApiQuery({ name: 'companyId', required: true })
   listFeePackages(@Query('companyId') companyId: string) {
     return this.finance.listPackages(companyId);
   }
 
   @Post('fee-packages')
+  @RequiresModule('FINANCE_FEES')
   @Roles('ADMIN', 'ACCOUNTANT')
   createFeePackage(@Body() body: any) {
     return this.finance.createPackage(body);
   }
 
   @Put('fee-packages/:id')
+  @RequiresModule('FINANCE_FEES')
   @Roles('ADMIN', 'ACCOUNTANT')
   @ApiQuery({ name: 'companyId', required: true })
   updateFeePackage(@Param('id') id: string, @Query('companyId') companyId: string, @Body() body: any) {
@@ -476,6 +502,7 @@ export class SchoolController {
   }
 
   @Delete('fee-packages/:id')
+  @RequiresModule('FINANCE_FEES')
   @Roles('ADMIN')
   @ApiQuery({ name: 'companyId', required: true })
   deleteFeePackage(@Param('id') id: string, @Query('companyId') companyId: string) {
@@ -483,6 +510,7 @@ export class SchoolController {
   }
 
   @Patch('students/:id/package')
+  @RequiresModule('FINANCE_FEES')
   @Roles('ADMIN', 'ACCOUNTANT')
   @ApiQuery({ name: 'companyId', required: true })
   assignPackage(@Param('id') id: string, @Query('companyId') companyId: string, @Body() body: { packageId: string | null }) {
@@ -492,6 +520,7 @@ export class SchoolController {
   // ── Billing Run ───────────────────────────────────────────────────────────────
 
   @Post('billing-run')
+  @RequiresModule('FINANCE_FEES')
   @Roles('ADMIN', 'ACCOUNTANT')
   billingRun(@Body() body: { companyId: string; month?: string; classId?: string; dueDate?: string; invoiceDate?: string }) {
     // Manual, button-triggered run — never auto-releases (autoRelease stays
@@ -500,6 +529,7 @@ export class SchoolController {
   }
 
   @Get('fee-invoices/:id/receipt')
+  @RequiresModule('FINANCE_FEES')
   @ApiQuery({ name: 'companyId', required: true })
   getFeeReceipt(@Param('id') id: string, @Query('companyId') companyId: string) {
     return this.finance.getFeeReceipt(companyId, id);
@@ -510,7 +540,7 @@ export class SchoolController {
 
   @Get('exams')
   @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'TEACHER')
-  @RequiresModule('SCHOOL_ACADEMICS')
+  @RequiresModule('SCHOOL_ACADEMICS_EXAMS')
   @ApiQuery({ name: 'companyId', required: true })
   listExams(@Query('companyId') companyId: string) {
     return this.service.listExams(companyId);
@@ -518,7 +548,7 @@ export class SchoolController {
 
   @Post('exams')
   @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'TEACHER')
-  @RequiresModule('SCHOOL_ACADEMICS')
+  @RequiresModule('SCHOOL_ACADEMICS_EXAMS')
   createExam(@Body() body: { companyId: string; name: string; examDate?: string; notes?: string }) {
     return this.service.createExam(body);
   }
@@ -535,7 +565,7 @@ export class SchoolController {
 
   @Get('exam-results')
   @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'TEACHER')
-  @RequiresModule('SCHOOL_ACADEMICS')
+  @RequiresModule('SCHOOL_ACADEMICS_EXAMS')
   @ApiQuery({ name: 'companyId', required: true })
   @ApiQuery({ name: 'examName', required: false })
   @ApiQuery({ name: 'studentId', required: false })
@@ -553,7 +583,7 @@ export class SchoolController {
 
   @Get('exam-results/report-card')
   @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'TEACHER')
-  @RequiresModule('SCHOOL_ACADEMICS')
+  @RequiresModule('SCHOOL_ACADEMICS_EXAMS')
   @ApiQuery({ name: 'companyId', required: true })
   @ApiQuery({ name: 'studentId', required: true })
   @ApiQuery({ name: 'examName', required: true })
@@ -599,7 +629,7 @@ export class SchoolController {
 
   @Get('exam-schedules')
   @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'TEACHER')
-  @RequiresModule('SCHOOL_ACADEMICS')
+  @RequiresModule('SCHOOL_ACADEMICS_EXAMS')
   @ApiQuery({ name: 'companyId', required: true })
   @ApiQuery({ name: 'classId', required: false })
   @ApiQuery({ name: 'examName', required: false })
@@ -650,7 +680,7 @@ export class SchoolController {
 
   @Get('timetable')
   @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'TEACHER')
-  @RequiresModule('SCHOOL_ACADEMICS')
+  @RequiresModule('SCHOOL_ACADEMICS_ROUTINE')
   @ApiQuery({ name: 'companyId', required: true })
   @ApiQuery({ name: 'classId', required: true })
   getTimetable(@Query('companyId') companyId: string, @Query('classId') classId: string) {
@@ -659,7 +689,7 @@ export class SchoolController {
 
   @Post('timetable')
   @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'TEACHER')
-  @RequiresModule('SCHOOL_ACADEMICS')
+  @RequiresModule('SCHOOL_ACADEMICS_ROUTINE')
   upsertTimetableEntry(@Body() body: any) {
     return this.service.upsertTimetableEntry(body);
   }
@@ -744,7 +774,7 @@ export class SchoolController {
 
   @Get('study-materials')
   @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'TEACHER')
-  @RequiresModule('SCHOOL_ACADEMICS')
+  @RequiresModule('SCHOOL_ACADEMICS_STUDY_MATERIALS')
   @ApiQuery({ name: 'companyId', required: true })
   @ApiQuery({ name: 'classId', required: false })
   @ApiQuery({ name: 'subjectId', required: false })
@@ -758,7 +788,7 @@ export class SchoolController {
 
   @Post('study-materials')
   @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'TEACHER')
-  @RequiresModule('SCHOOL_ACADEMICS')
+  @RequiresModule('SCHOOL_ACADEMICS_STUDY_MATERIALS')
   createStudyMaterial(@Body() body: any) {
     return this.service.createStudyMaterial(body);
   }
@@ -775,7 +805,7 @@ export class SchoolController {
 
   @Get('homework')
   @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'TEACHER')
-  @RequiresModule('SCHOOL_ACADEMICS')
+  @RequiresModule('SCHOOL_ACADEMICS_HOMEWORK')
   @ApiQuery({ name: 'companyId', required: true })
   @ApiQuery({ name: 'classId', required: false })
   @ApiQuery({ name: 'subjectId', required: false })
@@ -789,7 +819,7 @@ export class SchoolController {
 
   @Post('homework')
   @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'TEACHER')
-  @RequiresModule('SCHOOL_ACADEMICS')
+  @RequiresModule('SCHOOL_ACADEMICS_HOMEWORK')
   createHomework(@Body() body: any) {
     return this.service.createHomework(body);
   }
@@ -816,7 +846,7 @@ export class SchoolController {
   @Get('library/books')
   @Roles('STAFF', 'ACCOUNTANT', 'ADMIN')
   @RequiresStaffTag('LIBRARY')
-  @RequiresModule('FACILITIES')
+  @RequiresModule('FACILITIES_LIBRARY')
   @ApiQuery({ name: 'companyId', required: true })
   listBooks(@Query('companyId') companyId: string) {
     return this.service.listBooks(companyId);
@@ -851,7 +881,7 @@ export class SchoolController {
   @Get('library/issues')
   @Roles('STAFF', 'ACCOUNTANT', 'ADMIN')
   @RequiresStaffTag('LIBRARY')
-  @RequiresModule('FACILITIES')
+  @RequiresModule('FACILITIES_LIBRARY')
   @ApiQuery({ name: 'companyId', required: true })
   @ApiQuery({ name: 'status', required: false })
   listIssues(@Query('companyId') companyId: string, @Query('status') status?: string) {
@@ -880,7 +910,7 @@ export class SchoolController {
 
   @Get('hostel/rooms')
   @RequiresStaffTag('HOSTEL')
-  @RequiresModule('FACILITIES')
+  @RequiresModule('FACILITIES_HOSTEL')
   @ApiQuery({ name: 'companyId', required: true })
   listHostelRooms(@Query('companyId') companyId: string) {
     return this.service.listHostelRooms(companyId);
@@ -911,7 +941,7 @@ export class SchoolController {
 
   @Get('hostel/allocations')
   @RequiresStaffTag('HOSTEL')
-  @RequiresModule('FACILITIES')
+  @RequiresModule('FACILITIES_HOSTEL')
   @ApiQuery({ name: 'companyId', required: true })
   @ApiQuery({ name: 'roomId', required: false })
   listHostelAllocations(@Query('companyId') companyId: string, @Query('roomId') roomId?: string) {
@@ -938,7 +968,7 @@ export class SchoolController {
 
   @Get('transport/routes')
   @RequiresStaffTag('TRANSPORT')
-  @RequiresModule('FACILITIES')
+  @RequiresModule('FACILITIES_TRANSPORT')
   @ApiQuery({ name: 'companyId', required: true })
   listTransportRoutes(@Query('companyId') companyId: string) {
     return this.service.listTransportRoutes(companyId);
@@ -969,7 +999,7 @@ export class SchoolController {
 
   @Get('transport/assignments')
   @RequiresStaffTag('TRANSPORT')
-  @RequiresModule('FACILITIES')
+  @RequiresModule('FACILITIES_TRANSPORT')
   @ApiQuery({ name: 'companyId', required: true })
   @ApiQuery({ name: 'routeId', required: false })
   listTransportAssignments(@Query('companyId') companyId: string, @Query('routeId') routeId?: string) {

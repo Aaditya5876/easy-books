@@ -7,7 +7,7 @@ import { BulkImportService } from '../../../../application/services/bulk-import.
 @ApiTags('Bulk Import')
 @ApiBearerAuth()
 @Roles('STAFF', 'ACCOUNTANT', 'ADMIN')
-@RequiresModule('BULK_IMPORT')
+@RequiresModule('BULK_IMPORT_STUDENTS')
 @Controller('api/v1/bulk')
 export class BulkImportController {
   constructor(private readonly service: BulkImportService) {}

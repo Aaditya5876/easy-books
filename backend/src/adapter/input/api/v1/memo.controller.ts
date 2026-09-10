@@ -9,7 +9,7 @@ import { CreateMemoDocumentSchema, UpdateMemoDocumentSchema, CreateMemoDocumentD
 @ApiTags('Memos')
 @ApiBearerAuth()
 @Roles('STAFF', 'ACCOUNTANT', 'ADMIN')
-@RequiresModule('COMMUNICATION')
+@RequiresModule('COMMUNICATION_MEMO')
 @Controller('api/v1/memos')
 export class MemoController {
   constructor(private readonly service: MemoServiceImpl) {}

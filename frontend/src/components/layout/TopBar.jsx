@@ -63,7 +63,9 @@ export default function TopBar({ onMobileMenuToggle, onToolOpen }) {
   async function loadData() {
     const me = await apiAuth.me();
     setUser(me);
-    const companyList = await api.Company.list();
+    const companyList = me?.role === 'SUPER_ADMIN'
+      ? await companyApi.listAll().then(res => res.data || []).catch(() => [])
+      : await api.Company.list();
     setCompanies(companyList);
     // SUPER_ADMIN has no company of their own by default (no baseline
     // "active company" the way a real user has) — but they can explicitly
@@ -175,16 +177,7 @@ export default function TopBar({ onMobileMenuToggle, onToolOpen }) {
     window.location.reload();
   }
 
-  // SUPER_ADMIN has no Companies tab (they never own a company to switch
-  // between or edit — see Settings.jsx) so this routes to Clients instead,
-  // where their actual tools live (package, admin, reset password, activate/
-  // deactivate). Deliberately does NOT touch the active company id — SUPER_ADMIN
-  // doesn't "browse into" a client's data this way, only manages the client.
   function handleCompanyClick(company) {
-    if (isSuperAdmin) {
-      navigate('/settings', { state: { tab: 'clients' } });
-      return;
-    }
     // Switching TO a deactivated/expired company is allowed — that's the
     // whole point of the "show it as-is with a banner" design (see loadData
     // above). It's still blocked once already selected, at the point every
@@ -583,13 +576,23 @@ export default function TopBar({ onMobileMenuToggle, onToolOpen }) {
       <div className="px-4 lg:px-6 py-2.5 bg-red-50 border-b border-red-200 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm">
         <AlertTriangle className="w-4 h-4 text-red-600 shrink-0" />
         <span className="text-red-800 font-medium">
-          {activeCompany.is_active === false
+          {isSuperAdmin && activeCompany.is_active !== false
+            ? t('settings.superAdminTokenExpiredBanner', { defaultValue: 'This company\'s subscription token has expired.' })
+            : activeCompany.is_active === false
             ? t('settings.companyDeactivatedBanner', { defaultValue: 'This company has been deactivated.' })
             : t('settings.subscriptionExpiredBanner', { defaultValue: "This company's subscription has expired." })}
         </span>
-        <span className="text-red-600">
-          {t('settings.servicesPausedHint', { defaultValue: "Services are paused for now, but your data is safe — we'll be back up and running again soon. Please contact GeoInfosys." })}
-        </span>
+        {isSuperAdmin && activeCompany.is_active !== false ? (
+          <span className="text-red-600">
+            {activeCompany.last_renewal_requested_at
+              ? t('settings.renewalRequestStatus', { defaultValue: 'Renewal request: received.' })
+              : t('settings.renewalRequestStatusMissing', { defaultValue: 'Renewal request: not received yet.' })}
+          </span>
+        ) : (
+          <span className="text-red-600">
+            {t('settings.servicesPausedHint', { defaultValue: "Services are paused for now, but your data is safe — we'll be back up and running again soon. Please contact GeoInfosys." })}
+          </span>
+        )}
         {isAdmin && !isSuperAdmin && (() => {
           const onCooldown = renewalCooldownRemainingMs(activeCompany) > 0;
           return (

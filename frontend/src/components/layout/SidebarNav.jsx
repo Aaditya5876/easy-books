@@ -23,8 +23,8 @@ const navSections = [
     activeClass: 'bg-sidebar-primary text-sidebar-primary-foreground shadow-sm',
     items: [
       { icon: LayoutDashboard, label: 'Dashboard', path: '/' },
-      { icon: Fingerprint, label: 'My Attendance', path: '/my-attendance', module: 'HRMS' },
-      { icon: CalendarDays, label: 'My Leave', path: '/my-leave', module: 'HRMS' },
+      { icon: Fingerprint, label: 'My Attendance', path: '/my-attendance', module: 'HRMS_ATTENDANCE' },
+      { icon: CalendarDays, label: 'My Leave', path: '/my-leave', module: 'HRMS_LEAVE' },
       { icon: BarChart2, label: 'Reports', path: '/reports' },
     ]
   },
@@ -36,8 +36,8 @@ const navSections = [
     // keep STAFF from seeing a dead link.
     minRole: 'accountant',
     items: [
-      { icon: BookOpen, label: 'Ledger', path: '/ledger', module: 'FINANCE' },
-      { icon: ArrowLeftRight, label: 'Transactions', path: '/transactions', module: 'FINANCE' },
+      { icon: BookOpen, label: 'Ledger', path: '/ledger', module: 'FINANCE_LEDGER' },
+      { icon: ArrowLeftRight, label: 'Transactions', path: '/transactions', module: 'FINANCE_TRANSACTIONS' },
     ]
   },
   {
@@ -47,7 +47,7 @@ const navSections = [
     items: [
       { icon: Users, label: 'Vendors', path: '/vendors' },
       { icon: UserCheck, label: 'Clients', path: '/clients' },
-      { icon: Package, label: 'Inventory', path: '/inventory', module: 'INVENTORY' },
+      { icon: Package, label: 'Inventory', path: '/inventory', module: 'INVENTORY_STOCK' },
       { icon: ShoppingCart, label: 'Purchase', path: '/purchase' },
       { icon: Receipt, label: 'Sales', path: '/sales' },
       { icon: ClipboardList, label: 'Quotations', path: '/quotations' },
@@ -66,7 +66,7 @@ const navSections = [
     labelColor: 'text-violet-400',
     activeClass: 'bg-violet-600 text-white shadow-sm shadow-violet-900/30',
     items: [
-      { icon: FileText, label: 'Memo', path: '/memo', module: 'COMMUNICATION' },
+      { icon: FileText, label: 'Memo', path: '/memo', module: 'COMMUNICATION_MEMO' },
       { icon: MessageSquare, label: 'Communication', path: '/communication', module: 'COMMUNICATION' },
       { icon: FileSpreadsheet, label: 'Templates', path: '/templates' },
     ]
@@ -78,9 +78,9 @@ const navSections = [
     // Employees/Attendance: ACCOUNTANT + ADMIN, or a STAFF member tagged HR
     // (orStaffTag). Payroll stays ACCOUNTANT/ADMIN-only (minRole).
     items: [
-      { icon: UserCircle, label: 'Employees', path: '/employees', module: 'HRMS', orStaffTag: 'HR' },
-      { icon: CalendarCheck, label: 'Attendance', path: '/attendance', module: 'HRMS', orStaffTag: 'HR' },
-      { icon: Banknote, label: 'Payroll', path: '/payroll', module: 'HRMS', minRole: 'accountant' },
+      { icon: UserCircle, label: 'Employees', path: '/employees', module: 'HRMS_EMPLOYEES', orStaffTag: 'HR' },
+      { icon: CalendarCheck, label: 'Attendance', path: '/attendance', module: 'HRMS_ATTENDANCE', orStaffTag: 'HR' },
+      { icon: Banknote, label: 'Payroll', path: '/payroll', module: 'HRMS_PAYROLL', minRole: 'accountant' },
     ]
   },
   {
@@ -122,8 +122,8 @@ const schoolNavSections = [
     activeClass: 'bg-sidebar-primary text-sidebar-primary-foreground shadow-sm',
     items: [
       { icon: LayoutDashboard, label: 'Dashboard', path: '/', roles: ['TEACHER'] },
-      { icon: Fingerprint, label: 'My Attendance', path: '/my-attendance', roles: ['TEACHER'], module: 'HRMS' },
-      { icon: CalendarDays, label: 'My Leave', path: '/my-leave', roles: ['TEACHER'], module: 'HRMS' },
+      { icon: Fingerprint, label: 'My Attendance', path: '/my-attendance', roles: ['TEACHER'], module: 'HRMS_ATTENDANCE' },
+      { icon: CalendarDays, label: 'My Leave', path: '/my-leave', roles: ['TEACHER'], module: 'HRMS_LEAVE' },
       // Reports is split by tab for TEACHER (see SchoolReports.jsx) — the backend
       // only grants TEACHER the Attendance/Academics analytics endpoints, not
       // Fees/Operations/Audit.
@@ -148,10 +148,10 @@ const schoolNavSections = [
     items: [
       { icon: GraduationCap, label: 'Students', path: '/students', roles: ['TEACHER'] },
       { icon: CalendarCheck2, label: 'Attendance', path: '/student-attendance', roles: ['TEACHER'] },
-      { icon: CalendarDays, label: 'Routine', path: '/routine', roles: ['TEACHER'], module: 'SCHOOL_ACADEMICS' },
-      { icon: Trophy, label: 'Exam', path: '/exams', roles: ['TEACHER'], module: 'SCHOOL_ACADEMICS' },
-      { icon: FolderOpen, label: 'Study Material', path: '/study-materials', roles: ['TEACHER'], module: 'SCHOOL_ACADEMICS' },
-      { icon: ClipboardList, label: 'Homework', path: '/homework', roles: ['TEACHER'], module: 'SCHOOL_ACADEMICS' },
+      { icon: CalendarDays, label: 'Routine', path: '/routine', roles: ['TEACHER'], module: 'SCHOOL_ACADEMICS_ROUTINE' },
+      { icon: Trophy, label: 'Exam', path: '/exams', roles: ['TEACHER'], module: 'SCHOOL_ACADEMICS_EXAMS' },
+      { icon: FolderOpen, label: 'Study Material', path: '/study-materials', roles: ['TEACHER'], module: 'SCHOOL_ACADEMICS_STUDY_MATERIALS' },
+      { icon: ClipboardList, label: 'Homework', path: '/homework', roles: ['TEACHER'], module: 'SCHOOL_ACADEMICS_HOMEWORK' },
     ]
   },
   {
@@ -162,8 +162,8 @@ const schoolNavSections = [
       { icon: DollarSign, label: 'Fees', path: '/fees' },
       // Ledger/Transactions endpoints are ACCOUNTANT/ADMIN-only on the backend —
       // keep STAFF from seeing a dead link (Fees stays open to STAFF for front-desk use).
-      { icon: BookOpen, label: 'Ledger', path: '/ledger', minRole: 'accountant', module: 'FINANCE' },
-      { icon: ArrowLeftRight, label: 'Transactions', path: '/transactions', minRole: 'accountant', module: 'FINANCE' },
+      { icon: BookOpen, label: 'Ledger', path: '/ledger', minRole: 'accountant', module: 'FINANCE_LEDGER' },
+      { icon: ArrowLeftRight, label: 'Transactions', path: '/transactions', minRole: 'accountant', module: 'FINANCE_TRANSACTIONS' },
     ]
   },
   {
@@ -193,8 +193,8 @@ const schoolNavSections = [
     labelColor: 'text-sky-400',
     activeClass: 'bg-sky-600 text-white shadow-sm shadow-sky-900/30',
     items: [
-      { icon: CalendarCheck, label: 'Staff Attendance', path: '/attendance', module: 'HRMS', orStaffTag: 'HR' },
-      { icon: Banknote, label: 'Payroll', path: '/payroll', module: 'HRMS', minRole: 'accountant' },
+      { icon: CalendarCheck, label: 'Staff Attendance', path: '/attendance', module: 'HRMS_ATTENDANCE', orStaffTag: 'HR' },
+      { icon: Banknote, label: 'Payroll', path: '/payroll', module: 'HRMS_PAYROLL', minRole: 'accountant' },
     ]
   },
   {
@@ -220,7 +220,9 @@ export default function SidebarNav({ collapsed, onToggle }) {
   // Empty/missing enabledModules = unrestricted (legacy/full-access plan) —
   // mirrors ModuleAccessGuard's backend behavior for the same field.
   const enabledModules = user?.defaultCompany?.enabledModules || [];
-  const isModuleEnabled = (moduleKey) => !moduleKey || enabledModules.length === 0 || enabledModules.includes(moduleKey);
+  const isModuleEnabled = (moduleKey) => !moduleKey || enabledModules.length === 0
+    || enabledModules.includes(moduleKey)
+    || enabledModules.includes(moduleKey.replace(/_(FEES|TRANSACTIONS|LEDGER)$/, ''));
   const [expandedSections, setExpandedSections] = useState(
     Array(Math.max(navSections.length, schoolNavSections.length)).fill(true)
   );

@@ -6,7 +6,7 @@ import { RequiresModule } from '../../../../modules/decorators/requires-module.d
 
 @ApiTags('Payroll')
 @ApiBearerAuth()
-@RequiresModule('HRMS')
+@RequiresModule('HRMS_PAYROLL')
 @Controller('api/v1/payroll')
 export class PayrollController {
   constructor(private readonly engine: PayrollEngineService) {}

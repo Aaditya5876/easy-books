@@ -84,7 +84,7 @@ export default function Transactions() {
   const [showPassword, setShowPassword] = useState(false);
   const [uploadingQr, setUploadingQr] = useState(false);
   const [form, setForm] = useState({
-    account_type: 'purchase', category: 'expense', status: defaultStatusForMethod('cash'), amount: 0, description: '',
+    account_type: 'purchase', category: 'expense', status: defaultStatusForMethod('cash'), amount: '', description: '',
     bank_name: '', bank_account_number: '', cheque_number: '', cheque_date: '',
     cheque_issue_date: '', party_name: '',
     date_ad: new Date().toISOString().split('T')[0], reference_number: '', cash_bank_note: '',
@@ -217,7 +217,7 @@ export default function Transactions() {
       account_type: 'purchase',
       category: 'expense',
       status: defaultStatusForMethod('cash'),
-      amount: 0,
+      amount: '',
       description: '',
       bank_name: '', bank_account_number: '', cheque_number: '', cheque_date: '',
       cheque_issue_date: '', party_name: '',
@@ -798,10 +798,11 @@ export default function Transactions() {
                 <div className="flex items-stretch mt-1">
                   <span className="flex items-center px-3 text-sm font-bold text-muted-foreground bg-muted border border-r-0 border-input rounded-l-md shrink-0">NPR</span>
                   <Input
-                    type="number"
+                    type="text"
+                    inputMode="decimal"
                     className="rounded-l-none h-11 text-lg font-semibold flex-1"
                     value={form.amount}
-                    onChange={e => setForm({ ...form, amount: parseFloat(e.target.value) || 0 })}
+                    onChange={e => setForm({ ...form, amount: e.target.value })}
                     placeholder="0.00"
                   />
                 </div>

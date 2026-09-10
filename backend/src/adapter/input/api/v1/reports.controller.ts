@@ -7,7 +7,7 @@ import { RequiresModule } from '../../../../modules/decorators/requires-module.d
 @ApiTags('Reports')
 @ApiBearerAuth()
 @Roles('ACCOUNTANT', 'ADMIN')
-@RequiresModule('FINANCE')
+@RequiresModule('FINANCE_LEDGER')
 @Controller('api/v1/reports')
 export class ReportsController {
   constructor(private readonly service: ReportsService) {}

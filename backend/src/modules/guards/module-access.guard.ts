@@ -40,11 +40,18 @@ export class ModuleAccessGuard implements CanActivate {
     for (const companyId of companyIds) {
       const company = await this.prisma.company.findUnique({
         where: { id: companyId },
-        select: { enabledModules: true },
+        select: { enabledModules: true, businessType: true },
       });
       if (!company || company.enabledModules.length === 0) continue;
 
-      if (!company.enabledModules.includes(required)) {
+      const legacyParent = required.startsWith('FINANCE_') ? 'FINANCE' : null;
+      const hasExplicitFinanceChild = company.enabledModules.some(module => module.startsWith('FINANCE_'));
+      const legacySchoolFees = required === 'FINANCE_FEES'
+        && company.businessType === 'SCHOOL'
+        && !hasExplicitFinanceChild;
+      if (!company.enabledModules.includes(required)
+        && (!legacyParent || !company.enabledModules.includes(legacyParent))
+        && !legacySchoolFees) {
         throw new ForbiddenException(`Your plan does not include the ${required} module`);
       }
     }

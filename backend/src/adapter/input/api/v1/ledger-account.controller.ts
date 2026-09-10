@@ -9,7 +9,7 @@ import { CreateLedgerAccountSchema, UpdateLedgerAccountSchema, CreateLedgerAccou
 @ApiTags('Ledger Accounts')
 @ApiBearerAuth()
 @Roles('ACCOUNTANT', 'ADMIN')
-@RequiresModule('FINANCE')
+@RequiresModule('FINANCE_LEDGER')
 @Controller('api/v1/ledger/accounts')
 export class LedgerAccountController {
   constructor(private readonly service: LedgerAccountServiceImpl) {}

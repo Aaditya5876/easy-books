@@ -12,7 +12,7 @@ import { CreateAttendanceSchema, UpdateAttendanceSchema, CreateAttendanceDTO, Up
 @ApiTags('Attendance')
 @ApiBearerAuth()
 @Roles('ACCOUNTANT', 'ADMIN')
-@RequiresModule('HRMS')
+@RequiresModule('HRMS_ATTENDANCE')
 @Controller('api/v1/attendance')
 export class AttendanceController {
   constructor(private readonly service: AttendanceServiceImpl) {}

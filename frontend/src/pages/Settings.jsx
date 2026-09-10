@@ -24,7 +24,7 @@ import {
   Building2, Plus, Trash2, Save, ImagePlus, X, UserPlus, Copy, Check, Shield,
   Phone, Mail, MapPin, Hash, User, Palette, Type, Bell, RotateCcw, Upload,
   Recycle, RotateCw, Lock, AlertTriangle, Clock, Zap, QrCode, Power, PowerOff, Layers, KeyRound, ExternalLink,
-  Search, ChevronRight, UserCircle
+  Search, ChevronRight, ChevronDown, UserCircle
 } from 'lucide-react';
 
 const SIDEBAR_PALETTE = ['#1e293b', '#1e3a5f', '#14532d', '#4c1d95', '#881337', '#7c2d12'];
@@ -75,13 +75,41 @@ const STAFF_TAGS = [
 // enabledModules is never empty — it's added automatically whenever any
 // module here is selected, never shown as its own checkbox.
 const MODULE_CATALOG = [
-  { value: 'SCHOOL_ACADEMICS', i18n: 'settings.moduleSchoolAcademics', label: 'Academics', desc: 'Exams, homework, study materials, routine/timetable', schoolOnly: true },
-  { value: 'FACILITIES', i18n: 'settings.moduleFacilities', label: 'Facilities', desc: 'Library, hostel, transport', schoolOnly: true },
-  { value: 'HRMS', i18n: 'settings.moduleHrms', label: 'HR & Payroll', desc: 'Employees, staff attendance, leave, payroll' },
-  { value: 'FINANCE', i18n: 'settings.moduleFinance', label: 'Finance', desc: 'Ledger, transactions, accounting' },
-  { value: 'INVENTORY', i18n: 'settings.moduleInventory', label: 'Inventory', desc: 'Stock and item tracking' },
-  { value: 'AI', i18n: 'settings.moduleAi', label: 'AI Tools', desc: 'Gemini-powered notices, insights, report-card comments' },
-  { value: 'BULK_IMPORT', i18n: 'settings.moduleBulkImport', label: 'Bulk Import', desc: 'CSV/sheet import for students, employees, etc.' },
+  { value: 'SCHOOL_ACADEMICS', i18n: 'settings.moduleSchoolAcademics', label: 'Academics', desc: 'School academic services', schoolOnly: true, children: [
+    { value: 'SCHOOL_ACADEMICS_ROUTINE', label: 'Routine', desc: 'Class routines and timetables' },
+    { value: 'SCHOOL_ACADEMICS_EXAMS', label: 'Exams', desc: 'Exams and exam schedules' },
+    { value: 'SCHOOL_ACADEMICS_STUDY_MATERIALS', label: 'Study Materials', desc: 'Study materials and library content' },
+    { value: 'SCHOOL_ACADEMICS_HOMEWORK', label: 'Homework', desc: 'Homework assignments and submissions' },
+  ] },
+  { value: 'FACILITIES', i18n: 'settings.moduleFacilities', label: 'Facilities', desc: 'School facility services', schoolOnly: true, children: [
+    { value: 'FACILITIES_LIBRARY', label: 'Library', desc: 'Library catalog, issues and returns' },
+    { value: 'FACILITIES_HOSTEL', label: 'Hostel', desc: 'Hostel rooms and allocations' },
+    { value: 'FACILITIES_TRANSPORT', label: 'Transport', desc: 'Transport routes and assignments' },
+  ] },
+  { value: 'HRMS', i18n: 'settings.moduleHrms', label: 'HR & Payroll', desc: 'People operations services', children: [
+    { value: 'HRMS_EMPLOYEES', label: 'Employees', desc: 'Employee records and staff directory' },
+    { value: 'HRMS_ATTENDANCE', label: 'Attendance', desc: 'Staff attendance' },
+    { value: 'HRMS_LEAVE', label: 'Leave', desc: 'Leave requests and approvals' },
+    { value: 'HRMS_PAYROLL', label: 'Payroll', desc: 'Payroll processing and payslips' },
+  ] },
+  { value: 'FINANCE', i18n: 'settings.moduleFinance', label: 'Finance', desc: 'Finance tools', children: [
+    { value: 'FINANCE_FEES', label: 'Fees', desc: 'Fee structures, invoices and payments', schoolOnly: true },
+    { value: 'FINANCE_TRANSACTIONS', label: 'Transactions', desc: 'Income and expense transactions' },
+    { value: 'FINANCE_LEDGER', label: 'Ledger', desc: 'Accounts, entries and financial reports' },
+  ] },
+  { value: 'INVENTORY', i18n: 'settings.moduleInventory', label: 'Inventory', desc: 'Inventory services', children: [
+    { value: 'INVENTORY_STOCK', label: 'Stock', desc: 'Items, stock movements and adjustments' },
+  ] },
+  { value: 'AI', i18n: 'settings.moduleAi', label: 'AI Tools', desc: 'AI services', children: [
+    { value: 'AI_NOTICES', label: 'Notices', desc: 'AI-assisted notices' },
+    { value: 'AI_INSIGHTS', label: 'Insights', desc: 'AI business and school insights' },
+    { value: 'AI_REPORT_CARDS', label: 'Report Cards', desc: 'AI report-card comments' },
+  ] },
+  { value: 'BULK_IMPORT', i18n: 'settings.moduleBulkImport', label: 'Bulk Import', desc: 'Import services', children: [
+    { value: 'BULK_IMPORT_STUDENTS', label: 'Students', desc: 'Import students in bulk' },
+    { value: 'BULK_IMPORT_EMPLOYEES', label: 'Employees', desc: 'Import employees in bulk' },
+    { value: 'BULK_IMPORT_ITEMS', label: 'Items', desc: 'Import inventory items in bulk' },
+  ] },
 ];
 
 // A client's add-on checklist should only offer modules that mean something
@@ -89,7 +117,10 @@ const MODULE_CATALOG = [
 // a non-school company, so offering them there would be a toggle that lies.
 function moduleCatalogFor(company) {
   const isSchoolClient = company?.businessType === 'SCHOOL';
-  return isSchoolClient ? MODULE_CATALOG : MODULE_CATALOG.filter(m => !m.schoolOnly);
+  return (isSchoolClient ? MODULE_CATALOG : MODULE_CATALOG.filter(m => !m.schoolOnly)).map(module => ({
+    ...module,
+    children: module.children?.filter(child => isSchoolClient || !child.schoolOnly),
+  }));
 }
 
 // Core tools that ship with every company on any package and have no
@@ -171,7 +202,7 @@ export default function Settings() {
   // SUPER_ADMIN never owns a company of their own — Preferences (company
   // branding/fiscal year/etc.) is meaningless for them, so land on Clients
   // instead whenever they open Settings with no explicit tab requested.
-  const [activeTab, setActiveTab] = useState(location.state?.tab || (isSuperAdmin ? 'clients' : 'preferences'));
+  const [activeTab, setActiveTab] = useState(location.state?.tab || (isSuperAdmin ? 'clients' : 'companies'));
 
   // TopBar links here with e.g. navigate('/settings', { state: { tab: 'clients',
   // openAddCompany: true } }) — a useEffect (not just the lazy initial state
@@ -254,6 +285,7 @@ export default function Settings() {
   const [clientResettingPasswordId, setClientResettingPasswordId] = useState(null); // admin userId mid-reset
   const [pendingClientModules, setPendingClientModules] = useState({}); // { [companyId]: string[] } — staged, unsaved package edits
   const [expandedClientId, setExpandedClientId] = useState(null); // companyId whose package editor is open — one at a time
+  const [expandedClientModules, setExpandedClientModules] = useState({});
   const [clientSearch, setClientSearch] = useState('');
   const [clientSubscriptionSaving, setClientSubscriptionSaving] = useState(null); // companyId mid-save
   const [pendingSubscriptionExpiry, setPendingSubscriptionExpiry] = useState({}); // { [companyId]: string (datetime-local) | '' } — staged, unsaved
@@ -703,8 +735,8 @@ export default function Settings() {
   // ── Clients — platform-wide client directory (SUPER_ADMIN only) ──────────
   const PACKAGE_MODULES = {
     BASE: ['BASE'],
-    STANDARD: ['BASE', 'SCHOOL_ACADEMICS'],
-    PREMIUM: ['BASE', 'SCHOOL_ACADEMICS', 'FACILITIES', 'HRMS', 'AI', 'BULK_IMPORT', 'FINANCE', 'INVENTORY'],
+    STANDARD: ['BASE', 'SCHOOL_ACADEMICS', 'SCHOOL_ACADEMICS_ROUTINE', 'SCHOOL_ACADEMICS_EXAMS', 'SCHOOL_ACADEMICS_STUDY_MATERIALS', 'SCHOOL_ACADEMICS_HOMEWORK'],
+    PREMIUM: ['BASE', 'SCHOOL_ACADEMICS', 'SCHOOL_ACADEMICS_ROUTINE', 'SCHOOL_ACADEMICS_EXAMS', 'SCHOOL_ACADEMICS_STUDY_MATERIALS', 'SCHOOL_ACADEMICS_HOMEWORK', 'FACILITIES', 'FACILITIES_LIBRARY', 'FACILITIES_HOSTEL', 'FACILITIES_TRANSPORT', 'HRMS', 'HRMS_EMPLOYEES', 'HRMS_ATTENDANCE', 'HRMS_LEAVE', 'HRMS_PAYROLL', 'AI', 'AI_NOTICES', 'AI_INSIGHTS', 'AI_REPORT_CARDS', 'BULK_IMPORT', 'BULK_IMPORT_STUDENTS', 'BULK_IMPORT_EMPLOYEES', 'BULK_IMPORT_ITEMS', 'FINANCE_FEES', 'FINANCE_TRANSACTIONS', 'FINANCE_LEDGER', 'INVENTORY', 'INVENTORY_STOCK'],
   };
 
   function packageTierOf(enabledModules) {
@@ -761,10 +793,37 @@ export default function Settings() {
   function stageClientModuleToggle(company, moduleKey) {
     setPendingClientModules(p => {
       const current = p[company.id] ?? company.enabledModules ?? [];
-      const next = current.includes(moduleKey) ? current.filter(m => m !== moduleKey) : [...current, moduleKey];
+      const module = moduleCatalogFor(company).find(item => item.value === moduleKey)
+        || moduleCatalogFor(company).find(item => item.children?.some(child => child.value === moduleKey));
+      const childKeys = module?.children?.map(child => child.value) || [];
+      if (module && module.value !== moduleKey && childKeys.length > 0) {
+        const next = current.includes(moduleKey)
+          ? current.filter(key => key !== moduleKey)
+          : [...current, moduleKey];
+        const modules = next.filter(m => m !== 'BASE').length > 0 ? [...new Set(['BASE', ...next])] : [];
+        return { ...p, [company.id]: modules };
+      }
+      const currentChildren = childKeys.length
+        ? childKeys.filter(key => current.includes(key) || current.includes(moduleKey))
+        : [];
+      const toggledKeys = childKeys.length
+        ? (currentChildren.length === childKeys.length ? [] : childKeys)
+        : (current.includes(moduleKey) ? [] : [moduleKey]);
+      const keysToReplace = childKeys.length ? [moduleKey, ...childKeys] : [moduleKey];
+      const next = [...current.filter(key => !keysToReplace.includes(key)), ...toggledKeys];
       const modules = next.filter(m => m !== 'BASE').length > 0 ? [...new Set(['BASE', ...next])] : [];
       return { ...p, [company.id]: modules };
     });
+  }
+
+  function isClientModuleActive(effectiveModules, module, child) {
+    const key = child?.value || module.value;
+    return (effectiveModules || []).includes(key) || (!child && (effectiveModules || []).includes(module.value));
+  }
+
+  function toggleClientModuleExpanded(companyId, moduleValue) {
+    const key = `${companyId}:${moduleValue}`;
+    setExpandedClientModules(current => ({ ...current, [key]: !current[key] }));
   }
 
   function discardClientPackageChange(company) {
@@ -1148,18 +1207,46 @@ export default function Settings() {
 
                   return groups.map(group => (
                     <div key={group.key} className="bg-card rounded-xl border overflow-hidden">
-                      {/* Only shown when the same admin runs more than one company —
-                          a single-company client just gets a plain row, no group header. */}
-                      {group.companies.length > 1 && (
-                        <div className="px-4 py-2 bg-muted/40 border-b flex items-center gap-2 text-xs">
-                          <UserCircle className="w-3.5 h-3.5 text-muted-foreground" />
-                          <span className="font-medium">{group.admin?.name}</span>
-                          <span className="text-muted-foreground">{group.admin?.email}</span>
-                          <span className="ml-auto text-muted-foreground">
-                            {t('settings.schoolCount', { defaultValue: '{{count}} schools', count: group.companies.length })}
-                          </span>
-                        </div>
-                      )}
+                      <div className="px-4 py-2.5 bg-muted/40 border-b flex flex-wrap items-center gap-x-2 gap-y-1.5 text-xs">
+                        <UserCircle className="w-3.5 h-3.5 text-muted-foreground" />
+                        <span className="font-medium">{group.admin?.name || t('settings.noAdminYet', { defaultValue: 'No admin user found' })}</span>
+                        {group.admin?.email && <span className="text-muted-foreground">{group.admin.email}</span>}
+                        <span className="text-muted-foreground">
+                          {t('settings.schoolCount', { defaultValue: '{{count}} schools', count: group.companies.length })}
+                        </span>
+                        {group.admin && (() => {
+                          const maxCompaniesPending = pendingMaxCompanies[group.admin.id] !== undefined;
+                          return (
+                            <div className="flex items-center gap-1.5 ml-auto" title={t('settings.maxCompaniesHint', { defaultValue: 'How many companies this admin may self-serve create' })}>
+                              <span className="font-medium text-muted-foreground">{t('settings.maxCompaniesLabel', { defaultValue: 'Max Companies' })}</span>
+                              <input
+                                type="number"
+                                min={1}
+                                className="w-14 h-7 text-xs border rounded-md px-1.5 bg-background focus:outline-none focus:ring-1 focus:ring-ring"
+                                value={pendingMaxCompanies[group.admin.id] ?? group.admin.maxCompanies ?? 1}
+                                disabled={clientMaxCompaniesSaving === group.admin.id}
+                                onChange={e => setPendingMaxCompanies(p => ({ ...p, [group.admin.id]: Number(e.target.value) }))}
+                              />
+                              {maxCompaniesPending && (
+                                <>
+                                  <Button size="sm" className="h-7 px-2" onClick={() => handleSaveMaxCompanies(group.admin)} disabled={clientMaxCompaniesSaving === group.admin.id}>
+                                    <Save className="w-3.5 h-3.5 mr-1" />
+                                    {clientMaxCompaniesSaving === group.admin.id ? t('settings.savingEllipsis', { defaultValue: 'Saving…' }) : t('settings.save', { defaultValue: 'Save' })}
+                                  </Button>
+                                  <button
+                                    type="button"
+                                    onClick={() => discardMaxCompaniesChange(group.admin.id)}
+                                    disabled={clientMaxCompaniesSaving === group.admin.id}
+                                    className="h-7 rounded-md px-1.5 font-medium text-muted-foreground underline-offset-2 hover:bg-muted hover:text-foreground hover:underline disabled:opacity-50"
+                                  >
+                                    {t('settings.cancel', { defaultValue: 'Cancel' })}
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          );
+                        })()}
+                      </div>
                       <div className="divide-y">
                         {group.companies.map(c => {
                           const admin = group.admin;
@@ -1269,38 +1356,6 @@ export default function Settings() {
                                         {!tier && <span className="text-xs text-muted-foreground">{t('settings.noPackageSetShort', { defaultValue: '(unrestricted/legacy)' })}</span>}
                                       </div>
 
-                                      {admin && (() => {
-                                        const maxCompaniesPending = pendingMaxCompanies[admin.id] !== undefined;
-                                        return (
-                                          <div className="flex items-center gap-1.5" title={t('settings.maxCompaniesHint', { defaultValue: 'How many companies this admin may self-serve create' })}>
-                                            <span className="text-xs font-medium text-muted-foreground">{t('settings.maxCompaniesLabel', { defaultValue: 'Max Companies' })}</span>
-                                            <input
-                                              type="number"
-                                              min={1}
-                                              className="w-14 text-xs border rounded-md px-1.5 py-1 bg-background focus:outline-none focus:ring-1 focus:ring-ring"
-                                              value={pendingMaxCompanies[admin.id] ?? admin.maxCompanies ?? 1}
-                                              disabled={clientMaxCompaniesSaving === admin.id}
-                                              onChange={e => setPendingMaxCompanies(p => ({ ...p, [admin.id]: Number(e.target.value) }))}
-                                            />
-                                            {maxCompaniesPending && (
-                                              <>
-                                                <Button size="sm" onClick={() => handleSaveMaxCompanies(admin)} disabled={clientMaxCompaniesSaving === admin.id}>
-                                                  <Save className="w-3.5 h-3.5 mr-1.5" />
-                                                  {clientMaxCompaniesSaving === admin.id ? t('settings.savingEllipsis', { defaultValue: 'Saving…' }) : t('settings.save', { defaultValue: 'Save' })}
-                                                </Button>
-                                                <button
-                                                  type="button"
-                                                  onClick={() => discardMaxCompaniesChange(admin.id)}
-                                                  disabled={clientMaxCompaniesSaving === admin.id}
-                                                  className="text-xs text-muted-foreground hover:text-foreground underline disabled:opacity-50"
-                                                >
-                                                  {t('settings.cancel', { defaultValue: 'Cancel' })}
-                                                </button>
-                                              </>
-                                            )}
-                                          </div>
-                                        );
-                                      })()}
                                     </div>
 
                                     {/* Subscription expiry — automatic, time-based counterpart to
@@ -1339,9 +1394,9 @@ export default function Settings() {
                                         </span>
                                       )}
                                       {pendingSubscriptionExpiry[c.id] !== undefined && (
-                                        <>
-                                          <span className="text-xs text-amber-600">{t('settings.unsavedChanges', { defaultValue: 'Unsaved changes' })}</span>
-                                          <Button size="sm" onClick={() => handleSaveSubscriptionExpiry(c)} disabled={clientSubscriptionSaving === c.id}>
+                                        <div className="flex w-full flex-wrap items-center gap-2 pt-1">
+                                          <span className="text-xs font-medium text-amber-600">{t('settings.unsavedChanges', { defaultValue: 'Unsaved changes' })}</span>
+                                          <Button size="sm" className="h-8 gap-1.5 px-3" onClick={() => handleSaveSubscriptionExpiry(c)} disabled={clientSubscriptionSaving === c.id}>
                                             <Save className="w-3.5 h-3.5 mr-1.5" />
                                             {clientSubscriptionSaving === c.id ? t('settings.savingEllipsis', { defaultValue: 'Saving…' }) : t('settings.save', { defaultValue: 'Save' })}
                                           </Button>
@@ -1349,11 +1404,11 @@ export default function Settings() {
                                             type="button"
                                             onClick={() => discardSubscriptionExpiryChange(c.id)}
                                             disabled={clientSubscriptionSaving === c.id}
-                                            className="text-xs text-muted-foreground hover:text-foreground underline disabled:opacity-50"
+                                            className="h-8 rounded-md px-2 text-xs font-medium text-muted-foreground underline-offset-2 hover:bg-muted hover:text-foreground hover:underline disabled:opacity-50"
                                           >
                                             {t('settings.cancel', { defaultValue: 'Cancel' })}
                                           </button>
-                                        </>
+                                        </div>
                                       )}
                                     </div>
 
@@ -1394,34 +1449,77 @@ export default function Settings() {
                                           {t('settings.addOnModulesHeading', { defaultValue: 'Add-on Modules' })}
                                         </span>
                                       </div>
-                                      <div className="flex flex-wrap items-center gap-1.5">
+                                      <div className="space-y-1.5">
                                         {moduleCatalogFor(c).map(mod => {
-                                          const active = (effectiveModules || []).includes(mod.value);
+                                          const children = mod.children || [];
+                                          const active = children.length
+                                            ? children.some(child => isClientModuleActive(effectiveModules, mod, child))
+                                            : isClientModuleActive(effectiveModules, mod);
+                                          const allChildrenActive = children.length > 0 && children.every(child => isClientModuleActive(effectiveModules, mod, child));
+                                          const moduleExpanded = !!expandedClientModules[`${c.id}:${mod.value}`];
                                           return (
-                                            <button
-                                              key={mod.value}
-                                              type="button"
-                                              disabled={clientPackageSaving === c.id}
-                                              onClick={() => stageClientModuleToggle(c, mod.value)}
-                                              title={t(`${mod.i18n}Desc`, { defaultValue: mod.desc })}
-                                              className={`flex items-center gap-1.5 px-2 py-1 rounded-full border text-xs transition-colors disabled:opacity-50 ${
-                                                active ? 'bg-primary/10 border-primary text-primary' : 'border-border text-muted-foreground hover:border-primary/50'
-                                              }`}
-                                            >
-                                              <span className={`w-3 h-3 rounded-sm border flex items-center justify-center ${active ? 'bg-primary border-primary' : 'border-muted-foreground/40'}`}>
-                                                {active && <Check className="w-2.5 h-2.5 text-primary-foreground" />}
-                                              </span>
-                                              {t(mod.i18n, { defaultValue: mod.label })}
-                                            </button>
+                                            <div key={mod.value} className="rounded-md border border-border/70 overflow-hidden">
+                                              <div className="flex items-center gap-1.5 px-2 py-1.5 bg-muted/20">
+                                                <button
+                                                  type="button"
+                                                  disabled={clientPackageSaving === c.id}
+                                                  onClick={() => stageClientModuleToggle(c, mod.value)}
+                                                  title={t(`${mod.i18n}Desc`, { defaultValue: mod.desc })}
+                                                  className={`flex flex-1 items-center gap-1.5 text-left text-xs font-medium transition-colors disabled:opacity-50 ${
+                                                    active ? 'text-primary' : 'text-muted-foreground hover:text-foreground'
+                                                  }`}
+                                                >
+                                                  <span className={`w-3.5 h-3.5 rounded-sm border flex items-center justify-center ${allChildrenActive || (children.length === 0 && active) ? 'bg-primary border-primary' : 'border-muted-foreground/40'}`}>
+                                                    {(allChildrenActive || (children.length === 0 && active)) && <Check className="w-2.5 h-2.5 text-primary-foreground" />}
+                                                  </span>
+                                                  {t(mod.i18n, { defaultValue: mod.label })}
+                                                  {children.length > 0 && <span className="text-[10px] text-muted-foreground">{children.filter(child => isClientModuleActive(effectiveModules, mod, child)).length}/{children.length}</span>}
+                                                </button>
+                                                {children.length > 0 && (
+                                                  <button
+                                                    type="button"
+                                                    aria-label={`${moduleExpanded ? 'Collapse' : 'Expand'} ${mod.label}`}
+                                                    onClick={() => toggleClientModuleExpanded(c.id, mod.value)}
+                                                    className="p-1 text-muted-foreground hover:text-foreground"
+                                                  >
+                                                    <ChevronDown className={`w-3.5 h-3.5 transition-transform ${moduleExpanded ? '' : '-rotate-90'}`} />
+                                                  </button>
+                                                )}
+                                              </div>
+                                              {moduleExpanded && (
+                                                <div className="flex flex-wrap gap-1.5 px-2 py-2 bg-card border-t">
+                                                  {children.map(child => {
+                                                    const childActive = isClientModuleActive(effectiveModules, mod, child);
+                                                    return (
+                                                      <button
+                                                        key={child.value}
+                                                        type="button"
+                                                        disabled={clientPackageSaving === c.id}
+                                                        onClick={() => stageClientModuleToggle(c, child.value)}
+                                                        title={child.desc}
+                                                        className={`flex items-center gap-1 px-2 py-1 rounded-full border text-xs transition-colors disabled:opacity-50 ${
+                                                          childActive ? 'bg-primary/10 border-primary text-primary' : 'border-border text-muted-foreground hover:border-primary/50'
+                                                        }`}
+                                                      >
+                                                        <span className={`w-3 h-3 rounded-sm border flex items-center justify-center ${childActive ? 'bg-primary border-primary' : 'border-muted-foreground/40'}`}>
+                                                          {childActive && <Check className="w-2.5 h-2.5 text-primary-foreground" />}
+                                                        </span>
+                                                        {child.label}
+                                                      </button>
+                                                    );
+                                                  })}
+                                                </div>
+                                              )}
+                                            </div>
                                           );
                                         })}
 
                                         {hasPendingChange && (
-                                          <>
-                                            <span className="text-xs text-amber-600 ml-1">
+                                          <div className="flex w-full flex-wrap items-center gap-2 pt-1">
+                                            <span className="text-xs font-medium text-amber-600">
                                               {t('settings.unsavedChanges', { defaultValue: 'Unsaved changes' })}
                                             </span>
-                                            <Button size="sm" onClick={() => handleSaveClientPackage(c)} disabled={clientPackageSaving === c.id}>
+                                            <Button size="sm" className="h-8 gap-1.5 px-3" onClick={() => handleSaveClientPackage(c)} disabled={clientPackageSaving === c.id}>
                                               <Save className="w-3.5 h-3.5 mr-1.5" />
                                               {clientPackageSaving === c.id ? t('settings.savingEllipsis', { defaultValue: 'Saving…' }) : t('settings.save', { defaultValue: 'Save' })}
                                             </Button>
@@ -1429,11 +1527,11 @@ export default function Settings() {
                                               type="button"
                                               onClick={() => discardClientPackageChange(c)}
                                               disabled={clientPackageSaving === c.id}
-                                              className="text-xs text-muted-foreground hover:text-foreground underline disabled:opacity-50"
+                                              className="h-8 rounded-md px-2 text-xs font-medium text-muted-foreground underline-offset-2 hover:bg-muted hover:text-foreground hover:underline disabled:opacity-50"
                                             >
                                               {t('settings.cancel', { defaultValue: 'Cancel' })}
                                             </button>
-                                          </>
+                                          </div>
                                         )}
                                       </div>
                                     </div>
@@ -1525,7 +1623,10 @@ export default function Settings() {
             <Button onClick={() => setShowAddCompany(true)}><Plus className="w-4 h-4 mr-1" />{t('settings.addCompany', { defaultValue: 'Add Company' })}</Button>
           </div>
           <div className="grid gap-4">
-            {companies.map(c => (
+            {companies.map(c => {
+              const subscriptionExpiry = c.subscriptionExpiresAt || c.subscription_expires_at;
+              const isExpired = subscriptionExpiry && new Date(subscriptionExpiry).getTime() <= Date.now();
+              return (
               <div key={c.id} className={`bg-card rounded-xl border p-5 flex items-start justify-between ${c.id === activeCompanyId ? 'border-primary/50 ring-1 ring-primary/20' : ''}`}>
                 <div className="flex items-start gap-4">
                   <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center overflow-hidden">
@@ -1538,8 +1639,14 @@ export default function Settings() {
                   <div>
                     <div className="flex items-center gap-2">
                       <h3 className="font-semibold">{c.name}</h3>
-                      {c.id === activeCompanyId && <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full" title={t('settings.currentlyViewingHint', { defaultValue: "You're currently viewing this school" })}>{t('settings.active', { defaultValue: 'Active' })}</span>}
+                      {c.id === activeCompanyId && (
+                        <span className="inline-flex items-center gap-1.5 text-xs bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-full" title={t('settings.currentlyViewingHint', { defaultValue: "You're currently viewing this company" })}>
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                          {t('settings.active', { defaultValue: 'Active' })}
+                        </span>
+                      )}
                       {c.is_active === false && <span className="text-xs bg-red-50 text-red-600 px-2 py-0.5 rounded-full font-medium">{t('settings.deactivated', { defaultValue: 'Deactivated' })}</span>}
+                      {c.is_active !== false && isExpired && <span className="text-xs bg-amber-50 text-amber-600 px-2 py-0.5 rounded-full font-medium">{t('settings.subscriptionExpired', { defaultValue: 'Expired' })}</span>}
                       {c.business_type && (
                         <span className="text-xs bg-secondary text-muted-foreground px-2 py-0.5 rounded-full">
                           {businessTypeLabel(c.business_type)}
@@ -1577,7 +1684,8 @@ export default function Settings() {
                   )}
                 </div>
               </div>
-            ))}
+              );
+            })}
             {companies.length === 0 && (
               <div className="text-center py-12 text-muted-foreground">{t('settings.noCompaniesYet', { defaultValue: 'No companies yet' })}</div>
             )}

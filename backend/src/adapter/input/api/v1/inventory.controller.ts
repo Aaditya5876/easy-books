@@ -8,7 +8,7 @@ import { CreateInventoryItemSchema, UpdateInventoryItemSchema, CreateInventoryIt
 
 @ApiTags('Inventory')
 @ApiBearerAuth()
-@RequiresModule('INVENTORY')
+@RequiresModule('INVENTORY_STOCK')
 @Controller('api/v1/inventory')
 export class InventoryController {
   constructor(private readonly service: InventoryServiceImpl) {}

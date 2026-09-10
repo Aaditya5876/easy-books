@@ -9,7 +9,7 @@ import { CreateTransactionSchema, UpdateTransactionSchema, CreateTransactionDTO,
 @ApiTags('Transactions')
 @ApiBearerAuth()
 @Roles('ACCOUNTANT', 'ADMIN')
-@RequiresModule('FINANCE')
+@RequiresModule('FINANCE_TRANSACTIONS')
 @Controller('api/v1/transactions')
 export class TransactionController {
   constructor(private readonly service: TransactionServiceImpl) {}

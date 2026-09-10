@@ -6,7 +6,7 @@ import { RequiresModule } from '../../../../modules/decorators/requires-module.d
 
 @ApiTags('Leave')
 @ApiBearerAuth()
-@RequiresModule('HRMS')
+@RequiresModule('HRMS_LEAVE')
 @Controller('api/v1/leave')
 export class LeaveController {
   constructor(private readonly service: LeaveServiceImpl) {}
