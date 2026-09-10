@@ -136,7 +136,7 @@ const schoolNavSections = [
     activeClass: 'bg-rose-600 text-white shadow-sm shadow-rose-900/30',
     items: [
       { icon: CalendarDays, label: 'Calendar and Events', path: '/calendar-events', roles: ['TEACHER'] },
-      { icon: UserCircle, label: 'Teachers', path: '/employees', orStaffTag: 'HR' },
+      { icon: UserCircle, label: 'Employees', path: '/employees', orStaffTag: 'HR' },
       { icon: School, label: 'Classes', path: '/classes', roles: ['TEACHER'] },
       { icon: BookMarked, label: 'Subjects', path: '/subjects', roles: ['TEACHER'] },
     ]

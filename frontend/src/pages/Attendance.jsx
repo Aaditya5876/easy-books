@@ -43,6 +43,12 @@ export default function Attendance() {
 
   useEffect(() => { if (companyId) load(); }, [companyId]);
 
+  useEffect(() => {
+    if (showForm && companyId) {
+      api.Employee.filter({ company_id: companyId }, 'name', 100).then(setEmployees);
+    }
+  }, [showForm, companyId]);
+
   async function load() {
     setLoading(true);
     const [att, emp] = await Promise.all([
@@ -156,7 +162,7 @@ export default function Attendance() {
                   <SelectValue placeholder={t('staffAttendance.selectEmployeePlaceholder', { defaultValue: 'Select employee' })} />
                 </SelectTrigger>
                 <SelectContent>
-                  {employees.map(e => <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>)}
+                  {employees.map(e => <SelectItem key={e.id} value={e.id}>{e.name}{e.designation ? ` · ${e.designation}` : ''}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>

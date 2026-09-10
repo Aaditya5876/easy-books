@@ -490,6 +490,8 @@ export default function Settings() {
     }
   }
 
+  const visibleUsers = isSuperAdmin ? users : users.filter(u => u.role !== 'SUPER_ADMIN');
+
   // ── Company CRUD ──────────────────────────────────────────────────────────
 
   async function addCompany() {
@@ -1702,7 +1704,7 @@ export default function Settings() {
           ) : (
             <>
               <div className="flex items-center justify-between">
-                <p className="text-sm text-muted-foreground">{t('settings.membersCount', { defaultValue: '{{count}} members in this company', count: users.length })}</p>
+                <p className="text-sm text-muted-foreground">{t('settings.membersCount', { defaultValue: '{{count}} members in this company', count: visibleUsers.length })}</p>
                 {canManageUsers && (
                   <Button onClick={() => setShowInvite(true)}>
                     <UserPlus className="w-4 h-4 mr-1" />{t('settings.inviteUser', { defaultValue: 'Invite User' })}
@@ -1716,7 +1718,7 @@ export default function Settings() {
                 </div>
               ) : (
                 <div className="grid gap-3">
-                  {users.map(u => (
+                  {visibleUsers.map(u => (
                     <div key={u.id} className="bg-card rounded-xl border p-4 flex items-center justify-between">
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-primary-foreground text-sm font-semibold">
@@ -1829,7 +1831,7 @@ export default function Settings() {
                       </div>
                     </div>
                   ))}
-                  {users.length === 0 && (
+                  {visibleUsers.length === 0 && (
                     <div className="text-center py-12 text-muted-foreground text-sm">{t('settings.noUsersYet', { defaultValue: 'No users yet. Invite your team.' })}</div>
                   )}
                 </div>
