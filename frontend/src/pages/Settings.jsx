@@ -1256,7 +1256,9 @@ export default function Settings() {
                           const hasPendingChange = pendingClientModules[c.id] !== undefined;
                           const effectiveModules = pendingClientModules[c.id] ?? c.enabledModules;
                           const tier = packageTierOf(effectiveModules);
+                          const hasThreeDayExtension = !!c.subscriptionExtensionUsedAt;
                           const isExpired = c.subscriptionExpiresAt && new Date(c.subscriptionExpiresAt).getTime() <= nowTick;
+                          const extensionStatusText = hasThreeDayExtension && !isExpired ? 'Extended' : null;
                           return (
                             <div key={c.id} id={`client-row-${c.id}`}>
                               {/* Compact row — this is ALL that renders per client until expanded,
@@ -1288,7 +1290,12 @@ export default function Settings() {
                                     {t('settings.deactivated', { defaultValue: 'Deactivated' })}
                                   </span>
                                 )}
-                                {c.isActive !== false && isExpired && (
+                                {c.isActive !== false && extensionStatusText && (
+                                  <span className="text-[10px] bg-emerald-50 text-emerald-700 px-1.5 py-0.5 rounded-full font-medium shrink-0" title={t('settings.subscriptionExtendedHint', { defaultValue: 'Used the one-time 3-day extension' })}>
+                                    {t('settings.subscriptionExtended', { defaultValue: 'Extended' })}
+                                  </span>
+                                )}
+                                {c.isActive !== false && isExpired && !hasThreeDayExtension && (
                                   <span className="text-[10px] bg-amber-50 text-amber-600 px-1.5 py-0.5 rounded-full font-medium shrink-0" title={t('settings.subscriptionExpiredHint', { defaultValue: 'Subscription expiry has passed — locked out the same as Deactivated' })}>
                                     {t('settings.subscriptionExpired', { defaultValue: 'Expired' })}
                                   </span>

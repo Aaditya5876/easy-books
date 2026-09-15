@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from 'next-themes';
 import { api, apiAuth } from '@/api/adapter';
@@ -53,12 +53,54 @@ export default function TopBar({ onMobileMenuToggle, onToolOpen }) {
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [notifLoading, setNotifLoading] = useState(false);
+  const [liveNotification, setLiveNotification] = useState(null);
+  const newestNotificationId = useRef(null);
   const [autoDetail, setAutoDetail] = useState(null);
   const [requestingRenewal, setRequestingRenewal] = useState(false);
   const [extendingSubscription, setExtendingSubscription] = useState(false);
 
   useEffect(() => {
     loadData();
+  }, []);
+
+  useEffect(() => {
+    if (import.meta.env.VITE_ENABLE_NOTIFICATIONS !== 'true') return;
+
+    const refreshNotifications = () => {
+      notificationsApi.unreadCount().then(res => setUnreadCount(res?.data ?? 0)).catch(() => {});
+      if (document.visibilityState === 'visible') {
+        loadNotifications(true);
+      }
+    };
+
+    const intervalId = setInterval(refreshNotifications, 3000);
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') refreshNotifications();
+    };
+
+    const streamUrl = `${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/api/v1/notifications/stream`;
+    const stream = new EventSource(streamUrl, { withCredentials: true });
+    stream.onmessage = (event) => {
+      try {
+        const payload = JSON.parse(event.data);
+        if (payload?.type === 'notification' && payload.payload?.title) {
+          loadNotifications();
+          setLiveNotification(payload.payload);
+        }
+        if (payload?.type === 'count' && typeof payload.unreadCount === 'number') {
+          setUnreadCount(payload.unreadCount);
+        }
+      } catch {}
+    };
+    // EventSource automatically retries after transient connection errors.
+    // Closing it here would disable the live channel and leave only polling.
+
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => {
+      clearInterval(intervalId);
+      stream?.close();
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    };
   }, []);
 
   async function loadData() {
@@ -134,14 +176,29 @@ export default function TopBar({ onMobileMenuToggle, onToolOpen }) {
     }
   }
 
-  async function loadNotifications() {
+  async function loadNotifications(announceNew = false) {
     setNotifLoading(true);
     try {
       const [listRes, countRes] = await Promise.all([
         notificationsApi.list({ pageSize: 10 }),
         notificationsApi.unreadCount(),
       ]);
-      setNotifications(listRes?.data?.items ?? []);
+      const items = listRes?.data?.items ?? [];
+      const newest = items[0];
+      if (announceNew && newest?.id && newestNotificationId.current && newest.id !== newestNotificationId.current) {
+        setLiveNotification({
+          title: newest.title,
+          message: newest.message,
+          link: newest.link,
+          referenceType: newest.referenceType,
+          referenceId: newest.referenceId,
+          type: newest.type,
+          createdAt: newest.createdAt,
+          isRead: newest.isRead,
+        });
+      }
+      if (newest?.id) newestNotificationId.current = newest.id;
+      setNotifications(items);
       setUnreadCount(countRes?.data ?? 0);
     } catch {}
     setNotifLoading(false);
@@ -278,6 +335,19 @@ export default function TopBar({ onMobileMenuToggle, onToolOpen }) {
 
   return (
     <>
+    <Dialog open={!!liveNotification} onOpenChange={open => { if (!open) setLiveNotification(null); }}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>{liveNotification?.title}</DialogTitle>
+        </DialogHeader>
+        <p className="text-sm leading-6 text-muted-foreground">
+          {liveNotification?.message}
+        </p>
+        <DialogFooter>
+          <Button onClick={() => setLiveNotification(null)}>Okay</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
     <header
       className="h-16 backdrop-blur-xl bg-card/80 border-b border-border/60 flex items-center justify-between px-4 lg:px-6 shrink-0 sticky top-0 z-30"
       style={prefs.topbarColor ? { backgroundColor: prefs.topbarColor } : undefined}

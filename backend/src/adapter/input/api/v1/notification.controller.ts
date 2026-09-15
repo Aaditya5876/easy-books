@@ -1,6 +1,7 @@
-import { Controller, Get, Patch, Put, Body, Param, Query, Request } from '@nestjs/common';
+import { Controller, Get, Patch, Put, Body, Param, Query, Request, Res, Sse } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { NotificationType } from '@prisma/client';
+import { Observable } from 'rxjs';
 import { NotificationServiceImpl } from '../../../../application/services/notification.service.impl';
 
 // No class-level @Roles(...) — every authenticated user reads their own inbox;
@@ -33,6 +34,17 @@ export class NotificationController {
       pageSize: pageSize ? parseInt(pageSize) : undefined,
       unreadOnly: unreadOnly === 'true',
       type,
+    });
+  }
+
+  @Sse('stream')
+  stream(@Request() req: any): Observable<MessageEvent> {
+    return new Observable((subscriber) => {
+      const userId = req.user.sub;
+      const handler = (event: any) => subscriber.next({ data: JSON.stringify(event) } as MessageEvent);
+      this.service.addSubscriber(userId, handler);
+      subscriber.next({ data: JSON.stringify({ type: 'count', unreadCount: 0 }) } as MessageEvent);
+      return () => this.service.removeSubscriber(userId, handler);
     });
   }
 

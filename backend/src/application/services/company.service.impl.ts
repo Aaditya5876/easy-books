@@ -177,7 +177,23 @@ export class CompanyServiceImpl {
       where: { id },
       data: { subscriptionExpiresAt: expiresAt, ...(restoring ? { accessBlockedNotifiedAt: null } : {}) },
     });
-    if (restoring && company.isActive) await this.notifyAccessChange(id, company.name, true);
+    if (restoring && company.isActive) {
+      await Promise.all([
+        this.notifications.notifyRole(id, COMPANY_ROLES, {
+          type: 'ACCESS_RESTORED',
+          title: 'Subscription renewed',
+          message: `${company.name}'s subscription was renewed and access is available again.`,
+        }),
+        this.notifications.notifySuperAdmins(id, {
+          type: 'ACCESS_RESTORED',
+          title: 'Subscription renewed',
+          message: `${company.name}'s subscription was renewed and access is available again.`,
+          link: '/settings',
+          referenceType: 'COMPANY',
+          referenceId: id,
+        }),
+      ]);
+    }
     return updated;
   }
 

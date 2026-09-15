@@ -2,6 +2,22 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../../core/db/psql/prisma.client';
 import { NotificationType } from '@prisma/client';
 
+interface NotificationStreamEvent {
+  type: 'notification' | 'count';
+  payload?: {
+    id?: string;
+    title?: string;
+    message?: string;
+    link?: string;
+    referenceType?: string;
+    referenceId?: string;
+    type?: NotificationType;
+    createdAt?: string;
+    isRead?: boolean;
+  };
+  unreadCount?: number;
+}
+
 interface NotifyPayload {
   type: NotificationType;
   title: string;
@@ -26,7 +42,28 @@ const CATEGORY_BY_TYPE: Partial<Record<NotificationType, PreferenceCategory>> = 
 
 @Injectable()
 export class NotificationServiceImpl {
+  private readonly subscribers = new Map<string, Set<(event: NotificationStreamEvent) => void>>();
+
   constructor(private readonly prisma: PrismaService) {}
+
+  addSubscriber(userId: string, handler: (event: NotificationStreamEvent) => void): void {
+    const set = this.subscribers.get(userId) ?? new Set();
+    set.add(handler);
+    this.subscribers.set(userId, set);
+  }
+
+  removeSubscriber(userId: string, handler: (event: NotificationStreamEvent) => void): void {
+    const set = this.subscribers.get(userId);
+    if (!set) return;
+    set.delete(handler);
+    if (set.size === 0) this.subscribers.delete(userId);
+  }
+
+  private emitToUser(userId: string, event: NotificationStreamEvent): void {
+    const handlers = this.subscribers.get(userId);
+    if (!handlers) return;
+    handlers.forEach((handler) => handler(event));
+  }
 
   async notifyRole(companyId: string, roles: string[], payload: NotifyPayload): Promise<void> {
     const links = await this.prisma.userCompany.findMany({
@@ -46,18 +83,40 @@ export class NotificationServiceImpl {
     }
     if (recipientIds.length === 0) return;
 
-    await this.prisma.notification.createMany({
-      data: recipientIds.map((userId) => ({
-        companyId,
-        userId,
-        type: payload.type,
-        title: payload.title,
-        message: payload.message,
-        link: payload.link,
-        referenceType: payload.referenceType,
-        referenceId: payload.referenceId,
-        details: payload.details as any,
-      })),
+    const rows = recipientIds.map((userId) => ({
+      companyId,
+      userId,
+      type: payload.type,
+      title: payload.title,
+      message: payload.message,
+      link: payload.link,
+      referenceType: payload.referenceType,
+      referenceId: payload.referenceId,
+      details: payload.details as any,
+    }));
+
+    await this.prisma.notification.createMany({ data: rows });
+
+    const unreadCount = await this.prisma.notification.count({ where: { userId: { in: recipientIds }, isRead: false } });
+    const createdAt = new Date().toISOString();
+    recipientIds.forEach((userId) => {
+      this.emitToUser(userId, {
+        type: 'notification',
+        payload: {
+          title: payload.title,
+          message: payload.message,
+          link: payload.link,
+          referenceType: payload.referenceType,
+          referenceId: payload.referenceId,
+          type: payload.type,
+          createdAt,
+          isRead: false,
+        },
+      });
+      this.emitToUser(userId, {
+        type: 'count',
+        unreadCount,
+      });
     });
   }
 
@@ -75,18 +134,44 @@ export class NotificationServiceImpl {
       select: { id: true },
     });
     if (superAdmins.length === 0) return;
-    await this.prisma.notification.createMany({
-      data: superAdmins.map((u) => ({
-        companyId,
-        userId: u.id,
-        type: payload.type,
-        title: payload.title,
-        message: payload.message,
-        link: payload.link,
-        referenceType: payload.referenceType,
-        referenceId: payload.referenceId,
-        details: payload.details as any,
-      })),
+
+    const rows = superAdmins.map((u) => ({
+      companyId,
+      userId: u.id,
+      type: payload.type,
+      title: payload.title,
+      message: payload.message,
+      link: payload.link,
+      referenceType: payload.referenceType,
+      referenceId: payload.referenceId,
+      details: payload.details as any,
+    }));
+
+    await this.prisma.notification.createMany({ data: rows });
+
+    const unreadCounts = await Promise.all(
+      superAdmins.map(({ id }) => this.prisma.notification.count({ where: { userId: id, isRead: false } })),
+    );
+
+    const createdAt = new Date().toISOString();
+    superAdmins.forEach(({ id }, index) => {
+      this.emitToUser(id, {
+        type: 'notification',
+        payload: {
+          title: payload.title,
+          message: payload.message,
+          link: payload.link,
+          referenceType: payload.referenceType,
+          referenceId: payload.referenceId,
+          type: payload.type,
+          createdAt,
+          isRead: false,
+        },
+      });
+      this.emitToUser(id, {
+        type: 'count',
+        unreadCount: unreadCounts[index],
+      });
     });
   }
 

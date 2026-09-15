@@ -100,10 +100,20 @@ export class CompanyAccessGuard implements CanActivate {
     // purpose — TEACHER has no /settings route at all (App.jsx's
     // schoolRoutes only gives them an explicit allowlist), so it would 404
     // them, and there's nothing role-specific to send anyone to anyway.
-    await this.notifications.notifyRole(companyId, ['ADMIN', 'ACCOUNTANT', 'STAFF', 'TEACHER'], {
-      type: 'ACCESS_SUSPENDED',
-      title: 'Temporarily paused',
-      message: `${company?.name ?? 'Your company'}'s subscription has expired. Your data is safe and untouched — we'll be back up and running again as soon as this is renewed. Contact GeoInfosys to renew.`,
-    });
+    await Promise.all([
+      this.notifications.notifyRole(companyId, ['ADMIN', 'ACCOUNTANT', 'STAFF', 'TEACHER'], {
+        type: 'ACCESS_SUSPENDED',
+        title: 'Temporarily paused',
+        message: `${company?.name ?? 'Your company'}'s subscription has expired. Your data is safe and untouched — we'll be back up and running again as soon as this is renewed. Contact GeoInfosys to renew.`,
+      }),
+      this.notifications.notifySuperAdmins(companyId, {
+        type: 'ACCESS_SUSPENDED',
+        title: 'Subscription expired',
+        message: `${company?.name ?? 'A company'} has expired and is now locked out until renewed.`,
+        link: '/settings',
+        referenceType: 'COMPANY',
+        referenceId: companyId,
+      }),
+    ]);
   }
 }
