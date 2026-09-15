@@ -55,6 +55,7 @@ export default function TopBar({ onMobileMenuToggle, onToolOpen }) {
   const [notifLoading, setNotifLoading] = useState(false);
   const [autoDetail, setAutoDetail] = useState(null);
   const [requestingRenewal, setRequestingRenewal] = useState(false);
+  const [extendingSubscription, setExtendingSubscription] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -206,6 +207,24 @@ export default function TopBar({ onMobileMenuToggle, onToolOpen }) {
       toast.error(err?.response?.data?.message || t('settings.renewalRequestFailed', { defaultValue: 'Failed to send request' }));
     } finally {
       setRequestingRenewal(false);
+    }
+  }
+
+  async function handleExtendSubscription() {
+    if (!activeCompany || extendingSubscription) return;
+    setExtendingSubscription(true);
+    try {
+      const response = await companyApi.extendSubscription(activeCompany.id);
+      setActiveCompany(c => c ? {
+        ...c,
+        subscription_expires_at: response.data.subscriptionExpiresAt,
+        subscription_extension_used_at: response.data.subscriptionExtensionUsedAt,
+      } : c);
+      toast.success(t('settings.subscriptionExtended', { defaultValue: 'Your subscription has been extended for 3 days.' }));
+    } catch (err) {
+      toast.error(err?.response?.data?.message || t('settings.subscriptionExtensionFailed', { defaultValue: 'Failed to extend subscription' }));
+    } finally {
+      setExtendingSubscription(false);
     }
   }
 
@@ -573,9 +592,9 @@ export default function TopBar({ onMobileMenuToggle, onToolOpen }) {
         cached data, nav) per design: losing access shouldn't feel like the
         page broke, it should read as "paused, here's why, here's what to do". */}
     {activeCompany && !isCompanyAccessible(activeCompany) && (
-      <div className="px-4 lg:px-6 py-2.5 bg-red-50 border-b border-red-200 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm">
+      <div className="subscription-alert-bar px-4 lg:px-6 py-2 bg-red-50 border-b border-red-200 flex items-center gap-3 text-sm">
         <AlertTriangle className="w-4 h-4 text-red-600 shrink-0" />
-        <span className="text-red-800 font-medium">
+        <span className="subscription-alert-title text-red-800 font-medium shrink-0">
           {isSuperAdmin && activeCompany.is_active !== false
             ? t('settings.superAdminTokenExpiredBanner', { defaultValue: 'This company\'s subscription token has expired.' })
             : activeCompany.is_active === false
@@ -583,40 +602,59 @@ export default function TopBar({ onMobileMenuToggle, onToolOpen }) {
             : t('settings.subscriptionExpiredBanner', { defaultValue: "This company's subscription has expired." })}
         </span>
         {isSuperAdmin && activeCompany.is_active !== false ? (
-          <span className="text-red-600">
+          <span className="subscription-alert-copy text-red-600">
             {activeCompany.last_renewal_requested_at
               ? t('settings.renewalRequestStatus', { defaultValue: 'Renewal request: received.' })
               : t('settings.renewalRequestStatusMissing', { defaultValue: 'Renewal request: not received yet.' })}
           </span>
         ) : (
-          <span className="text-red-600">
+          <span className="subscription-alert-copy text-red-600">
             {t('settings.servicesPausedHint', { defaultValue: "Services are paused for now, but your data is safe — we'll be back up and running again soon. Please contact GeoInfosys." })}
           </span>
         )}
-        {isAdmin && !isSuperAdmin && (() => {
+        {isAdmin && !isSuperAdmin && activeCompany.is_active !== false && activeCompany.subscription_expires_at && (() => {
+          const extensionUsed = !!activeCompany.subscription_extension_used_at;
+          const subscriptionExpired = new Date(activeCompany.subscription_expires_at).getTime() <= Date.now();
           const onCooldown = renewalCooldownRemainingMs(activeCompany) > 0;
           return (
-            <Button
-              size="sm"
-              variant="outline"
-              className="ml-auto border-red-300 text-red-700 hover:bg-red-100 hover:text-red-800 shrink-0"
-              onClick={handleRequestRenewal}
-              disabled={requestingRenewal || onCooldown}
-            >
-              <Send className="w-3.5 h-3.5 mr-1.5" />
-              {onCooldown
-                ? t('settings.renewalRequested', { defaultValue: 'Request Sent — GeoInfosys Notified' })
-                : requestingRenewal
-                  ? t('settings.requestingEllipsis', { defaultValue: 'Requesting…' })
-                  : t('settings.requestRenewal', { defaultValue: 'Request Subscription Renewal' })}
-            </Button>
+            <div className="subscription-alert-actions flex items-center gap-2 shrink-0 ml-auto">
+              {subscriptionExpired && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="border-amber-300 text-amber-700 hover:bg-amber-100 hover:text-amber-800 whitespace-nowrap"
+                  onClick={handleExtendSubscription}
+                  disabled={extendingSubscription || extensionUsed}
+                >
+                  {extendingSubscription
+                    ? t('settings.extendingEllipsis', { defaultValue: 'Extending…' })
+                    : extensionUsed
+                      ? t('settings.extensionUsed', { defaultValue: 'Extended for 3 Days' })
+                      : t('settings.extendThreeDays', { defaultValue: 'Extend for 3 Days' })}
+                </Button>
+              )}
+              <Button
+                size="sm"
+                variant="outline"
+                className="border-red-300 text-red-700 hover:bg-red-100 hover:text-red-800 whitespace-nowrap"
+                onClick={handleRequestRenewal}
+                disabled={requestingRenewal || onCooldown}
+              >
+                <Send className="w-3.5 h-3.5 mr-1.5" />
+                {onCooldown
+                  ? t('settings.renewalRequested', { defaultValue: 'Request Sent — GeoInfosys Notified' })
+                  : requestingRenewal
+                    ? t('settings.requestingEllipsis', { defaultValue: 'Requesting…' })
+                    : t('settings.requestRenewal', { defaultValue: 'Request Subscription Renewal' })}
+              </Button>
+            </div>
           );
         })()}
         {isSuperAdmin && (
           <Button
             size="sm"
             variant="outline"
-            className="ml-auto border-red-300 text-red-700 hover:bg-red-100 hover:text-red-800 shrink-0"
+            className="ml-auto border-red-300 text-red-700 hover:bg-red-100 hover:text-red-800 whitespace-nowrap"
             onClick={() => navigate('/settings', { state: { tab: 'clients', highlightCompanyId: activeCompany.id } })}
           >
             {t('settings.manageInSettings', { defaultValue: 'Manage in Settings' })}

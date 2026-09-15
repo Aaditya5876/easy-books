@@ -123,6 +123,7 @@ export class CompanyServiceImpl {
       // Internal bookkeeping only setActive/setSubscriptionExpiry/requestRenewal
       // above are meant to touch — never settable directly.
       accessBlockedNotifiedAt, lastRenewalRequestedAt,
+      subscriptionExtensionUsedAt, subscriptionExtensionExpiresAt,
       ...updateData
     } = data;
     return this.prisma.company.update({ where: { id }, data: updateData });
@@ -291,5 +292,43 @@ export class CompanyServiceImpl {
       create: { companyId, ...data },
       update: data,
     });
+  }
+
+  // ADMIN-only (enforced by the controller) — claim the single three-day
+  // grace period. The conditional update is the one-time-use lock: concurrent
+  // clicks can only claim it once, even before the frontend refreshes.
+  async extendSubscription(id: string, requestedByUserId: string, role: string) {
+    await this.assertMembership(id, requestedByUserId, role);
+    const company = await this.prisma.company.findFirst({ where: { id } });
+    if (!company) throw new NotFoundException('Company not found');
+    const now = new Date();
+    if (!company.isActive || !company.subscriptionExpiresAt || company.subscriptionExpiresAt.getTime() > now.getTime()) {
+      throw new BadRequestException('The three-day extension is only available after subscription expiry.');
+    }
+
+    const extensionExpiresAt = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000);
+    const claimed = await this.prisma.company.updateMany({
+      where: { id, subscriptionExtensionUsedAt: null, isActive: true, subscriptionExpiresAt: { lte: now } },
+      data: {
+        subscriptionExpiresAt: extensionExpiresAt,
+        subscriptionExtensionUsedAt: now,
+        subscriptionExtensionExpiresAt: extensionExpiresAt,
+        accessBlockedNotifiedAt: null,
+      },
+    });
+    if (claimed.count === 0) {
+      throw new BadRequestException('The three-day extension has already been used.');
+    }
+
+    const requester = await this.prisma.user.findUnique({ where: { id: requestedByUserId }, select: { name: true, email: true } });
+    await this.notifications.notifySuperAdmins(id, {
+      type: 'SUBSCRIPTION_EXTENDED',
+      title: 'Three-day subscription extension used',
+      message: `${requester?.name ?? requester?.email ?? 'An admin'} (${company.name}) used the one-time three-day subscription extension.`,
+      link: '/settings',
+      referenceType: 'COMPANY',
+      referenceId: id,
+    });
+    return { subscriptionExpiresAt: extensionExpiresAt, subscriptionExtensionUsedAt: now };
   }
 }

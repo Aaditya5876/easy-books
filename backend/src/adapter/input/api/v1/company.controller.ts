@@ -105,6 +105,15 @@ export class CompanyController {
     return this.service.requestRenewal(id, req.user.sub, req.user.role);
   }
 
+  // ADMIN only — one three-day grace period after subscription expiry.
+  // Deliberately reachable while suspended so the locked-out ADMIN can claim it.
+  @Post(':id/extend-subscription')
+  @Roles('ADMIN')
+  @ApiOperation({ summary: "Use this company's one-time three-day subscription extension" })
+  extendSubscription(@Param('id') id: string, @Req() req: any) {
+    return this.service.extendSubscription(id, req.user.sub, req.user.role);
+  }
+
   // ─── Payroll Settings ────────────────────────────────────────────────────────
 
   @Get(':id/payroll-settings')

@@ -1386,7 +1386,7 @@ export default function Settings() {
                                         </button>
                                       )}
                                       {!c.subscriptionExpiresAt && pendingSubscriptionExpiry[c.id] === undefined && (
-                                        <span className="text-xs text-muted-foreground">{t('settings.noExpirySet', { defaultValue: 'No expiry set' })}</span>
+                                        <span className="text-xs text-muted-foreground">{t('settings.noExpirySet', { defaultValue: 'No expiry set (unlimited access)' })}</span>
                                       )}
                                       {c.subscriptionExpiresAt && pendingSubscriptionExpiry[c.id] === undefined && (
                                         <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${isExpired ? 'bg-amber-50 text-amber-600' : 'bg-secondary text-muted-foreground'}`}>

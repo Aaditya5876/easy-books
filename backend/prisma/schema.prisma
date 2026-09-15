@@ -173,6 +173,8 @@ enum NotificationType {
   ACCESS_RESTORED
   // Sent to every SUPER_ADMIN when an ADMIN clicks "Request Renewal".
   SUBSCRIPTION_RENEWAL_REQUESTED
+  // Sent to every SUPER_ADMIN when an ADMIN uses the one-time three-day extension.
+  SUBSCRIPTION_EXTENDED
 }
 
 // ─── Models ──────────────────────────────────────────────────────────────────
@@ -267,6 +269,9 @@ model Company {
   // Cooldown for the ADMIN-facing "Request Renewal" button — prevents
   // spamming SUPER_ADMIN with repeat notifications for the same lapse.
   lastRenewalRequestedAt    DateTime?
+  // One-time grace period that an ADMIN may claim after subscription expiry.
+  subscriptionExtensionUsedAt DateTime?
+  subscriptionExtensionExpiresAt DateTime?
   // Auto-increment counters for invoice numbering (reset each fiscal year)
   invoiceSequence           Int      @default(0)
   purchaseSequence          Int      @default(0)

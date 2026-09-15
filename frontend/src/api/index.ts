@@ -240,6 +240,8 @@ export const companyApi = {
   setSubscriptionExpiry: (id: string, expiresAt: string | null) => apiClient.patch(`/api/v1/companies/${id}/subscription`, { expiresAt }),
   // ADMIN only — "Request Renewal" button shown once a company loses access. Notifies every SUPER_ADMIN.
   requestRenewal: (id: string) => apiClient.post(`/api/v1/companies/${id}/request-renewal`),
+  // ADMIN only — claim the one-time three-day extension after expiry.
+  extendSubscription: (id: string) => apiClient.post(`/api/v1/companies/${id}/extend-subscription`),
 };
 
 // File Upload
