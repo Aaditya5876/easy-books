@@ -93,7 +93,7 @@ export class CompanyAccessGuard implements CanActivate {
       data: { accessBlockedNotifiedAt: new Date() },
     });
     if (claimed.count === 0) return;
-    const company = await this.prisma.company.findUnique({ where: { id: companyId }, select: { name: true } });
+    const company = await this.prisma.company.findUnique({ where: { id: companyId }, select: { name: true, lastRenewalRequestedAt: true } });
     // Every non-SUPER_ADMIN role at the company is equally locked out by
     // this guard (only SUPER_ADMIN bypasses it above) — everyone actually
     // affected hears about it, not just the ADMIN. No `link` here on
@@ -104,7 +104,9 @@ export class CompanyAccessGuard implements CanActivate {
       this.notifications.notifyRole(companyId, ['ADMIN', 'ACCOUNTANT', 'STAFF', 'TEACHER'], {
         type: 'ACCESS_SUSPENDED',
         title: 'Temporarily paused',
-        message: `${company?.name ?? 'Your company'}'s subscription has expired. Your data is safe and untouched — we'll be back up and running again as soon as this is renewed. Contact GeoInfosys to renew.`,
+          message: company?.lastRenewalRequestedAt
+            ? `${company.name}'s subscription has expired. Your data is safe and untouched. Thank you for your patience. Your renewal request is in progress.`
+            : `${company?.name ?? 'Your company'}'s subscription has expired. Your data is safe and untouched. Please request a new subscription.`,
       }),
       this.notifications.notifySuperAdmins(companyId, {
         type: 'ACCESS_SUSPENDED',

@@ -15,40 +15,35 @@ export default function Layout() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Mobile overlay */}
-      {mobileMenuOpen && (
-        <div 
-          className="fixed inset-0 bg-black/40 z-30 lg:hidden"
-          onClick={() => setMobileMenuOpen(false)}
-        />
-      )}
-
-      {/* Sidebar - desktop */}
-      <div className="hidden lg:block">
+      {/* One sidebar implementation at every viewport width. Keeping a single
+          collapse state avoids switching to a different, non-collapsible
+          drawer when the viewport crosses a responsive breakpoint. */}
+      <div>
         <SidebarNav 
           collapsed={sidebarCollapsed} 
           onToggle={() => setSidebarCollapsed(!sidebarCollapsed)} 
         />
-      </div>
-
-      {/* Sidebar - mobile */}
-      <div className={cn(
-        "lg:hidden fixed inset-y-0 left-0 z-40 transition-transform duration-300",
-        mobileMenuOpen ? "translate-x-0" : "-translate-x-full"
-      )}>
-        <SidebarNav 
-          collapsed={false} 
-          onToggle={() => setMobileMenuOpen(false)} 
-        />
+        <button
+          type="button"
+          aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          onClick={() => setSidebarCollapsed(value => !value)}
+          className={cn(
+            "fixed top-1/2 -translate-y-1/2 z-[70] flex h-12 w-5 items-center justify-center rounded-r-md border border-l-0 border-sidebar-border bg-sidebar text-sidebar-muted shadow-md hover:bg-sidebar-accent hover:text-sidebar-foreground transition-[left,color,background-color] duration-300",
+            sidebarCollapsed ? "left-[68px]" : "left-[240px]"
+          )}
+        >
+          <span aria-hidden="true" className="text-xs font-bold">{sidebarCollapsed ? '›' : '‹'}</span>
+        </button>
       </div>
 
       {/* Main content */}
       <div className={cn(
         "transition-all duration-300",
-        sidebarCollapsed ? "lg:ml-[68px]" : "lg:ml-[240px]"
+        sidebarCollapsed ? "ml-[68px]" : "ml-[240px]"
       )}>
-        <TopBar onMobileMenuToggle={() => setMobileMenuOpen(!mobileMenuOpen)} onToolOpen={setActiveTool} />
-        <main className="p-4 lg:p-6 max-w-[1600px] mx-auto">
+        <TopBar onToolOpen={setActiveTool} />
+        <main className="p-4 xl:p-6 max-w-[1600px] mx-auto">
           <AnimatePresence mode="wait" initial={false}>
             <motion.div
               key={location.pathname}

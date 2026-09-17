@@ -55,6 +55,7 @@ export default function TopBar({ onMobileMenuToggle, onToolOpen }) {
   const [notifLoading, setNotifLoading] = useState(false);
   const [liveNotification, setLiveNotification] = useState(null);
   const newestNotificationId = useRef(null);
+  const activeCompanyRef = useRef(null);
   const [autoDetail, setAutoDetail] = useState(null);
   const [requestingRenewal, setRequestingRenewal] = useState(false);
   const [extendingSubscription, setExtendingSubscription] = useState(false);
@@ -62,6 +63,43 @@ export default function TopBar({ onMobileMenuToggle, onToolOpen }) {
   useEffect(() => {
     loadData();
   }, []);
+
+  useEffect(() => {
+    activeCompanyRef.current = activeCompany;
+  }, [activeCompany]);
+
+  useEffect(() => {
+    const expiresAt = activeCompany?.subscription_expires_at ?? activeCompany?.subscriptionExpiresAt;
+    if (!activeCompany || !expiresAt || activeCompany.is_active === false || activeCompany.isActive === false) return undefined;
+
+    const expirationTime = new Date(expiresAt).getTime();
+    if (!Number.isFinite(expirationTime)) return undefined;
+
+    const showExpiryModal = () => {
+      const modalKey = `easybooks:expiry-modal:${activeCompany.id}:${expirationTime}`;
+      if (sessionStorage.getItem(modalKey) === 'shown') return;
+      sessionStorage.setItem(modalKey, 'shown');
+      const renewalRequested = !!(activeCompany.last_renewal_requested_at ?? activeCompany.lastRenewalRequestedAt);
+      setLiveNotification({
+        type: 'ACCESS_SUSPENDED',
+        title: isSuperAdmin ? 'Subscription expired' : 'Temporarily paused',
+        message: isSuperAdmin
+          ? `${activeCompany.name} has expired and is now locked out until renewed.`
+          : renewalRequested
+            ? `${activeCompany.name}'s subscription has expired. Your data is safe and untouched. Thank you for your patience. Your renewal request is in progress.`
+            : `${activeCompany.name}'s subscription has expired. Your data is safe and untouched. Please request a new subscription.`,
+      });
+    };
+
+    const delay = expirationTime - Date.now();
+    if (delay <= 0) {
+      showExpiryModal();
+      return undefined;
+    }
+
+    const timerId = window.setTimeout(showExpiryModal, delay);
+    return () => window.clearTimeout(timerId);
+  }, [activeCompany, isSuperAdmin]);
 
   useEffect(() => {
     if (import.meta.env.VITE_ENABLE_NOTIFICATIONS !== 'true') return;
@@ -85,7 +123,7 @@ export default function TopBar({ onMobileMenuToggle, onToolOpen }) {
         const payload = JSON.parse(event.data);
         if (payload?.type === 'notification' && payload.payload?.title) {
           loadNotifications();
-          setLiveNotification(payload.payload);
+          handleLiveNotification(payload.payload);
         }
         if (payload?.type === 'count' && typeof payload.unreadCount === 'number') {
           setUnreadCount(payload.unreadCount);
@@ -176,6 +214,29 @@ export default function TopBar({ onMobileMenuToggle, onToolOpen }) {
     }
   }
 
+  async function handleLiveNotification(notification) {
+    const companyId = notification.referenceId || activeCompanyRef.current?.id;
+    if (companyId && notification.type === 'SUBSCRIPTION_RENEWAL_REQUESTED') {
+      const company = await api.Company.get(companyId).catch(() => null);
+      if (company) setActiveCompany(company);
+    }
+    if (companyId && notification.type === 'ACCESS_RESTORED') {
+      const company = await api.Company.get(companyId).catch(() => null);
+      if (company) setActiveCompany(company);
+    }
+    if (notification.type === 'ACCESS_SUSPENDED' && companyId) {
+      const company = await api.Company.get(companyId).catch(() => null);
+      if (company && isCompanyAccessible(company)) return;
+      const expiresAt = company?.subscriptionExpiresAt ?? company?.subscription_expires_at
+        ?? activeCompanyRef.current?.subscriptionExpiresAt ?? activeCompanyRef.current?.subscription_expires_at;
+      const expiryKey = expiresAt ? new Date(expiresAt).getTime() : 'suspended';
+      const modalKey = `easybooks:expiry-modal:${companyId}:${expiryKey}`;
+      if (sessionStorage.getItem(modalKey) === 'shown') return;
+      sessionStorage.setItem(modalKey, 'shown');
+    }
+    setLiveNotification(notification);
+  }
+
   async function loadNotifications(announceNew = false) {
     setNotifLoading(true);
     try {
@@ -186,7 +247,7 @@ export default function TopBar({ onMobileMenuToggle, onToolOpen }) {
       const items = listRes?.data?.items ?? [];
       const newest = items[0];
       if (announceNew && newest?.id && newestNotificationId.current && newest.id !== newestNotificationId.current) {
-        setLiveNotification({
+        handleLiveNotification({
           title: newest.title,
           message: newest.message,
           link: newest.link,
@@ -258,8 +319,13 @@ export default function TopBar({ onMobileMenuToggle, onToolOpen }) {
     setRequestingRenewal(true);
     try {
       await companyApi.requestRenewal(activeCompany.id);
-      setActiveCompany(c => c ? { ...c, last_renewal_requested_at: new Date().toISOString() } : c);
-      toast.success(t('settings.renewalRequestSent', { defaultValue: 'GeoInfosys has been notified — you\'ll hear back once your subscription is renewed.' }));
+      const requestedAt = new Date().toISOString();
+      setActiveCompany(c => c ? {
+        ...c,
+        last_renewal_requested_at: requestedAt,
+        lastRenewalRequestedAt: requestedAt,
+      } : c);
+      toast.success(t('settings.renewalRequestSent', { defaultValue: 'Thank you for your patience. Your renewal request is in progress.' }));
     } catch (err) {
       toast.error(err?.response?.data?.message || t('settings.renewalRequestFailed', { defaultValue: 'Failed to send request' }));
     } finally {
@@ -332,6 +398,9 @@ export default function TopBar({ onMobileMenuToggle, onToolOpen }) {
   }
 
   const todayBS = getTodayBS();
+  const activeCompanyIsActive = activeCompany?.is_active ?? activeCompany?.isActive;
+  const activeCompanyExpiresAt = activeCompany?.subscription_expires_at ?? activeCompany?.subscriptionExpiresAt;
+  const activeCompanyIsAccessible = isCompanyAccessible(activeCompany);
 
   return (
     <>
@@ -356,7 +425,7 @@ export default function TopBar({ onMobileMenuToggle, onToolOpen }) {
       <div className="flex items-center gap-3">
         <button
           onClick={onMobileMenuToggle}
-          className="lg:hidden p-2 rounded-lg hover:bg-secondary transition-colors"
+          className="hidden"
         >
           <Menu className="w-5 h-5" />
         </button>
@@ -661,31 +730,33 @@ export default function TopBar({ onMobileMenuToggle, onToolOpen }) {
     {/* Suspended/expired banner — the company stays fully visible (name,
         cached data, nav) per design: losing access shouldn't feel like the
         page broke, it should read as "paused, here's why, here's what to do". */}
-    {activeCompany && !isCompanyAccessible(activeCompany) && (
+    {activeCompany && !activeCompanyIsAccessible && (
       <div className="subscription-alert-bar px-4 lg:px-6 py-2 bg-red-50 border-b border-red-200 flex items-center gap-3 text-sm">
         <AlertTriangle className="w-4 h-4 text-red-600 shrink-0" />
         <span className="subscription-alert-title text-red-800 font-medium shrink-0">
-          {isSuperAdmin && activeCompany.is_active !== false
+          {isSuperAdmin && activeCompanyIsActive !== false
             ? t('settings.superAdminTokenExpiredBanner', { defaultValue: 'This company\'s subscription token has expired.' })
-            : activeCompany.is_active === false
+            : activeCompanyIsActive === false
             ? t('settings.companyDeactivatedBanner', { defaultValue: 'This company has been deactivated.' })
             : t('settings.subscriptionExpiredBanner', { defaultValue: "This company's subscription has expired." })}
         </span>
-        {isSuperAdmin && activeCompany.is_active !== false ? (
+        {isSuperAdmin && activeCompanyIsActive !== false ? (
           <span className="subscription-alert-copy text-red-600">
-            {activeCompany.last_renewal_requested_at
+            {(activeCompany.last_renewal_requested_at ?? activeCompany.lastRenewalRequestedAt)
               ? t('settings.renewalRequestStatus', { defaultValue: 'Renewal request: received.' })
               : t('settings.renewalRequestStatusMissing', { defaultValue: 'Renewal request: not received yet.' })}
           </span>
         ) : (
           <span className="subscription-alert-copy text-red-600">
-            {t('settings.servicesPausedHint', { defaultValue: "Services are paused for now, but your data is safe — we'll be back up and running again soon. Please contact GeoInfosys." })}
+            {(activeCompany.last_renewal_requested_at ?? activeCompany.lastRenewalRequestedAt)
+              ? t('settings.servicesPausedAfterRequest', { defaultValue: 'Thank you for your patience. Your renewal request is in progress.' })
+              : t('settings.servicesPausedBeforeRequest', { defaultValue: 'Services are paused for now. Your data is safe. Please request a new subscription.' })}
           </span>
         )}
-        {isAdmin && !isSuperAdmin && activeCompany.is_active !== false && activeCompany.subscription_expires_at && (() => {
-          const extensionUsed = !!activeCompany.subscription_extension_used_at;
-          const subscriptionExpired = new Date(activeCompany.subscription_expires_at).getTime() <= Date.now();
-          const onCooldown = renewalCooldownRemainingMs(activeCompany) > 0;
+        {isAdmin && !isSuperAdmin && activeCompanyIsActive !== false && activeCompanyExpiresAt && (() => {
+          const extensionUsed = !!(activeCompany.subscription_extension_used_at ?? activeCompany.subscriptionExtensionUsedAt);
+          const subscriptionExpiresAt = activeCompany.subscription_expires_at ?? activeCompany.subscriptionExpiresAt;
+          const subscriptionExpired = new Date(subscriptionExpiresAt).getTime() <= Date.now();
           return (
             <div className="subscription-alert-actions flex items-center gap-2 shrink-0 ml-auto">
               {subscriptionExpired && (
@@ -708,12 +779,10 @@ export default function TopBar({ onMobileMenuToggle, onToolOpen }) {
                 variant="outline"
                 className="border-red-300 text-red-700 hover:bg-red-100 hover:text-red-800 whitespace-nowrap"
                 onClick={handleRequestRenewal}
-                disabled={requestingRenewal || onCooldown}
+                disabled={requestingRenewal}
               >
                 <Send className="w-3.5 h-3.5 mr-1.5" />
-                {onCooldown
-                  ? t('settings.renewalRequested', { defaultValue: 'Request Sent — GeoInfosys Notified' })
-                  : requestingRenewal
+                {requestingRenewal
                     ? t('settings.requestingEllipsis', { defaultValue: 'Requesting…' })
                     : t('settings.requestRenewal', { defaultValue: 'Request Subscription Renewal' })}
               </Button>

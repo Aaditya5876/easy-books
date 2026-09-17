@@ -32,6 +32,45 @@ export class ScheduledTasksService {
     private readonly portalNotifications: PortalNotificationService,
   ) {}
 
+  @Cron(CronExpression.EVERY_MINUTE)
+  async notifyExpiredCompanies() {
+    const now = new Date();
+    const companies = await this.prisma.company.findMany({
+      where: {
+        isActive: true,
+        subscriptionExpiresAt: { lte: now },
+        accessBlockedNotifiedAt: null,
+      },
+      select: { id: true, name: true, lastRenewalRequestedAt: true },
+    });
+
+    for (const company of companies) {
+      const claimed = await this.prisma.company.updateMany({
+        where: { id: company.id, accessBlockedNotifiedAt: null },
+        data: { accessBlockedNotifiedAt: now },
+      });
+      if (claimed.count === 0) continue;
+
+      await Promise.all([
+        this.notifications.notifyRole(company.id, ['ADMIN', 'ACCOUNTANT', 'STAFF', 'TEACHER'], {
+          type: 'ACCESS_SUSPENDED',
+          title: 'Temporarily paused',
+            message: company.lastRenewalRequestedAt
+              ? `${company.name}'s subscription has expired. Your data is safe and untouched. Thank you for your patience. Your renewal request is in progress.`
+              : `${company.name}'s subscription has expired. Your data is safe and untouched. Please request a new subscription.`,
+        }),
+        this.notifications.notifySuperAdmins(company.id, {
+          type: 'ACCESS_SUSPENDED',
+          title: 'Subscription expired',
+          message: `${company.name} has expired and is now locked out until renewed.`,
+          link: '/settings',
+          referenceType: 'COMPANY',
+          referenceId: company.id,
+        }),
+      ]);
+    }
+  }
+
   @Cron(CronExpression.EVERY_DAY_AT_1AM)
   async runMonthlyAutomation() {
     const currentBsMonth = bsYearMonth(new Date());

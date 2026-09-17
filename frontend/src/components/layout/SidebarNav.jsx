@@ -273,7 +273,7 @@ export default function SidebarNav({ collapsed, onToggle }) {
   return (
     <aside
       className={cn(
-        "fixed left-0 top-0 h-screen bg-sidebar text-sidebar-foreground z-40 flex flex-col transition-all duration-300",
+        "fixed left-0 top-0 h-screen bg-sidebar text-sidebar-foreground z-[60] flex flex-col pointer-events-auto transition-[width] duration-300",
         collapsed ? "w-[68px]" : "w-[240px]"
       )}
       style={hasBgColor ? { backgroundColor: prefs.sidebarColor } : undefined}
@@ -309,7 +309,7 @@ export default function SidebarNav({ collapsed, onToggle }) {
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 overflow-y-auto py-3 px-2 space-y-1">
+      <nav className="flex-1 min-h-0 overflow-y-auto py-3 px-2 space-y-1">
         {visibleSections.map((section, sIdx) => (
           <div key={section.label} className="mb-1">
             {!collapsed && (
@@ -380,12 +380,13 @@ export default function SidebarNav({ collapsed, onToggle }) {
 
       {/* Collapse toggle */}
       <div className={cn(
-        "shrink-0 p-2 border-t",
+        "relative z-[62] shrink-0 border-t bg-sidebar",
         hasBgColor ? "border-white/10" : "border-sidebar-border"
       )}>
         <button
+          type="button"
           onClick={onToggle}
-          className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sidebar-muted hover:bg-sidebar-accent hover:text-sidebar-foreground transition-colors"
+          className="relative z-[63] flex w-full min-h-12 items-center justify-center gap-2 px-3 py-2 text-sidebar-muted hover:bg-sidebar-accent hover:text-sidebar-foreground cursor-pointer transition-colors"
         >
           {collapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
           {!collapsed && <span className="text-xs">Collapse</span>}

@@ -175,7 +175,10 @@ export class CompanyServiceImpl {
     const restoring = !expiresAt || expiresAt.getTime() > Date.now();
     const updated = await this.prisma.company.update({
       where: { id },
-      data: { subscriptionExpiresAt: expiresAt, ...(restoring ? { accessBlockedNotifiedAt: null } : {}) },
+      data: {
+        subscriptionExpiresAt: expiresAt,
+        ...(restoring ? { accessBlockedNotifiedAt: null, lastRenewalRequestedAt: null } : {}),
+      },
     });
     if (restoring && company.isActive) {
       await Promise.all([

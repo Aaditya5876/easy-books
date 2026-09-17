@@ -1380,7 +1380,13 @@ export default function Settings() {
                                         className="text-xs border rounded-md px-1.5 py-1 bg-background focus:outline-none focus:ring-1 focus:ring-ring"
                                         value={pendingSubscriptionExpiry[c.id] ?? toDatetimeLocalValue(c.subscriptionExpiresAt)}
                                         disabled={clientSubscriptionSaving === c.id}
-                                        onChange={e => setPendingSubscriptionExpiry(p => ({ ...p, [c.id]: e.target.value }))}
+                                        onChange={e => {
+                                          setPendingSubscriptionExpiry(p => ({ ...p, [c.id]: e.target.value }));
+                                          // Native datetime-local pickers stay open while the input
+                                          // owns focus. Release it after the complete value changes
+                                          // so the Save action is visible immediately.
+                                          requestAnimationFrame(() => e.currentTarget.blur());
+                                        }}
                                       />
                                       {(pendingSubscriptionExpiry[c.id] ?? toDatetimeLocalValue(c.subscriptionExpiresAt)) && (
                                         <button
