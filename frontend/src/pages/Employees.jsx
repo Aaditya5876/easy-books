@@ -327,7 +327,7 @@ export default function Employees() {
         ...rest,
         basic_salary: parseFloat(salary) || 0,
         ...(rest.employment_type === 'PART_TIME' ? { contracted_hours_per_day: parseFloat(contracted_hours_per_day) } : {}),
-      });
+      }, { company_id: companyId });
       setEditEmployee(null);
       toast.success(t('employees.employeeUpdated', { defaultValue: 'Employee updated' }));
       load();

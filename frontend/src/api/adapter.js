@@ -72,8 +72,8 @@ function makeEntity(endpoint) {
       const res = await apiClient.post(endpoint, toCamel(data));
       return toSnake(unwrap(res));
     },
-    async update(id, data) {
-      const res = await apiClient.put(`${endpoint}/${id}`, toCamel(data));
+    async update(id, data, params = {}) {
+      const res = await apiClient.put(`${endpoint}/${id}`, toCamel(data), { params: toCamel(params) });
       return toSnake(unwrap(res));
     },
     async delete(id) {

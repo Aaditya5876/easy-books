@@ -28,6 +28,24 @@ export class UserServiceImpl {
     private readonly mailService: MailService,
   ) {}
 
+  private async ensureEmployeeRecord(companyId: string, user: { id: string; name: string; email: string; role: string }) {
+    if (user.role === 'SUPER_ADMIN') return;
+    const existing = await this.prisma.employee.findFirst({
+      where: { companyId, email: { equals: user.email, mode: 'insensitive' }, deletedAt: null },
+      select: { id: true },
+    });
+    if (existing) return;
+    await this.prisma.employee.create({
+      data: {
+        companyId,
+        name: user.name,
+        email: user.email,
+        employeeId: `USER-${user.id}`,
+        designation: user.role === 'TEACHER' ? 'Teacher' : user.role,
+      },
+    });
+  }
+
   async inviteUser(
     companyId: string,
     data: { email: string; name: string; role: string; staffTags?: string[] },
@@ -61,6 +79,7 @@ export class UserServiceImpl {
       await this.prisma.userCompany.create({
         data: { userId: existing.id, companyId, isDefault: false },
       });
+      await this.ensureEmployeeRecord(companyId, existing);
 
       // Deliberately not setting role here: `role` lives globally on User,
       // not per-company, so overwriting it to match this invite would also
@@ -89,6 +108,8 @@ export class UserServiceImpl {
       },
       select: { id: true, email: true, name: true, role: true, staffTags: true },
     });
+
+    await this.ensureEmployeeRecord(companyId, user);
 
     await this.mailService.sendInvitation(data.email, data.name, company.name, tempPassword);
 
