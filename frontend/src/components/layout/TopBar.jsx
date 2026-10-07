@@ -1,14 +1,16 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from 'next-themes';
 import { api, apiAuth } from '@/api/adapter';
-import { notificationsApi } from '@/api';
+import { notificationsApi, companyApi } from '@/api';
 import {
   Search, Bell, Settings, LogOut, Building2, ChevronDown, Plus, Menu,
   Wrench, Calculator, RefreshCw, CalendarDays, UserCircle, CalendarCheck,
   UsersRound, Banknote, Sun, Moon, X, Package, Users, UserCheck, Globe,
+  Sparkles, AlertTriangle, ShieldCheck, Send,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { toast } from 'sonner';
 import { toggleLanguage } from '@/i18n';
 import { usePreferences } from '@/lib/PreferencesContext';
 import { Button } from "@/components/ui/button";
@@ -16,13 +18,26 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
   DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { getActiveCompanyId, setActiveCompanyId } from '@/lib/companyContext';
+import { getActiveCompanyId, setActiveCompanyId, isCompanyAccessible } from '@/lib/companyContext';
 import { getTodayBS } from '@/lib/nepaliDate';
+import { useRole } from '@/lib/useRole';
+
+// Mirrors Settings.jsx's ROLE_I18N_KEY — kept local since it's the only other
+// place a role label is shown in the chrome.
+const ROLE_LABEL_KEY = {
+  STAFF: 'settings.roleStaff',
+  ACCOUNTANT: 'settings.roleAccountant',
+  TEACHER: 'settings.roleTeacher',
+  ADMIN: 'settings.roleAdmin',
+  SUPER_ADMIN: 'settings.roleSuperAdmin',
+};
 
 export default function TopBar({ onMobileMenuToggle, onToolOpen }) {
   const navigate = useNavigate();
-  const { i18n } = useTranslation();
+  const { isAdmin, isAccountant, isSuperAdmin, canViewPayroll } = useRole();
+  const { t, i18n } = useTranslation();
   const { resolvedTheme, setTheme } = useTheme();
   const { prefs } = usePreferences();
   const [user, setUser] = useState(null);
@@ -38,31 +53,158 @@ export default function TopBar({ onMobileMenuToggle, onToolOpen }) {
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [notifLoading, setNotifLoading] = useState(false);
+  const [liveNotification, setLiveNotification] = useState(null);
+  const newestNotificationId = useRef(null);
+  const activeCompanyRef = useRef(null);
+  const [autoDetail, setAutoDetail] = useState(null);
+  const [requestingRenewal, setRequestingRenewal] = useState(false);
+  const [extendingSubscription, setExtendingSubscription] = useState(false);
 
   useEffect(() => {
     loadData();
   }, []);
 
+  useEffect(() => {
+    activeCompanyRef.current = activeCompany;
+  }, [activeCompany]);
+
+  useEffect(() => {
+    const expiresAt = activeCompany?.subscription_expires_at ?? activeCompany?.subscriptionExpiresAt;
+    if (!activeCompany || !expiresAt || activeCompany.is_active === false || activeCompany.isActive === false) return undefined;
+
+    const expirationTime = new Date(expiresAt).getTime();
+    if (!Number.isFinite(expirationTime)) return undefined;
+
+    const showExpiryModal = () => {
+      const modalKey = `easybooks:expiry-modal:${activeCompany.id}:${expirationTime}`;
+      if (sessionStorage.getItem(modalKey) === 'shown') return;
+      sessionStorage.setItem(modalKey, 'shown');
+      const renewalRequested = !!(activeCompany.last_renewal_requested_at ?? activeCompany.lastRenewalRequestedAt);
+      setLiveNotification({
+        type: 'ACCESS_SUSPENDED',
+        title: isSuperAdmin ? 'Subscription expired' : 'Temporarily paused',
+        message: isSuperAdmin
+          ? `${activeCompany.name} has expired and is now locked out until renewed.`
+          : renewalRequested
+            ? `${activeCompany.name}'s subscription has expired. Your data is safe and untouched. Thank you for your patience. Your renewal request is in progress.`
+            : `${activeCompany.name}'s subscription has expired. Your data is safe and untouched. Please request a new subscription.`,
+      });
+    };
+
+    const delay = expirationTime - Date.now();
+    if (delay <= 0) {
+      showExpiryModal();
+      return undefined;
+    }
+
+    const timerId = window.setTimeout(showExpiryModal, delay);
+    return () => window.clearTimeout(timerId);
+  }, [activeCompany, isSuperAdmin]);
+
+  useEffect(() => {
+    if (import.meta.env.VITE_ENABLE_NOTIFICATIONS !== 'true') return;
+
+    const refreshNotifications = () => {
+      notificationsApi.unreadCount().then(res => setUnreadCount(res?.data ?? 0)).catch(() => {});
+      if (document.visibilityState === 'visible') {
+        loadNotifications(true);
+      }
+    };
+
+    const intervalId = setInterval(refreshNotifications, 3000);
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') refreshNotifications();
+    };
+
+    const streamUrl = `${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/api/v1/notifications/stream`;
+    const stream = new EventSource(streamUrl, { withCredentials: true });
+    stream.onmessage = (event) => {
+      try {
+        const payload = JSON.parse(event.data);
+        if (payload?.type === 'notification' && payload.payload?.title) {
+          loadNotifications();
+          handleLiveNotification(payload.payload);
+        }
+        if (payload?.type === 'count' && typeof payload.unreadCount === 'number') {
+          setUnreadCount(payload.unreadCount);
+        }
+      } catch {}
+    };
+    // EventSource automatically retries after transient connection errors.
+    // Closing it here would disable the live channel and leave only polling.
+
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => {
+      clearInterval(intervalId);
+      stream?.close();
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    };
+  }, []);
+
   async function loadData() {
     const me = await apiAuth.me();
     setUser(me);
-    const companyList = await api.Company.list();
+    const companyList = me?.role === 'SUPER_ADMIN'
+      ? await companyApi.listAll().then(res => res.data || []).catch(() => [])
+      : await api.Company.list();
     setCompanies(companyList);
+    // SUPER_ADMIN has no company of their own by default (no baseline
+    // "active company" the way a real user has) — but they can explicitly
+    // step into a client's view (Settings -> Clients -> View), which sets
+    // activeCompanyId to a company they're often NOT linked to via
+    // UserCompany at all (e.g. one the client self-served a second branch
+    // for). The bug last time: this resolution only ever searched their OWN
+    // linked companyList, didn't find an unlinked one, and "self-healed"
+    // back to a linked company — fighting the switch. Fetch it directly
+    // instead of assuming it must be in companyList.
+    if (me?.role === 'SUPER_ADMIN') {
+      const activeId = getActiveCompanyId();
+      let resolved = activeId ? companyList.find(c => c.id === activeId) : null;
+      if (activeId && !resolved) {
+        resolved = await api.Company.get(activeId).catch(() => null);
+      }
+      // Deliberately NOT nulled out when inaccessible (deactivated/expired) —
+      // SUPER_ADMIN bypasses CompanyAccessGuard entirely and needs to keep
+      // seeing/managing a suspended client's view, not have the header go
+      // blank on them. The banner below (isCompanyAccessible check) still
+      // flags it, just without hiding the company itself.
+      setActiveCompany(resolved || null);
+      if (import.meta.env.VITE_ENABLE_NOTIFICATIONS === 'true') {
+        notificationsApi.unreadCount().then(res => setUnreadCount(res?.data ?? 0)).catch(() => {});
+      }
+      return;
+    }
+    // Only fall back to a different company when there's genuinely no
+    // explicit selection (first-ever login, or the previously-selected one
+    // isn't in this user's list at all e.g. removed). A selection that IS
+    // found but has since lost access (deactivated/expired) is deliberately
+    // kept, not swapped away from — the whole point is to keep showing that
+    // company (cached data, familiar header) with a locked/expired banner,
+    // not silently teleport the admin to a different one of their companies.
     const activeId = getActiveCompanyId();
-    if (activeId) {
-      const active = companyList.find(c => c.id === activeId);
-      setActiveCompany(active || companyList[0] || null);
-      // Pre-load search data in background
-      Promise.all([
-        api.Client.filter({ company_id: activeId }),
-        api.Vendor.filter({ company_id: activeId }),
-        api.InventoryItem.filter({ company_id: activeId }),
-      ]).then(([cls, vens, inv]) => {
-        setSearchData({ clients: cls, vendors: vens, inventory: inv });
-      }).catch(() => {});
-    } else if (companyList.length > 0) {
-      setActiveCompany(companyList[0]);
-      setActiveCompanyId(companyList[0].id);
+    let resolved = activeId ? companyList.find(c => c.id === activeId) : null;
+    if (!resolved) {
+      resolved = companyList.find(isCompanyAccessible) || companyList[0] || null;
+      if (resolved) setActiveCompanyId(resolved.id);
+    }
+    setActiveCompany(resolved);
+    if (resolved && isCompanyAccessible(resolved)) {
+      // Pre-load search data in background — Clients/Vendors/Inventory are
+      // business-ERP-only modules (don't exist for school companies) and are
+      // also role-gated to STAFF/ACCOUNTANT/ADMIN, so skip entirely for school
+      // companies or for TEACHER to avoid pointless 403s. Also skipped
+      // outright once the company itself is locked out — every one of these
+      // calls would just 403.
+      const canSearchBusinessData = resolved.business_type !== 'SCHOOL' && me?.role !== 'TEACHER';
+      if (canSearchBusinessData) {
+        Promise.all([
+          api.Client.filter({ company_id: resolved.id }),
+          api.Vendor.filter({ company_id: resolved.id }),
+          api.InventoryItem.filter({ company_id: resolved.id }),
+        ]).then(([cls, vens, inv]) => {
+          setSearchData({ clients: cls, vendors: vens, inventory: inv });
+        }).catch(() => {});
+      }
     }
     // Pre-load unread count so the badge is right before the dropdown ever opens
     if (import.meta.env.VITE_ENABLE_NOTIFICATIONS === 'true') {
@@ -72,33 +214,79 @@ export default function TopBar({ onMobileMenuToggle, onToolOpen }) {
     }
   }
 
-  async function loadNotifications() {
+  async function handleLiveNotification(notification) {
+    const companyId = notification.referenceId || activeCompanyRef.current?.id;
+    if (companyId && notification.type === 'SUBSCRIPTION_RENEWAL_REQUESTED') {
+      const company = await api.Company.get(companyId).catch(() => null);
+      if (company) setActiveCompany(company);
+    }
+    if (companyId && notification.type === 'ACCESS_RESTORED') {
+      const company = await api.Company.get(companyId).catch(() => null);
+      if (company) setActiveCompany(company);
+    }
+    if (notification.type === 'ACCESS_SUSPENDED' && companyId) {
+      const company = await api.Company.get(companyId).catch(() => null);
+      if (company && isCompanyAccessible(company)) return;
+      const expiresAt = company?.subscriptionExpiresAt ?? company?.subscription_expires_at
+        ?? activeCompanyRef.current?.subscriptionExpiresAt ?? activeCompanyRef.current?.subscription_expires_at;
+      const expiryKey = expiresAt ? new Date(expiresAt).getTime() : 'suspended';
+      const modalKey = `easybooks:expiry-modal:${companyId}:${expiryKey}`;
+      if (sessionStorage.getItem(modalKey) === 'shown') return;
+      sessionStorage.setItem(modalKey, 'shown');
+    }
+    setLiveNotification(notification);
+  }
+
+  async function loadNotifications(announceNew = false) {
     setNotifLoading(true);
     try {
       const [listRes, countRes] = await Promise.all([
         notificationsApi.list({ pageSize: 10 }),
         notificationsApi.unreadCount(),
       ]);
-      setNotifications(listRes?.data?.items ?? []);
+      const items = listRes?.data?.items ?? [];
+      const newest = items[0];
+      if (announceNew && newest?.id && newestNotificationId.current && newest.id !== newestNotificationId.current) {
+        handleLiveNotification({
+          title: newest.title,
+          message: newest.message,
+          link: newest.link,
+          referenceType: newest.referenceType,
+          referenceId: newest.referenceId,
+          type: newest.type,
+          createdAt: newest.createdAt,
+          isRead: newest.isRead,
+        });
+      }
+      if (newest?.id) newestNotificationId.current = newest.id;
+      setNotifications(items);
       setUnreadCount(countRes?.data ?? 0);
-    } catch (_) {}
+    } catch {}
     setNotifLoading(false);
   }
 
   async function markNotificationRead(id) {
     setNotifications(ns => ns.map(n => n.id === id ? { ...n, isRead: true } : n));
     setUnreadCount(c => Math.max(0, c - 1));
-    try { await notificationsApi.markRead(id); } catch (_) {}
+    try { await notificationsApi.markRead(id); } catch {}
   }
 
   async function markAllNotificationsRead() {
     setNotifications(ns => ns.map(n => ({ ...n, isRead: true })));
     setUnreadCount(0);
-    try { await notificationsApi.markAllRead(); } catch (_) {}
+    try { await notificationsApi.markAllRead(); } catch {}
   }
 
   function handleNotificationClick(n) {
     if (!n.isRead) markNotificationRead(n.id);
+    if (n.type === 'SYSTEM_AUTOMATION') {
+      setAutoDetail(n);
+      return;
+    }
+    if (n.type === 'SUBSCRIPTION_RENEWAL_REQUESTED' && n.referenceId) {
+      navigate('/settings', { state: { tab: 'clients', highlightCompanyId: n.referenceId } });
+      return;
+    }
     if (n.link) navigate(n.link);
   }
 
@@ -106,6 +294,61 @@ export default function TopBar({ onMobileMenuToggle, onToolOpen }) {
     setActiveCompany(company);
     setActiveCompanyId(company.id);
     window.location.reload();
+  }
+
+  function handleCompanyClick(company) {
+    // Switching TO a deactivated/expired company is allowed — that's the
+    // whole point of the "show it as-is with a banner" design (see loadData
+    // above). It's still blocked once already selected, at the point every
+    // actual data request 403s server-side; this is just picking which
+    // company to look at, not an action that itself needs to succeed.
+    switchCompany(company);
+  }
+
+  // 1-hour cooldown, driven by Company.lastRenewalRequestedAt — keeps one
+  // ADMIN from mashing the button and flooding every SUPER_ADMIN's inbox.
+  const RENEWAL_COOLDOWN_MS = 60 * 60 * 1000;
+  function renewalCooldownRemainingMs(company) {
+    const last = company?.last_renewal_requested_at;
+    if (!last) return 0;
+    return Math.max(0, new Date(last).getTime() + RENEWAL_COOLDOWN_MS - Date.now());
+  }
+
+  async function handleRequestRenewal() {
+    if (!activeCompany || requestingRenewal) return;
+    setRequestingRenewal(true);
+    try {
+      await companyApi.requestRenewal(activeCompany.id);
+      const requestedAt = new Date().toISOString();
+      setActiveCompany(c => c ? {
+        ...c,
+        last_renewal_requested_at: requestedAt,
+        lastRenewalRequestedAt: requestedAt,
+      } : c);
+      toast.success(t('settings.renewalRequestSent', { defaultValue: 'Thank you for your patience. Your renewal request is in progress.' }));
+    } catch (err) {
+      toast.error(err?.response?.data?.message || t('settings.renewalRequestFailed', { defaultValue: 'Failed to send request' }));
+    } finally {
+      setRequestingRenewal(false);
+    }
+  }
+
+  async function handleExtendSubscription() {
+    if (!activeCompany || extendingSubscription) return;
+    setExtendingSubscription(true);
+    try {
+      const response = await companyApi.extendSubscription(activeCompany.id);
+      setActiveCompany(c => c ? {
+        ...c,
+        subscription_expires_at: response.data.subscriptionExpiresAt,
+        subscription_extension_used_at: response.data.subscriptionExtensionUsedAt,
+      } : c);
+      toast.success(t('settings.subscriptionExtended', { defaultValue: 'Your subscription has been extended for 3 days.' }));
+    } catch (err) {
+      toast.error(err?.response?.data?.message || t('settings.subscriptionExtensionFailed', { defaultValue: 'Failed to extend subscription' }));
+    } finally {
+      setExtendingSubscription(false);
+    }
   }
 
   function closeSearch() {
@@ -138,6 +381,10 @@ export default function TopBar({ onMobileMenuToggle, onToolOpen }) {
     FEE_PAYMENT: { Icon: Banknote, bg: 'bg-green-50', color: 'text-green-500' },
     LEAVE_REQUEST: { Icon: CalendarCheck, bg: 'bg-blue-50', color: 'text-blue-500' },
     PAYROLL_PAID: { Icon: Banknote, bg: 'bg-green-50', color: 'text-green-500' },
+    SYSTEM_AUTOMATION: { Icon: Sparkles, bg: 'bg-violet-50', color: 'text-violet-500' },
+    ACCESS_SUSPENDED: { Icon: AlertTriangle, bg: 'bg-red-50', color: 'text-red-500' },
+    ACCESS_RESTORED: { Icon: ShieldCheck, bg: 'bg-green-50', color: 'text-green-500' },
+    SUBSCRIPTION_RENEWAL_REQUESTED: { Icon: Send, bg: 'bg-blue-50', color: 'text-blue-500' },
   };
 
   function timeAgo(iso) {
@@ -151,8 +398,25 @@ export default function TopBar({ onMobileMenuToggle, onToolOpen }) {
   }
 
   const todayBS = getTodayBS();
+  const activeCompanyIsActive = activeCompany?.is_active ?? activeCompany?.isActive;
+  const activeCompanyExpiresAt = activeCompany?.subscription_expires_at ?? activeCompany?.subscriptionExpiresAt;
+  const activeCompanyIsAccessible = isCompanyAccessible(activeCompany);
 
   return (
+    <>
+    <Dialog open={!!liveNotification} onOpenChange={open => { if (!open) setLiveNotification(null); }}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>{liveNotification?.title}</DialogTitle>
+        </DialogHeader>
+        <p className="text-sm leading-6 text-muted-foreground">
+          {liveNotification?.message}
+        </p>
+        <DialogFooter>
+          <Button onClick={() => setLiveNotification(null)}>Okay</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
     <header
       className="h-16 backdrop-blur-xl bg-card/80 border-b border-border/60 flex items-center justify-between px-4 lg:px-6 shrink-0 sticky top-0 z-30"
       style={prefs.topbarColor ? { backgroundColor: prefs.topbarColor } : undefined}
@@ -161,7 +425,7 @@ export default function TopBar({ onMobileMenuToggle, onToolOpen }) {
       <div className="flex items-center gap-3">
         <button
           onClick={onMobileMenuToggle}
-          className="lg:hidden p-2 rounded-lg hover:bg-secondary transition-colors"
+          className="hidden"
         >
           <Menu className="w-5 h-5" />
         </button>
@@ -178,22 +442,43 @@ export default function TopBar({ onMobileMenuToggle, onToolOpen }) {
               <span className="hidden sm:inline max-w-[160px] truncate">
                 {activeCompany?.name || 'Select Company'}
               </span>
+              {activeCompany && (
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-emerald-500/25 shadow-[0_0_4px_rgba(16,185,129,0.7)] shrink-0" title="Active" />
+              )}
               <ChevronDown className="w-3 h-3 text-muted-foreground" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" className="w-56">
             {companies.map(c => (
-              <DropdownMenuItem key={c.id} onClick={() => switchCompany(c)}>
+              <DropdownMenuItem
+                key={c.id}
+                onClick={() => handleCompanyClick(c)}
+                className={!isCompanyAccessible(c) ? 'opacity-60' : ''}
+              >
                 <Building2 className="w-4 h-4 mr-2" />
                 {c.name}
+                {/* Green = this is the currently active/selected company (matches
+                    the button dot exactly) — not "not deactivated". */}
+                {c.id === activeCompany?.id && (
+                  <span
+                    className="ml-2 w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-emerald-500/25 shadow-[0_0_4px_rgba(16,185,129,0.7)] shrink-0"
+                    title="Currently active company"
+                  />
+                )}
                 {c.isDefault && <span className="ml-auto text-[10px] text-muted-foreground">default</span>}
               </DropdownMenuItem>
             ))}
-            {companies.length > 0 && <DropdownMenuSeparator />}
-            <DropdownMenuItem onClick={() => navigate('/settings')}>
-              <Plus className="w-4 h-4 mr-2" />
-              Add Company
-            </DropdownMenuItem>
+            {isAdmin && !isSuperAdmin && companies.length > 0 && <DropdownMenuSeparator />}
+            {/* Not for SUPER_ADMIN — this self-serve flow would make the new
+                company owned by them, no separate client admin, same mistake
+                as the old "GeoInfosys School" test company. Create Client
+                (Settings -> Clients) is the only correct way for them. */}
+            {isAdmin && !isSuperAdmin && (
+              <DropdownMenuItem onClick={() => navigate('/settings', { state: { tab: 'companies', openAddCompany: true } })}>
+                <Plus className="w-4 h-4 mr-2" />
+                Add Company
+              </DropdownMenuItem>
+            )}
           </DropdownMenuContent>
         </DropdownMenu>
 
@@ -218,45 +503,56 @@ export default function TopBar({ onMobileMenuToggle, onToolOpen }) {
             <DropdownMenuItem onClick={() => onToolOpen?.('calculator')}>
               <Calculator className="w-4 h-4 mr-2" />Calculator
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => onToolOpen?.('currency')}>
-              <RefreshCw className="w-4 h-4 mr-2" />Currency Converter
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => onToolOpen?.('calendar')}>
-              <CalendarDays className="w-4 h-4 mr-2" />Calendar
-            </DropdownMenuItem>
+            {/* Currency Converter and generic Calendar are business-only tools —
+                schools have their own dedicated Calendar and Events module. */}
+            {activeCompany?.business_type !== 'SCHOOL' && (
+              <>
+                <DropdownMenuItem onClick={() => onToolOpen?.('currency')}>
+                  <RefreshCw className="w-4 h-4 mr-2" />Currency Converter
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => onToolOpen?.('calendar')}>
+                  <CalendarDays className="w-4 h-4 mr-2" />Calendar
+                </DropdownMenuItem>
+              </>
+            )}
           </DropdownMenuContent>
         </DropdownMenu>
 
-        {/* HR */}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground">
-              <UsersRound className="w-4 h-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-48">
-            <DropdownMenuItem onClick={() => navigate('/employees')}>
-              <UserCircle className="w-4 h-4 mr-2" />Employees
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => navigate('/attendance')}>
-              <CalendarCheck className="w-4 h-4 mr-2" />Attendance
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => navigate('/payroll')}>
-              <Banknote className="w-4 h-4 mr-2" />Payroll
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        {/* HR — routes are ACCOUNTANT/ADMIN-only for restricted roles (see schoolRoutes in App.jsx) */}
+        {canViewPayroll && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground">
+                <UsersRound className="w-4 h-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48">
+              <DropdownMenuItem onClick={() => navigate('/employees')}>
+                <UserCircle className="w-4 h-4 mr-2" />Employees
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => navigate('/attendance')}>
+                <CalendarCheck className="w-4 h-4 mr-2" />Attendance
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => navigate('/payroll')}>
+                <Banknote className="w-4 h-4 mr-2" />Payroll
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
 
-        {/* Settings shortcut */}
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => navigate('/settings')}
-          className="text-muted-foreground hover:text-foreground"
-          title="Settings"
-        >
-          <Settings className="w-4 h-4" />
-        </Button>
+        {/* Settings shortcut — /settings is reachable by ADMIN/ACCOUNTANT (bank accounts,
+            fiscal year, automation); unreachable for restricted roles (see schoolRoutes in App.jsx) */}
+        {(isAdmin || isAccountant) && (
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => navigate('/settings')}
+            className="text-muted-foreground hover:text-foreground"
+            title="Settings"
+          >
+            <Settings className="w-4 h-4" />
+          </Button>
+        )}
 
         {/* ── Inline Search ── */}
         {searchOpen ? (
@@ -404,16 +700,25 @@ export default function TopBar({ onMobileMenuToggle, onToolOpen }) {
                   {user?.full_name?.[0]?.toUpperCase() || 'U'}
                 </span>
               </div>
-              <span className="hidden md:inline text-sm font-medium max-w-[120px] truncate">
-                {user?.full_name || 'User'}
+              <span className="hidden md:flex flex-col items-start leading-tight">
+                <span className="text-sm font-medium max-w-[120px] truncate">{user?.full_name || 'User'}</span>
+                {user?.role && (
+                  <span className="text-[10px] text-muted-foreground max-w-[120px] truncate">
+                    {ROLE_LABEL_KEY[user.role] ? t(ROLE_LABEL_KEY[user.role], { defaultValue: user.role }) : user.role}
+                  </span>
+                )}
               </span>
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-48">
-            <DropdownMenuItem onClick={() => navigate('/settings')}>
-              <Settings className="w-4 h-4 mr-2" />Settings
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
+            {(isAdmin || isAccountant) && (
+              <>
+                <DropdownMenuItem onClick={() => navigate('/settings')}>
+                  <Settings className="w-4 h-4 mr-2" />Settings
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+              </>
+            )}
             <DropdownMenuItem onClick={() => apiAuth.logout()}>
               <LogOut className="w-4 h-4 mr-2" />Logout
             </DropdownMenuItem>
@@ -421,5 +726,126 @@ export default function TopBar({ onMobileMenuToggle, onToolOpen }) {
         </DropdownMenu>
       </div>
     </header>
+
+    {/* Suspended/expired banner — the company stays fully visible (name,
+        cached data, nav) per design: losing access shouldn't feel like the
+        page broke, it should read as "paused, here's why, here's what to do". */}
+    {activeCompany && !activeCompanyIsAccessible && (
+      <div className="subscription-alert-bar px-4 lg:px-6 py-2 bg-red-50 border-b border-red-200 flex items-center gap-3 text-sm">
+        <AlertTriangle className="w-4 h-4 text-red-600 shrink-0" />
+        <span className="subscription-alert-title text-red-800 font-medium shrink-0">
+          {isSuperAdmin && activeCompanyIsActive !== false
+            ? t('settings.superAdminTokenExpiredBanner', { defaultValue: 'This company\'s subscription token has expired.' })
+            : activeCompanyIsActive === false
+            ? t('settings.companyDeactivatedBanner', { defaultValue: 'This company has been deactivated.' })
+            : t('settings.subscriptionExpiredBanner', { defaultValue: "This company's subscription has expired." })}
+        </span>
+        {isSuperAdmin && activeCompanyIsActive !== false ? (
+          <span className="subscription-alert-copy text-red-600">
+            {(activeCompany.last_renewal_requested_at ?? activeCompany.lastRenewalRequestedAt)
+              ? t('settings.renewalRequestStatus', { defaultValue: 'Renewal request: received.' })
+              : t('settings.renewalRequestStatusMissing', { defaultValue: 'Renewal request: not received yet.' })}
+          </span>
+        ) : (
+          <span className="subscription-alert-copy text-red-600">
+            {(activeCompany.last_renewal_requested_at ?? activeCompany.lastRenewalRequestedAt)
+              ? t('settings.servicesPausedAfterRequest', { defaultValue: 'Thank you for your patience. Your renewal request is in progress.' })
+              : t('settings.servicesPausedBeforeRequest', { defaultValue: 'Services are paused for now. Your data is safe. Please request a new subscription.' })}
+          </span>
+        )}
+        {isAdmin && !isSuperAdmin && activeCompanyIsActive !== false && activeCompanyExpiresAt && (() => {
+          const extensionUsed = !!(activeCompany.subscription_extension_used_at ?? activeCompany.subscriptionExtensionUsedAt);
+          const subscriptionExpiresAt = activeCompany.subscription_expires_at ?? activeCompany.subscriptionExpiresAt;
+          const subscriptionExpired = new Date(subscriptionExpiresAt).getTime() <= Date.now();
+          return (
+            <div className="subscription-alert-actions flex items-center gap-2 shrink-0 ml-auto">
+              {subscriptionExpired && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="border-amber-300 text-amber-700 hover:bg-amber-100 hover:text-amber-800 whitespace-nowrap"
+                  onClick={handleExtendSubscription}
+                  disabled={extendingSubscription || extensionUsed}
+                >
+                  {extendingSubscription
+                    ? t('settings.extendingEllipsis', { defaultValue: 'Extending…' })
+                    : extensionUsed
+                      ? t('settings.extensionUsed', { defaultValue: 'Extended for 3 Days' })
+                      : t('settings.extendThreeDays', { defaultValue: 'Extend for 3 Days' })}
+                </Button>
+              )}
+              <Button
+                size="sm"
+                variant="outline"
+                className="border-red-300 text-red-700 hover:bg-red-100 hover:text-red-800 whitespace-nowrap"
+                onClick={handleRequestRenewal}
+                disabled={requestingRenewal}
+              >
+                <Send className="w-3.5 h-3.5 mr-1.5" />
+                {requestingRenewal
+                    ? t('settings.requestingEllipsis', { defaultValue: 'Requesting…' })
+                    : t('settings.requestRenewal', { defaultValue: 'Request Subscription Renewal' })}
+              </Button>
+            </div>
+          );
+        })()}
+        {isSuperAdmin && (
+          <Button
+            size="sm"
+            variant="outline"
+            className="ml-auto border-red-300 text-red-700 hover:bg-red-100 hover:text-red-800 whitespace-nowrap"
+            onClick={() => navigate('/settings', { state: { tab: 'clients', highlightCompanyId: activeCompany.id } })}
+          >
+            {t('settings.manageInSettings', { defaultValue: 'Manage in Settings' })}
+          </Button>
+        )}
+      </div>
+    )}
+
+    {/* Nightly automation detail — shown when a SYSTEM_AUTOMATION notification is clicked */}
+    <Dialog open={!!autoDetail} onOpenChange={(open) => !open && setAutoDetail(null)}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Sparkles className="w-4 h-4 text-violet-500" />
+            {autoDetail?.title || 'Nightly automation completed'}
+          </DialogTitle>
+        </DialogHeader>
+        {autoDetail?.details?.runAt && (
+          <p className="text-xs text-muted-foreground -mt-2">
+            Ran {new Date(autoDetail.details.runAt).toLocaleString()}
+            {autoDetail.details.month ? ` · Month: ${autoDetail.details.month}` : ''}
+          </p>
+        )}
+        <div className="max-h-96 overflow-y-auto space-y-4 mt-1">
+          {(autoDetail?.details?.updates ?? []).map((group, i) => (
+            <div key={i}>
+              <p className="text-sm font-semibold mb-1.5">{group.label}</p>
+              <div className="border border-border rounded-lg divide-y divide-border overflow-hidden">
+                {group.items.map((item, j) => (
+                  <div key={j} className="flex items-center justify-between px-3 py-1.5 text-sm">
+                    <span className="text-foreground">{item.name}</span>
+                    {item.amount != null && (
+                      <span className="text-muted-foreground font-mono text-xs">NPR {Number(item.amount).toLocaleString()}</span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+          {(!autoDetail?.details?.updates || autoDetail.details.updates.length === 0) && (
+            <p className="text-sm text-muted-foreground">{autoDetail?.message}</p>
+          )}
+        </div>
+        {autoDetail?.link && (
+          <DialogFooter>
+            <Button onClick={() => { navigate(autoDetail.link); setAutoDetail(null); }}>
+              Go to related page
+            </Button>
+          </DialogFooter>
+        )}
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }

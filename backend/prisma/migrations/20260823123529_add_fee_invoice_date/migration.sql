@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE "fee_invoices" ADD COLUMN     "invoiceDate" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;

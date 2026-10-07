@@ -5,6 +5,7 @@ import {
   ConflictException,
   BadRequestException,
   NotFoundException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
@@ -15,6 +16,8 @@ import { IAuthService, AuthTokens } from '../../domain/services/auth.service';
 import { IUserRepository, USER_REPOSITORY } from '../../domain/repositories';
 import { PrismaService } from '../../../core/db/psql/prisma.client';
 import { MailService } from './mail.service';
+import { markSelfAttendance } from './self-attendance.util';
+import { isCompanyAccessible } from '../../../core/modules/company-access';
 
 @Injectable()
 export class AuthServiceImpl implements IAuthService {
@@ -95,7 +98,7 @@ export class AuthServiceImpl implements IAuthService {
       data: { emailVerified: true, verificationOtp: null, otpExpiresAt: null },
     });
 
-    return this.issueTokens(user.id, user.email, user.role);
+    return this.issueTokens(user.id, user.email, user.role, user.staffTags);
   }
 
   async resendOtp(email: string): Promise<void> {
@@ -123,8 +126,73 @@ export class AuthServiceImpl implements IAuthService {
       throw new UnauthorizedException('Please verify your email before logging in');
     }
 
-    const tokens = await this.issueTokens(user.id, user.email, user.role);
+    this.assertNotSuspended(user);
+    await this.assertHasActiveCompany(user.id, user.role);
+
+    await this.prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
+
+    const tokens = await this.issueTokens(user.id, user.email, user.role, user.staffTags);
     return { ...tokens, mustChangePassword: user.mustChangePassword };
+  }
+
+  // Login-page "quick attendance" — validates credentials exactly like login()
+  // but never issues tokens/cookies, so the requester stays on the login page
+  // instead of being signed into the full app. Scoped to the user's default
+  // company (falls back to their first company) since they haven't picked an
+  // active company yet at this point.
+  async quickAttendance(email: string, password: string, action: 'IN' | 'OUT') {
+    const user = await this.userRepo.findByEmail(email);
+    if (!user) throw new UnauthorizedException('Invalid credentials');
+
+    const valid = await bcrypt.compare(password, user.password);
+    if (!valid) throw new UnauthorizedException('Invalid credentials');
+
+    if (!user.emailVerified) {
+      throw new UnauthorizedException('Please verify your email before logging in');
+    }
+
+    this.assertNotSuspended(user);
+    await this.assertHasActiveCompany(user.id, user.role);
+
+    const userCompany = await this.prisma.userCompany.findFirst({
+      where: { userId: user.id },
+      orderBy: { isDefault: 'desc' },
+    });
+    if (!userCompany) throw new BadRequestException('No company found for this account');
+
+    const record = await markSelfAttendance(this.prisma, userCompany.companyId, user.email, action);
+    return { success: true, record };
+  }
+
+  // GeoInfosys's suspend switch (Company.isActive, set via SUPER_ADMIN-only
+  // CompanyServiceImpl.setActive) and the automatic subscriptionExpiresAt gate
+  // previously only blocked companyId-scoped API calls (CompanyAccessGuard) —
+  // a suspended/expired client could still sign in and poke around. Blocks
+  // sign-in outright once EVERY company this user belongs to fails
+  // isCompanyAccessible; a user with at least one accessible company still
+  // gets in (e.g. SUPER_ADMIN, who is never blocked, or someone belonging to
+  // more than one company where only some are suspended/expired — those
+  // others keep working normally, this only ever blocks sign-in entirely
+  // when NONE of their companies are usable).
+  private async assertHasActiveCompany(userId: string, role: string): Promise<void> {
+    if (role === 'SUPER_ADMIN') return;
+    const userCompanies = await this.prisma.userCompany.findMany({
+      where: { userId },
+      select: { company: { select: { isActive: true, subscriptionExpiresAt: true } } },
+    });
+    if (userCompanies.length > 0 && userCompanies.every((uc) => !isCompanyAccessible(uc.company))) {
+      throw new ForbiddenException('This company has been deactivated. Contact GeoInfosys to reactivate it.');
+    }
+  }
+
+  // Per-user suspend switch (User.isActive, set via ADMIN/SUPER_ADMIN-only
+  // UserServiceImpl.setUserActive) — distinct from assertHasActiveCompany
+  // above, which suspends every user of a company at once. SUPER_ADMIN is
+  // never suspendable (setUserActive rejects it), so no bypass needed here.
+  private assertNotSuspended(user: { isActive: boolean }): void {
+    if (!user.isActive) {
+      throw new ForbiddenException('This account has been suspended. Contact your administrator.');
+    }
   }
 
   async changePassword(userId: string, currentPassword: string, newPassword: string): Promise<void> {
@@ -150,7 +218,16 @@ export class AuthServiceImpl implements IAuthService {
     const match = await bcrypt.compare(refreshToken, user.refreshToken);
     if (!match) throw new UnauthorizedException('Access denied');
 
-    return this.issueTokens(user.id, user.email, user.role);
+    // Suspending a user or deactivating their company both null out
+    // refreshToken (see setUserActive/resetPassword), which the check above
+    // already catches. This re-check is for Company.isActive specifically —
+    // that flip doesn't touch User rows, so without this a company deactivated
+    // mid-session would only fully log its users out after the 7-day refresh
+    // token expires instead of within the 15-minute access token window.
+    this.assertNotSuspended(user);
+    await this.assertHasActiveCompany(user.id, user.role);
+
+    return this.issueTokens(user.id, user.email, user.role, user.staffTags);
   }
 
   async logout(userId: string): Promise<void> {
@@ -171,6 +248,7 @@ export class AuthServiceImpl implements IAuthService {
       email: user.email,
       name: user.name,
       role: user.role,
+      staffTags: user.staffTags,
       mustChangePassword: user.mustChangePassword,
       defaultCompanyId: defaultUC?.company.id || null,
       defaultCompany: defaultUC?.company || null,
@@ -181,8 +259,8 @@ export class AuthServiceImpl implements IAuthService {
     return Math.floor(100000 + Math.random() * 900000).toString();
   }
 
-  private async issueTokens(userId: string, email: string, role: string): Promise<AuthTokens> {
-    const payload = { sub: userId, email, role };
+  private async issueTokens(userId: string, email: string, role: string, staffTags: string[] = []): Promise<AuthTokens> {
+    const payload = { sub: userId, email, role, tags: staffTags };
 
     const accessToken = this.jwtService.sign(payload, {
       secret: this.config.get<string>('JWT_ACCESS_SECRET'),

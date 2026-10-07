@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { subjectsApi, classesApi } from '@/api';
+import { confirm } from '@/lib/confirm';
+import { useRole } from '@/lib/useRole';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -11,7 +13,7 @@ import {
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
-import { BookMarked, Plus, Pencil, Trash2, Upload } from 'lucide-react';
+import { BookMarked, Plus, Pencil, Trash2, Upload, Search } from 'lucide-react';
 import { toast } from 'sonner';
 import BulkImportDialog from '@/components/shared/BulkImportDialog';
 import { SUBJECT_FIELDS } from '@/components/shared/bulkImportFields';
@@ -35,6 +37,8 @@ function SubjectDialog({ open, onClose, subject }) {
     queryFn: () => classesApi.list().then(r => r.data),
   });
 
+  const [errors, setErrors] = useState({});
+
   const toggleClass = (classId) => {
     setForm(p => ({
       ...p,
@@ -56,7 +60,12 @@ function SubjectDialog({ open, onClose, subject }) {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (!form.name.trim()) return toast.error(t('subjects.subjectNameRequired', { defaultValue: 'Subject name is required' }));
+    if (!form.name.trim()) {
+      const msg = t('subjects.subjectNameRequired', { defaultValue: 'Subject name is required' });
+      setErrors({ name: msg });
+      return toast.error(msg);
+    }
+    setErrors({});
     const payload = {
       name: form.name,
       code: form.code,
@@ -76,7 +85,8 @@ function SubjectDialog({ open, onClose, subject }) {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-1">
             <Label>{t('subjects.subjectName', { defaultValue: 'Subject Name *' })}</Label>
-            <Input value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} placeholder={t('subjects.subjectNamePlaceholder', { defaultValue: 'e.g. Mathematics' })} />
+            <Input value={form.name} onChange={e => { setForm(p => ({ ...p, name: e.target.value })); if (errors.name) setErrors({}); }} placeholder={t('subjects.subjectNamePlaceholder', { defaultValue: 'e.g. Mathematics' })} />
+            {errors.name && <p className="text-xs text-red-600">{errors.name}</p>}
           </div>
           <div className="space-y-1">
             <Label>{t('subjects.subjectCode', { defaultValue: 'Subject Code' })}</Label>
@@ -118,13 +128,21 @@ function SubjectDialog({ open, onClose, subject }) {
 
 export default function Subjects() {
   const { t } = useTranslation();
+  const { canManageAcademicContent } = useRole();
   const qc = useQueryClient();
   const [dialog, setDialog] = useState({ open: false, subject: null });
   const [importOpen, setImportOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const [standardFilter, setStandardFilter] = useState('all');
 
   const { data: subjects = [], isLoading } = useQuery({
     queryKey: ['school-subjects'],
     queryFn: () => subjectsApi.list().then(r => r.data),
+  });
+
+  const { data: classes = [] } = useQuery({
+    queryKey: ['school-classes'],
+    queryFn: () => classesApi.list().then(r => r.data),
   });
 
   const remove = useMutation({
@@ -133,10 +151,23 @@ export default function Subjects() {
     onError: (e) => toast.error(e.response?.data?.message || t('subjects.cannotDeleteSubject', { defaultValue: 'Cannot delete subject' })),
   });
 
-  const handleDelete = (s) => {
-    if (!window.confirm(t('subjects.confirmDelete', { defaultValue: 'Delete subject "{{name}}"?', name: s.name }))) return;
+  const handleDelete = async (s) => {
+    const ok = await confirm({
+      title: t('common.deleteConfirmTitle', { defaultValue: 'Delete?' }),
+      description: t('subjects.confirmDelete', { defaultValue: 'Delete subject "{{name}}"?', name: s.name }),
+      confirmLabel: t('common.delete', { defaultValue: 'Delete' }),
+      variant: 'destructive',
+    });
+    if (!ok) return;
     remove.mutate(s.id);
   };
+
+  const q = search.trim().toLowerCase();
+  const filteredSubjects = subjects.filter(s => {
+    const matchesSearch = !q || s.name.toLowerCase().includes(q) || (s.code || '').toLowerCase().includes(q);
+    const matchesStandard = standardFilter === 'all' || (s.classes ?? []).some(sc => sc.classId === standardFilter);
+    return matchesSearch && matchesStandard;
+  });
 
   return (
     <div className="p-6 space-y-6">
@@ -149,11 +180,37 @@ export default function Subjects() {
           <Button variant="outline" onClick={() => setImportOpen(true)}>
             <Upload className="h-4 w-4 mr-1" /> {t('subjects.import', { defaultValue: 'Import' })}
           </Button>
-          <Button onClick={() => setDialog({ open: true, subject: null })}>
-            <Plus className="h-4 w-4 mr-1" /> {t('subjects.addSubject', { defaultValue: 'Add Subject' })}
-          </Button>
+          {canManageAcademicContent && (
+            <Button onClick={() => setDialog({ open: true, subject: null })}>
+              <Plus className="h-4 w-4 mr-1" /> {t('subjects.addSubject', { defaultValue: 'Add Subject' })}
+            </Button>
+          )}
         </div>
       </div>
+
+      {subjects.length > 0 && (
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="relative w-full max-w-xs">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Input
+              className="pl-8"
+              placeholder={t('subjects.searchPlaceholder', { defaultValue: 'Search by name or code…' })}
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+            />
+          </div>
+          {classes.length > 0 && (
+            <select
+              className="text-sm border rounded-md px-2 py-2 bg-background focus:outline-none focus:ring-2 focus:ring-ring"
+              value={standardFilter}
+              onChange={e => setStandardFilter(e.target.value)}
+            >
+              <option value="all">{t('subjects.allStandardsFilter', { defaultValue: 'All standards' })}</option>
+              {classes.map(c => <option key={c.id} value={c.id}>{classLabel(c)}</option>)}
+            </select>
+          )}
+        </div>
+      )}
 
       <BulkImportDialog
         open={importOpen}
@@ -179,10 +236,12 @@ export default function Subjects() {
           </TableHeader>
           <TableBody>
             {isLoading ? (
-              <TableRow><TableCell colSpan={4} className="text-center py-8 text-muted-foreground">{t('subjects.loading', { defaultValue: 'Loading…' })}</TableCell></TableRow>
+              <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">{t('subjects.loading', { defaultValue: 'Loading…' })}</TableCell></TableRow>
             ) : subjects.length === 0 ? (
-              <TableRow><TableCell colSpan={4} className="text-center py-12 text-muted-foreground">{t('subjects.noSubjectsYet', { defaultValue: 'No subjects yet. Add your first subject.' })}</TableCell></TableRow>
-            ) : subjects.map((s, i) => (
+              <TableRow><TableCell colSpan={7} className="text-center py-12 text-muted-foreground">{t('subjects.noSubjectsYet', { defaultValue: 'No subjects yet. Add your first subject.' })}</TableCell></TableRow>
+            ) : filteredSubjects.length === 0 ? (
+              <TableRow><TableCell colSpan={7} className="text-center py-12 text-muted-foreground">{t('subjects.noMatches', { defaultValue: 'No subjects match your filters.' })}</TableCell></TableRow>
+            ) : filteredSubjects.map((s, i) => (
               <TableRow key={s.id}>
                 <TableCell className="text-muted-foreground">{i + 1}</TableCell>
                   <TableCell className="font-medium">{s.name}</TableCell>
@@ -192,12 +251,16 @@ export default function Subjects() {
                   <TableCell>{s.chapters ?? <span className="text-muted-foreground">—</span>}</TableCell>
                   <TableCell>
                     <div className="flex gap-1">
-                      <Button size="icon" variant="ghost" onClick={() => setDialog({ open: true, subject: s })}>
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                      <Button size="icon" variant="ghost" onClick={() => handleDelete(s)}>
-                        <Trash2 className="h-4 w-4 text-destructive" />
-                      </Button>
+                      {canManageAcademicContent && (
+                        <Button size="icon" variant="ghost" onClick={() => setDialog({ open: true, subject: s })}>
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                      )}
+                      {canManageAcademicContent && (
+                        <Button size="icon" variant="ghost" onClick={() => handleDelete(s)}>
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                      )}
                     </div>
                   </TableCell>
               </TableRow>

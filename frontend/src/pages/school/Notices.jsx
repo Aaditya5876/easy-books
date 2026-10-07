@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { noticesApi } from '@/api';
+import { confirm } from '@/lib/confirm';
+import { useRole } from '@/lib/useRole';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -34,6 +36,7 @@ function NoticeDialog({ open, onClose, notice }) {
     expiresAt: notice?.expiresAt ? notice.expiresAt.split('T')[0] : '',
   });
   const [aiLoading, setAiLoading] = useState(false);
+  const [errors, setErrors] = useState({});
 
   const save = useMutation({
     mutationFn: (d) =>
@@ -50,7 +53,14 @@ function NoticeDialog({ open, onClose, notice }) {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (!form.title.trim() || !form.content.trim()) return toast.error(t('notices.titleContentRequired', { defaultValue: 'Title and content are required' }));
+    const errs = {};
+    if (!form.title.trim()) errs.title = t('notices.titleRequired', { defaultValue: 'Title is required' });
+    if (!form.content.trim()) errs.content = t('notices.contentRequired', { defaultValue: 'Content is required' });
+    if (Object.keys(errs).length) {
+      setErrors(errs);
+      return toast.error(t('notices.titleContentRequired', { defaultValue: 'Title and content are required' }));
+    }
+    setErrors({});
     save.mutate({ ...form, expiresAt: form.expiresAt || undefined });
   };
 
@@ -59,6 +69,7 @@ function NoticeDialog({ open, onClose, notice }) {
     setAiLoading(true);
     try {
       const res = await aiApi.generateNotice({
+        companyId: companyId(),
         topic: form.title,
         targetAudience: form.targetAudience,
         tone: 'formal',
@@ -92,16 +103,18 @@ function NoticeDialog({ open, onClose, notice }) {
                 {aiLoading ? t('notices.generating', { defaultValue: 'Generating…' }) : t('notices.generateWithAI', { defaultValue: 'Generate with AI' })}
               </button>
             </div>
-            <Input value={form.title} onChange={e => setForm(p => ({ ...p, title: e.target.value }))} placeholder={t('notices.titlePlaceholder', { defaultValue: 'e.g. Annual Sports Day 2081' })} />
+            <Input value={form.title} onChange={e => { setForm(p => ({ ...p, title: e.target.value })); if (errors.title) setErrors(er => ({ ...er, title: undefined })); }} placeholder={t('notices.titlePlaceholder', { defaultValue: 'e.g. Annual Sports Day 2081' })} />
+            {errors.title && <p className="text-xs text-red-600">{errors.title}</p>}
           </div>
           <div className="space-y-1">
             <Label>{t('notices.content', { defaultValue: 'Content *' })}</Label>
             <Textarea
               value={form.content}
-              onChange={e => setForm(p => ({ ...p, content: e.target.value }))}
+              onChange={e => { setForm(p => ({ ...p, content: e.target.value })); if (errors.content) setErrors(er => ({ ...er, content: undefined })); }}
               placeholder={t('notices.contentPlaceholder', { defaultValue: 'Write your notice here…' })}
               rows={6}
             />
+            {errors.content && <p className="text-xs text-red-600">{errors.content}</p>}
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
@@ -166,6 +179,7 @@ function printNotice(n) {
 
 export default function Notices() {
   const { t } = useTranslation();
+  const { canEditRecords, canDelete, isAdmin } = useRole();
   const qc = useQueryClient();
   const [dialog, setDialog] = useState({ open: false, notice: null });
   const [search, setSearch] = useState('');
@@ -195,9 +209,11 @@ export default function Notices() {
           <Megaphone className="h-6 w-6 text-primary" />
           <h1 className="text-2xl font-bold">{t('notices.noticeBoard', { defaultValue: 'Notice Board' })}</h1>
         </div>
-        <Button onClick={() => setDialog({ open: true, notice: null })}>
-          <Plus className="h-4 w-4 mr-1" /> {t('notices.postNotice', { defaultValue: 'Post Notice' })}
-        </Button>
+        {canEditRecords && (
+          <Button onClick={() => setDialog({ open: true, notice: null })}>
+            <Plus className="h-4 w-4 mr-1" /> {t('notices.postNotice', { defaultValue: 'Post Notice' })}
+          </Button>
+        )}
       </div>
 
       <Input
@@ -232,22 +248,28 @@ export default function Notices() {
                   <Button size="icon" variant="ghost" onClick={() => printNotice(n)} title={t('notices.print', { defaultValue: 'Print' })}>
                     <Printer className="h-4 w-4" />
                   </Button>
-                  <Button size="icon" variant="ghost" title={t('notices.broadcastSms', { defaultValue: 'Broadcast SMS to all guardians' })} onClick={async () => {
-                    try {
-                      const res = await noticesApi.broadcastSms(n.id);
-                      toast.success(t('notices.smsSent', { defaultValue: 'SMS sent: {{sent}} delivered, {{failed}} failed', sent: res.data.sent, failed: res.data.failed }));
-                    } catch (e) {
-                      toast.error(e?.response?.data?.message || t('notices.smsFailed', { defaultValue: 'SMS failed — check SMS_API_KEY' }));
-                    }
-                  }}>
-                    <MessageSquare className="h-4 w-4 text-violet-600" />
-                  </Button>
-                  <Button size="icon" variant="ghost" onClick={() => setDialog({ open: true, notice: n })}>
-                    <Pencil className="h-4 w-4" />
-                  </Button>
-                  <Button size="icon" variant="ghost" onClick={() => { if (window.confirm(t('notices.deleteConfirm', { defaultValue: 'Delete this notice?' }))) remove.mutate(n.id); }}>
-                    <Trash2 className="h-4 w-4 text-destructive" />
-                  </Button>
+                  {isAdmin && (
+                    <Button size="icon" variant="ghost" title={t('notices.broadcastSms', { defaultValue: 'Broadcast SMS to all guardians' })} onClick={async () => {
+                      try {
+                        const res = await noticesApi.broadcastSms(n.id);
+                        toast.success(t('notices.smsSent', { defaultValue: 'SMS sent: {{sent}} delivered, {{failed}} failed', sent: res.data.sent, failed: res.data.failed }));
+                      } catch (e) {
+                        toast.error(e?.response?.data?.message || t('notices.smsFailed', { defaultValue: 'SMS failed — check SMS_API_KEY' }));
+                      }
+                    }}>
+                      <MessageSquare className="h-4 w-4 text-violet-600" />
+                    </Button>
+                  )}
+                  {canEditRecords && (
+                    <Button size="icon" variant="ghost" onClick={() => setDialog({ open: true, notice: n })}>
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                  )}
+                  {canDelete && (
+                    <Button size="icon" variant="ghost" onClick={async () => { if (await confirm({ description: t('notices.deleteConfirm', { defaultValue: 'Delete this notice?' }), variant: 'destructive' })) remove.mutate(n.id); }}>
+                      <Trash2 className="h-4 w-4 text-destructive" />
+                    </Button>
+                  )}
                 </div>
               </div>
             </div>

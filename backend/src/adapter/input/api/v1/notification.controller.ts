@@ -1,9 +1,15 @@
-import { Controller, Get, Patch, Param, Query, Request } from '@nestjs/common';
+import { Controller, Get, Patch, Put, Body, Param, Query, Request, Res, Sse } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
+import { NotificationType } from '@prisma/client';
+import { Observable } from 'rxjs';
 import { NotificationServiceImpl } from '../../../../application/services/notification.service.impl';
 
 // No class-level @Roles(...) — every authenticated user reads their own inbox;
 // which roles ever receive a row is decided inside NotificationServiceImpl.notifyRole.
+// Also NOT gated by @RequiresModule('COMMUNICATION') — the in-app bell/inbox is
+// foundational infra (low-stock alerts, leave requests, fee payments, payroll
+// all notify through it) like Identity/Admin, not an optional Communication
+// feature on its own. Only Memo and future broadcast/notice features are.
 @ApiTags('Notifications')
 @ApiBearerAuth()
 @Controller('api/v1/notifications')
@@ -15,16 +21,30 @@ export class NotificationController {
   @ApiQuery({ name: 'page', required: false, type: Number })
   @ApiQuery({ name: 'pageSize', required: false, type: Number })
   @ApiQuery({ name: 'unreadOnly', required: false, type: Boolean })
+  @ApiQuery({ name: 'type', required: false, enum: NotificationType })
   list(
     @Request() req: any,
     @Query('page') page?: string,
     @Query('pageSize') pageSize?: string,
     @Query('unreadOnly') unreadOnly?: string,
+    @Query('type') type?: NotificationType,
   ) {
     return this.service.listForUser(req.user.sub, {
       page: page ? parseInt(page) : undefined,
       pageSize: pageSize ? parseInt(pageSize) : undefined,
       unreadOnly: unreadOnly === 'true',
+      type,
+    });
+  }
+
+  @Sse('stream')
+  stream(@Request() req: any): Observable<MessageEvent> {
+    return new Observable((subscriber) => {
+      const userId = req.user.sub;
+      const handler = (event: any) => subscriber.next({ data: JSON.stringify(event) } as MessageEvent);
+      this.service.addSubscriber(userId, handler);
+      subscriber.next({ data: JSON.stringify({ type: 'count', unreadCount: 0 }) } as MessageEvent);
+      return () => this.service.removeSubscriber(userId, handler);
     });
   }
 
@@ -44,5 +64,17 @@ export class NotificationController {
   @ApiOperation({ summary: 'Mark a single notification as read' })
   markRead(@Param('id') id: string, @Request() req: any) {
     return this.service.markRead(id, req.user.sub);
+  }
+
+  @Get('preferences')
+  @ApiOperation({ summary: 'Get the current user\'s notification category preferences' })
+  getPreferences(@Request() req: any) {
+    return this.service.getPreference(req.user.sub);
+  }
+
+  @Put('preferences')
+  @ApiOperation({ summary: 'Update the current user\'s notification category preferences' })
+  updatePreferences(@Request() req: any, @Body() body: { transactions?: boolean; reminders?: boolean; system?: boolean }) {
+    return this.service.updatePreference(req.user.sub, body);
   }
 }

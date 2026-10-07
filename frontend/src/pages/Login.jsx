@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { Eye, EyeOff, Mail, Lock, User, Building2, Hash, ShieldCheck, KeyRound } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { authApi } from '@/api';
@@ -8,26 +9,29 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
 
-const BUSINESS_TYPES = [
-  { value: 'SCHOOL', label: 'School / Educational Institution' },
-  { value: 'RETAIL', label: 'Retail / General Store' },
-  { value: 'PHARMACY', label: 'Pharmacy / Medical' },
-  { value: 'ELECTRONICS', label: 'Electronics / Hardware' },
-  { value: 'FOOD_BEVERAGE', label: 'Restaurant / Tea Shop / Bakery' },
-  { value: 'SERVICES', label: 'Services / Consulting / IT' },
-  { value: 'MANUFACTURING', label: 'Manufacturing / Production' },
-  { value: 'OTHER', label: 'Other' },
-];
+function businessTypes(t) {
+  return [
+    { value: 'SCHOOL', label: t('auth.bizSchool', { defaultValue: 'School / Educational Institution' }) },
+    { value: 'RETAIL', label: t('auth.bizRetail', { defaultValue: 'Retail / General Store' }) },
+    { value: 'PHARMACY', label: t('auth.bizPharmacy', { defaultValue: 'Pharmacy / Medical' }) },
+    { value: 'ELECTRONICS', label: t('auth.bizElectronics', { defaultValue: 'Electronics / Hardware' }) },
+    { value: 'FOOD_BEVERAGE', label: t('auth.bizFoodBeverage', { defaultValue: 'Restaurant / Tea Shop / Bakery' }) },
+    { value: 'SERVICES', label: t('auth.bizServices', { defaultValue: 'Services / Consulting / IT' }) },
+    { value: 'MANUFACTURING', label: t('auth.bizManufacturing', { defaultValue: 'Manufacturing / Production' }) },
+    { value: 'OTHER', label: t('auth.bizOther', { defaultValue: 'Other' }) },
+  ];
+}
 
-function passwordStrength(pw) {
+function passwordStrength(pw, t) {
   if (!pw) return null;
   const checks = [pw.length >= 8, /[A-Z]/.test(pw), /[0-9]/.test(pw), /[^A-Za-z0-9]/.test(pw)];
   const passed = checks.filter(Boolean).length;
-  if (passed <= 1) return { label: 'Weak', color: 'bg-destructive' };
-  if (passed === 2) return { label: 'Fair', color: 'bg-yellow-500' };
-  if (passed === 3) return { label: 'Good', color: 'bg-blue-500' };
-  return { label: 'Strong', color: 'bg-green-500' };
+  if (passed <= 1) return { level: 'Weak', label: t('auth.strengthWeak', { defaultValue: 'Weak' }), color: 'bg-destructive', width: '25%' };
+  if (passed === 2) return { level: 'Fair', label: t('auth.strengthFair', { defaultValue: 'Fair' }), color: 'bg-yellow-500', width: '50%' };
+  if (passed === 3) return { level: 'Good', label: t('auth.strengthGood', { defaultValue: 'Good' }), color: 'bg-blue-500', width: '75%' };
+  return { level: 'Strong', label: t('auth.strengthStrong', { defaultValue: 'Strong' }), color: 'bg-green-500', width: '100%' };
 }
 
 function StepDots({ step, total = 2 }) {
@@ -99,6 +103,8 @@ function OtpInput({ value, onChange }) {
 }
 
 export default function Login() {
+  const { t } = useTranslation();
+  const BUSINESS_TYPES = businessTypes(t);
   const [mode, setMode] = useState('login'); // 'login' | 'register' | 'otp' | 'change-password'
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -106,6 +112,12 @@ export default function Login() {
   // Login
   const [loginForm, setLoginForm] = useState({ email: '', password: '' });
   const [showLoginPw, setShowLoginPw] = useState(false);
+  const [agreedToLoginTerms, setAgreedToLoginTerms] = useState(false);
+
+  // Quick attendance (login-page check in/out — no session started)
+  const [attAction, setAttAction] = useState('IN');
+  const [attLoading, setAttLoading] = useState(false);
+  const [attMessage, setAttMessage] = useState(null);
 
   // Register
   const [regStep, setRegStep] = useState(1);
@@ -122,6 +134,7 @@ export default function Login() {
   });
   const [showRegPw, setShowRegPw] = useState(false);
   const [showConfirmPw, setShowConfirmPw] = useState(false);
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
 
   // OTP
   const [otpEmail, setOtpEmail] = useState('');
@@ -162,20 +175,45 @@ export default function Login() {
       if (meRes.data?.defaultCompanyId) setActiveCompanyId(meRes.data.defaultCompanyId);
       window.location.href = '/';
     } catch (err) {
-      setError(err?.response?.data?.message || 'Invalid email or password');
+      setError(err?.response?.data?.message || t('auth.invalidCredentials', { defaultValue: 'Invalid email or password' }));
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleQuickAttendance() {
+    if (!loginForm.email || !loginForm.password) {
+      setAttMessage({ type: 'error', text: t('auth.enterEmailPasswordFirst', { defaultValue: 'Enter your email and password above first' }) });
+      return;
+    }
+    setAttLoading(true);
+    setAttMessage(null);
+    try {
+      const res = await authApi.quickAttendance(loginForm.email, loginForm.password, attAction);
+      const rec = res.data?.record;
+      const time = attAction === 'IN' ? rec?.checkInTime : rec?.checkOutTime;
+      setAttMessage({
+        type: 'success',
+        text: attAction === 'IN'
+          ? t('auth.checkedInAt', { defaultValue: 'Checked in at {{time}}', time })
+          : t('auth.checkedOutAt', { defaultValue: 'Checked out at {{time}}', time }),
+      });
+    } catch (err) {
+      setAttMessage({ type: 'error', text: err?.response?.data?.message || t('auth.attendanceFailed', { defaultValue: 'Could not mark attendance' }) });
+    } finally {
+      setAttLoading(false);
     }
   }
 
   async function handleRegister(e) {
     e.preventDefault();
     setError('');
-    if (regForm.password !== regForm.confirmPassword) { setError('Passwords do not match'); return; }
-    if (regForm.password.length < 8) { setError('Password must be at least 8 characters'); return; }
+    if (regForm.password !== regForm.confirmPassword) { setError(t('auth.passwordsDontMatch', { defaultValue: 'Passwords do not match' })); return; }
+    if (regForm.password.length < 8) { setError(t('auth.passwordMinLength', { defaultValue: 'Password must be at least 8 characters' })); return; }
+    if (!agreedToTerms) { setError(t('auth.mustAgreeToTerms', { defaultValue: 'Please agree to the Terms and Agreement to continue' })); return; }
     setLoading(true);
     try {
-      const { confirmPassword, otherBusinessDesc, ...payload } = regForm;
+      const { confirmPassword: _confirmPassword, otherBusinessDesc, ...payload } = regForm;
       if (payload.businessType === 'OTHER' && otherBusinessDesc.trim()) {
         payload.businessType = otherBusinessDesc.trim();
       }
@@ -187,7 +225,7 @@ export default function Login() {
         startCooldown();
       }
     } catch (err) {
-      setError(err?.response?.data?.message || 'Registration failed');
+      setError(err?.response?.data?.message || t('auth.registrationFailed', { defaultValue: 'Registration failed' }));
     } finally {
       setLoading(false);
     }
@@ -195,7 +233,7 @@ export default function Login() {
 
   async function handleVerifyOtp(e) {
     e.preventDefault();
-    if (otpValue.length !== 6) { setError('Please enter the 6-digit code'); return; }
+    if (otpValue.length !== 6) { setError(t('auth.enter6DigitCode', { defaultValue: 'Please enter the 6-digit code' })); return; }
     setError('');
     setLoading(true);
     try {
@@ -204,7 +242,7 @@ export default function Login() {
       if (meRes.data?.defaultCompanyId) setActiveCompanyId(meRes.data.defaultCompanyId);
       window.location.href = '/';
     } catch (err) {
-      setError(err?.response?.data?.message || 'Invalid or expired verification code');
+      setError(err?.response?.data?.message || t('auth.invalidOrExpiredCode', { defaultValue: 'Invalid or expired verification code' }));
     } finally {
       setLoading(false);
     }
@@ -217,16 +255,16 @@ export default function Login() {
       await authApi.resendOtp(otpEmail);
       startCooldown();
     } catch (err) {
-      setError(err?.response?.data?.message || 'Failed to resend code');
+      setError(err?.response?.data?.message || t('auth.failedToResendCode', { defaultValue: 'Failed to resend code' }));
     }
   }
 
   async function handleChangePassword(e) {
     e.preventDefault();
     setError('');
-    if (cpForm.next !== cpForm.confirm) { setError('Passwords do not match'); return; }
-    if (cpForm.next.length < 8) { setError('Password must be at least 8 characters'); return; }
-    if (cpForm.next === cpForm.current) { setError('New password must be different from current password'); return; }
+    if (cpForm.next !== cpForm.confirm) { setError(t('auth.passwordsDontMatch', { defaultValue: 'Passwords do not match' })); return; }
+    if (cpForm.next.length < 8) { setError(t('auth.passwordMinLength', { defaultValue: 'Password must be at least 8 characters' })); return; }
+    if (cpForm.next === cpForm.current) { setError(t('auth.newPasswordMustDiffer', { defaultValue: 'New password must be different from current password' })); return; }
     setLoading(true);
     try {
       await authApi.changePassword(cpForm.current, cpForm.next);
@@ -234,7 +272,7 @@ export default function Login() {
       if (meRes.data?.defaultCompanyId) setActiveCompanyId(meRes.data.defaultCompanyId);
       window.location.href = '/';
     } catch (err) {
-      setError(err?.response?.data?.message || 'Failed to change password');
+      setError(err?.response?.data?.message || t('auth.failedToChangePassword', { defaultValue: 'Failed to change password' }));
     } finally {
       setLoading(false);
     }
@@ -242,15 +280,15 @@ export default function Login() {
 
   function goNext() {
     setError('');
-    if (!regForm.name.trim()) { setError('Full name is required'); return; }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(regForm.email)) { setError('Please enter a valid email address'); return; }
-    if (regForm.password.length < 8) { setError('Password must be at least 8 characters'); return; }
-    if (regForm.password !== regForm.confirmPassword) { setError('Passwords do not match'); return; }
+    if (!regForm.name.trim()) { setError(t('auth.fullNameRequired', { defaultValue: 'Full name is required' })); return; }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(regForm.email)) { setError(t('auth.validEmailRequired', { defaultValue: 'Please enter a valid email address' })); return; }
+    if (regForm.password.length < 8) { setError(t('auth.passwordMinLength', { defaultValue: 'Password must be at least 8 characters' })); return; }
+    if (regForm.password !== regForm.confirmPassword) { setError(t('auth.passwordsDontMatch', { defaultValue: 'Passwords do not match' })); return; }
     setRegStep(2);
   }
 
-  const strength = passwordStrength(regForm.password);
-  const cpStrength = passwordStrength(cpForm.next);
+  const strength = passwordStrength(regForm.password, t);
+  const cpStrength = passwordStrength(cpForm.next, t);
 
   return (
     <div
@@ -264,13 +302,14 @@ export default function Login() {
       <div className="login-orb login-orb-2" />
       <div className="login-orb login-orb-3" />
 
-      <Card className="w-full max-w-md shadow-2xl glass-dialog border-border/40 relative z-10 overflow-hidden">
+      <div className="w-full max-w-md flex flex-col items-center relative z-10">
+      <Card className="w-full shadow-2xl glass-dialog border-border/40 overflow-hidden">
         <div className="h-1 bg-gradient-to-r from-primary via-blue-500 to-indigo-400" />
 
         <CardHeader className="text-center pb-2">
-          <img src="/logo-icon.png" alt="Easy Books" className="w-12 h-12 object-contain mx-auto mb-3 drop-shadow-lg" />
-          <CardTitle className="text-xl">Easy Books</CardTitle>
-          <p className="text-sm text-muted-foreground">Nepal Accounting Software</p>
+          <img src="/logo-icon.png" alt="OneBook" className="w-12 h-12 object-contain mx-auto mb-3 drop-shadow-lg" />
+          <CardTitle className="text-xl">{t('auth.appName', { defaultValue: 'OneBook' })}</CardTitle>
+          <p className="text-sm text-muted-foreground">{t('auth.appTagline', { defaultValue: 'Nepal Accounting Software' })}</p>
         </CardHeader>
 
         <CardContent className="pt-4">
@@ -287,9 +326,9 @@ export default function Login() {
                 <div className="w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-3">
                   <ShieldCheck className="w-7 h-7 text-primary" />
                 </div>
-                <h3 className="font-semibold text-base">Verify your email</h3>
+                <h3 className="font-semibold text-base">{t('auth.verifyYourEmail', { defaultValue: 'Verify your email' })}</h3>
                 <p className="text-sm text-muted-foreground mt-1">
-                  We sent a 6-digit code to<br />
+                  {t('auth.weSentACode', { defaultValue: 'We sent a 6-digit code to' })}<br />
                   <span className="font-medium text-foreground">{otpEmail}</span>
                 </p>
               </div>
@@ -300,19 +339,19 @@ export default function Login() {
                 {error && <p className="text-sm text-destructive text-center">{error}</p>}
 
                 <Button type="submit" className="w-full" disabled={loading || otpValue.length !== 6}>
-                  {loading ? 'Verifying...' : 'Verify Email'}
+                  {loading ? t('auth.verifying', { defaultValue: 'Verifying...' }) : t('auth.verifyEmail', { defaultValue: 'Verify Email' })}
                 </Button>
               </form>
 
               <div className="text-center space-y-2">
-                <p className="text-xs text-muted-foreground">Didn't receive the code?</p>
+                <p className="text-xs text-muted-foreground">{t('auth.didntReceiveCode', { defaultValue: "Didn't receive the code?" })}</p>
                 <button
                   type="button"
                   disabled={resendCooldown > 0}
                   onClick={handleResendOtp}
                   className="text-xs text-primary hover:underline disabled:opacity-50 disabled:no-underline disabled:cursor-not-allowed"
                 >
-                  {resendCooldown > 0 ? `Resend in ${resendCooldown}s` : 'Resend code'}
+                  {resendCooldown > 0 ? t('auth.resendIn', { defaultValue: `Resend in ${resendCooldown}s`, seconds: resendCooldown }) : t('auth.resendCode', { defaultValue: 'Resend code' })}
                 </button>
                 <div>
                   <button
@@ -320,7 +359,7 @@ export default function Login() {
                     className="text-xs text-muted-foreground hover:text-foreground transition-colors"
                     onClick={() => { setMode('register'); setRegStep(2); setError(''); }}
                   >
-                    ← Back to registration
+                    {t('auth.backToRegistration', { defaultValue: '← Back to registration' })}
                   </button>
                 </div>
               </div>
@@ -340,20 +379,20 @@ export default function Login() {
                 <div className="w-14 h-14 rounded-full bg-amber-100 flex items-center justify-center mx-auto mb-3">
                   <KeyRound className="w-7 h-7 text-amber-600" />
                 </div>
-                <h3 className="font-semibold text-base">Set your password</h3>
+                <h3 className="font-semibold text-base">{t('auth.setYourPassword', { defaultValue: 'Set your password' })}</h3>
                 <p className="text-sm text-muted-foreground mt-1">
-                  Your account requires a password change before you can continue.
+                  {t('auth.mustChangePasswordHint', { defaultValue: 'Your account requires a password change before you can continue.' })}
                 </p>
               </div>
 
               <form onSubmit={handleChangePassword} className="space-y-3">
                 <div className="space-y-1.5">
-                  <Label>Temporary Password</Label>
+                  <Label>{t('auth.temporaryPassword', { defaultValue: 'Temporary Password' })}</Label>
                   <div className="relative">
                     <Lock className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
                     <Input
                       type={showCpCurrent ? 'text' : 'password'}
-                      placeholder="Enter the password from your invite email"
+                      placeholder={t('auth.enterInvitePasswordPlaceholder', { defaultValue: 'Enter the password from your invite email' })}
                       className="pl-8 pr-10 h-9"
                       value={cpForm.current}
                       onChange={e => setCpForm({ ...cpForm, current: e.target.value })}
@@ -371,12 +410,12 @@ export default function Login() {
                 </div>
 
                 <div className="space-y-1.5">
-                  <Label>New Password</Label>
+                  <Label>{t('auth.newPassword', { defaultValue: 'New Password' })}</Label>
                   <div className="relative">
                     <Lock className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
                     <Input
                       type={showCpNext ? 'text' : 'password'}
-                      placeholder="Min. 8 characters"
+                      placeholder={t('auth.min8CharsPlaceholder', { defaultValue: 'Min. 8 characters' })}
                       className="pl-8 pr-10 h-9"
                       value={cpForm.next}
                       onChange={e => setCpForm({ ...cpForm, next: e.target.value })}
@@ -396,7 +435,7 @@ export default function Login() {
                       <div className="flex-1 h-1 bg-secondary rounded-full overflow-hidden">
                         <div
                           className={`h-full rounded-full transition-all ${cpStrength.color}`}
-                          style={{ width: cpStrength.label === 'Weak' ? '25%' : cpStrength.label === 'Fair' ? '50%' : cpStrength.label === 'Good' ? '75%' : '100%' }}
+                          style={{ width: cpStrength.width }}
                         />
                       </div>
                       <span className="text-xs text-muted-foreground">{cpStrength.label}</span>
@@ -405,12 +444,12 @@ export default function Login() {
                 </div>
 
                 <div className="space-y-1.5">
-                  <Label>Confirm New Password</Label>
+                  <Label>{t('auth.confirmNewPassword', { defaultValue: 'Confirm New Password' })}</Label>
                   <div className="relative">
                     <Lock className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
                     <Input
                       type="password"
-                      placeholder="Re-enter new password"
+                      placeholder={t('auth.reenterNewPasswordPlaceholder', { defaultValue: 'Re-enter new password' })}
                       className="pl-8 h-9"
                       value={cpForm.confirm}
                       onChange={e => setCpForm({ ...cpForm, confirm: e.target.value })}
@@ -418,43 +457,33 @@ export default function Login() {
                     />
                   </div>
                   {cpForm.confirm && cpForm.next !== cpForm.confirm && (
-                    <p className="text-xs text-destructive">Passwords do not match</p>
+                    <p className="text-xs text-destructive">{t('auth.passwordsDontMatch', { defaultValue: 'Passwords do not match' })}</p>
                   )}
                 </div>
 
                 {error && <p className="text-sm text-destructive">{error}</p>}
 
                 <Button type="submit" className="w-full" disabled={loading}>
-                  {loading ? 'Saving...' : 'Set Password & Continue'}
+                  {loading ? t('auth.saving', { defaultValue: 'Saving...' }) : t('auth.setPasswordAndContinue', { defaultValue: 'Set Password & Continue' })}
                 </Button>
               </form>
             </motion.div>
           )}
 
           {/* ── LOGIN / REGISTER ── */}
+          {/* Self-registration is intentionally not offered to clients — new
+              companies are provisioned by GeoInfosys (see provisionClient) —
+              so the tab switcher is hidden and only the login form shows.
+              The register/OTP-verification code paths below are otherwise
+              unreachable from the UI now, left in place in case self-serve
+              signup is ever turned back on. */}
           {(mode === 'login' || mode === 'register') && (
             <>
-              {/* Tab switcher */}
-              <div className="flex rounded-lg bg-secondary p-1 mb-6">
-                <button
-                  className={`flex-1 text-sm py-1.5 rounded-md transition-colors ${mode === 'login' ? 'bg-background shadow-sm font-medium' : 'text-muted-foreground'}`}
-                  onClick={() => { setMode('login'); setError(''); setRegStep(1); }}
-                >
-                  Login
-                </button>
-                <button
-                  className={`flex-1 text-sm py-1.5 rounded-md transition-colors ${mode === 'register' ? 'bg-background shadow-sm font-medium' : 'text-muted-foreground'}`}
-                  onClick={() => { setMode('register'); setError(''); }}
-                >
-                  Register
-                </button>
-              </div>
-
               {/* ── LOGIN FORM ── */}
               {mode === 'login' && (
                 <form onSubmit={handleLogin} className="space-y-4">
                   <div className="space-y-1.5">
-                    <Label>Email</Label>
+                    <Label>{t('auth.email', { defaultValue: 'Email' })}</Label>
                     <div className="relative">
                       <Mail className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
                       <Input
@@ -469,7 +498,7 @@ export default function Login() {
                   </div>
 
                   <div className="space-y-1.5">
-                    <Label>Password</Label>
+                    <Label>{t('auth.password', { defaultValue: 'Password' })}</Label>
                     <div className="relative">
                       <Lock className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
                       <Input
@@ -491,19 +520,77 @@ export default function Login() {
                     </div>
                   </div>
 
+                  <label htmlFor="agree-login-terms" className="flex items-center gap-2 cursor-pointer select-none">
+                    <Checkbox
+                      id="agree-login-terms"
+                      checked={agreedToLoginTerms}
+                      onCheckedChange={(v) => setAgreedToLoginTerms(v === true)}
+                    />
+                    <span className="text-xs text-muted-foreground">
+                      {t('auth.agreeToTermsPrefix', { defaultValue: 'I agree to the' })}{' '}
+                      <Link
+                        to="/terms"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-primary hover:underline font-medium"
+                        onClick={e => e.stopPropagation()}
+                      >
+                        {t('auth.termsAndAgreement', { defaultValue: 'Terms and Agreement' })}
+                      </Link>
+                    </span>
+                  </label>
+
                   {error && <p className="text-sm text-destructive">{error}</p>}
 
-                  <Button type="submit" className="w-full" disabled={loading}>
-                    {loading ? 'Signing in...' : 'Sign In'}
+                  <Button type="submit" className="w-full" disabled={loading || !agreedToLoginTerms}>
+                    {loading ? t('auth.signingIn', { defaultValue: 'Signing in...' }) : t('auth.signIn', { defaultValue: 'Sign In' })}
                   </Button>
 
                   <p className="text-center text-xs text-muted-foreground">
-                    Parent or student?{' '}
+                    {t('auth.parentOrStudent', { defaultValue: 'Parent or student?' })}{' '}
                     <Link to="/portal/login" className="text-primary hover:underline font-medium">
-                      Sign in to the Portal
+                      {t('auth.signInToPortal', { defaultValue: 'Sign in to the Portal' })}
                     </Link>
                   </p>
                 </form>
+              )}
+
+              {/* ── Quick Attendance — check in/out without a full sign-in ── */}
+              {mode === 'login' && (
+                <div className="mt-4 pt-4 border-t border-border/60">
+                  <p className="text-xs font-medium text-muted-foreground mb-2">
+                    {t('auth.quickAttendance', { defaultValue: 'Quick Attendance' })}
+                  </p>
+                  <div className="flex items-center gap-4 h-9">
+                    {[
+                      { v: 'IN', label: t('auth.checkIn', { defaultValue: 'Check In' }) },
+                      { v: 'OUT', label: t('auth.checkOut', { defaultValue: 'Check Out' }) },
+                    ].map(opt => (
+                      <label key={opt.v} className="flex items-center gap-1.5 text-sm cursor-pointer select-none">
+                        <input
+                          type="radio"
+                          name="quick-attendance-action"
+                          value={opt.v}
+                          checked={attAction === opt.v}
+                          onChange={() => setAttAction(opt.v)}
+                          className="w-3.5 h-3.5 accent-primary cursor-pointer"
+                        />
+                        {opt.label}
+                      </label>
+                    ))}
+                    <Button type="button" variant="outline" className="h-9 shrink-0 ml-auto" onClick={handleQuickAttendance} disabled={attLoading}>
+                      {attLoading ? t('auth.marking', { defaultValue: 'Marking…' }) : t('auth.markAttendance', { defaultValue: 'Mark Attendance' })}
+                    </Button>
+                  </div>
+                  {attMessage && (
+                    <p className={`text-xs mt-2 ${attMessage.type === 'error' ? 'text-destructive' : 'text-emerald-600'}`}>
+                      {attMessage.text}
+                    </p>
+                  )}
+                  <p className="text-[11px] text-muted-foreground mt-1">
+                    {t('auth.quickAttendanceHint', { defaultValue: 'Uses the email and password above — no need to sign in.' })}
+                  </p>
+                </div>
               )}
 
               {/* ── REGISTER FORM ── */}
@@ -525,11 +612,11 @@ export default function Login() {
                         className="space-y-3"
                       >
                         <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">
-                          Personal Details
+                          {t('auth.personalDetails', { defaultValue: 'Personal Details' })}
                         </p>
 
                         <div className="space-y-1.5">
-                          <Label>Full Name *</Label>
+                          <Label>{t('auth.fullNameRequiredLabel', { defaultValue: 'Full Name *' })}</Label>
                           <div className="relative">
                             <User className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
                             <Input
@@ -542,7 +629,7 @@ export default function Login() {
                         </div>
 
                         <div className="space-y-1.5">
-                          <Label>Email *</Label>
+                          <Label>{t('auth.emailRequiredLabel', { defaultValue: 'Email *' })}</Label>
                           <div className="relative">
                             <Mail className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
                             <Input
@@ -556,12 +643,12 @@ export default function Login() {
                         </div>
 
                         <div className="space-y-1.5">
-                          <Label>Password *</Label>
+                          <Label>{t('auth.passwordRequiredLabel', { defaultValue: 'Password *' })}</Label>
                           <div className="relative">
                             <Lock className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
                             <Input
                               type={showRegPw ? 'text' : 'password'}
-                              placeholder="Min. 8 characters"
+                              placeholder={t('auth.min8CharsPlaceholder', { defaultValue: 'Min. 8 characters' })}
                               className="pl-8 pr-10 h-9"
                               value={regForm.password}
                               onChange={e => setRegForm({ ...regForm, password: e.target.value })}
@@ -580,7 +667,7 @@ export default function Login() {
                               <div className="flex-1 h-1 bg-secondary rounded-full overflow-hidden">
                                 <div
                                   className={`h-full rounded-full transition-all ${strength.color}`}
-                                  style={{ width: strength.label === 'Weak' ? '25%' : strength.label === 'Fair' ? '50%' : strength.label === 'Good' ? '75%' : '100%' }}
+                                  style={{ width: strength.width }}
                                 />
                               </div>
                               <span className="text-xs text-muted-foreground">{strength.label}</span>
@@ -589,12 +676,12 @@ export default function Login() {
                         </div>
 
                         <div className="space-y-1.5">
-                          <Label>Confirm Password *</Label>
+                          <Label>{t('auth.confirmPasswordRequiredLabel', { defaultValue: 'Confirm Password *' })}</Label>
                           <div className="relative">
                             <Lock className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
                             <Input
                               type={showConfirmPw ? 'text' : 'password'}
-                              placeholder="Re-enter password"
+                              placeholder={t('auth.reenterPasswordPlaceholder', { defaultValue: 'Re-enter password' })}
                               className="pl-8 pr-10 h-9"
                               value={regForm.confirmPassword}
                               onChange={e => setRegForm({ ...regForm, confirmPassword: e.target.value })}
@@ -609,14 +696,14 @@ export default function Login() {
                             </button>
                           </div>
                           {regForm.confirmPassword && regForm.password !== regForm.confirmPassword && (
-                            <p className="text-xs text-destructive">Passwords do not match</p>
+                            <p className="text-xs text-destructive">{t('auth.passwordsDontMatch', { defaultValue: 'Passwords do not match' })}</p>
                           )}
                         </div>
 
                         {error && <p className="text-sm text-destructive">{error}</p>}
 
                         <Button className="w-full" onClick={goNext}>
-                          Continue →
+                          {t('auth.continueArrow', { defaultValue: 'Continue →' })}
                         </Button>
                       </motion.div>
                     )}
@@ -639,15 +726,15 @@ export default function Login() {
                             className="text-xs text-muted-foreground hover:text-foreground transition-colors"
                             onClick={() => { setError(''); setRegStep(1); }}
                           >
-                            ← Back
+                            {t('auth.backArrow', { defaultValue: '← Back' })}
                           </button>
                           <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                            Company Details
+                            {t('auth.companyDetails', { defaultValue: 'Company Details' })}
                           </p>
                         </div>
 
                         <div className="space-y-1.5">
-                          <Label>Company Name *</Label>
+                          <Label>{t('auth.companyNameRequiredLabel', { defaultValue: 'Company Name *' })}</Label>
                           <div className="relative">
                             <Building2 className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
                             <Input
@@ -661,21 +748,21 @@ export default function Login() {
                         </div>
 
                         <div className="space-y-1.5">
-                          <Label>Business Type *</Label>
+                          <Label>{t('auth.businessTypeRequiredLabel', { defaultValue: 'Business Type *' })}</Label>
                           <select
                             className="w-full border rounded-md px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring"
                             value={regForm.businessType}
                             onChange={e => setRegForm({ ...regForm, businessType: e.target.value, otherBusinessDesc: '' })}
                             required
                           >
-                            <option value="">Select business type…</option>
+                            <option value="">{t('auth.selectBusinessTypeEllipsis', { defaultValue: 'Select business type…' })}</option>
                             {BUSINESS_TYPES.map(bt => (
                               <option key={bt.value} value={bt.value}>{bt.label}</option>
                             ))}
                           </select>
                           {regForm.businessType === 'OTHER' && (
                             <Input
-                              placeholder="Describe your business (e.g. Tailoring Shop, Laundry)"
+                              placeholder={t('auth.describeBusinessPlaceholder', { defaultValue: 'Describe your business (e.g. Tailoring Shop, Laundry)' })}
                               value={regForm.otherBusinessDesc}
                               onChange={e => setRegForm({ ...regForm, otherBusinessDesc: e.target.value })}
                               autoFocus
@@ -685,13 +772,13 @@ export default function Login() {
 
                         <div className="space-y-1.5">
                           <Label>
-                            PAN / Registration Number{' '}
-                            <span className="text-muted-foreground">(Optional)</span>
+                            {t('auth.panRegNumber', { defaultValue: 'PAN / Registration Number' })}{' '}
+                            <span className="text-muted-foreground">{t('auth.optionalParens', { defaultValue: '(Optional)' })}</span>
                           </Label>
                           <div className="relative">
                             <Hash className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
                             <Input
-                              placeholder="e.g. 123456789 or Company Reg No."
+                              placeholder={t('auth.regNumberPlaceholder', { defaultValue: 'e.g. 123456789 or Company Reg No.' })}
                               className="pl-8 h-9"
                               value={regForm.registrationNumber}
                               onChange={e => setRegForm({ ...regForm, registrationNumber: e.target.value })}
@@ -699,10 +786,25 @@ export default function Login() {
                           </div>
                         </div>
 
+                        <div className="flex items-start gap-2">
+                          <Checkbox
+                            id="agree-terms"
+                            checked={agreedToTerms}
+                            onCheckedChange={(v) => setAgreedToTerms(v === true)}
+                            className="mt-0.5"
+                          />
+                          <Label htmlFor="agree-terms" className="text-xs font-normal text-muted-foreground leading-snug cursor-pointer">
+                            {t('auth.agreeToTermsPrefix', { defaultValue: 'I agree to the' })}{' '}
+                            <Link to="/terms" target="_blank" rel="noopener noreferrer" className="underline hover:text-foreground">
+                              {t('auth.termsAndAgreement', { defaultValue: 'Terms and Agreement' })}
+                            </Link>
+                          </Label>
+                        </div>
+
                         {error && <p className="text-sm text-destructive">{error}</p>}
 
-                        <Button type="submit" className="w-full" onClick={handleRegister} disabled={loading}>
-                          {loading ? 'Creating account...' : 'Create Account'}
+                        <Button type="submit" className="w-full" onClick={handleRegister} disabled={loading || !agreedToTerms}>
+                          {loading ? t('auth.creatingAccount', { defaultValue: 'Creating account...' }) : t('auth.createAccount', { defaultValue: 'Create Account' })}
                         </Button>
                       </motion.div>
                     )}
@@ -713,6 +815,14 @@ export default function Login() {
           )}
         </CardContent>
       </Card>
+      {mode !== 'login' && (
+        <p className="text-center text-xs text-muted-foreground mt-4">
+          <Link to="/terms" target="_blank" rel="noopener noreferrer" className="underline hover:text-foreground">
+            {t('auth.termsAndAgreement', { defaultValue: 'Terms and Agreement' })}
+          </Link>
+        </p>
+      )}
+      </div>
     </div>
   );
 }

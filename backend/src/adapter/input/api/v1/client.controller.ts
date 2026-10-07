@@ -27,12 +27,14 @@ export class ClientController {
   }
 
   @Post()
+  @Roles('ACCOUNTANT', 'ADMIN')
   @ApiOperation({ summary: 'Create a client' })
   create(@Body(new ZodValidationPipe(CreateClientSchema)) dto: CreateClientDTO) {
     return this.service.create(dto);
   }
 
   @Put(':id')
+  @Roles('ACCOUNTANT', 'ADMIN')
   @ApiOperation({ summary: 'Update a client' })
   @ApiQuery({ name: 'companyId', required: true })
   update(
@@ -44,6 +46,7 @@ export class ClientController {
   }
 
   @Delete(':id')
+  @Roles('ACCOUNTANT', 'ADMIN')
   @ApiOperation({ summary: 'Delete a client (blocked if has sales orders)' })
   @ApiQuery({ name: 'companyId', required: true })
   remove(@Param('id') id: string, @Query('companyId') companyId: string) {

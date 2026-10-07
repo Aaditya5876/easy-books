@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { schoolEventsApi } from '@/api';
+import { confirm } from '@/lib/confirm';
+import { useRole } from '@/lib/useRole';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -14,7 +16,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog';
 import { CalendarCheck, Plus, Pencil, Trash2 } from 'lucide-react';
-import { adToBs, bsToAd, formatBsDate } from '@/lib/nepaliDate';
+import { adToBs, bsToAd } from '@/lib/nepaliDate';
 import { toast } from 'sonner';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, getDay, isSameDay } from 'date-fns';
 
@@ -40,11 +42,10 @@ const eventTypeLabel = (t, type) =>
 
 const companyId = () => localStorage.getItem('easybooks_active_company') || '';
 
-function EventDialog({ open, onClose, event, mode = 'AD', monthKey }) {
+function EventDialog({ open, onClose, event, mode = 'AD' }) {
   const { t } = useTranslation();
   const qc = useQueryClient();
   const isEdit = !!event;
-  const queryKey = ['school-events', monthKey];
   const [form, setForm] = useState({
     title: event?.title || '',
     description: event?.description || '',
@@ -70,9 +71,18 @@ function EventDialog({ open, onClose, event, mode = 'AD', monthKey }) {
     onError: (e) => toast.error(e.response?.data?.message || t('events.failedToSave', { defaultValue: 'Failed to save' })),
   });
 
+  const [errors, setErrors] = useState({});
+
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (!form.title.trim() || !form.startDate) return toast.error(t('events.titleStartDateRequired', { defaultValue: 'Title and start date are required' }));
+    const errs = {};
+    if (!form.title.trim()) errs.title = t('events.titleRequired', { defaultValue: 'Event title is required' });
+    if (!form.startDate) errs.startDate = t('events.startDateRequired', { defaultValue: 'Start date is required' });
+    if (Object.keys(errs).length) {
+      setErrors(errs);
+      return toast.error(t('events.titleStartDateRequired', { defaultValue: 'Title and start date are required' }));
+    }
+    setErrors({});
     save.mutate({ ...form, endDate: form.endDate || undefined });
   };
 
@@ -85,7 +95,8 @@ function EventDialog({ open, onClose, event, mode = 'AD', monthKey }) {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-1">
             <Label>{t('events.eventTitle', { defaultValue: 'Event Title *' })}</Label>
-            <Input value={form.title} onChange={e => setForm(p => ({ ...p, title: e.target.value }))} placeholder={t('events.titlePlaceholder', { defaultValue: 'e.g. Annual Day Celebration' })} />
+            <Input value={form.title} onChange={e => { setForm(p => ({ ...p, title: e.target.value })); if (errors.title) setErrors(er => ({ ...er, title: undefined })); }} placeholder={t('events.titlePlaceholder', { defaultValue: 'e.g. Annual Day Celebration' })} />
+            {errors.title && <p className="text-xs text-red-600">{errors.title}</p>}
           </div>
           <div className="space-y-1">
             <Label>{t('events.type', { defaultValue: 'Type' })}</Label>
@@ -101,8 +112,9 @@ function EventDialog({ open, onClose, event, mode = 'AD', monthKey }) {
               <>
                 <div className="space-y-1">
                   <Label>{t('events.startDate', { defaultValue: 'Start Date *' })}</Label>
-                  <input type="date" value={form.startDate} onChange={e => setForm(p => ({ ...p, startDate: e.target.value }))}
+                  <input type="date" value={form.startDate} onChange={e => { setForm(p => ({ ...p, startDate: e.target.value })); if (errors.startDate) setErrors(er => ({ ...er, startDate: undefined })); }}
                     className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm" />
+                  {errors.startDate && <p className="text-xs text-red-600">{errors.startDate}</p>}
                 </div>
                 <div className="space-y-1">
                   <Label>{t('events.endDate', { defaultValue: 'End Date' })}</Label>
@@ -117,6 +129,7 @@ function EventDialog({ open, onClose, event, mode = 'AD', monthKey }) {
                   <Input value={form.bsStart} onChange={e => {
                     const v = e.target.value;
                     setForm(p => ({ ...p, bsStart: v }));
+                    if (errors.startDate) setErrors(er => ({ ...er, startDate: undefined }));
                     // try convert format YYYY-MM-DD
                     const parts = v.split('-');
                     if (parts.length === 3) {
@@ -131,6 +144,7 @@ function EventDialog({ open, onClose, event, mode = 'AD', monthKey }) {
                       }
                     }
                   }} placeholder="YYYY-MM-DD" />
+                  {errors.startDate && <p className="text-xs text-red-600">{errors.startDate}</p>}
                 </div>
                 <div className="space-y-1">
                   <Label>{t('events.endDate', { defaultValue: 'End Date' })} (BS)</Label>
@@ -170,6 +184,7 @@ function EventDialog({ open, onClose, event, mode = 'AD', monthKey }) {
 
 export default function Events({ mode: propMode = 'AD' }) {
   const { t } = useTranslation();
+  const { canEdit, canDeleteRecords } = useRole();
   const qc = useQueryClient();
   const [dialog, setDialog] = useState({ open: false, event: null });
   const [mode, setMode] = useState(propMode);
@@ -253,9 +268,11 @@ export default function Events({ mode: propMode = 'AD' }) {
             <option value="AD">AD</option>
             <option value="BS">BS</option>
           </select>
-          <Button onClick={() => setDialog({ open: true, event: null })}>
-            <Plus className="h-4 w-4 mr-1" /> {t('events.addEvent', { defaultValue: 'Add Event' })}
-          </Button>
+          {canEdit && (
+            <Button onClick={() => setDialog({ open: true, event: null })}>
+              <Plus className="h-4 w-4 mr-1" /> {t('events.addEvent', { defaultValue: 'Add Event' })}
+            </Button>
+          )}
         </div>
       </div>
 
@@ -321,12 +338,16 @@ export default function Events({ mode: propMode = 'AD' }) {
               {e.description && <p className="text-sm mt-1">{e.description}</p>}
             </div>
             <div className="flex gap-1">
-              <Button size="icon" variant="ghost" onClick={() => setDialog({ open: true, event: e })}>
-                <Pencil className="h-4 w-4" />
-              </Button>
-              <Button size="icon" variant="ghost" onClick={() => { if (window.confirm(t('events.deleteConfirm', { defaultValue: 'Delete this event?' }))) remove.mutate(e.id); }}>
-                <Trash2 className="h-4 w-4 text-destructive" />
-              </Button>
+              {canEdit && (
+                <Button size="icon" variant="ghost" onClick={() => setDialog({ open: true, event: e })}>
+                  <Pencil className="h-4 w-4" />
+                </Button>
+              )}
+              {canDeleteRecords && (
+                <Button size="icon" variant="ghost" onClick={async () => { if (await confirm({ description: t('events.deleteConfirm', { defaultValue: 'Delete this event?' }), variant: 'destructive' })) remove.mutate(e.id); }}>
+                  <Trash2 className="h-4 w-4 text-destructive" />
+                </Button>
+              )}
             </div>
           </div>
         ))}
@@ -338,7 +359,6 @@ export default function Events({ mode: propMode = 'AD' }) {
           onClose={() => setDialog({ open: false, event: null })}
           event={dialog.event}
           mode={mode}
-          monthKey={monthKey}
         />
       )}
     </div>

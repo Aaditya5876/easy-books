@@ -1,8 +1,16 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { randomBytes } from 'crypto';
 import { PrismaService } from '../../../core/db/psql/prisma.client';
 import { LedgerPostingService } from './ledger-posting.service';
 import { NotificationServiceImpl } from './notification.service.impl';
-import { adToBs } from '@easy-books/shared';
+import { PortalNotificationService } from './portal-notification.service';
+import { SmsService } from './sms.service';
+import { adToBs, bsYearMonth, isValidBsYearMonth } from '@easy-books/shared';
+
+// Short, QR-friendly code — not the DB id, so a scanned/printed receipt
+// doesn't leak the payment's UUID. Collisions are practically impossible at
+// this length; the unique constraint would surface one anyway.
+const randomVerificationCode = () => randomBytes(6).toString('base64url').toUpperCase();
 
 const DEFAULT_FEE_HEADS = [
   { name: 'Tuition Fee', code: 'TUI', type: 'GENERAL' },
@@ -31,6 +39,8 @@ export class SchoolFinanceService {
     private readonly prisma: PrismaService,
     private readonly posting: LedgerPostingService,
     private readonly notifications: NotificationServiceImpl,
+    private readonly portalNotifications: PortalNotificationService,
+    private readonly sms: SmsService,
   ) {}
 
   // ── Fee Heads ────────────────────────────────────────────────────────────────
@@ -321,16 +331,29 @@ export class SchoolFinanceService {
   // ── Billing Run ──────────────────────────────────────────────────────────────
   // Walks every active student's fee profile and creates line-itemed invoices.
 
-  async billingRun(companyId: string, month: string, classId?: string, dueDate?: string) {
-    if (!month?.trim()) throw new BadRequestException('Billing month is required');
+  // month is optional — when omitted (the Fee page no longer collects free-text
+  // month), it's derived from invoiceDate using the same BS year-month
+  // conversion the nightly cron already uses, so a manual run and an
+  // auto-billed run land in the same bucket and "already billed" dedup
+  // (below) works correctly regardless of which path created an invoice.
+  //
+  // autoRelease only ever comes from the nightly cron (ScheduledTasksService),
+  // gated by Company.autoInvoiceRelease — a human-triggered run (the Fee page
+  // button) always leaves invoices unreleased, requiring an explicit Release
+  // action (releaseInvoiceById/releaseBulk below).
+  async billingRun(companyId: string, month?: string, classId?: string, dueDate?: string, invoiceDate?: string, autoRelease = false) {
+    if (month?.trim() && !isValidBsYearMonth(month.trim())) {
+      throw new BadRequestException('month must be in BS "YYYY-MM" format, e.g. 2083-05');
+    }
+    const resolvedMonth = month?.trim() || bsYearMonth(invoiceDate ? new Date(invoiceDate) : new Date());
 
     const students = await this.prisma.student.findMany({
       where: { companyId, status: 'ACTIVE', ...(classId ? { classId } : {}) },
-      select: { id: true },
+      select: { id: true, name: true, guardianPhone: true },
     });
 
     const existing = await this.prisma.feeInvoice.findMany({
-      where: { companyId, month, studentId: { in: students.map(s => s.id) } },
+      where: { companyId, month: resolvedMonth, studentId: { in: students.map(s => s.id) } },
       select: { studentId: true },
     });
     const alreadyBilled = new Set(existing.map(e => e.studentId));
@@ -338,19 +361,22 @@ export class SchoolFinanceService {
     let created = 0;
     let skippedExisting = 0;
     let skippedEmpty = 0;
+    const createdDetails: { studentName: string; amount: number }[] = [];
 
     for (const s of students) {
       if (alreadyBilled.has(s.id)) { skippedExisting++; continue; }
       const profile = await this.getStudentFeeProfile(companyId, s.id);
       if (profile.monthlyTotal <= 0 || profile.lines.length === 0) { skippedEmpty++; continue; }
 
-      await this.prisma.feeInvoice.create({
+      const invoice = await this.prisma.feeInvoice.create({
         data: {
           companyId,
           studentId: s.id,
-          month,
-          description: `Monthly fees — ${month}`,
+          invoiceNo: await this.nextInvoiceNo(companyId),
+          month: resolvedMonth,
+          description: `Monthly fees — ${resolvedMonth}`,
           totalAmount: profile.monthlyTotal,
+          invoiceDate: invoiceDate ? new Date(invoiceDate) : new Date(),
           dueDate: dueDate ? new Date(dueDate) : new Date(Date.now() + 10 * 86_400_000),
           status: 'PENDING',
           items: {
@@ -362,10 +388,158 @@ export class SchoolFinanceService {
           },
         },
       });
+
+      // Best-effort, same as recordPayment() below — a ledger posting failure
+      // must never block the invoice itself from being created.
+      try {
+        await this.postFeeInvoiceAccrual(companyId, invoice.id);
+      } catch (err) {
+        console.error('Fee invoice accrual posting failed:', (err as Error).message);
+      }
+
       created++;
+      createdDetails.push({ studentName: s.name, amount: profile.monthlyTotal });
+
+      if (autoRelease) {
+        await this.releaseInvoice(companyId, invoice.id);
+      }
     }
 
-    return { created, skippedExisting, skippedEmpty, students: students.length };
+    return { created, skippedExisting, skippedEmpty, students: students.length, createdDetails };
+  }
+
+  // ── Invoice Release ──────────────────────────────────────────────────────────
+  // Marks an invoice releasedAt=now and fires the same portal notification +
+  // SMS reminder that used to happen unconditionally at creation time. Portal
+  // visibility (PortalService.getFees) is gated on releasedAt, so an invoice a
+  // human hasn't released yet — or that auto-billing left unreleased because
+  // Company.autoInvoiceRelease is off — simply doesn't show up for the student.
+  private async releaseInvoice(companyId: string, invoiceId: string) {
+    const invoice = await this.prisma.feeInvoice.findFirst({
+      where: { id: invoiceId, companyId },
+      include: { student: { select: { id: true, name: true, guardianPhone: true } } },
+    });
+    if (!invoice || !invoice.student || invoice.releasedAt) return;
+
+    await this.prisma.feeInvoice.update({ where: { id: invoiceId }, data: { releasedAt: new Date() } });
+
+    const amount = Number(invoice.totalAmount);
+    const dueDateLabel = invoice.dueDate ? invoice.dueDate.toDateString() : 'in 10 days';
+
+    // Free channel — always fires, no cost. SMS below is the paid channel,
+    // best-effort so a missing phone / SMS-provider hiccup never blocks release.
+    try {
+      await this.portalNotifications.notifyStudent(companyId, invoice.student.id, {
+        title: 'Fee invoice ready',
+        message: `Your fee invoice for ${invoice.month} is ready — Rs. ${amount}, due ${dueDateLabel}.`,
+        link: '/portal/fees',
+        referenceType: 'FEE_INVOICE',
+        referenceId: invoice.id,
+      });
+    } catch (err) {
+      console.error('Portal notification failed:', (err as Error).message);
+    }
+
+    if (invoice.student.guardianPhone) {
+      try {
+        const company = await this.prisma.company.findUnique({ where: { id: companyId }, select: { name: true } });
+        await this.sms.sendFeeReminder(invoice.student.name, invoice.student.guardianPhone, amount, invoice.month, company?.name);
+      } catch (err) {
+        console.error('Fee-ready SMS failed:', (err as Error).message);
+      }
+    }
+  }
+
+  async releaseInvoiceById(companyId: string, invoiceId: string) {
+    const invoice = await this.prisma.feeInvoice.findFirst({ where: { id: invoiceId, companyId }, select: { id: true, releasedAt: true } });
+    if (!invoice) throw new NotFoundException('Invoice not found');
+    if (invoice.releasedAt) throw new BadRequestException('Invoice already released');
+    await this.releaseInvoice(companyId, invoiceId);
+    return { released: true };
+  }
+
+  async releaseBulk(companyId: string) {
+    if (!companyId) throw new BadRequestException('companyId is required');
+    const invoices = await this.prisma.feeInvoice.findMany({ where: { companyId, releasedAt: null }, select: { id: true } });
+    for (const inv of invoices) {
+      await this.releaseInvoice(companyId, inv.id);
+    }
+    return { released: invoices.length };
+  }
+
+  // The moment an invoice is generated (whether from a manual billing run or
+  // the automatic monthly scheduler), recognize the income right away — DR Fee
+  // Receivable, CR each fee head's Income account. This is accrual accounting:
+  // a student owing fees counts as income now, not only once they actually pay.
+  // recordPayment()/postFeePayment() below then just clears Fee Receivable via
+  // Cash/Bank when payment actually happens — it does NOT credit Income again,
+  // otherwise every fee would be counted twice.
+  //
+  // Posts through the shared LedgerPostingService primitive (one DR/CR pair per
+  // fee head, paired against Fee Receivable) instead of writing ledger rows
+  // directly — keeps this in sync with every other module's postings and gets
+  // race-safe balance updates (reads happen inside the same DB transaction).
+  private async postFeeInvoiceAccrual(companyId: string, invoiceId: string) {
+    const invoice = await this.prisma.feeInvoice.findUnique({
+      where: { id: invoiceId },
+      include: { items: { include: { feeHead: true } }, student: { select: { name: true } } },
+    });
+    if (!invoice) return;
+
+    const total = Number(invoice.totalAmount);
+    if (total <= 0) return; // fully covered by scholarship — nothing to accrue
+
+    const dateAd = invoice.invoiceDate.toISOString();
+    const desc = `Fee billed — ${invoice.student?.name ?? 'Student'} (${invoice.month})`;
+
+    // Net per income head — a scholarship line against a specific head reduces
+    // that head's net (rare case: net could even be negative for a head with a
+    // large targeted scholarship, posted as a debit to that Income account).
+    const byHead = new Map<string, number>();
+    for (const item of invoice.items) {
+      const accName = `${item.feeHead?.name ?? 'General Fee'} Income`;
+      byHead.set(accName, round2((byHead.get(accName) ?? 0) + Number(item.amount)));
+    }
+
+    const receivable = await this.posting.getOrCreateSystemAccount(companyId, 'Fee Receivable', 'ASSET');
+    const headLegs = await Promise.all(
+      [...byHead.entries()]
+        .filter(([, netAmt]) => Math.abs(netAmt) >= 0.005)
+        .map(async ([accName, netAmt]) => ({
+          netAmt,
+          account: await this.posting.getOrCreateSystemAccount(companyId, accName, 'INCOME'),
+        })),
+    );
+
+    await this.prisma.$transaction(async (tx) => {
+      for (const { account, netAmt } of headLegs) {
+        const legAccounts = netAmt > 0
+          ? { debitAccountId: receivable.id, creditAccountId: account.id }
+          : { debitAccountId: account.id, creditAccountId: receivable.id };
+        await this.posting.postManualJournalEntryTx(tx, companyId, {
+          ...legAccounts,
+          amount: Math.abs(netAmt),
+          dateAd, description: desc,
+          referenceType: 'FEE_INVOICE', referenceId: invoice.id,
+        });
+      }
+    });
+  }
+
+  // ── Invoice Numbering ────────────────────────────────────────────────────────
+
+  private async nextInvoiceNo(companyId: string): Promise<string> {
+    const bsYear = (adToBs(new Date()) || '').split('-')[0] || String(new Date().getFullYear());
+    const company = await this.prisma.company.findUnique({
+      where: { id: companyId },
+      select: { feeInvoiceSequence: true, feeInvoiceYear: true },
+    });
+    const seq = company?.feeInvoiceYear === bsYear ? (company.feeInvoiceSequence ?? 0) + 1 : 1;
+    await this.prisma.company.update({
+      where: { id: companyId },
+      data: { feeInvoiceSequence: seq, feeInvoiceYear: bsYear },
+    });
+    return `INV-${bsYear}-${String(seq).padStart(4, '0')}`;
   }
 
   // ── Payments & Receipts ──────────────────────────────────────────────────────
@@ -397,44 +571,13 @@ export class SchoolFinanceService {
     if (amount > remaining) throw new BadRequestException(`Payment exceeds remaining amount: Rs. ${remaining}`);
 
     const method = ['CASH', 'BANK', 'ESEWA', 'KHALTI'].includes(body.method ?? '') ? body.method! : 'CASH';
+    const bankAccount = await this.resolveBankAccount(companyId, method, body.bankAccountId);
 
-    let bankAccount: { id: string } | null = null;
-    if (method === 'BANK') {
-      if (!body.bankAccountId) throw new BadRequestException('Select which bank account received this payment');
-      bankAccount = await this.prisma.bankAccount.findFirst({ where: { id: body.bankAccountId, companyId }, select: { id: true } });
-      if (!bankAccount) throw new BadRequestException('Bank account not found');
-    }
-
-    const receiptNo = await this.nextReceiptNo(companyId);
-    const newPaid = round2(Number(invoice.paidAmount) + amount);
-    const status = newPaid >= Number(invoice.totalAmount) ? 'PAID' : 'PARTIAL';
-
-    const payment = await this.prisma.$transaction(async (tx) => {
-      const created = await tx.feePayment.create({
-        data: { companyId, invoiceId, receiptNo, amount, method, bankAccountId: bankAccount?.id, notes: body.notes || null },
-      });
-      await tx.feeInvoice.update({
-        where: { id: invoiceId },
-        data: { paidAmount: newPaid, status, paidDate: status === 'PAID' ? new Date() : undefined },
-      });
-      if (bankAccount) {
-        await tx.bankAccount.update({ where: { id: bankAccount.id }, data: { currentBalance: { increment: amount } } });
-        await tx.transaction.create({
-          data: {
-            companyId,
-            bankAccountId: bankAccount.id,
-            dateAd: new Date(),
-            type: 'BANK' as any,
-            category: 'INCOME' as any,
-            amount,
-            description: `Fee payment — ${invoice.student?.name ?? 'Student'} (Invoice ${invoice.month})`,
-            referenceType: 'FEE_PAYMENT',
-            referenceId: created.id,
-            status: 'COMPLETED' as any,
-          },
-        });
-      }
-      return created;
+    const { payment, status } = await this.applyConfirmedPayment(companyId, invoice, {
+      amount,
+      method,
+      bankAccountId: bankAccount?.id,
+      notes: body.notes || null,
     });
 
     // Ledger posting is best-effort — a posting failure must never lose a receipt
@@ -458,13 +601,271 @@ export class SchoolFinanceService {
       console.error('Notification dispatch failed:', (err as Error).message);
     }
 
+    try {
+      await this.portalNotifications.notifyStudent(companyId, invoice.studentId, {
+        title: 'Fee receipt ready',
+        message: `Payment of Rs. ${amount} received — Receipt ${payment.receiptNo}.`,
+        link: '/portal/fees',
+        referenceType: 'FEE_PAYMENT',
+        referenceId: payment.id,
+      });
+    } catch (err) {
+      console.error('Portal receipt notification failed:', (err as Error).message);
+    }
+
     return { ...payment, invoiceStatus: status };
+  }
+
+  // BANK always names a real bank account — that's what "bank transfer" means.
+  // ESEWA/KHALTI don't: the money can stay wallet-to-wallet with no bank
+  // involved at all, or later get withdrawn to a bank — that's a separate,
+  // unrelated event, not something this one payment record can know. So a
+  // bank account is optional for wallet methods, never required.
+  private async resolveBankAccount(companyId: string, method: string, bankAccountId?: string) {
+    if (method === 'BANK') {
+      if (!bankAccountId) throw new BadRequestException('Select which bank account received this payment');
+      const bankAccount = await this.prisma.bankAccount.findFirst({ where: { id: bankAccountId, companyId }, select: { id: true } });
+      if (!bankAccount) throw new BadRequestException('Bank account not found');
+      return bankAccount;
+    }
+    if ((method === 'ESEWA' || method === 'KHALTI') && bankAccountId) {
+      const bankAccount = await this.prisma.bankAccount.findFirst({ where: { id: bankAccountId, companyId }, select: { id: true } });
+      if (!bankAccount) throw new BadRequestException('Bank account not found');
+      return bankAccount;
+    }
+    return null;
+  }
+
+  // Shared by recordPayment (counter/gateway, already-trusted) and
+  // confirmPaymentProof (portal proof, just approved by staff): assigns the
+  // receipt number + verification code, updates the invoice, bumps the bank
+  // balance, and logs a Transaction row — all in one $transaction. Every fee
+  // payment gets a Transaction row regardless of method, so it shows up on
+  // the Transactions page without anyone having to dig into a Ledger system
+  // account to confirm a payment actually happened. Only a real linked bank
+  // account's balance moves; Cash and unsettled wallet payments still get a
+  // Transaction, just with no bankAccountId attached.
+  private async applyConfirmedPayment(
+    companyId: string,
+    invoice: { id: string; studentId: string; totalAmount: any; paidAmount: any; month: string; student?: { name: string } | null },
+    input: { amount: number; method: string; bankAccountId?: string; notes?: string | null; existingPaymentId?: string; reviewedByUserId?: string },
+  ) {
+    const receiptNo = await this.nextReceiptNo(companyId);
+    const verificationCode = randomVerificationCode();
+    const newPaid = round2(Number(invoice.paidAmount) + input.amount);
+    const status = newPaid >= Number(invoice.totalAmount) ? 'PAID' : 'PARTIAL';
+
+    // The linked account's own paymentType decides the Transaction type — not
+    // the payment method — since an ESEWA/KHALTI-method payment now always
+    // links to the school's own wallet account (never a real bank).
+    const linkedAccount = input.bankAccountId
+      ? await this.prisma.bankAccount.findUnique({ where: { id: input.bankAccountId }, select: { paymentType: true } })
+      : null;
+    const transactionType = input.method === 'CASH' ? 'CASH' : linkedAccount?.paymentType === 'BANK' ? 'BANK' : 'WALLET';
+
+    const payment = await this.prisma.$transaction(async (tx) => {
+      const created = input.existingPaymentId
+        ? await tx.feePayment.update({
+            where: { id: input.existingPaymentId },
+            data: {
+              receiptNo,
+              verificationCode,
+              status: 'CONFIRMED',
+              reviewedByUserId: input.reviewedByUserId,
+              reviewedAt: new Date(),
+            },
+          })
+        : await tx.feePayment.create({
+            data: {
+              companyId,
+              invoiceId: invoice.id,
+              receiptNo,
+              verificationCode,
+              amount: input.amount,
+              method: input.method,
+              bankAccountId: input.bankAccountId,
+              notes: input.notes || null,
+              status: 'CONFIRMED',
+            },
+          });
+      await tx.feeInvoice.update({
+        where: { id: invoice.id },
+        data: { paidAmount: newPaid, status, paidDate: status === 'PAID' ? new Date() : undefined },
+      });
+      if (input.bankAccountId) {
+        await tx.bankAccount.update({ where: { id: input.bankAccountId }, data: { currentBalance: { increment: input.amount } } });
+      }
+      await tx.transaction.create({
+        data: {
+          companyId,
+          bankAccountId: input.bankAccountId,
+          dateAd: new Date(),
+          type: transactionType as any,
+          category: 'INCOME' as any,
+          amount: input.amount,
+          description: `Fee payment — ${invoice.student?.name ?? 'Student'} (Invoice ${invoice.month})`,
+          referenceType: 'FEE_PAYMENT',
+          referenceId: created.id,
+          status: 'COMPLETED' as any,
+        },
+      });
+      return created;
+    });
+
+    return { payment, status };
   }
 
   listPayments(companyId: string, invoiceId: string) {
     return this.prisma.feePayment.findMany({
       where: { companyId, invoiceId },
       orderBy: { paidAt: 'desc' },
+    });
+  }
+
+  // ── Payment Proofs (portal-submitted, pending staff confirmation) ──────────────
+
+  async submitPaymentProof(
+    companyId: string,
+    invoiceId: string,
+    studentId: string,
+    body: { amount: number; method?: string; bankAccountId?: string; proofScreenshotUrl: string; notes?: string },
+  ) {
+    const invoice = await this.prisma.feeInvoice.findFirst({ where: { id: invoiceId, companyId, studentId } });
+    if (!invoice) throw new NotFoundException('Invoice not found');
+    if (!body.proofScreenshotUrl) throw new BadRequestException('Payment screenshot is required');
+    // Must be one of our own uploaded files, not an arbitrary attacker-hosted
+    // URL — otherwise a submitted "proof" could force staff browsers to load
+    // external content every time the pending-review list is opened.
+    if (!/^\/uploads\/[A-Za-z0-9._-]+$/.test(body.proofScreenshotUrl)) {
+      throw new BadRequestException('Invalid screenshot reference');
+    }
+
+    const amount = round2(Number(body.amount));
+    if (!(amount > 0)) throw new BadRequestException('Payment amount must be positive');
+    const remaining = round2(Number(invoice.totalAmount) - Number(invoice.paidAmount));
+    if (amount > remaining) throw new BadRequestException(`Payment exceeds remaining amount: Rs. ${remaining}`);
+
+    const method = ['BANK', 'ESEWA', 'KHALTI', 'CASH'].includes(body.method ?? '') ? body.method! : 'BANK';
+    const bankAccount = await this.resolveBankAccount(companyId, method, body.bankAccountId);
+
+    const payment = await this.prisma.feePayment.create({
+      data: {
+        companyId,
+        invoiceId,
+        amount,
+        method,
+        bankAccountId: bankAccount?.id,
+        proofScreenshotUrl: body.proofScreenshotUrl,
+        notes: body.notes || null,
+        status: 'PENDING_REVIEW',
+        submittedByPortal: true,
+      },
+    });
+
+    try {
+      await this.notifications.notifyRole(companyId, ['ADMIN', 'ACCOUNTANT'], {
+        type: 'FEE_PAYMENT',
+        title: 'Payment proof submitted',
+        message: `Rs. ${amount} claimed by ${invoice.month} invoice — awaiting confirmation`,
+        link: '/fees',
+        referenceType: 'FEE_PAYMENT',
+        referenceId: payment.id,
+      });
+    } catch (err) {
+      console.error('Notification dispatch failed:', (err as Error).message);
+    }
+
+    return payment;
+  }
+
+  listPendingPaymentProofs(companyId: string) {
+    if (!companyId) throw new BadRequestException('companyId is required');
+    return this.prisma.feePayment.findMany({
+      where: { companyId, status: 'PENDING_REVIEW' },
+      include: { invoice: { include: { student: { select: { id: true, name: true, rollNumber: true } } } }, bankAccount: { select: { bankName: true } } },
+      orderBy: { createdAt: 'asc' },
+    });
+  }
+
+  async confirmPaymentProof(companyId: string, paymentId: string, reviewerUserId?: string) {
+    const pending = await this.prisma.feePayment.findFirst({
+      where: { id: paymentId, companyId, status: 'PENDING_REVIEW' },
+      include: { invoice: { include: { student: { select: { name: true } } } } },
+    });
+    if (!pending) throw new NotFoundException('Pending payment proof not found');
+
+    const invoice = pending.invoice;
+    const remaining = round2(Number(invoice.totalAmount) - Number(invoice.paidAmount));
+    const amount = Number(pending.amount);
+    if (amount > remaining) {
+      throw new BadRequestException(`This invoice's remaining balance (Rs. ${remaining}) is now less than the claimed amount — resolve the other payments first`);
+    }
+
+    const { payment, status } = await this.applyConfirmedPayment(companyId, invoice, {
+      amount,
+      method: pending.method,
+      bankAccountId: pending.bankAccountId ?? undefined,
+      notes: pending.notes,
+      existingPaymentId: pending.id,
+      reviewedByUserId: reviewerUserId,
+    });
+
+    try {
+      await this.postFeePayment(companyId, payment.id, invoice.student?.name ?? 'Student');
+    } catch (err) {
+      console.error('Fee payment ledger posting failed:', (err as Error).message);
+    }
+
+    try {
+      await this.portalNotifications.notifyStudent(companyId, invoice.studentId, {
+        title: 'Payment confirmed',
+        message: `Your payment of Rs. ${amount} has been confirmed — Receipt ${payment.receiptNo}.`,
+        link: '/portal/fees',
+        referenceType: 'FEE_PAYMENT',
+        referenceId: payment.id,
+      });
+    } catch (err) {
+      console.error('Portal receipt notification failed:', (err as Error).message);
+    }
+
+    return { ...payment, invoiceStatus: status };
+  }
+
+  async rejectPaymentProof(companyId: string, paymentId: string, reason: string, reviewerUserId?: string) {
+    if (!reason?.trim()) throw new BadRequestException('A rejection reason is required');
+    const pending = await this.prisma.feePayment.findFirst({ where: { id: paymentId, companyId, status: 'PENDING_REVIEW' } });
+    if (!pending) throw new NotFoundException('Pending payment proof not found');
+
+    const payment = await this.prisma.feePayment.update({
+      where: { id: pending.id },
+      data: { status: 'REJECTED', rejectionReason: reason.trim(), reviewedByUserId: reviewerUserId, reviewedAt: new Date() },
+    });
+
+    try {
+      const invoice = await this.prisma.feeInvoice.findUnique({ where: { id: pending.invoiceId }, select: { studentId: true } });
+      if (invoice) {
+        await this.portalNotifications.notifyStudent(companyId, invoice.studentId, {
+          title: 'Payment proof rejected',
+          message: `Your submitted payment proof was rejected: ${reason.trim()}. Please resubmit.`,
+          link: '/portal/fees',
+          referenceType: 'FEE_PAYMENT',
+          referenceId: payment.id,
+        });
+      }
+    } catch (err) {
+      console.error('Portal rejection notification failed:', (err as Error).message);
+    }
+
+    return payment;
+  }
+
+  verifyByCode(companyId: string, code: string) {
+    return this.prisma.feePayment.findFirst({
+      where: { companyId, verificationCode: code, status: 'CONFIRMED' },
+      include: {
+        invoice: { include: { student: { include: { class: { select: { name: true, section: true } } } } } },
+        bankAccount: { select: { bankName: true } },
+      },
     });
   }
 
@@ -475,7 +876,12 @@ export class SchoolFinanceService {
         student: {
           include: { class: { select: { name: true, section: true } } },
         },
-        company: { select: { name: true, address: true, phone: true, email: true } },
+        company: {
+          select: {
+            name: true, address: true, phone: true, email: true,
+            bankAccounts: { where: { qrCodeUrl: { not: null } }, select: { bankName: true, accountNumber: true, qrCodeUrl: true } },
+          },
+        },
         items: { include: { feeHead: { select: { name: true } }, inventoryItem: { select: { itemName: true, unit: true } } } },
         payments: { orderBy: { paidAt: 'asc' } },
       },
@@ -484,87 +890,47 @@ export class SchoolFinanceService {
     return invoice;
   }
 
-  // DR Cash/Bank · CR each head's income account, allocated across invoice items
+  // DR Cash/Bank · CR Fee Receivable — the actual cash receipt, clearing the
+  // receivable that postFeeInvoiceAccrual() already created when the invoice
+  // was generated. This must NOT credit Income again (that already happened at
+  // billing time) — otherwise every fee would be counted twice.
+  //
+  // A single balanced DR/CR pair, so this maps directly onto the shared
+  // LedgerPostingService entry point instead of hand-writing ledger rows.
   private async postFeePayment(companyId: string, paymentId: string, studentName: string) {
     const payment = await this.prisma.feePayment.findUnique({
       where: { id: paymentId },
-      include: { invoice: { include: { items: { include: { feeHead: true } } } } },
+      include: { invoice: true, bankAccount: { select: { paymentType: true } } },
     });
     if (!payment) return;
 
-    const amount = Number(payment.amount);
-    const date = new Date(payment.paidAt);
-    const dateBs = adToBs(date);
-    const drAccountName = payment.method === 'CASH' ? 'Cash in Hand' : 'Bank Account';
-
-    // Allocate proportionally across positive line items
-    const positiveItems = payment.invoice.items.filter(i => Number(i.amount) > 0);
-    const positiveSum = positiveItems.reduce((s, i) => s + Number(i.amount), 0);
-    const invoiceNet = Number(payment.invoice.totalAmount);
-
-    const allocations = new Map<string, number>(); // income account name -> amount
-    if (positiveSum > 0 && invoiceNet > 0) {
-      // scholarship-adjusted: scale item shares so they sum to the payment amount
-      for (const item of positiveItems) {
-        const share = round2((Number(item.amount) / positiveSum) * amount);
-        const accName = `${item.feeHead?.name ?? 'General Fee'} Income`;
-        allocations.set(accName, round2((allocations.get(accName) ?? 0) + share));
-      }
-      // fix rounding drift on the largest allocation
-      const drift = round2(amount - [...allocations.values()].reduce((s, v) => s + v, 0));
-      if (drift !== 0) {
-        const largest = [...allocations.entries()].sort((a, b) => b[1] - a[1])[0];
-        if (largest) allocations.set(largest[0], round2(largest[1] + drift));
-      }
-    } else {
-      allocations.set('General Fee Income', amount);
-    }
-
-    const drAccount = await this.getOrCreateAccount(companyId, drAccountName, 'ASSET');
+    // Cash is Cash. Everything else names a specific configured account, and
+    // that account's own paymentType (Bank/eSewa/Khalti) — not the payment's
+    // method — decides which pool of money actually moved, since a payment
+    // recorded as "eSewa" could still be linked to a real bank account it
+    // already settled into.
+    const drAccountName = payment.method === 'CASH'
+      ? 'Cash in Hand'
+      : payment.bankAccount?.paymentType === 'ESEWA'
+        ? 'eSewa Wallet'
+        : payment.bankAccount?.paymentType === 'KHALTI'
+          ? 'Khalti Wallet'
+          : 'Bank Account';
     const desc = `Fee receipt ${payment.receiptNo} — ${studentName} (${payment.invoice.month})`;
 
-    const ops: any[] = [
-      this.prisma.ledgerEntry.create({
-        data: {
-          companyId, accountId: drAccount.id, dateAd: date, dateBs,
-          description: desc, debit: amount, credit: 0,
-          balance: Number(drAccount.currentBalance) + amount,
-          referenceType: 'FEE_PAYMENT', referenceId: payment.id, isAutoPosted: true,
-        },
-      }),
-      this.prisma.ledgerAccount.update({
-        where: { id: drAccount.id },
-        data: { currentBalance: { increment: amount } },
-      }),
-    ];
+    const [drAccount, receivable] = await Promise.all([
+      this.posting.getOrCreateSystemAccount(companyId, drAccountName, 'ASSET'),
+      this.posting.getOrCreateSystemAccount(companyId, 'Fee Receivable', 'ASSET'),
+    ]);
 
-    for (const [accName, alloc] of allocations) {
-      if (alloc <= 0) continue;
-      const account = await this.getOrCreateAccount(companyId, accName, 'INCOME');
-      ops.push(
-        this.prisma.ledgerEntry.create({
-          data: {
-            companyId, accountId: account.id, dateAd: date, dateBs,
-            description: desc, debit: 0, credit: alloc,
-            balance: Number(account.currentBalance) + alloc,
-            referenceType: 'FEE_PAYMENT', referenceId: payment.id, isAutoPosted: true,
-          },
-        }),
-        this.prisma.ledgerAccount.update({
-          where: { id: account.id },
-          data: { currentBalance: { increment: alloc } },
-        }),
-      );
-    }
-
-    await this.prisma.$transaction(ops);
-  }
-
-  private async getOrCreateAccount(companyId: string, accountName: string, accountType: string) {
-    const existing = await this.prisma.ledgerAccount.findFirst({ where: { companyId, accountName } });
-    if (existing) return existing;
-    return this.prisma.ledgerAccount.create({
-      data: { companyId, accountName, accountType: accountType as any, isSystem: true },
+    await this.posting.postManualJournalEntry(companyId, {
+      debitAccountId: drAccount.id,
+      creditAccountId: receivable.id,
+      amount: Number(payment.amount),
+      dateAd: payment.paidAt.toISOString(),
+      description: desc,
+      referenceType: 'FEE_PAYMENT',
+      referenceId: payment.id,
     });
   }
 

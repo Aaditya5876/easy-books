@@ -3,9 +3,11 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, Pencil, Trash2, BookOpen, ArrowLeftRight, Upload } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import BulkImportDialog from '@/components/shared/BulkImportDialog';
+import BorrowerCombobox from '@/components/shared/BorrowerCombobox';
 import { BOOK_FIELDS } from '@/components/shared/bulkImportFields';
 import { libraryApi } from '@/api';
 import { getActiveCompanyId } from '@/lib/companyContext';
+import { confirm } from '@/lib/confirm';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -14,7 +16,7 @@ import { toast } from 'sonner';
 
 const EMPTY_BOOK = { title: '', author: '', isbn: '', category: '', totalCopies: 1, availableCopies: 1, shelfLocation: '' };
 
-function BookDialog({ open, onClose, initial, companyId }) {
+function BookDialog({ open, onClose, initial, companyId, existingTitles }) {
   const { t } = useTranslation();
   const qc = useQueryClient();
   const isEdit = !!initial?.id;
@@ -23,6 +25,7 @@ function BookDialog({ open, onClose, initial, companyId }) {
     category: initial.category || '', totalCopies: initial.totalCopies,
     availableCopies: initial.availableCopies, shelfLocation: initial.shelfLocation || '',
   } : EMPTY_BOOK);
+  const [errors, setErrors] = useState({});
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   const save = useMutation({
@@ -33,7 +36,13 @@ function BookDialog({ open, onClose, initial, companyId }) {
 
   function handleSubmit(e) {
     e.preventDefault();
-    if (!form.title.trim()) { toast.error(t('library.titleRequired', { defaultValue: 'Title is required' })); return; }
+    if (!form.title.trim()) {
+      const msg = t('library.titleRequired', { defaultValue: 'Title is required' });
+      setErrors({ title: msg });
+      toast.error(msg);
+      return;
+    }
+    setErrors({});
     save.mutate({ ...form, companyId, totalCopies: Number(form.totalCopies), availableCopies: Number(form.availableCopies) });
   }
 
@@ -44,7 +53,11 @@ function BookDialog({ open, onClose, initial, companyId }) {
         <form onSubmit={handleSubmit} className="space-y-4 pt-2">
           <div className="space-y-1.5">
             <Label>{t('library.titleLabel', { defaultValue: 'Title *' })}</Label>
-            <Input placeholder={t('library.titlePlaceholder', { defaultValue: 'Book title' })} value={form.title} onChange={e => set('title', e.target.value)} />
+            <Input list="library-existing-titles" placeholder={t('library.titlePlaceholder', { defaultValue: 'Book title' })} value={form.title} onChange={e => { set('title', e.target.value); if (errors.title) setErrors({}); }} />
+            <datalist id="library-existing-titles">
+              {existingTitles?.map(title => <option key={title} value={title} />)}
+            </datalist>
+            {errors.title && <p className="text-xs text-red-600">{errors.title}</p>}
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
@@ -89,7 +102,8 @@ function BookDialog({ open, onClose, initial, companyId }) {
 function IssueDialog({ open, onClose, books, companyId }) {
   const { t } = useTranslation();
   const qc = useQueryClient();
-  const [form, setForm] = useState({ bookId: '', memberName: '', dueDate: '' });
+  const [form, setForm] = useState({ bookId: '', studentId: null, memberName: '', dueDate: '' });
+  const [errors, setErrors] = useState({});
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   const issue = useMutation({
@@ -105,10 +119,17 @@ function IssueDialog({ open, onClose, books, companyId }) {
 
   function handleSubmit(e) {
     e.preventDefault();
-    if (!form.bookId) { toast.error(t('library.selectABook', { defaultValue: 'Select a book' })); return; }
-    if (!form.memberName.trim()) { toast.error(t('library.memberNameRequired', { defaultValue: 'Member name is required' })); return; }
-    if (!form.dueDate) { toast.error(t('library.dueDateRequired', { defaultValue: 'Due date is required' })); return; }
-    issue.mutate({ companyId, bookId: form.bookId, memberName: form.memberName, dueDate: new Date(form.dueDate) });
+    const errs = {};
+    if (!form.bookId) errs.bookId = t('library.selectABook', { defaultValue: 'Select a book' });
+    if (!form.memberName.trim()) errs.memberName = t('library.memberNameRequired', { defaultValue: 'Member name is required' });
+    if (!form.dueDate) errs.dueDate = t('library.dueDateRequired', { defaultValue: 'Due date is required' });
+    if (Object.keys(errs).length) {
+      setErrors(errs);
+      toast.error(Object.values(errs)[0]);
+      return;
+    }
+    setErrors({});
+    issue.mutate({ companyId, bookId: form.bookId, studentId: form.studentId, memberName: form.memberName, dueDate: new Date(form.dueDate) });
   }
 
   return (
@@ -118,20 +139,27 @@ function IssueDialog({ open, onClose, books, companyId }) {
         <form onSubmit={handleSubmit} className="space-y-4 pt-2">
           <div className="space-y-1.5">
             <Label>{t('library.bookLabel', { defaultValue: 'Book *' })}</Label>
-            <select className="w-full border rounded-md px-3 py-2 text-sm bg-background" value={form.bookId} onChange={e => set('bookId', e.target.value)}>
+            <select className="w-full border rounded-md px-3 py-2 text-sm bg-background" value={form.bookId} onChange={e => { set('bookId', e.target.value); if (errors.bookId) setErrors(er => ({ ...er, bookId: undefined })); }}>
               <option value="">{t('library.selectBook', { defaultValue: 'Select book…' })}</option>
               {books.filter(b => b.availableCopies > 0).map(b => (
                 <option key={b.id} value={b.id}>{t('library.bookOption', { defaultValue: '{{title}} ({{count}} available)', title: b.title, count: b.availableCopies })}</option>
               ))}
             </select>
+            {errors.bookId && <p className="text-xs text-red-600">{errors.bookId}</p>}
           </div>
           <div className="space-y-1.5">
             <Label>{t('library.issuedToLabel', { defaultValue: 'Issued To *' })}</Label>
-            <Input placeholder={t('library.issuedToPlaceholder', { defaultValue: 'Student or staff name' })} value={form.memberName} onChange={e => set('memberName', e.target.value)} />
+            <BorrowerCombobox
+              displayValue={form.memberName}
+              onSelect={({ studentId, memberName }) => { setForm(f => ({ ...f, studentId, memberName })); if (errors.memberName) setErrors(er => ({ ...er, memberName: undefined })); }}
+              placeholder={t('library.issuedToPlaceholder', { defaultValue: 'Search student or staff…' })}
+            />
+            {errors.memberName && <p className="text-xs text-red-600">{errors.memberName}</p>}
           </div>
           <div className="space-y-1.5">
             <Label>{t('library.dueDateLabel', { defaultValue: 'Due Date *' })}</Label>
-            <Input type="date" value={form.dueDate} onChange={e => set('dueDate', e.target.value)} />
+            <Input type="date" value={form.dueDate} onChange={e => { set('dueDate', e.target.value); if (errors.dueDate) setErrors(er => ({ ...er, dueDate: undefined })); }} />
+            {errors.dueDate && <p className="text-xs text-red-600">{errors.dueDate}</p>}
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose}>{t('library.cancel', { defaultValue: 'Cancel' })}</Button>
@@ -143,7 +171,7 @@ function IssueDialog({ open, onClose, books, companyId }) {
   );
 }
 
-function ReturnDialog({ open, onClose, issue: issueRecord, companyId }) {
+function ReturnDialog({ open, onClose, issue: issueRecord }) {
   const { t } = useTranslation();
   const qc = useQueryClient();
   const [fine, setFine] = useState(0);
@@ -298,7 +326,11 @@ export default function Library() {
                           <button onClick={() => setBookDialog({ mode: 'edit', book: b })} className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors">
                             <Pencil className="w-3.5 h-3.5" />
                           </button>
-                          <button onClick={() => { if (confirm(t('library.confirmDeleteBook', { defaultValue: 'Delete "{{title}}"?', title: b.title }))) removeBook.mutate(b.id); }}
+                          <button onClick={async () => {
+                            const ok = await confirm({ description: t('library.confirmDeleteBook', { defaultValue: 'Delete "{{title}}"?', title: b.title }), variant: 'destructive' });
+                            if (!ok) return;
+                            removeBook.mutate(b.id);
+                          }}
                             className="p-1.5 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600 transition-colors">
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
@@ -363,13 +395,19 @@ export default function Library() {
       )}
 
       {bookDialog && (
-        <BookDialog open={!!bookDialog} onClose={() => setBookDialog(null)} initial={bookDialog.mode === 'edit' ? bookDialog.book : null} companyId={companyId} />
+        <BookDialog
+          open={!!bookDialog}
+          onClose={() => setBookDialog(null)}
+          initial={bookDialog.mode === 'edit' ? bookDialog.book : null}
+          companyId={companyId}
+          existingTitles={[...new Set(books.map(b => b.title))]}
+        />
       )}
       {issueDialog && (
         <IssueDialog open={issueDialog} onClose={() => setIssueDialog(false)} books={books} companyId={companyId} />
       )}
       {returnDialog && (
-        <ReturnDialog open={!!returnDialog} onClose={() => setReturnDialog(null)} issue={returnDialog} companyId={companyId} />
+        <ReturnDialog open={!!returnDialog} onClose={() => setReturnDialog(null)} issue={returnDialog} />
       )}
     </div>
   );

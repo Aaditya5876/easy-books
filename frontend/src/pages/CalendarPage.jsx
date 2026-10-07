@@ -196,14 +196,14 @@ export default function CalendarPage({ mode = 'AD' }) {
         </div>
       </div>
 
-      {/* Nepali Months Reference */}
+      {/* Months Reference — follows the AD/BS toggle instead of always showing Nepali months */}
       <div className="bg-card rounded-xl border p-4">
-        <h3 className="text-sm font-semibold mb-3">Nepali Calendar Months</h3>
+        <h3 className="text-sm font-semibold mb-3">{mode === 'AD' ? 'Gregorian Calendar Months' : 'Nepali Calendar Months'}</h3>
         <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
-          {NEPALI_MONTHS.map((month, idx) => (
+          {(mode === 'AD' ? ENGLISH_MONTHS : NEPALI_MONTHS).map((month, idx) => (
             <div key={month} className={cn(
               "text-center p-2 rounded-lg text-xs",
-              todayBS.month === idx + 1 ? "bg-primary text-primary-foreground" : "bg-secondary"
+              (mode === 'AD' ? today.getMonth() === idx : todayBS.month === idx + 1) ? "bg-primary text-primary-foreground" : "bg-secondary"
             )}>
               <p className="font-medium">{month}</p>
               <p className="text-[10px] opacity-70">Month {idx + 1}</p>

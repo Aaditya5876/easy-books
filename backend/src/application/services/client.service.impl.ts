@@ -24,6 +24,8 @@ export class ClientServiceImpl {
   }
 
   async update(id: string, companyId: string, dto: UpdateClientDTO) {
+    const client = await this.prisma.client.findFirst({ where: { id, companyId, deletedAt: null } });
+    if (!client) throw new NotFoundException('Client not found');
     return this.prisma.client.update({ where: { id }, data: dto as any });
   }
 

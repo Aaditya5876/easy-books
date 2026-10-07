@@ -44,10 +44,14 @@ export class QuotationServiceImpl {
   }
 
   async update(id: string, companyId: string, dto: UpdateQuotationDTO) {
+    const existing = await this.prisma.quotation.findFirst({ where: { id, companyId } });
+    if (!existing) throw new NotFoundException('Quotation not found');
     return this.prisma.quotation.update({ where: { id }, data: dto as any });
   }
 
   async remove(id: string, companyId: string) {
+    const existing = await this.prisma.quotation.findFirst({ where: { id, companyId } });
+    if (!existing) throw new NotFoundException('Quotation not found');
     return this.prisma.quotation.delete({ where: { id } });
   }
 
@@ -72,6 +76,15 @@ export class QuotationServiceImpl {
     }>;
 
     if (items.length === 0) throw new BadRequestException('Quotation has no items to convert');
+
+    // Item ids are read out of a JSON blob set at quotation-create time, not
+    // re-validated since — confirm every referenced item still belongs to
+    // this company before any stock gets decremented against it.
+    const inventoryItemIds = [...new Set(items.map(i => i.inventoryItemId).filter((v): v is string => !!v))];
+    if (inventoryItemIds.length) {
+      const owned = await this.prisma.inventoryItem.count({ where: { id: { in: inventoryItemIds }, companyId } });
+      if (owned !== inventoryItemIds.length) throw new BadRequestException('Quotation references an inventory item that no longer belongs to this company');
+    }
 
     // Recompute line totals from quotation items
     const computedItems = items.map((item) => {

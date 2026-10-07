@@ -1,10 +1,10 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { animate } from 'framer-motion';
 import { portalApi } from '@/api';
-import { CalendarCheck, DollarSign, ClipboardList, AlertCircle, ChevronRight, Trophy, Megaphone, Clock } from 'lucide-react';
+import { CalendarCheck, DollarSign, ClipboardList, AlertCircle, ChevronRight, Trophy, Megaphone, Clock, CalendarClock, PartyPopper } from 'lucide-react';
 import { containerVariants, cardVariants, itemVariants } from '@/lib/portalAnimations';
 import { useTranslation } from 'react-i18next';
 
@@ -53,11 +53,14 @@ const STAT_CARDS = [
 
 export default function PortalDashboard() {
   const { t } = useTranslation();
-  const [student, setStudent] = useState(null);
 
-  useEffect(() => {
-    try { setStudent(JSON.parse(localStorage.getItem('portal_student') || 'null')); } catch {}
-  }, []);
+  // Live, not the localStorage snapshot cached at login — a class reassignment
+  // after login would otherwise silently keep showing the old class's data
+  // until the student logs out and back in.
+  const { data: student } = useQuery({
+    queryKey: ['portal-me'],
+    queryFn: () => portalApi.me().then(r => r.data),
+  });
 
   const { data: attendance } = useQuery({
     queryKey: ['portal-attendance'],
@@ -91,9 +94,30 @@ export default function PortalDashboard() {
     enabled: !!student?.classId,
   });
 
+  const { data: examSchedule = [] } = useQuery({
+    queryKey: ['portal-exam-schedule', student?.classId],
+    queryFn: () => portalApi.examSchedule(student?.classId).then(r => r.data),
+    enabled: !!student?.classId,
+  });
+
+  const { data: events = [] } = useQuery({
+    queryKey: ['portal-events'],
+    queryFn: () => portalApi.events().then(r => r.data),
+  });
+
   const pendingFees  = fees.filter(f => f.status === 'PENDING' || f.status === 'PARTIAL');
   const overdueHw    = homework.filter(h => new Date(h.dueDate) < new Date());
   const fmtAmt = (n) => `Rs. ${Number(n).toLocaleString('en-NP')}`;
+
+  const now = new Date();
+  const upcomingExams = examSchedule
+    .filter(e => new Date(e.examDate) >= now)
+    .sort((a, b) => new Date(a.examDate) - new Date(b.examDate))
+    .slice(0, 4);
+  const upcomingEvents = events
+    .filter(e => new Date(e.startDate) >= now)
+    .sort((a, b) => new Date(a.startDate) - new Date(b.startDate))
+    .slice(0, 4);
 
   const latestExam = results.reduce((latest, r) => (
     !latest || new Date(r.examDate) > new Date(latest.examDate) ? r : latest
@@ -127,16 +151,23 @@ export default function PortalDashboard() {
   return (
     <div className="p-5 md:p-7 space-y-6 max-w-7xl mx-auto">
 
-      {/* Greeting */}
-      <motion.div initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
-        <h1 className="text-2xl md:text-3xl font-bold text-slate-900">
-          {greeting}{student?.name ? `, ${student.name.split(' ')[0]}` : ''} 👋
-        </h1>
-        <p className="text-slate-500 text-sm mt-1">
-          {student?.class
-            ? `${student.class.name}${student.class.section ? ` · ${t('portal.section', { defaultValue: 'Section {{section}}', section: student.class.section })}` : ''}`
-            : t('portal.academicOverview', { defaultValue: 'Your academic overview' })}
-        </p>
+      {/* Hero greeting banner */}
+      <motion.div
+        initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}
+        className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-blue-600 via-blue-600 to-indigo-700 px-6 py-7 md:px-8 md:py-8 shadow-lg shadow-blue-900/10"
+      >
+        <div className="absolute -right-10 -top-16 w-56 h-56 rounded-full bg-white/10 blur-2xl" />
+        <div className="absolute -left-6 bottom-0 w-40 h-40 rounded-full bg-white/10 blur-2xl" />
+        <div className="relative z-10">
+          <h1 className="text-2xl md:text-3xl font-bold text-white">
+            {greeting}{student?.name ? `, ${student.name.split(' ')[0]}` : ''} 👋
+          </h1>
+          <p className="text-blue-100 text-sm mt-1.5">
+            {student?.class
+              ? `${student.class.name}${student.class.section ? ` · ${t('portal.section', { defaultValue: 'Section {{section}}', section: student.class.section })}` : ''}`
+              : t('portal.academicOverview', { defaultValue: 'Your academic overview' })}
+          </p>
+        </div>
       </motion.div>
 
       {/* Stat cards */}
@@ -152,15 +183,15 @@ export default function PortalDashboard() {
             <motion.div key={card.key} variants={cardVariants}>
               <Link to={card.link}>
                 <motion.div
+                  whileHover={{ y: -2 }}
                   whileTap={{ scale: 0.96 }}
-                  className="rounded-2xl p-4 cursor-pointer border border-white shadow-sm"
-                  style={{ background: card.bg }}
+                  className="rounded-2xl p-4 cursor-pointer border border-slate-100 shadow-sm hover:shadow-md transition-shadow bg-white"
                 >
                   <div
-                    className="w-9 h-9 rounded-xl flex items-center justify-center mb-3"
-                    style={{ background: card.color + '22' }}
+                    className="w-10 h-10 rounded-xl flex items-center justify-center mb-3 shadow-sm"
+                    style={{ background: `linear-gradient(135deg, ${card.color}22, ${card.color}11)` }}
                   >
-                    <Icon className="w-4.5 h-4.5" style={{ color: card.color }} />
+                    <Icon className="w-5 h-5" style={{ color: card.color }} />
                   </div>
                   <p className="text-2xl font-bold text-slate-900">
                     <CountUp to={statValues[card.key]} suffix={statSuffix[card.key]} />
@@ -173,8 +204,12 @@ export default function PortalDashboard() {
         })}
       </motion.div>
 
-      {/* Detail sections */}
+      {/* Detail sections — two independent columns, each hugging its own content height.
+          Deliberately NOT one CSS grid of siblings: a grid pairs items into rows by index
+          and stretches the shorter cell to match its taller row-mate, which is exactly
+          what left a big empty gap under a short card like "Latest Result" before. */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-start">
+        <div className="space-y-5">
 
         {/* Pending fees */}
         {pendingFees.length > 0 && (
@@ -289,6 +324,67 @@ export default function PortalDashboard() {
             </motion.div>
           </motion.div>
         )}
+        </div>
+
+        <div className="space-y-5">
+        {/* Upcoming exams */}
+        {upcomingExams.length > 0 && (
+          <motion.div
+            variants={cardVariants}
+            initial="initial"
+            animate="animate"
+            className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm"
+          >
+            <div className="px-5 py-3.5 flex items-center justify-between border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <CalendarClock className="w-4 h-4 text-indigo-500" />
+                <h2 className="text-sm font-semibold text-slate-900">{t('portal.upcomingExams', { defaultValue: 'Upcoming Exams' })}</h2>
+              </div>
+            </div>
+            <motion.div className="divide-y divide-slate-100" variants={containerVariants} initial="initial" animate="animate">
+              {upcomingExams.map(e => (
+                <motion.div key={e.id} variants={itemVariants} className="px-5 py-3 flex items-center justify-between gap-4">
+                  <div>
+                    <p className="text-sm font-medium text-slate-800">{e.examName}</p>
+                    {e.subject?.name && <p className="text-xs text-slate-400">{e.subject.name}</p>}
+                  </div>
+                  <span className="text-xs px-2.5 py-1 rounded-full shrink-0 font-medium bg-indigo-50 text-indigo-700 tabular-nums">
+                    {new Date(e.examDate).toLocaleDateString('en-NP', { day: 'numeric', month: 'short' })}
+                  </span>
+                </motion.div>
+              ))}
+            </motion.div>
+          </motion.div>
+        )}
+
+        {/* Upcoming events */}
+        {upcomingEvents.length > 0 && (
+          <motion.div
+            variants={cardVariants}
+            initial="initial"
+            animate="animate"
+            className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm"
+          >
+            <div className="px-5 py-3.5 flex items-center justify-between border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <PartyPopper className="w-4 h-4 text-amber-500" />
+                <h2 className="text-sm font-semibold text-slate-900">{t('portal.upcomingEvents', { defaultValue: 'Upcoming Events' })}</h2>
+              </div>
+            </div>
+            <motion.div className="divide-y divide-slate-100" variants={containerVariants} initial="initial" animate="animate">
+              {upcomingEvents.map(e => (
+                <motion.div key={e.id} variants={itemVariants} className="px-5 py-3 flex items-center justify-between gap-4">
+                  <div>
+                    <p className="text-sm font-medium text-slate-800">{e.title}</p>
+                  </div>
+                  <span className="text-xs px-2.5 py-1 rounded-full shrink-0 font-medium bg-amber-50 text-amber-700 tabular-nums">
+                    {new Date(e.startDate).toLocaleDateString('en-NP', { day: 'numeric', month: 'short' })}
+                  </span>
+                </motion.div>
+              ))}
+            </motion.div>
+          </motion.div>
+        )}
 
         {/* Latest exam result */}
         {latestExam && (
@@ -348,10 +444,11 @@ export default function PortalDashboard() {
             </motion.div>
           </motion.div>
         )}
+        </div>
       </div>
 
       {/* All clear */}
-      {pendingFees.length === 0 && homework.length === 0 && todaysRoutine.length === 0 && recentNotices.length === 0 && !latestExam && attendance && (
+      {pendingFees.length === 0 && homework.length === 0 && todaysRoutine.length === 0 && recentNotices.length === 0 && !latestExam && upcomingExams.length === 0 && upcomingEvents.length === 0 && attendance && (
         <motion.div
           variants={cardVariants}
           initial="initial"

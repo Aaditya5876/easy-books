@@ -1,20 +1,25 @@
 import { useState } from 'react';
 import { X, Minus, Calculator, RefreshCw, CalendarDays } from 'lucide-react';
-import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { useAuth } from '@/lib/AuthContext';
 import CalculatorPage from '@/pages/Calculator';
 import CurrencyConverterPage from '@/pages/CurrencyConverter';
 import CalendarPageComp from '@/pages/CalendarPage';
 
-const TOOLS = [
+const ALL_TOOLS = [
   { id: 'calculator', label: 'Calculator', icon: Calculator, component: CalculatorPage },
-  { id: 'currency', label: 'Currency Converter', icon: RefreshCw, component: CurrencyConverterPage },
-  { id: 'calendar', label: 'Calendar', icon: CalendarDays, component: CalendarPageComp },
+  { id: 'currency', label: 'Currency Converter', icon: RefreshCw, component: CurrencyConverterPage, businessOnly: true },
+  { id: 'calendar', label: 'Calendar', icon: CalendarDays, component: CalendarPageComp, businessOnly: true },
 ];
 
 export default function FloatingToolWindow({ activeTool, onClose }) {
   const [minimized, setMinimized] = useState(false);
   const [activeTab, setActiveTab] = useState(activeTool || 'calculator');
+  const { user } = useAuth();
+  // Currency Converter and generic Calendar are business-only — schools have
+  // their own dedicated Calendar and Events module instead.
+  const isSchool = user?.defaultCompany?.businessType === 'SCHOOL';
+  const TOOLS = isSchool ? ALL_TOOLS.filter(t => !t.businessOnly) : ALL_TOOLS;
 
   if (!activeTool) return null;
 

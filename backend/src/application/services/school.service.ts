@@ -1,18 +1,22 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../../../core/db/psql/prisma.client';
 import { SmsService } from './sms.service';
 import { AiService } from './ai.service';
+import { InventoryServiceImpl } from './inventory.service.impl';
+import { PortalNotificationService } from './portal-notification.service';
+import { adToBs, isValidBsYearMonth } from '@easy-books/shared';
 
 // Forms send whole entity objects (with id/relations/_count) and bare "YYYY-MM-DD"
 // strings; Prisma rejects unknown keys and date-only strings. Whitelist + coerce here
 // so every create/update accepts what the UI actually sends.
-const DATE_KEYS = new Set(['startDate', 'endDate', 'dueDate', 'examDate', 'dateOfBirth', 'admissionDate', 'expiresAt']);
+const DATE_KEYS = new Set(['startDate', 'endDate', 'dueDate', 'invoiceDate', 'examDate', 'dateOfBirth', 'admissionDate', 'expiresAt']);
 
 function clean(data: any, allowed: string[], intKeys: string[] = []) {
   const out: any = {};
   for (const k of allowed) {
     if (data?.[k] === undefined) continue;
     let v = data[k];
+    if (typeof v === 'string') v = v.trim();
     if (v === '') v = null;
     if (v !== null && DATE_KEYS.has(k)) v = new Date(v);
     if (v !== null && intKeys.includes(k)) v = parseInt(String(v), 10);
@@ -27,6 +31,8 @@ export class SchoolService {
     private readonly prisma: PrismaService,
     private readonly sms: SmsService,
     private readonly ai: AiService,
+    private readonly inventory: InventoryServiceImpl,
+    private readonly portalNotifications: PortalNotificationService,
   ) {}
 
   // ── Dashboard ────────────────────────────────────────────────────────────────
@@ -125,6 +131,10 @@ export class SchoolService {
 
   async createAcademicYear(body: any) {
     const data = clean(body, ['companyId', 'name', 'startDate', 'endDate', 'isCurrent']);
+    const existing = await this.prisma.academicYear.findFirst({
+      where: { companyId: data.companyId, name: { equals: data.name, mode: 'insensitive' } },
+    });
+    if (existing) throw new ConflictException(`Academic year "${data.name}" already exists`);
     if (data.isCurrent) {
       await this.prisma.academicYear.updateMany({ where: { companyId: data.companyId }, data: { isCurrent: false } });
     }
@@ -135,6 +145,12 @@ export class SchoolService {
     const year = await this.prisma.academicYear.findFirst({ where: { id, companyId } });
     if (!year) throw new NotFoundException('Academic year not found');
     const data = clean(body, ['name', 'startDate', 'endDate', 'isCurrent']);
+    if (data.name !== undefined) {
+      const existing = await this.prisma.academicYear.findFirst({
+        where: { companyId, name: { equals: data.name, mode: 'insensitive' }, id: { not: id } },
+      });
+      if (existing) throw new ConflictException(`Academic year "${data.name}" already exists`);
+    }
     if (data.isCurrent) {
       await this.prisma.academicYear.updateMany({ where: { companyId }, data: { isCurrent: false } });
     }
@@ -159,22 +175,50 @@ export class SchoolService {
     });
   }
 
-  async createClass(body: any) {
-    return this.prisma.schoolClass.create({
-      data: clean(body, ['companyId', 'name', 'section', 'classTeacherId']),
+  // Case/whitespace-insensitive duplicate guard — the DB unique index on
+  // (companyId, name, section) is case-sensitive and doesn't trim, so
+  // "Class 1"/"class 1"/"class 1 " would otherwise all slide through as
+  // distinct rows even though they're the same class to a human.
+  private async assertClassNameFree(companyId: string, name: string, section: string | null, excludeId?: string) {
+    const existing = await this.prisma.schoolClass.findFirst({
+      where: {
+        companyId,
+        name: { equals: name, mode: 'insensitive' },
+        section: section ? { equals: section, mode: 'insensitive' } : null,
+        ...(excludeId ? { id: { not: excludeId } } : {}),
+      },
     });
+    if (existing) {
+      throw new ConflictException(
+        section ? `Class "${name}" section "${section}" already exists` : `Class "${name}" already exists`,
+      );
+    }
   }
 
-  async updateClass(id: string, body: any) {
-    const cls = await this.prisma.schoolClass.findUnique({ where: { id } });
+  async createClass(body: any) {
+    const data = clean(body, ['companyId', 'name', 'section', 'classTeacherId']);
+    await this.assertClassNameFree(data.companyId, data.name, data.section ?? null);
+    return this.prisma.schoolClass.create({ data });
+  }
+
+  async updateClass(id: string, companyId: string, body: any) {
+    const cls = await this.prisma.schoolClass.findFirst({ where: { id, companyId } });
     if (!cls) throw new NotFoundException('Class not found');
-    return this.prisma.schoolClass.update({
-      where: { id },
-      data: clean(body, ['name', 'section', 'classTeacherId']),
-    });
+    const data = clean(body, ['name', 'section', 'classTeacherId']);
+    if (data.name !== undefined || data.section !== undefined) {
+      await this.assertClassNameFree(
+        cls.companyId,
+        data.name ?? cls.name,
+        (data.section !== undefined ? data.section : cls.section) ?? null,
+        id,
+      );
+    }
+    return this.prisma.schoolClass.update({ where: { id }, data });
   }
 
   async deleteClass(id: string, companyId: string) {
+    const cls = await this.prisma.schoolClass.findFirst({ where: { id, companyId } });
+    if (!cls) throw new NotFoundException('Class not found');
     const studentCount = await this.prisma.student.count({ where: { classId: id } });
     if (studentCount > 0) throw new BadRequestException(`Cannot delete — ${studentCount} students are enrolled in this class`);
     const blockers: string[] = [];
@@ -261,8 +305,8 @@ export class SchoolService {
     });
   }
 
-  async updateStudent(id: string, body: any) {
-    const student = await this.prisma.student.findUnique({ where: { id } });
+  async updateStudent(id: string, companyId: string, body: any) {
+    const student = await this.prisma.student.findFirst({ where: { id, companyId } });
     if (!student) throw new NotFoundException('Student not found');
     return this.prisma.student.update({
       where: { id },
@@ -299,18 +343,42 @@ export class SchoolService {
     });
   }
 
+  // Same case/whitespace-insensitive gap as classes — the DB unique index on
+  // (companyId, name) is case-sensitive, so "English"/"english" would otherwise
+  // both be creatable as separate subjects.
+  private async assertSubjectNameFree(companyId: string, name: string, excludeId?: string) {
+    const existing = await this.prisma.subject.findFirst({
+      where: { companyId, name: { equals: name, mode: 'insensitive' }, ...(excludeId ? { id: { not: excludeId } } : {}) },
+    });
+    if (existing) throw new ConflictException(`Subject "${name}" already exists`);
+  }
+
   async createSubject(body: any) {
     const { classIds } = body;
     const data = clean(body, ['companyId', 'name', 'code', 'bookReference', 'chapters'], ['chapters']);
+    await this.assertSubjectNameFree(data.companyId, data.name);
+    if (classIds?.length) {
+      const owned = await this.prisma.schoolClass.count({ where: { id: { in: classIds }, companyId: data.companyId } });
+      if (owned !== classIds.length) throw new NotFoundException('One or more classes do not belong to this company');
+    }
     return this.prisma.subject.create({
       data: { ...data, classes: classIds?.length ? { create: classIds.map((classId: string) => ({ classId })) } : undefined },
       include: { classes: { include: { class: true } } },
     });
   }
 
-  async updateSubject(id: string, body: any) {
+  async updateSubject(id: string, companyId: string, body: any) {
     const { classIds } = body;
+    const subject = await this.prisma.subject.findFirst({ where: { id, companyId } });
+    if (!subject) throw new NotFoundException('Subject not found');
     const data = clean(body, ['name', 'code', 'bookReference', 'chapters'], ['chapters']);
+    if (data.name !== undefined) {
+      await this.assertSubjectNameFree(subject.companyId, data.name, id);
+    }
+    if (classIds?.length) {
+      const owned = await this.prisma.schoolClass.count({ where: { id: { in: classIds }, companyId } });
+      if (owned !== classIds.length) throw new NotFoundException('One or more classes do not belong to this company');
+    }
     return this.prisma.$transaction(async (tx) => {
       if (classIds !== undefined) {
         await tx.subjectClass.deleteMany({ where: { subjectId: id } });
@@ -371,6 +439,10 @@ export class SchoolService {
 
   async saveAttendance(companyId: string, classId: string, date: string, academicYearId: string | undefined, entries: Array<{ studentId: string; status: string; notes?: string }>) {
     const targetDate = new Date(date);
+
+    const studentIds = [...new Set(entries.map(e => e.studentId))];
+    const ownedCount = await this.prisma.student.count({ where: { id: { in: studentIds }, companyId } });
+    if (ownedCount !== studentIds.length) throw new NotFoundException('One or more students do not belong to this company');
 
     // Snapshot prior status so re-saving an unchanged day doesn't re-notify guardians
     const existing = await this.prisma.studentAttendance.findMany({
@@ -512,14 +584,18 @@ export class SchoolService {
     });
   }
 
-  async updateFeeStructure(id: string, body: any) {
+  async updateFeeStructure(id: string, companyId: string, body: any) {
+    const structure = await this.prisma.feeStructure.findFirst({ where: { id, companyId } });
+    if (!structure) throw new NotFoundException('Fee structure not found');
     return this.prisma.feeStructure.update({
       where: { id },
       data: clean(body, ['classId', 'feeHeadId', 'name', 'amount', 'frequency']),
     });
   }
 
-  async deleteFeeStructure(id: string) {
+  async deleteFeeStructure(id: string, companyId: string) {
+    const structure = await this.prisma.feeStructure.findFirst({ where: { id, companyId } });
+    if (!structure) throw new NotFoundException('Fee structure not found');
     return this.prisma.feeStructure.delete({ where: { id } });
   }
 
@@ -570,7 +646,10 @@ export class SchoolService {
   }
 
   async createFeeInvoice(body: any) {
-    const data = clean(body, ['companyId', 'studentId', 'month', 'description', 'paidAmount', 'discount', 'fine', 'dueDate', 'status', 'notes']);
+    const data = clean(body, ['companyId', 'studentId', 'month', 'description', 'paidAmount', 'discount', 'fine', 'invoiceDate', 'dueDate', 'status', 'notes']);
+    if (data.month && !isValidBsYearMonth(data.month)) {
+      throw new BadRequestException('month must be in BS "YYYY-MM" format, e.g. 2083-05');
+    }
     const rows: Array<{ description: string; amount: number; feeHeadId?: string | null; inventoryItemId?: string | null; quantity?: number | null }> =
       Array.isArray(body.items) && body.items.length
         ? body.items.map((it: any) => ({
@@ -584,40 +663,44 @@ export class SchoolService {
         : [{ description: data.description || 'Fee', amount: Number(body.totalAmount), feeHeadId: body.feeHeadId || null }];
 
     const totalAmount = rows.reduce((sum, r) => sum + r.amount, 0);
+    const invoiceNo = await this.nextInvoiceNo(data.companyId);
 
     return this.prisma.$transaction(async (tx) => {
       for (const row of rows) {
         if (!row.inventoryItemId) continue;
         const qty = row.quantity ?? 0;
         if (qty <= 0) throw new BadRequestException('Quantity is required for inventory items');
-        const item = await tx.inventoryItem.findFirst({ where: { id: row.inventoryItemId, companyId: data.companyId, deletedAt: null } });
-        if (!item) throw new NotFoundException('Inventory item not found');
-        const quantityBefore = Number(item.quantity);
-        const quantityAfter = quantityBefore - qty;
-        if (quantityAfter < 0) throw new BadRequestException(`Not enough stock for "${item.itemName}" — only ${quantityBefore} left`);
-        await tx.inventoryItem.update({ where: { id: item.id }, data: { quantity: quantityAfter } });
-        await tx.inventoryAdjustment.create({
-          data: {
-            companyId: data.companyId,
-            inventoryItemId: item.id,
-            adjustmentType: 'SUBTRACTION',
-            quantityBefore,
-            quantityChange: -qty,
-            quantityAfter,
-            reason: `Billed on fee invoice (${data.month || ''})`.trim(),
-            dateAd: new Date(),
-          },
-        });
+        await this.inventory.decrementForReferenceTx(
+          tx, data.companyId, row.inventoryItemId, qty,
+          `Billed on fee invoice (${data.month || ''})`.trim(),
+        );
       }
 
       return tx.feeInvoice.create({
-        data: { ...data, totalAmount, items: { create: rows } },
+        data: { ...data, invoiceNo, totalAmount, items: { create: rows } },
         include: { items: { include: { feeHead: { select: { name: true } }, inventoryItem: { select: { itemName: true, unit: true } } } } },
       });
     });
   }
 
+  private async nextInvoiceNo(companyId: string): Promise<string> {
+    const bsYear = (adToBs(new Date()) || '').split('-')[0] || String(new Date().getFullYear());
+    const company = await this.prisma.company.findUnique({
+      where: { id: companyId },
+      select: { feeInvoiceSequence: true, feeInvoiceYear: true },
+    });
+    const seq = company?.feeInvoiceYear === bsYear ? (company.feeInvoiceSequence ?? 0) + 1 : 1;
+    await this.prisma.company.update({
+      where: { id: companyId },
+      data: { feeInvoiceSequence: seq, feeInvoiceYear: bsYear },
+    });
+    return `INV-${bsYear}-${String(seq).padStart(4, '0')}`;
+  }
+
   async generateBulkInvoices(companyId: string, classId: string, month: string, feeStructureIds: string[]) {
+    if (!isValidBsYearMonth(month)) {
+      throw new BadRequestException('month must be in BS "YYYY-MM" format, e.g. 2083-05');
+    }
     const students = await this.prisma.student.findMany({
       where: { companyId, classId, status: 'ACTIVE' },
     });
@@ -661,12 +744,14 @@ export class SchoolService {
 
   // ── Exam Results ──────────────────────────────────────────────────────────────
 
-  async listExamResults(companyId: string, examName?: string, studentId?: string) {
+  async listExamResults(companyId: string, examName?: string, studentId?: string, classId?: string, subjectId?: string) {
     return this.prisma.examResult.findMany({
       where: {
         companyId,
         ...(examName ? { examName } : {}),
         ...(studentId ? { studentId } : {}),
+        ...(classId ? { student: { classId } } : {}),
+        ...(subjectId ? { subjectId } : {}),
       },
       orderBy: { createdAt: 'desc' },
       include: {
@@ -741,7 +826,21 @@ export class SchoolService {
       if (!exam) throw new NotFoundException('Exam not found');
       data.examName = exam.name;
     }
-    return this.prisma.examResult.create({ data });
+    const result = await this.prisma.examResult.create({ data });
+
+    try {
+      await this.portalNotifications.notifyStudent(data.companyId, result.studentId, {
+        title: '📊 New exam result available',
+        message: `Your result for "${result.examName}" has been published — tap to view your marks.`,
+        link: '/portal/results',
+        referenceType: 'EXAM_RESULT',
+        referenceId: result.id,
+      });
+    } catch (err) {
+      console.error(`Exam result notification failed for student ${result.studentId}:`, (err as Error).message);
+    }
+
+    return result;
   }
 
   async updateExamResult(id: string, companyId: string, body: any) {
@@ -753,13 +852,70 @@ export class SchoolService {
       if (!exam) throw new NotFoundException('Exam not found');
       data.examName = exam.name;
     }
-    return this.prisma.examResult.update({ where: { id }, data });
+    const result = await this.prisma.examResult.update({ where: { id }, data });
+
+    try {
+      await this.portalNotifications.notifyStudent(companyId, result.studentId, {
+        title: '📊 Exam result updated',
+        message: `Your result for "${result.examName}" has been updated — tap to view your marks.`,
+        link: '/portal/results',
+        referenceType: 'EXAM_RESULT',
+        referenceId: result.id,
+      });
+    } catch (err) {
+      console.error(`Exam result notification failed for student ${result.studentId}:`, (err as Error).message);
+    }
+
+    return result;
   }
 
   async deleteExamResult(id: string, companyId: string) {
     const existing = await this.prisma.examResult.findFirst({ where: { id, companyId } });
     if (!existing) throw new NotFoundException('Exam result not found');
     return this.prisma.examResult.delete({ where: { id } });
+  }
+
+  // One subject's marks for a whole class in one call — a teacher entering
+  // marks for 40 students one-by-one via createExamResult doesn't scale.
+  // Re-uses create/updateExamResult per student so exam-name resolution and
+  // the portal notification stay in one place.
+  async bulkUpsertExamResults(
+    companyId: string,
+    data: {
+      examId: string;
+      subjectId: string;
+      totalMarks: number;
+      examDate?: string;
+      entries: { studentId: string; marksObtained: number }[];
+    },
+  ) {
+    const exam = await this.prisma.exam.findFirst({ where: { id: data.examId, companyId } });
+    if (!exam) throw new NotFoundException('Exam not found');
+
+    let created = 0;
+    let updated = 0;
+    for (const entry of data.entries) {
+      const existing = await this.prisma.examResult.findFirst({
+        where: { companyId, studentId: entry.studentId, subjectId: data.subjectId, examName: exam.name },
+      });
+      const payload = {
+        companyId,
+        studentId: entry.studentId,
+        subjectId: data.subjectId,
+        examId: data.examId,
+        marksObtained: entry.marksObtained,
+        totalMarks: data.totalMarks,
+        examDate: data.examDate,
+      };
+      if (existing) {
+        await this.updateExamResult(existing.id, companyId, payload);
+        updated++;
+      } else {
+        await this.createExamResult(payload);
+        created++;
+      }
+    }
+    return { created, updated };
   }
 
   // ── Exam Schedules ────────────────────────────────────────────────────────────
@@ -790,9 +946,29 @@ export class SchoolService {
     roomNumber?: string;
     notes?: string;
   }) {
-    return this.prisma.examSchedule.create({
+    const schedule = await this.prisma.examSchedule.create({
       data: { ...data, examDate: new Date(data.examDate) },
     });
+
+    const students = await this.prisma.student.findMany({
+      where: { companyId: data.companyId, classId: data.classId, status: 'ACTIVE' },
+      select: { id: true },
+    });
+    for (const s of students) {
+      try {
+        await this.portalNotifications.notifyStudent(data.companyId, s.id, {
+          title: '📅 Exam scheduled',
+          message: `"${data.examName}" has been scheduled — check your exam date.`,
+          link: '/portal/exam-schedule',
+          referenceType: 'EXAM_SCHEDULE',
+          referenceId: schedule.id,
+        });
+      } catch (err) {
+        console.error(`Exam schedule notification failed for student ${s.id}:`, (err as Error).message);
+      }
+    }
+
+    return schedule;
   }
 
   // Creates one date-sheet in one go: a shared exam name/class plus a table of
@@ -820,16 +996,57 @@ export class SchoolService {
         }),
       ),
     );
+
+    // One notification per date-sheet, not per row — a date-sheet is many
+    // rows (one per subject) from a single admin action.
+    const students = await this.prisma.student.findMany({
+      where: { companyId: body.companyId, classId: body.classId, status: 'ACTIVE' },
+      select: { id: true },
+    });
+    for (const s of students) {
+      try {
+        await this.portalNotifications.notifyStudent(body.companyId, s.id, {
+          title: '📅 Exam schedule published',
+          message: `The date-sheet for "${body.examName}" is now available — check your exam dates and start preparing!`,
+          link: '/portal/exam-schedule',
+          referenceType: 'EXAM_SCHEDULE',
+          referenceId: body.classId,
+        });
+      } catch (err) {
+        console.error(`Exam schedule notification failed for student ${s.id}:`, (err as Error).message);
+      }
+    }
+
     return { created: created.length };
   }
 
   async updateExamSchedule(id: string, companyId: string, body: any) {
     const existing = await this.prisma.examSchedule.findFirst({ where: { id, companyId } });
     if (!existing) throw new NotFoundException('Exam schedule not found');
-    return this.prisma.examSchedule.update({
+    const updated = await this.prisma.examSchedule.update({
       where: { id },
       data: clean(body, ['classId', 'subjectId', 'examName', 'examDate', 'startTime', 'endTime', 'roomNumber', 'notes']),
     });
+
+    const students = await this.prisma.student.findMany({
+      where: { companyId, classId: updated.classId, status: 'ACTIVE' },
+      select: { id: true },
+    });
+    for (const s of students) {
+      try {
+        await this.portalNotifications.notifyStudent(companyId, s.id, {
+          title: '📅 Exam schedule updated',
+          message: `"${updated.examName}" schedule has changed — check the latest date and time.`,
+          link: '/portal/exam-schedule',
+          referenceType: 'EXAM_SCHEDULE',
+          referenceId: updated.id,
+        });
+      } catch (err) {
+        console.error(`Exam schedule notification failed for student ${s.id}:`, (err as Error).message);
+      }
+    }
+
+    return updated;
   }
 
   async deleteExamSchedule(id: string, companyId: string) {
@@ -848,17 +1065,58 @@ export class SchoolService {
     });
   }
 
+  // A full weekly routine is built one period-cell at a time (up to ~48 calls
+  // for one class), so notifying on every upsert would spam students with
+  // dozens of pings while an admin is mid-edit. Instead, throttle: only notify
+  // once per class per 10-minute window — an admin editing a whole week's
+  // grid in one sitting produces exactly one notification, not one per cell.
+  private static readonly ROUTINE_NOTIFY_THROTTLE_MS = 10 * 60 * 1000;
+
   async upsertTimetableEntry(body: any) {
     const data = clean(
       body,
       ['companyId', 'classId', 'subjectId', 'teacherId', 'dayOfWeek', 'periodNumber', 'startTime', 'endTime', 'roomNumber'],
       ['dayOfWeek', 'periodNumber'],
     );
-    return this.prisma.timetableEntry.upsert({
+    const cls = await this.prisma.schoolClass.findFirst({ where: { id: data.classId, companyId: data.companyId } });
+    if (!cls) throw new NotFoundException('Class not found');
+    const entry = await this.prisma.timetableEntry.upsert({
       where: { classId_dayOfWeek_periodNumber: { classId: data.classId, dayOfWeek: data.dayOfWeek, periodNumber: data.periodNumber } },
       create: data,
       update: { subjectId: data.subjectId, teacherId: data.teacherId, startTime: data.startTime, endTime: data.endTime, roomNumber: data.roomNumber },
     });
+
+    try {
+      const recent = await this.prisma.portalNotification.findFirst({
+        where: { companyId: data.companyId, referenceType: 'ROUTINE_UPDATE', referenceId: data.classId },
+        orderBy: { createdAt: 'desc' },
+        select: { createdAt: true },
+      });
+      const throttled = recent && Date.now() - recent.createdAt.getTime() < SchoolService.ROUTINE_NOTIFY_THROTTLE_MS;
+      if (!throttled) {
+        const students = await this.prisma.student.findMany({
+          where: { companyId: data.companyId, classId: data.classId, status: 'ACTIVE' },
+          select: { id: true },
+        });
+        for (const s of students) {
+          try {
+            await this.portalNotifications.notifyStudent(data.companyId, s.id, {
+              title: '🕐 Class routine updated',
+              message: 'Your class timetable has been updated — tap to see the latest schedule.',
+              link: '/portal/timetable',
+              referenceType: 'ROUTINE_UPDATE',
+              referenceId: data.classId,
+            });
+          } catch (err) {
+            console.error(`Routine notification failed for student ${s.id}:`, (err as Error).message);
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Routine notification throttle check failed:', (err as Error).message);
+    }
+
+    return entry;
   }
 
   async deleteTimetableEntry(id: string, companyId: string) {
@@ -876,7 +1134,32 @@ export class SchoolService {
 
   async createNotice(body: any) {
     const data = clean(body, ['companyId', 'title', 'content', 'targetAudience', 'isPublished', 'expiresAt']);
-    return this.prisma.schoolNotice.create({ data: { ...data, publishedAt: new Date() } });
+    const notice = await this.prisma.schoolNotice.create({ data: { ...data, publishedAt: new Date() } });
+
+    // Best-effort, per student — a notification failure must never block the
+    // notice itself, and one student's failure must not skip the rest of the
+    // batch. TEACHERS-only notices don't reach the student portal.
+    if (notice.isPublished && notice.targetAudience !== 'TEACHERS') {
+      const students = await this.prisma.student.findMany({
+        where: { companyId: data.companyId, status: 'ACTIVE' },
+        select: { id: true },
+      });
+      for (const s of students) {
+        try {
+          await this.portalNotifications.notifyStudent(data.companyId, s.id, {
+            title: 'New notice published',
+            message: notice.title,
+            link: '/portal/notices',
+            referenceType: 'SCHOOL_NOTICE',
+            referenceId: notice.id,
+          });
+        } catch (err) {
+          console.error(`Notice portal notification failed for student ${s.id}:`, (err as Error).message);
+        }
+      }
+    }
+
+    return notice;
   }
 
   async updateNotice(id: string, companyId: string, body: any) {
@@ -938,9 +1221,30 @@ export class SchoolService {
   }
 
   async createStudyMaterial(body: any) {
-    return this.prisma.studyMaterial.create({
-      data: clean(body, ['companyId', 'title', 'fileUrl', 'fileType', 'classId', 'subjectId', 'description', 'uploadedBy']),
+    const data = clean(body, ['companyId', 'title', 'fileUrl', 'fileType', 'classId', 'subjectId', 'description', 'uploadedBy']);
+    const material = await this.prisma.studyMaterial.create({ data });
+
+    // classId is optional on this model — null means school-wide, so notify
+    // every active student rather than skipping (matches the Notices pattern).
+    const students = await this.prisma.student.findMany({
+      where: { companyId: data.companyId, status: 'ACTIVE', ...(data.classId ? { classId: data.classId } : {}) },
+      select: { id: true },
     });
+    for (const s of students) {
+      try {
+        await this.portalNotifications.notifyStudent(data.companyId, s.id, {
+          title: '📘 New study material',
+          message: `"${material.title}" has been added to your class materials — tap to view or download.`,
+          link: '/portal/study-materials',
+          referenceType: 'STUDY_MATERIAL',
+          referenceId: material.id,
+        });
+      } catch (err) {
+        console.error(`Study material notification failed for student ${s.id}:`, (err as Error).message);
+      }
+    }
+
+    return material;
   }
 
   async deleteStudyMaterial(id: string, companyId: string) {
@@ -963,18 +1267,57 @@ export class SchoolService {
   }
 
   async createHomework(body: any) {
-    return this.prisma.homework.create({
-      data: clean(body, ['companyId', 'classId', 'subjectId', 'title', 'description', 'dueDate', 'fileUrl']),
+    const data = clean(body, ['companyId', 'classId', 'subjectId', 'title', 'description', 'dueDate', 'fileUrl']);
+    const homework = await this.prisma.homework.create({ data });
+
+    const students = await this.prisma.student.findMany({
+      where: { companyId: data.companyId, classId: data.classId, status: 'ACTIVE' },
+      select: { id: true },
     });
+    for (const s of students) {
+      try {
+        await this.portalNotifications.notifyStudent(data.companyId, s.id, {
+          title: '📝 New homework assigned',
+          message: `"${homework.title}" has been assigned — due ${homework.dueDate.toLocaleDateString('en-NP', { day: 'numeric', month: 'short', year: 'numeric' })}. Don't forget to complete it on time!`,
+          link: '/portal/homework',
+          referenceType: 'HOMEWORK',
+          referenceId: homework.id,
+        });
+      } catch (err) {
+        console.error(`Homework notification failed for student ${s.id}:`, (err as Error).message);
+      }
+    }
+
+    return homework;
   }
 
   async updateHomework(id: string, companyId: string, body: any) {
     const hw = await this.prisma.homework.findFirst({ where: { id, companyId } });
     if (!hw) throw new NotFoundException('Homework not found');
-    return this.prisma.homework.update({
+    const updated = await this.prisma.homework.update({
       where: { id },
       data: clean(body, ['classId', 'subjectId', 'title', 'description', 'dueDate', 'fileUrl']),
     });
+
+    const students = await this.prisma.student.findMany({
+      where: { companyId, classId: updated.classId, status: 'ACTIVE' },
+      select: { id: true },
+    });
+    for (const s of students) {
+      try {
+        await this.portalNotifications.notifyStudent(companyId, s.id, {
+          title: '📝 Homework updated',
+          message: `"${updated.title}" has been updated — due ${updated.dueDate.toLocaleDateString('en-NP', { day: 'numeric', month: 'short', year: 'numeric' })}.`,
+          link: '/portal/homework',
+          referenceType: 'HOMEWORK',
+          referenceId: updated.id,
+        });
+      } catch (err) {
+        console.error(`Homework notification failed for student ${s.id}:`, (err as Error).message);
+      }
+    }
+
+    return updated;
   }
 
   async deleteHomework(id: string, companyId: string) {
@@ -1037,6 +1380,10 @@ export class SchoolService {
     const book = await this.prisma.book.findFirst({ where: { id: data.bookId, companyId: data.companyId } });
     if (!book) throw new NotFoundException('Book not found');
     if (book.availableCopies < 1) throw new BadRequestException('No copies available');
+    if (data.studentId) {
+      const student = await this.prisma.student.findFirst({ where: { id: data.studentId, companyId: data.companyId } });
+      if (!student) throw new NotFoundException('Student not found');
+    }
     const [issue] = await this.prisma.$transaction([
       this.prisma.bookIssue.create({ data: { ...data, status: 'ISSUED', issueDate: new Date() } }),
       this.prisma.book.update({ where: { id: data.bookId }, data: { availableCopies: { decrement: 1 } } }),
@@ -1113,13 +1460,39 @@ export class SchoolService {
     if (room._count.allocations >= room.capacity) throw new BadRequestException('Room is at full capacity');
     const existing = await this.prisma.hostelAllocation.findFirst({ where: { studentId: data.studentId, companyId: data.companyId, isActive: true } });
     if (existing) throw new BadRequestException('Student already has an active hostel allocation');
-    return this.prisma.hostelAllocation.create({ data: { ...data, startDate: data.startDate ?? new Date() } });
+    const allocation = await this.prisma.hostelAllocation.create({ data: { ...data, startDate: data.startDate ?? new Date() } });
+
+    try {
+      await this.portalNotifications.notifyStudent(data.companyId, data.studentId, {
+        title: 'Hostel room assigned',
+        message: `You've been assigned to Room ${room.roomNumber}${room.floor ? ` (${room.floor})` : ''}.`,
+        referenceType: 'HOSTEL_ALLOCATION',
+        referenceId: allocation.id,
+      });
+    } catch (err) {
+      console.error('Hostel allocation notification failed:', (err as Error).message);
+    }
+
+    return allocation;
   }
 
   async deallocateStudent(id: string, companyId: string) {
-    const alloc = await this.prisma.hostelAllocation.findFirst({ where: { id, companyId } });
+    const alloc = await this.prisma.hostelAllocation.findFirst({ where: { id, companyId }, include: { room: { select: { roomNumber: true } } } });
     if (!alloc) throw new NotFoundException('Allocation not found');
-    return this.prisma.hostelAllocation.update({ where: { id }, data: { isActive: false, endDate: new Date() } });
+    const updated = await this.prisma.hostelAllocation.update({ where: { id }, data: { isActive: false, endDate: new Date() } });
+
+    try {
+      await this.portalNotifications.notifyStudent(companyId, alloc.studentId, {
+        title: 'Hostel room removed',
+        message: `You've been removed from Room ${alloc.room?.roomNumber ?? '—'}.`,
+        referenceType: 'HOSTEL_ALLOCATION',
+        referenceId: alloc.id,
+      });
+    } catch (err) {
+      console.error('Hostel deallocation notification failed:', (err as Error).message);
+    }
+
+    return updated;
   }
 
   // ── Transport ─────────────────────────────────────────────────────────────────
@@ -1175,12 +1548,39 @@ export class SchoolService {
     const data = clean(body, ['companyId', 'routeId', 'studentId', 'pickupStop']);
     const existing = await this.prisma.studentTransport.findFirst({ where: { studentId: data.studentId, companyId: data.companyId, isActive: true } });
     if (existing) throw new BadRequestException('Student is already assigned to a transport route');
-    return this.prisma.studentTransport.create({ data });
+    const route = await this.prisma.transportRoute.findFirst({ where: { id: data.routeId, companyId: data.companyId }, select: { routeName: true } });
+    const assignment = await this.prisma.studentTransport.create({ data });
+
+    try {
+      await this.portalNotifications.notifyStudent(data.companyId, data.studentId, {
+        title: 'Transport route assigned',
+        message: `You've been added to the ${route?.routeName ?? 'transport'} route${data.pickupStop ? `, pickup at ${data.pickupStop}` : ''}.`,
+        referenceType: 'TRANSPORT_ASSIGNMENT',
+        referenceId: assignment.id,
+      });
+    } catch (err) {
+      console.error('Transport assignment notification failed:', (err as Error).message);
+    }
+
+    return assignment;
   }
 
   async removeStudentTransport(id: string, companyId: string) {
-    const assignment = await this.prisma.studentTransport.findFirst({ where: { id, companyId } });
+    const assignment = await this.prisma.studentTransport.findFirst({ where: { id, companyId }, include: { route: { select: { routeName: true } } } });
     if (!assignment) throw new NotFoundException('Assignment not found');
-    return this.prisma.studentTransport.update({ where: { id }, data: { isActive: false } });
+    const updated = await this.prisma.studentTransport.update({ where: { id }, data: { isActive: false } });
+
+    try {
+      await this.portalNotifications.notifyStudent(companyId, assignment.studentId, {
+        title: 'Transport route removed',
+        message: `You've been removed from the ${assignment.route?.routeName ?? 'transport'} route.`,
+        referenceType: 'TRANSPORT_ASSIGNMENT',
+        referenceId: assignment.id,
+      });
+    } catch (err) {
+      console.error('Transport removal notification failed:', (err as Error).message);
+    }
+
+    return updated;
   }
 }

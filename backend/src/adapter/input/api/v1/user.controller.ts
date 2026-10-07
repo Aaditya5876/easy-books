@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Body, Param, Query, Req } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Body, Param, Query, Req } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { UserServiceImpl } from '../../../../application/services/user.service.impl';
 import { Roles } from '../../../../modules/decorators/roles.decorator';
@@ -17,13 +17,27 @@ export class UserController {
     return this.service.listCompanyUsers(companyId);
   }
 
+  // SUPER_ADMIN only — creates a new client company + its first ADMIN login
+  // for sales-led onboarding. Placed before ':id'-style routes below is not
+  // required here (literal 'provision-client' segment never collides with a
+  // param route), kept next to 'invite' for readability.
+  @Post('provision-client')
+  @Roles('SUPER_ADMIN')
+  @ApiOperation({ summary: "Create a new client company and its first ADMIN login (sales-led onboarding)" })
+  provisionClient(
+    @Body() body: { companyName: string; businessType: string; adminName: string; adminEmail: string; enabledModules?: string[] },
+    @Req() req: any,
+  ) {
+    return this.service.provisionClient(req.user.sub, body);
+  }
+
   @Post('invite')
   @Roles('ADMIN')
   @ApiOperation({ summary: 'Invite a user to the company (creates user if not exists)' })
   @ApiQuery({ name: 'companyId', required: true })
   invite(
     @Query('companyId') companyId: string,
-    @Body() body: { email: string; name: string; role: string },
+    @Body() body: { email: string; name: string; role: string; staffTags?: string[] },
     @Req() req: any,
   ) {
     return this.service.inviteUser(companyId, body, req.user.role);
@@ -36,9 +50,53 @@ export class UserController {
   changeRole(
     @Param('id') userId: string,
     @Query('companyId') companyId: string,
-    @Body() body: { role: string },
+    @Body() body: { role: string; staffTags?: string[] },
     @Req() req: any,
   ) {
-    return this.service.changeRole(userId, companyId, body.role, req.user.role);
+    return this.service.changeRole(userId, companyId, body.role, req.user.role, body.staffTags);
+  }
+
+  @Patch(':id/max-companies')
+  @Roles('SUPER_ADMIN')
+  @ApiOperation({ summary: 'Set how many companies this user may self-serve create (e.g. after they buy another school)' })
+  updateMaxCompanies(@Param('id') id: string, @Body('maxCompanies') maxCompanies: number) {
+    return this.service.updateMaxCompanies(id, maxCompanies);
+  }
+
+  @Post(':id/reset-password')
+  @Roles('ADMIN')
+  @ApiOperation({ summary: "Generate a new temp password for a user who lost theirs (forces a change on next login)" })
+  @ApiQuery({ name: 'companyId', required: true })
+  resetPassword(
+    @Param('id') userId: string,
+    @Query('companyId') companyId: string,
+    @Req() req: any,
+  ) {
+    return this.service.resetPassword(userId, companyId, req.user.role);
+  }
+
+  @Patch(':id/status')
+  @Roles('ADMIN')
+  @ApiOperation({ summary: 'Suspend or restore a single user login without touching the rest of the company' })
+  @ApiQuery({ name: 'companyId', required: true })
+  setUserActive(
+    @Param('id') userId: string,
+    @Query('companyId') companyId: string,
+    @Body('isActive') isActive: boolean,
+    @Req() req: any,
+  ) {
+    return this.service.setUserActive(userId, companyId, isActive, req.user.role, req.user.sub);
+  }
+
+  @Delete(':id')
+  @Roles('ADMIN')
+  @ApiOperation({ summary: 'Remove a user from the company' })
+  @ApiQuery({ name: 'companyId', required: true })
+  remove(
+    @Param('id') userId: string,
+    @Query('companyId') companyId: string,
+    @Req() req: any,
+  ) {
+    return this.service.removeUser(userId, companyId, req.user.role, req.user.sub);
   }
 }

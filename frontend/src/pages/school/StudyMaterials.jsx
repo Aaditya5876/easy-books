@@ -1,11 +1,14 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Trash2, FileText, Download, BookOpen, Filter } from 'lucide-react';
+import { Plus, Trash2, Download, BookOpen } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { studyMaterialsApi, classesApi, subjectsApi, uploadApi } from '@/api';
 import apiClient from '@/api/client';
+import StaffCombobox from '@/components/shared/StaffCombobox';
 import { getActiveCompanyId } from '@/lib/companyContext';
 import { filterSubjectsByClass } from '@/lib/subjectFilter';
+import { useRole } from '@/lib/useRole';
+import { confirm } from '@/lib/confirm';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -32,6 +35,7 @@ function UploadDialog({ open, onClose, classes, subjects, companyId }) {
   const [form, setForm] = useState({ title: '', classId: '', subjectId: '', description: '', uploadedBy: '' });
   const [file, setFile] = useState(null);
   const [uploading, setUploading] = useState(false);
+  const [errors, setErrors] = useState({});
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   const save = useMutation({
@@ -46,15 +50,22 @@ function UploadDialog({ open, onClose, classes, subjects, companyId }) {
 
   async function handleSubmit(e) {
     e.preventDefault();
-    if (!form.title.trim()) { toast.error(t('materials.titleRequired', { defaultValue: 'Title is required' })); return; }
-    if (!file) { toast.error(t('materials.selectFile', { defaultValue: 'Please select a file' })); return; }
+    const errs = {};
+    if (!form.title.trim()) errs.title = t('materials.titleRequired', { defaultValue: 'Title is required' });
+    if (!file) errs.file = t('materials.selectFile', { defaultValue: 'Please select a file' });
+    if (Object.keys(errs).length) {
+      setErrors(errs);
+      toast.error(Object.values(errs)[0]);
+      return;
+    }
+    setErrors({});
     setUploading(true);
     try {
       const res = await uploadApi.upload(file);
       const fileUrl = res.data?.url || res.data?.fileUrl || res.data?.path;
       if (!fileUrl) throw new Error('No URL returned from upload');
       save.mutate({ ...form, companyId, fileUrl, fileType: getFileType(fileUrl) });
-    } catch (err) {
+    } catch {
       toast.error(t('materials.fileUploadFailed', { defaultValue: 'File upload failed' }));
     } finally {
       setUploading(false);
@@ -68,7 +79,8 @@ function UploadDialog({ open, onClose, classes, subjects, companyId }) {
         <form onSubmit={handleSubmit} className="space-y-4 pt-2">
           <div className="space-y-1.5">
             <Label>{t('materials.title', { defaultValue: 'Title *' })}</Label>
-            <Input placeholder={t('materials.titlePlaceholder', { defaultValue: 'e.g. Chapter 3 Notes' })} value={form.title} onChange={e => set('title', e.target.value)} />
+            <Input placeholder={t('materials.titlePlaceholder', { defaultValue: 'e.g. Chapter 3 Notes' })} value={form.title} onChange={e => { set('title', e.target.value); if (errors.title) setErrors(er => ({ ...er, title: undefined })); }} />
+            {errors.title && <p className="text-xs text-red-600">{errors.title}</p>}
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
@@ -92,11 +104,12 @@ function UploadDialog({ open, onClose, classes, subjects, companyId }) {
           </div>
           <div className="space-y-1.5">
             <Label>{t('materials.uploadedBy', { defaultValue: 'Uploaded By' })}</Label>
-            <Input placeholder={t('materials.uploadedByPlaceholder', { defaultValue: 'Teacher name' })} value={form.uploadedBy} onChange={e => set('uploadedBy', e.target.value)} />
+            <StaffCombobox displayValue={form.uploadedBy} onSelect={name => set('uploadedBy', name)} placeholder={t('materials.uploadedByPlaceholder', { defaultValue: 'Search staff…' })} />
           </div>
           <div className="space-y-1.5">
             <Label>{t('materials.file', { defaultValue: 'File *' })}</Label>
-            <input type="file" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" onChange={e => setFile(e.target.files[0])} className="w-full text-sm border rounded-md px-3 py-2 cursor-pointer" />
+            <input type="file" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" onChange={e => { setFile(e.target.files[0]); if (errors.file) setErrors(er => ({ ...er, file: undefined })); }} className="w-full text-sm border rounded-md px-3 py-2 cursor-pointer" />
+            {errors.file && <p className="text-xs text-red-600">{errors.file}</p>}
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose}>{t('materials.cancel', { defaultValue: 'Cancel' })}</Button>
@@ -113,6 +126,7 @@ function UploadDialog({ open, onClose, classes, subjects, companyId }) {
 export default function StudyMaterials() {
   const { t } = useTranslation();
   const companyId = getActiveCompanyId();
+  const { canManageAcademicContent } = useRole();
   const qc = useQueryClient();
   const [showUpload, setShowUpload] = useState(false);
   const [filterClass, setFilterClass] = useState('');
@@ -152,9 +166,11 @@ export default function StudyMaterials() {
           <h1 className="text-2xl font-bold">{t('materials.pageTitle', { defaultValue: 'Study Materials' })}</h1>
           <p className="text-muted-foreground text-sm mt-1">{t('materials.filesUploaded', { defaultValue: '{{count}} files uploaded', count: materials.length })}</p>
         </div>
-        <Button onClick={() => setShowUpload(true)}>
-          <Plus className="w-4 h-4 mr-2" /> {t('materials.uploadMaterial', { defaultValue: 'Upload Material' })}
-        </Button>
+        {canManageAcademicContent && (
+          <Button onClick={() => setShowUpload(true)}>
+            <Plus className="w-4 h-4 mr-2" /> {t('materials.uploadMaterial', { defaultValue: 'Upload Material' })}
+          </Button>
+        )}
       </div>
 
       {/* Filters */}
@@ -200,12 +216,18 @@ export default function StudyMaterials() {
                     <Download className="w-3.5 h-3.5 mr-1.5" /> {t('materials.download', { defaultValue: 'Download' })}
                   </Button>
                 </a>
-                <button
-                  onClick={() => { if (confirm(t('materials.deleteConfirm', { defaultValue: 'Delete this material?' }))) remove.mutate(mat.id); }}
-                  className="p-2 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600 transition-colors"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
+                {canManageAcademicContent && (
+                  <button
+                    onClick={async () => {
+                      const ok = await confirm({ description: t('materials.deleteConfirm', { defaultValue: 'Delete this material?' }), variant: 'destructive' });
+                      if (!ok) return;
+                      remove.mutate(mat.id);
+                    }}
+                    className="p-2 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600 transition-colors"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                )}
               </div>
             </div>
           ))}

@@ -60,6 +60,18 @@ export function formatBsDate(bsDateStr) {
   return `${parts[2]} ${NEPALI_MONTHS[month] || ''} ${parts[0]}`;
 }
 
+// Format a canonical invoice-month string ("2083-05") as "Bhadra 2083" for
+// display. Falls back to the raw string for anything that isn't strict
+// "YYYY-MM" (e.g. legacy/free-form data), so it never throws on bad input.
+export function formatBsYearMonth(yearMonth) {
+  if (!yearMonth) return '';
+  const parts = yearMonth.split('-');
+  if (parts.length !== 2) return yearMonth;
+  const [year, month] = parts;
+  const idx = parseInt(month, 10) - 1;
+  return NEPALI_MONTHS[idx] ? `${NEPALI_MONTHS[idx]} ${year}` : yearMonth;
+}
+
 // Get current fiscal year in BS
 export function getCurrentFiscalYear() {
   const today = getTodayBS();

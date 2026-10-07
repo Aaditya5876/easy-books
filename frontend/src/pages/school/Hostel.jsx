@@ -4,6 +4,7 @@ import { Plus, Pencil, Trash2, Home, UserMinus } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { hostelApi } from '@/api';
 import StudentCombobox from '@/components/shared/StudentCombobox';
+import { confirm } from '@/lib/confirm';
 
 import { getActiveCompanyId } from '@/lib/companyContext';
 import { Button } from '@/components/ui/button';
@@ -22,6 +23,7 @@ function RoomDialog({ open, onClose, initial, companyId }) {
     roomNumber: initial.roomNumber, floor: initial.floor || '', capacity: initial.capacity,
     monthlyFee: initial.monthlyFee, facilities: initial.facilities || '',
   } : EMPTY_ROOM);
+  const [errors, setErrors] = useState({});
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   const save = useMutation({
@@ -32,7 +34,13 @@ function RoomDialog({ open, onClose, initial, companyId }) {
 
   function handleSubmit(e) {
     e.preventDefault();
-    if (!form.roomNumber.trim()) { toast.error(t('hostel.roomNumberRequired', { defaultValue: 'Room number is required' })); return; }
+    if (!form.roomNumber.trim()) {
+      const msg = t('hostel.roomNumberRequired', { defaultValue: 'Room number is required' });
+      setErrors({ roomNumber: msg });
+      toast.error(msg);
+      return;
+    }
+    setErrors({});
     save.mutate({ ...form, companyId, capacity: Number(form.capacity), monthlyFee: Number(form.monthlyFee) });
   }
 
@@ -44,7 +52,8 @@ function RoomDialog({ open, onClose, initial, companyId }) {
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label>{t('hostel.roomNumber', { defaultValue: 'Room Number *' })}</Label>
-              <Input placeholder={t('hostel.roomNumberPlaceholder', { defaultValue: 'e.g. 101, A-12' })} value={form.roomNumber} onChange={e => set('roomNumber', e.target.value)} />
+              <Input placeholder={t('hostel.roomNumberPlaceholder', { defaultValue: 'e.g. 101, A-12' })} value={form.roomNumber} onChange={e => { set('roomNumber', e.target.value); if (errors.roomNumber) setErrors({}); }} />
+              {errors.roomNumber && <p className="text-xs text-red-600">{errors.roomNumber}</p>}
             </div>
             <div className="space-y-1.5">
               <Label>{t('hostel.floor', { defaultValue: 'Floor' })}</Label>
@@ -79,6 +88,7 @@ function AllocateDialog({ open, onClose, rooms, companyId }) {
   const { t } = useTranslation();
   const qc = useQueryClient();
   const [form, setForm] = useState({ roomId: '', studentId: '' });
+  const [errors, setErrors] = useState({});
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   const allocate = useMutation({
@@ -94,8 +104,15 @@ function AllocateDialog({ open, onClose, rooms, companyId }) {
 
   function handleSubmit(e) {
     e.preventDefault();
-    if (!form.roomId) { toast.error(t('hostel.selectARoom', { defaultValue: 'Select a room' })); return; }
-    if (!form.studentId) { toast.error(t('hostel.selectAStudent', { defaultValue: 'Select a student' })); return; }
+    const errs = {};
+    if (!form.roomId) errs.roomId = t('hostel.selectARoom', { defaultValue: 'Select a room' });
+    if (!form.studentId) errs.studentId = t('hostel.selectAStudent', { defaultValue: 'Select a student' });
+    if (Object.keys(errs).length) {
+      setErrors(errs);
+      toast.error(Object.values(errs)[0]);
+      return;
+    }
+    setErrors({});
     allocate.mutate({ companyId, roomId: form.roomId, studentId: form.studentId });
   }
 
@@ -108,7 +125,7 @@ function AllocateDialog({ open, onClose, rooms, companyId }) {
         <form onSubmit={handleSubmit} className="space-y-4 pt-2">
           <div className="space-y-1.5">
             <Label>{t('hostel.roomLabel', { defaultValue: 'Room *' })}</Label>
-            <select className="w-full border rounded-md px-3 py-2 text-sm bg-background" value={form.roomId} onChange={e => set('roomId', e.target.value)}>
+            <select className="w-full border rounded-md px-3 py-2 text-sm bg-background" value={form.roomId} onChange={e => { set('roomId', e.target.value); if (errors.roomId) setErrors(er => ({ ...er, roomId: undefined })); }}>
               <option value="">{t('hostel.selectRoom', { defaultValue: 'Select room…' })}</option>
               {availableRooms.map(r => (
                 <option key={r.id} value={r.id}>
@@ -121,14 +138,16 @@ function AllocateDialog({ open, onClose, rooms, companyId }) {
                 </option>
               ))}
             </select>
+            {errors.roomId && <p className="text-xs text-red-600">{errors.roomId}</p>}
           </div>
           <div className="space-y-1.5">
             <Label>{t('hostel.studentLabel', { defaultValue: 'Student *' })}</Label>
             <StudentCombobox
               value={form.studentId}
-              onChange={id => set('studentId', id)}
+              onChange={id => { set('studentId', id); if (errors.studentId) setErrors(er => ({ ...er, studentId: undefined })); }}
               placeholder={t('hostel.selectStudent', { defaultValue: 'Select student…' })}
             />
+            {errors.studentId && <p className="text-xs text-red-600">{errors.studentId}</p>}
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose}>{t('hostel.cancel', { defaultValue: 'Cancel' })}</Button>
@@ -147,6 +166,9 @@ export default function Hostel() {
   const [tab, setTab] = useState('rooms');
   const [roomDialog, setRoomDialog] = useState(null);
   const [allocDialog, setAllocDialog] = useState(false);
+  const [residentSearch, setResidentSearch] = useState('');
+  const [classFilter, setClassFilter] = useState('');
+  const [roomFilter, setRoomFilter] = useState('');
 
   const { data: rooms = [], isLoading: loadingRooms } = useQuery({
     queryKey: ['hostel-rooms', companyId],
@@ -178,6 +200,16 @@ export default function Hostel() {
 
   const fmtDate = (d) => d ? new Date(d).toLocaleDateString('en-NP', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
   const fmtAmt = (n) => `Rs. ${Number(n).toLocaleString('en-NP')}`;
+  const classLabel = (a) => a.student?.class ? `${a.student.class.name}${a.student.class.section ? ` (${a.student.class.section})` : ''}` : '—';
+  const roomLabel = (a) => `${a.room?.roomNumber}${a.room?.floor ? `, ${a.room.floor}` : ''}`;
+
+  const classOptions = [...new Set(allocations.map(classLabel))].sort();
+  const roomOptions = [...new Set(allocations.map(roomLabel))].sort();
+  const filteredAllocations = allocations.filter(a =>
+    (!residentSearch || (a.student?.name || '').toLowerCase().includes(residentSearch.toLowerCase())) &&
+    (!classFilter || classLabel(a) === classFilter) &&
+    (!roomFilter || roomLabel(a) === roomFilter)
+  );
 
   return (
     <div className="p-6 space-y-5">
@@ -248,7 +280,11 @@ export default function Hostel() {
                   <button onClick={() => setRoomDialog({ mode: 'edit', room })} className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors">
                     <Pencil className="w-3.5 h-3.5" />
                   </button>
-                  <button onClick={() => { if (confirm(t('hostel.confirmDeleteRoom', { defaultValue: 'Delete Room {{number}}?', number: room.roomNumber }))) removeRoom.mutate(room.id); }}
+                  <button onClick={async () => {
+                    const ok = await confirm({ description: t('hostel.confirmDeleteRoom', { defaultValue: 'Delete Room {{number}}?', number: room.roomNumber }), variant: 'destructive' });
+                    if (!ok) return;
+                    removeRoom.mutate(room.id);
+                  }}
                     className="p-1.5 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600 transition-colors">
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
@@ -260,11 +296,27 @@ export default function Hostel() {
       )}
 
       {tab === 'residents' && (
-        <div className="bg-white rounded-xl border border-border overflow-hidden">
+        <>
+          {allocations.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              <Input placeholder={t('hostel.searchResidents', { defaultValue: 'Search by student name…' })} value={residentSearch} onChange={e => setResidentSearch(e.target.value)} className="max-w-xs" />
+              <select className="h-9 border rounded-md px-3 text-sm bg-background" value={classFilter} onChange={e => setClassFilter(e.target.value)}>
+                <option value="">{t('hostel.allClasses', { defaultValue: 'All Classes' })}</option>
+                {classOptions.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+              <select className="h-9 border rounded-md px-3 text-sm bg-background" value={roomFilter} onChange={e => setRoomFilter(e.target.value)}>
+                <option value="">{t('hostel.allRooms', { defaultValue: 'All Rooms' })}</option>
+                {roomOptions.map(r => <option key={r} value={r}>{r}</option>)}
+              </select>
+            </div>
+          )}
+          <div className="bg-white rounded-xl border border-border overflow-hidden">
           {loadingAllocs ? (
             <div className="p-12 text-center text-muted-foreground text-sm">{t('hostel.loading', { defaultValue: 'Loading…' })}</div>
           ) : allocations.length === 0 ? (
             <div className="p-12 text-center text-muted-foreground text-sm">{t('hostel.noResidents', { defaultValue: 'No residents currently allocated.' })}</div>
+          ) : filteredAllocations.length === 0 ? (
+            <div className="p-12 text-center text-muted-foreground text-sm">{t('hostel.noMatchingResidents', { defaultValue: 'No residents match your search/filters.' })}</div>
           ) : (
             <table className="w-full text-sm">
               <thead className="bg-muted/40 border-b border-border">
@@ -277,14 +329,18 @@ export default function Hostel() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {allocations.map(a => (
+                {filteredAllocations.map(a => (
                   <tr key={a.id} className="hover:bg-muted/20">
                     <td className="px-5 py-3 font-medium">{a.student?.name}</td>
-                    <td className="px-5 py-3 text-muted-foreground">{a.student?.class ? `${a.student.class.name}${a.student.class.section ? ` (${a.student.class.section})` : ''}` : '—'}</td>
-                    <td className="px-5 py-3">{t('hostel.roomTitle', { defaultValue: 'Room {{number}}', number: `${a.room?.roomNumber}${a.room?.floor ? `, ${a.room.floor}` : ''}` })}</td>
+                    <td className="px-5 py-3 text-muted-foreground">{classLabel(a)}</td>
+                    <td className="px-5 py-3">{t('hostel.roomTitle', { defaultValue: 'Room {{number}}', number: roomLabel(a) })}</td>
                     <td className="px-5 py-3 text-muted-foreground">{fmtDate(a.startDate)}</td>
                     <td className="px-5 py-3">
-                      <button onClick={() => { if (confirm(t('hostel.confirmRemoveStudent', { defaultValue: 'Remove {{name}} from hostel?', name: a.student?.name }))) deallocate.mutate(a.id); }}
+                      <button onClick={async () => {
+                        const ok = await confirm({ description: t('hostel.confirmRemoveStudent', { defaultValue: 'Remove {{name}} from hostel?', name: a.student?.name }), variant: 'destructive' });
+                        if (!ok) return;
+                        deallocate.mutate(a.id);
+                      }}
                         className="flex items-center gap-1 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 px-2 py-1 rounded transition-colors">
                         <UserMinus className="w-3.5 h-3.5" /> {t('hostel.remove', { defaultValue: 'Remove' })}
                       </button>
@@ -294,7 +350,8 @@ export default function Hostel() {
               </tbody>
             </table>
           )}
-        </div>
+          </div>
+        </>
       )}
 
       {roomDialog && (

@@ -4,6 +4,39 @@
 @tailwind components;
 @tailwind utilities;
 
+@layer components {
+  .subscription-alert-bar {
+    min-height: 48px;
+  }
+
+  .subscription-alert-copy {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  @media (max-width: 900px) {
+    .subscription-alert-bar {
+      align-items: flex-start;
+      flex-wrap: wrap;
+      padding-top: 0.625rem;
+      padding-bottom: 0.625rem;
+    }
+
+    .subscription-alert-copy {
+      flex-basis: calc(100% - 2rem);
+      white-space: normal;
+    }
+
+    .subscription-alert-actions {
+      width: 100%;
+      justify-content: flex-end;
+      margin-left: 2rem;
+    }
+  }
+}
+
 @layer base {
   :root {
     --font-sans: 'Inter', system-ui, sans-serif;

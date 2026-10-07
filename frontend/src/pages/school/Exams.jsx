@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Trophy, Pencil, Trash2, Eye, Sparkles } from 'lucide-react';
+import { Plus, Trophy, Pencil, Trash2, Eye, Sparkles, Table2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { examResultsApi, examsApi, subjectsApi, studentsApi, aiApi } from '@/api';
+import { examResultsApi, examsApi, subjectsApi, studentsApi, classesApi, aiApi } from '@/api';
+import { confirm } from '@/lib/confirm';
 import { filterSubjectsByClass } from '@/lib/subjectFilter';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import ExamSchedulePage from './ExamSchedule';
@@ -12,7 +13,11 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu';
 import { toast } from 'sonner';
+
+const classLabel = (c) => `${c.name}${c.section ? ` (${c.section})` : ''}`;
 
 // ── Add Exam (creates a tab like "First Terminal" — no marks entry here) ───────
 
@@ -20,6 +25,7 @@ function AddExamDialog({ open, onClose, companyId }) {
   const { t } = useTranslation();
   const qc = useQueryClient();
   const [form, setForm] = useState({ name: '', examDate: '', notes: '' });
+  const [errors, setErrors] = useState({});
 
   const save = useMutation({
     mutationFn: () => examsApi.create({ name: form.name.trim(), examDate: form.examDate || undefined, notes: form.notes || undefined }),
@@ -33,7 +39,13 @@ function AddExamDialog({ open, onClose, companyId }) {
 
   function handleSubmit(e) {
     e.preventDefault();
-    if (!form.name.trim()) { toast.error(t('exams.examNameRequired', { defaultValue: 'Exam name is required' })); return; }
+    if (!form.name.trim()) {
+      const msg = t('exams.examNameRequired', { defaultValue: 'Exam name is required' });
+      setErrors({ name: msg });
+      toast.error(msg);
+      return;
+    }
+    setErrors({});
     save.mutate();
   }
 
@@ -47,7 +59,8 @@ function AddExamDialog({ open, onClose, companyId }) {
         <form onSubmit={handleSubmit} className="space-y-3 pt-2">
           <div className="space-y-1.5">
             <Label>{t('exams.examNameRequiredLabel', { defaultValue: 'Exam Name *' })}</Label>
-            <Input placeholder={t('exams.examNamePlaceholder', { defaultValue: 'e.g. First Terminal 2081' })} value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
+            <Input placeholder={t('exams.examNamePlaceholder', { defaultValue: 'e.g. First Terminal 2081' })} value={form.name} onChange={e => { setForm(f => ({ ...f, name: e.target.value })); if (errors.name) setErrors({}); }} />
+            {errors.name && <p className="text-xs text-red-600">{errors.name}</p>}
           </div>
           <div className="space-y-1.5">
             <Label>{t('exams.examDate', { defaultValue: 'Exam Date' })}</Label>
@@ -84,6 +97,7 @@ function ReportCardEntryDialog({ open, onClose, initial, exams, companyId }) {
     examDate: initial?.examDate ? initial.examDate.split('T')[0] : '',
   });
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const [errors, setErrors] = useState({});
 
   const { data: student } = useQuery({
     queryKey: ['student-by-id', studentId],
@@ -109,10 +123,18 @@ function ReportCardEntryDialog({ open, onClose, initial, exams, companyId }) {
 
   function handleSubmit(e) {
     e.preventDefault();
-    if (!studentId) { toast.error(t('exams.selectAStudent', { defaultValue: 'Select a student' })); return; }
-    if (!form.examId) { toast.error(t('exams.selectAnExam', { defaultValue: 'Select an exam' })); return; }
-    if (!form.subjectId) { toast.error(t('exams.selectASubject', { defaultValue: 'Select a subject' })); return; }
-    if (!form.marksObtained || !form.totalMarks) { toast.error(t('exams.enterMarks', { defaultValue: 'Enter marks' })); return; }
+    const errs = {};
+    if (!studentId) errs.studentId = t('exams.selectAStudent', { defaultValue: 'Select a student' });
+    if (!form.examId) errs.examId = t('exams.selectAnExam', { defaultValue: 'Select an exam' });
+    if (!form.subjectId) errs.subjectId = t('exams.selectASubject', { defaultValue: 'Select a subject' });
+    if (!form.marksObtained) errs.marksObtained = t('exams.enterMarks', { defaultValue: 'Enter marks' });
+    if (!form.totalMarks) errs.totalMarks = t('exams.enterMarks', { defaultValue: 'Enter marks' });
+    if (Object.keys(errs).length) {
+      setErrors(errs);
+      toast.error(Object.values(errs)[0]);
+      return;
+    }
+    setErrors({});
     save.mutate({
       studentId,
       examId: form.examId,
@@ -136,11 +158,12 @@ function ReportCardEntryDialog({ open, onClose, initial, exams, companyId }) {
             <Label>{t('exams.studentRequired', { defaultValue: 'Student *' })}</Label>
             <StudentCombobox
               value={studentId}
-              onChange={setStudentId}
+              onChange={v => { setStudentId(v); if (errors.studentId) setErrors(er => ({ ...er, studentId: undefined })); }}
               status=""
               placeholder={t('exams.selectStudent', { defaultValue: 'Search by name or roll number…' })}
               disabled={isEdit}
             />
+            {errors.studentId && <p className="text-xs text-red-600">{errors.studentId}</p>}
             <p className="text-xs text-muted-foreground">{t('exams.sameNameHint', { defaultValue: 'If more than one student shares a name, keep typing their roll number to narrow it down.' })}</p>
           </div>
 
@@ -155,28 +178,32 @@ function ReportCardEntryDialog({ open, onClose, initial, exams, companyId }) {
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label>{t('exams.examRequired', { defaultValue: 'Exam *' })}</Label>
-              <select className="w-full border rounded-md px-3 py-2 text-sm bg-background" value={form.examId} onChange={e => set('examId', e.target.value)}>
+              <select className="w-full border rounded-md px-3 py-2 text-sm bg-background" value={form.examId} onChange={e => { set('examId', e.target.value); if (errors.examId) setErrors(er => ({ ...er, examId: undefined })); }}>
                 <option value="">{t('exams.selectExam', { defaultValue: 'Select exam…' })}</option>
                 {exams.map(ex => <option key={ex.id} value={ex.id}>{ex.name}</option>)}
               </select>
+              {errors.examId && <p className="text-xs text-red-600">{errors.examId}</p>}
             </div>
             <div className="space-y-1.5">
               <Label>{t('exams.subjectRequired', { defaultValue: 'Subject *' })}</Label>
-              <select className="w-full border rounded-md px-3 py-2 text-sm bg-background" value={form.subjectId} onChange={e => set('subjectId', e.target.value)} disabled={!studentId}>
+              <select className="w-full border rounded-md px-3 py-2 text-sm bg-background" value={form.subjectId} onChange={e => { set('subjectId', e.target.value); if (errors.subjectId) setErrors(er => ({ ...er, subjectId: undefined })); }} disabled={!studentId}>
                 <option value="">{t('exams.selectSubject', { defaultValue: 'Select subject…' })}</option>
                 {filterSubjectsByClass(subjects, student?.classId).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
               </select>
+              {errors.subjectId && <p className="text-xs text-red-600">{errors.subjectId}</p>}
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label>{t('exams.marksObtainedRequired', { defaultValue: 'Marks Obtained *' })}</Label>
-              <Input type="number" placeholder="75" value={form.marksObtained} onChange={e => set('marksObtained', e.target.value)} />
+              <Input type="number" placeholder="75" value={form.marksObtained} onChange={e => { set('marksObtained', e.target.value); if (errors.marksObtained) setErrors(er => ({ ...er, marksObtained: undefined })); }} />
+              {errors.marksObtained && <p className="text-xs text-red-600">{errors.marksObtained}</p>}
             </div>
             <div className="space-y-1.5">
               <Label>{t('exams.totalMarksRequired', { defaultValue: 'Total Marks *' })}</Label>
-              <Input type="number" placeholder="100" value={form.totalMarks} onChange={e => set('totalMarks', e.target.value)} />
+              <Input type="number" placeholder="100" value={form.totalMarks} onChange={e => { set('totalMarks', e.target.value); if (errors.totalMarks) setErrors(er => ({ ...er, totalMarks: undefined })); }} />
+              {errors.totalMarks && <p className="text-xs text-red-600">{errors.totalMarks}</p>}
             </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
@@ -203,9 +230,181 @@ function ReportCardEntryDialog({ open, onClose, initial, exams, companyId }) {
   );
 }
 
+// ── Bulk Enter Marks (one subject, one class, every student in one screen) ─────
+
+function BulkResultEntryDialog({ open, onClose, exams, classes, companyId }) {
+  const { t } = useTranslation();
+  const qc = useQueryClient();
+  const [examId, setExamId] = useState('');
+  const [classId, setClassId] = useState('');
+  const [subjectId, setSubjectId] = useState('');
+  const [totalMarks, setTotalMarks] = useState('100');
+  const [examDate, setExamDate] = useState('');
+  const [marks, setMarks] = useState({});
+
+  const { data: subjects = [] } = useQuery({
+    queryKey: ['subjects', companyId],
+    queryFn: () => subjectsApi.list().then(r => r.data),
+  });
+  const classSubjects = filterSubjectsByClass(subjects, classId);
+  const selectedExam = exams.find(e => e.id === examId);
+
+  const { data: students = [], isLoading: loadingStudents } = useQuery({
+    queryKey: ['bulk-entry-students', classId],
+    queryFn: () => studentsApi.list({ classId }).then(r => r.data),
+    enabled: !!classId,
+  });
+
+  const { data: existingResults = [] } = useQuery({
+    queryKey: ['bulk-entry-existing', companyId, selectedExam?.name, classId, subjectId],
+    queryFn: () => examResultsApi.list({ examName: selectedExam.name, classId, subjectId }).then(r => r.data),
+    enabled: !!(selectedExam && classId && subjectId),
+  });
+
+  // Prefill from whatever's already on file — resaving a corrected sheet
+  // should update those rows, not create duplicates alongside them.
+  useEffect(() => {
+    if (!existingResults.length) return;
+    setMarks(m => {
+      const next = { ...m };
+      for (const r of existingResults) next[r.studentId] = String(Number(r.marksObtained));
+      return next;
+    });
+    setTotalMarks(String(Number(existingResults[0].totalMarks)));
+  }, [existingResults]);
+
+  useEffect(() => { setMarks({}); }, [classId, subjectId]);
+
+  const setMark = (studentId, v) => setMarks(m => ({ ...m, [studentId]: v }));
+
+  const save = useMutation({
+    mutationFn: (entries) => examResultsApi.bulkUpsert({
+      examId,
+      subjectId,
+      totalMarks: parseFloat(totalMarks),
+      examDate: examDate || undefined,
+      entries,
+    }),
+    onSuccess: (res) => {
+      qc.invalidateQueries({ queryKey: ['exam-results'] });
+      toast.success(t('exams.bulkResultsSaved', {
+        defaultValue: '{{created}} added, {{updated}} updated',
+        created: res.data.created,
+        updated: res.data.updated,
+      }));
+      onClose();
+    },
+    onError: (err) => toast.error(err?.response?.data?.message || t('exams.failedToSaveResult', { defaultValue: 'Failed to save result' })),
+  });
+
+  function handleSave() {
+    if (!examId) { toast.error(t('exams.selectAnExam', { defaultValue: 'Select an exam' })); return; }
+    if (!classId) { toast.error(t('exams.selectClassFirst', { defaultValue: 'Select a class' })); return; }
+    if (!subjectId) { toast.error(t('exams.selectASubject', { defaultValue: 'Select a subject' })); return; }
+    const total = parseFloat(totalMarks);
+    if (!total || total <= 0) { toast.error(t('exams.enterTotalMarks', { defaultValue: 'Enter total marks' })); return; }
+
+    const entries = students
+      .filter(s => marks[s.id] !== undefined && marks[s.id] !== '')
+      .map(s => ({ studentId: s.id, marksObtained: parseFloat(marks[s.id]) }));
+
+    if (!entries.length) { toast.error(t('exams.enterAtLeastOneMark', { defaultValue: 'Enter at least one mark' })); return; }
+    if (entries.some(e => e.marksObtained > total)) { toast.error(t('exams.marksExceedTotal', { defaultValue: 'A mark exceeds the total marks' })); return; }
+
+    save.mutate(entries);
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onClose}>
+      <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col">
+        <DialogHeader><DialogTitle>{t('exams.bulkEnterMarks', { defaultValue: 'Bulk Enter Marks' })}</DialogTitle></DialogHeader>
+        <p className="text-xs text-muted-foreground -mt-1">
+          {t('exams.bulkEnterMarksHint', { defaultValue: "Pick an exam, class, and subject, then enter every student's marks on one screen instead of one dialog per student." })}
+        </p>
+
+        <div className="grid grid-cols-2 gap-3 pt-1 shrink-0">
+          <div className="space-y-1.5">
+            <Label>{t('exams.examRequired', { defaultValue: 'Exam *' })}</Label>
+            <select className="w-full border rounded-md px-3 py-2 text-sm bg-background" value={examId} onChange={e => setExamId(e.target.value)}>
+              <option value="">{t('exams.selectExam', { defaultValue: 'Select exam…' })}</option>
+              {exams.map(ex => <option key={ex.id} value={ex.id}>{ex.name}</option>)}
+            </select>
+          </div>
+          <div className="space-y-1.5">
+            <Label>{t('exams.classRequired', { defaultValue: 'Class *' })}</Label>
+            <select className="w-full border rounded-md px-3 py-2 text-sm bg-background" value={classId} onChange={e => { setClassId(e.target.value); setSubjectId(''); }}>
+              <option value="">{t('exams.selectClass', { defaultValue: 'Select class…' })}</option>
+              {classes.map(c => <option key={c.id} value={c.id}>{classLabel(c)}</option>)}
+            </select>
+          </div>
+          <div className="space-y-1.5">
+            <Label>{t('exams.subjectRequired', { defaultValue: 'Subject *' })}</Label>
+            <select className="w-full border rounded-md px-3 py-2 text-sm bg-background" value={subjectId} onChange={e => setSubjectId(e.target.value)} disabled={!classId}>
+              <option value="">{t('exams.selectSubject', { defaultValue: 'Select subject…' })}</option>
+              {classSubjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </select>
+          </div>
+          <div className="space-y-1.5">
+            <Label>{t('exams.totalMarksRequired', { defaultValue: 'Total Marks *' })}</Label>
+            <Input type="number" value={totalMarks} onChange={e => setTotalMarks(e.target.value)} />
+          </div>
+          <div className="space-y-1.5">
+            <Label>{t('exams.examDate', { defaultValue: 'Exam Date' })}</Label>
+            <Input type="date" value={examDate} onChange={e => setExamDate(e.target.value)} />
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto border rounded-md mt-2 min-h-[200px]">
+          {!classId || !subjectId ? (
+            <div className="p-8 text-center text-sm text-muted-foreground">{t('exams.pickClassAndSubject', { defaultValue: 'Pick a class and subject to load students' })}</div>
+          ) : loadingStudents ? (
+            <div className="p-8 text-center text-sm text-muted-foreground">{t('exams.loadingStudents', { defaultValue: 'Loading students…' })}</div>
+          ) : students.length === 0 ? (
+            <div className="p-8 text-center text-sm text-muted-foreground">{t('exams.noActiveStudentsInClass', { defaultValue: 'No students in this class' })}</div>
+          ) : (
+            <table className="w-full text-sm">
+              <thead className="bg-muted/40 border-b border-border sticky top-0">
+                <tr>
+                  <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground uppercase">{t('exams.rollNumber', { defaultValue: 'Roll No.' })}</th>
+                  <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground uppercase">{t('exams.student', { defaultValue: 'Student' })}</th>
+                  <th className="text-right px-3 py-2 text-xs font-medium text-muted-foreground uppercase">{t('exams.marksObtainedRequired', { defaultValue: 'Marks Obtained' })}</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {students.map(s => (
+                  <tr key={s.id}>
+                    <td className="px-3 py-1.5 text-muted-foreground text-xs">{s.rollNumber || '—'}</td>
+                    <td className="px-3 py-1.5">{s.name}</td>
+                    <td className="px-3 py-1.5 text-right">
+                      <Input
+                        type="number"
+                        className="w-24 ml-auto text-right h-8"
+                        placeholder="—"
+                        value={marks[s.id] ?? ''}
+                        onChange={e => setMark(s.id, e.target.value)}
+                      />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+
+        <DialogFooter className="shrink-0">
+          <Button type="button" variant="outline" onClick={onClose}>{t('exams.cancel', { defaultValue: 'Cancel' })}</Button>
+          <Button onClick={handleSave} disabled={save.isPending}>
+            {save.isPending ? t('exams.saving', { defaultValue: 'Saving…' }) : t('exams.saveAllMarks', { defaultValue: 'Save All Marks' })}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // ── View Report Card (read-only, aggregates all subjects for one student+exam) ─
 
-function printReportCard(data) {
+function printReportCard(data, aiRemark) {
   const { student, results, company, examName, totalObtained, totalMax, percentage } = data;
   const className = student.class ? `${student.class.name}${student.class.section ? ` (${student.class.section})` : ''}` : '—';
   const rows = results.map(r => `
@@ -230,6 +429,7 @@ function printReportCard(data) {
       table{width:100%;border-collapse:collapse;font-size:13px;margin-top:16px}
       th{background:#f0f0f0;border:1px solid #ddd;padding:8px;text-align:left}
       .total{font-weight:bold;background:#f8f8f8}
+      .remark{margin-top:20px;font-size:13px;line-height:1.6}
       .footer{margin-top:50px;display:flex;justify-content:space-between;font-size:13px}
       @media print{button{display:none}}
     </style></head>
@@ -263,6 +463,7 @@ function printReportCard(data) {
         </tr>
       </tbody>
     </table>
+    ${aiRemark ? `<div class="remark"><strong>Remark:</strong> ${aiRemark}</div>` : ''}
     <div class="footer">
       <div>Class Teacher: _______________</div>
       <div>Principal: _______________</div>
@@ -274,8 +475,9 @@ function printReportCard(data) {
   setTimeout(() => w.print(), 300);
 }
 
-function ViewReportCardDialog({ open, onClose, studentId, examName }) {
+function ViewReportCardDialog({ open, onClose, studentId, examName, onEdit }) {
   const { t } = useTranslation();
+  const qc = useQueryClient();
   const [aiComment, setAiComment] = useState('');
   const [aiLoading, setAiLoading] = useState(false);
 
@@ -285,11 +487,22 @@ function ViewReportCardDialog({ open, onClose, studentId, examName }) {
     enabled: open && !!studentId && !!examName,
   });
 
+  const remove = useMutation({
+    mutationFn: (id) => examResultsApi.remove(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['exam-results'] });
+      qc.invalidateQueries({ queryKey: ['report-card', studentId, examName] });
+      toast.success(t('exams.resultDeleted', { defaultValue: 'Result deleted' }));
+    },
+    onError: () => toast.error(t('exams.failedToDelete', { defaultValue: 'Failed to delete' })),
+  });
+
   async function generateComment() {
     if (!cardData) return;
     setAiLoading(true);
     try {
       const res = await aiApi.reportCardComment({
+        companyId: getActiveCompanyId(),
         studentName: cardData.student?.name,
         examResults: cardData.results?.map(r => ({
           subject: r.subject?.name || 'Subject',
@@ -317,6 +530,35 @@ function ViewReportCardDialog({ open, onClose, studentId, examName }) {
             <div className="text-sm bg-muted rounded-md p-3 space-y-2">
               <div className="font-medium">{cardData.student?.name}</div>
               <div className="text-muted-foreground">{t('exams.subjectsOverall', { count: cardData.results?.length, percentage: cardData.percentage, defaultValue: '{{count}} subjects · {{percentage}}% overall' })}</div>
+
+              <div className="divide-y divide-border/60 border-y border-border/60 -mx-1 my-2">
+                {cardData.results?.map(r => (
+                  <div key={r.id} className="flex items-center justify-between gap-2 px-1 py-1.5">
+                    <span className="truncate">{r.subject?.name || '—'}</span>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="tabular-nums text-xs">
+                        {Number(r.marksObtained).toFixed(0)}/{Number(r.totalMarks).toFixed(0)}
+                        {r.grade ? ` · ${r.grade}` : ''}
+                      </span>
+                      <button
+                        onClick={() => { onClose(); onEdit(r); }}
+                        className="p-1 rounded hover:bg-background text-muted-foreground hover:text-foreground transition-colors"
+                        title={t('exams.editThisResult', { defaultValue: 'Edit this result' })}
+                      >
+                        <Pencil className="w-3 h-3" />
+                      </button>
+                      <button
+                        onClick={async () => { if (await confirm({ description: t('exams.deleteThisResult', { defaultValue: 'Delete this result?' }), variant: 'destructive' })) remove.mutate(r.id); }}
+                        className="p-1 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600 transition-colors"
+                        title={t('exams.delete', { defaultValue: 'Delete' })}
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
               <button
                 type="button"
                 onClick={generateComment}
@@ -339,7 +581,7 @@ function ViewReportCardDialog({ open, onClose, studentId, examName }) {
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>{t('exams.close', { defaultValue: 'Close' })}</Button>
           {cardData && (
-            <Button onClick={() => printReportCard(cardData)}>
+            <Button onClick={() => printReportCard(cardData, aiComment)}>
               {t('exams.print', { defaultValue: 'Print' })}
             </Button>
           )}
@@ -352,11 +594,12 @@ function ViewReportCardDialog({ open, onClose, studentId, examName }) {
 export default function Exams() {
   const { t } = useTranslation();
   const companyId = getActiveCompanyId();
-  const qc = useQueryClient();
   const [examDialog, setExamDialog] = useState(false);
   const [entryDialog, setEntryDialog] = useState(null);
+  const [bulkEntryDialog, setBulkEntryDialog] = useState(false);
   const [viewDialog, setViewDialog] = useState(null);
   const [filterExam, setFilterExam] = useState('');
+  const [filterClass, setFilterClass] = useState('ALL');
   const [activeTab, setActiveTab] = useState('results');
 
   const { data: exams = [] } = useQuery({
@@ -365,19 +608,61 @@ export default function Exams() {
     enabled: !!companyId,
   });
 
-  const { data: results = [], isLoading } = useQuery({
-    queryKey: ['exam-results', companyId, filterExam],
-    queryFn: () => examResultsApi.list(filterExam ? { examName: filterExam } : {}).then(r => r.data),
+  const { data: classes = [] } = useQuery({
+    queryKey: ['classes', companyId],
+    queryFn: () => classesApi.list().then(r => r.data),
     enabled: !!companyId,
   });
 
-  const remove = useMutation({
-    mutationFn: (id) => examResultsApi.remove(id),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['exam-results'] }); toast.success(t('exams.resultDeleted', { defaultValue: 'Result deleted' })); },
-    onError: () => toast.error(t('exams.failedToDelete', { defaultValue: 'Failed to delete' })),
+  const { data: results = [], isLoading } = useQuery({
+    queryKey: ['exam-results', companyId, filterExam, filterClass],
+    queryFn: () => examResultsApi.list({
+      ...(filterExam ? { examName: filterExam } : {}),
+      ...(filterClass !== 'ALL' ? { classId: filterClass } : {}),
+    }).then(r => r.data),
+    enabled: !!companyId,
   });
 
-  const filtered = filterExam ? results.filter(r => r.examName === filterExam) : results;
+  // One row per student per exam (not per subject) — group the flat
+  // ExamResult rows and pivot each student's subjects into columns.
+  const subjectColumns = useMemo(() => {
+    const seen = new Map();
+    for (const r of results) {
+      if (r.subjectId && !seen.has(r.subjectId)) seen.set(r.subjectId, r.subject?.name || '—');
+    }
+    return Array.from(seen, ([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
+  }, [results]);
+
+  // One row per student — when a single exam is selected, each row is that
+  // exam's subject breakdown; under "All Exams" a student would otherwise
+  // appear once per exam, so instead we collapse to one row per student and
+  // let the view action pick which exam's report card to open.
+  const pivotedRows = useMemo(() => {
+    const groups = new Map();
+    for (const r of results) {
+      const key = filterExam ? `${r.studentId}|${r.examName}` : r.studentId;
+      if (!groups.has(key)) {
+        groups.set(key, { studentId: r.studentId, student: r.student, examNames: new Set(), bySubject: new Map() });
+      }
+      const g = groups.get(key);
+      g.examNames.add(r.examName);
+      if (filterExam) g.bySubject.set(r.subjectId, r);
+    }
+    return Array.from(groups.values())
+      .map(g => {
+        const subjectResults = Array.from(g.bySubject.values());
+        const totalObtained = subjectResults.reduce((s, r) => s + Number(r.marksObtained), 0);
+        const totalMax = subjectResults.reduce((s, r) => s + Number(r.totalMarks), 0);
+        return {
+          ...g,
+          examNames: Array.from(g.examNames).sort(),
+          totalObtained,
+          totalMax,
+          percentage: totalMax > 0 ? (totalObtained / totalMax) * 100 : 0,
+        };
+      })
+      .sort((a, b) => (a.student?.name || '').localeCompare(b.student?.name || ''));
+  }, [results, filterExam]);
 
   return (
     <div className="p-6 space-y-5">
@@ -402,32 +687,44 @@ export default function Exams() {
             <Button onClick={() => setEntryDialog({ mode: 'add' })}>
               <Plus className="w-4 h-4 mr-2" /> {t('exams.addReportCard', { defaultValue: 'Add Report Card' })}
             </Button>
+            <Button variant="outline" onClick={() => setBulkEntryDialog(true)}>
+              <Table2 className="w-4 h-4 mr-2" /> {t('exams.bulkEnterMarks', { defaultValue: 'Bulk Enter Marks' })}
+            </Button>
           </div>
 
-          {exams.length > 0 && (
-            <div className="flex gap-2 flex-wrap">
-              <button
-                onClick={() => setFilterExam('')}
-                className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${!filterExam ? 'bg-primary text-primary-foreground border-primary' : 'border-border hover:bg-muted'}`}
-              >
-                {t('exams.allExams', { defaultValue: 'All Exams' })}
-              </button>
-              {exams.map(ex => (
+          <div className="flex flex-wrap items-center gap-3">
+            {exams.length > 0 && (
+              <div className="flex gap-2 flex-wrap">
                 <button
-                  key={ex.id}
-                  onClick={() => setFilterExam(ex.name)}
-                  className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${filterExam === ex.name ? 'bg-primary text-primary-foreground border-primary' : 'border-border hover:bg-muted'}`}
+                  onClick={() => setFilterExam('')}
+                  className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${!filterExam ? 'bg-primary text-primary-foreground border-primary' : 'border-border hover:bg-muted'}`}
                 >
-                  {ex.name}
+                  {t('exams.allExams', { defaultValue: 'All Exams' })}
                 </button>
-              ))}
-            </div>
-          )}
+                {exams.map(ex => (
+                  <button
+                    key={ex.id}
+                    onClick={() => setFilterExam(ex.name)}
+                    className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${filterExam === ex.name ? 'bg-primary text-primary-foreground border-primary' : 'border-border hover:bg-muted'}`}
+                  >
+                    {ex.name}
+                  </button>
+                ))}
+              </div>
+            )}
+            <Select value={filterClass} onValueChange={setFilterClass}>
+              <SelectTrigger className="w-44 ml-auto"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">{t('exams.allClasses', { defaultValue: 'All Classes' })}</SelectItem>
+                {classes.map(c => <SelectItem key={c.id} value={c.id}>{classLabel(c)}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
 
           <div className="bg-card rounded-xl border border-border overflow-hidden">
             {isLoading ? (
               <div className="p-12 text-center text-muted-foreground text-sm">{t('exams.loadingResults', { defaultValue: 'Loading results…' })}</div>
-            ) : filtered.length === 0 ? (
+            ) : pivotedRows.length === 0 ? (
               <div className="p-12 text-center">
                 <Trophy className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
                 <p className="text-muted-foreground text-sm">{t('exams.noExamResultsYet', { defaultValue: 'No exam results yet' })}</p>
@@ -440,44 +737,65 @@ export default function Exams() {
                     <tr>
                       <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('exams.student', { defaultValue: 'Student' })}</th>
                       <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('exams.class', { defaultValue: 'Class' })}</th>
-                      <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('exams.exam', { defaultValue: 'Exam' })}</th>
-                      <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('exams.subject', { defaultValue: 'Subject' })}</th>
-                      <th className="text-right px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('exams.marks', { defaultValue: 'Marks' })}</th>
-                      <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('exams.grade', { defaultValue: 'Grade' })}</th>
+                      {filterExam ? (
+                        <>
+                          {subjectColumns.map(sc => (
+                            <th key={sc.id} className="text-right px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide whitespace-nowrap">{sc.name}</th>
+                          ))}
+                          <th className="text-right px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('exams.total', { defaultValue: 'Total' })}</th>
+                          <th className="text-right px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">%</th>
+                        </>
+                      ) : (
+                        <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('exams.examsHeader', { defaultValue: 'Exams' })}</th>
+                      )}
                       <th className="px-5 py-3" />
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border">
-                    {filtered.map(r => (
-                      <tr key={r.id} className="hover:bg-muted/20">
-                        <td className="px-5 py-3 font-medium">{r.student?.name || '—'}</td>
+                    {pivotedRows.map(row => (
+                      <tr key={row.studentId} className="hover:bg-muted/20">
+                        <td className="px-5 py-3 font-medium">{row.student?.name || '—'}</td>
                         <td className="px-5 py-3 text-muted-foreground text-xs">
-                          {r.student?.class ? `${r.student.class.name}${r.student.class.section ? ` (${r.student.class.section})` : ''}` : '—'}
+                          {row.student?.class ? classLabel(row.student.class) : '—'}
                         </td>
-                        <td className="px-5 py-3 text-muted-foreground">{r.examName}</td>
-                        <td className="px-5 py-3 text-muted-foreground">{r.subject?.name || '—'}</td>
-                        <td className="px-5 py-3 text-right tabular-nums">
-                          {Number(r.marksObtained).toFixed(0)} / {Number(r.totalMarks).toFixed(0)}
-                          <span className="text-muted-foreground ml-1 text-xs">
-                            ({((Number(r.marksObtained) / Number(r.totalMarks)) * 100).toFixed(1)}%)
-                          </span>
-                        </td>
-                        <td className="px-5 py-3">
-                          {r.grade ? (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold bg-blue-100 text-blue-700">{r.grade}</span>
-                          ) : '—'}
-                        </td>
+                        {filterExam ? (
+                          <>
+                            {subjectColumns.map(sc => {
+                              const r = row.bySubject.get(sc.id);
+                              return (
+                                <td key={sc.id} className="px-5 py-3 text-right tabular-nums text-xs">
+                                  {r ? Number(r.marksObtained).toFixed(0) : '—'}
+                                </td>
+                              );
+                            })}
+                            <td className="px-5 py-3 text-right tabular-nums">{row.totalObtained} / {row.totalMax}</td>
+                            <td className="px-5 py-3 text-right tabular-nums font-medium">{row.percentage.toFixed(1)}%</td>
+                          </>
+                        ) : (
+                          <td className="px-5 py-3 text-muted-foreground text-xs">{row.examNames.join(', ')}</td>
+                        )}
                         <td className="px-5 py-3">
                           <div className="flex gap-2 justify-end">
-                            <button onClick={() => setViewDialog({ studentId: r.studentId, examName: r.examName })} className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors" title={t('exams.viewReportCard', { defaultValue: 'View report card' })}>
-                              <Eye className="w-3.5 h-3.5" />
-                            </button>
-                            <button onClick={() => setEntryDialog({ mode: 'edit', result: r })} className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors">
-                              <Pencil className="w-3.5 h-3.5" />
-                            </button>
-                            <button onClick={() => { if (window.confirm(t('exams.deleteThisResult', { defaultValue: 'Delete this result?' }))) remove.mutate(r.id); }} className="p-1.5 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600 transition-colors">
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
+                            {row.examNames.length > 1 ? (
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <button className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors" title={t('exams.viewReportCard', { defaultValue: 'View report card' })}>
+                                    <Eye className="w-3.5 h-3.5" />
+                                  </button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                  {row.examNames.map(examName => (
+                                    <DropdownMenuItem key={examName} onClick={() => setViewDialog({ studentId: row.studentId, examName })}>
+                                      {examName}
+                                    </DropdownMenuItem>
+                                  ))}
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            ) : (
+                              <button onClick={() => setViewDialog({ studentId: row.studentId, examName: row.examNames[0] })} className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors" title={t('exams.viewReportCard', { defaultValue: 'View report card' })}>
+                                <Eye className="w-3.5 h-3.5" />
+                              </button>
+                            )}
                           </div>
                         </td>
                       </tr>
@@ -514,6 +832,17 @@ export default function Exams() {
           onClose={() => setViewDialog(null)}
           studentId={viewDialog.studentId}
           examName={viewDialog.examName}
+          onEdit={(result) => setEntryDialog({ mode: 'edit', result })}
+        />
+      )}
+
+      {bulkEntryDialog && (
+        <BulkResultEntryDialog
+          open={bulkEntryDialog}
+          onClose={() => setBulkEntryDialog(false)}
+          exams={exams}
+          classes={classes}
+          companyId={companyId}
         />
       )}
     </div>

@@ -1,13 +1,17 @@
 import { Toaster } from "@/components/ui/toaster"
+import { Toaster as SonnerToaster } from "@/components/ui/sonner"
+import { ConfirmDialogHost } from "@/lib/confirm"
 import { QueryClientProvider } from '@tanstack/react-query'
 import { queryClientInstance } from '@/lib/query-client'
 import { ThemeProvider } from 'next-themes'
 import { BrowserRouter as Router, Navigate, Route, Routes } from 'react-router-dom';
 import PageNotFound from './lib/PageNotFound';
+import ErrorBoundary from '@/components/ErrorBoundary';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import { PreferencesProvider } from '@/lib/PreferencesContext';
 import UserNotRegisteredError from '@/components/UserNotRegisteredError';
 import Login from './pages/Login';
+import Terms from './pages/Terms';
 import Layout from './components/Layout';
 import Dashboard from './pages/Dashboard';
 import Ledger from './pages/Ledger';
@@ -24,12 +28,15 @@ import Calculator from './pages/Calculator';
 import CalendarPage from './pages/CalendarPage';
 import CurrencyConverter from './pages/CurrencyConverter';
 import Settings from './pages/Settings';
+import AuditLog from './pages/AuditLog';
 import Employees from './pages/Employees';
 import Attendance from './pages/Attendance';
 import Payroll from './pages/Payroll';
 import Quotations from './pages/Quotations';
 import Reports from './pages/Reports';
 import Workflow from './pages/Workflow';
+import MyAttendance from './pages/MyAttendance';
+import MyLeave from './pages/MyLeave';
 import SchoolDashboard from './pages/school/SchoolDashboard';
 import Students from './pages/school/Students';
 import Classes from './pages/school/Classes';
@@ -48,6 +55,7 @@ import Hostel from './pages/school/Hostel';
 import Transport from './pages/school/Transport';
 import SchoolReports from './pages/school/SchoolReports';
 import PortalLogin from './pages/portal/PortalLogin';
+import PortalChangePassword from './pages/portal/PortalChangePassword';
 import PortalLayout from './components/layout/PortalLayout';
 import PortalDashboard from './pages/portal/PortalDashboard';
 import PortalAttendance from './pages/portal/PortalAttendance';
@@ -56,43 +64,51 @@ import PortalResults from './pages/portal/PortalResults';
 import PortalHomework from './pages/portal/PortalHomework';
 import PortalNotices from './pages/portal/PortalNotices';
 import PortalTimetable from './pages/portal/PortalTimetable';
+import PortalStudyMaterials from './pages/portal/PortalStudyMaterials';
+import PortalExamSchedule from './pages/portal/PortalExamSchedule';
+import PortalEvents from './pages/portal/PortalEvents';
 import PaymentReturn from './pages/portal/PaymentReturn';
 
-// `roles` = also available to these restricted roles (TEACHER / LIBRARIAN).
+// `roles` = also available to the restricted TEACHER role.
 // Routes without `roles` are not registered for restricted roles.
 const schoolRoutes = [
-  { path: '/', page: SchoolDashboard, roles: ['TEACHER', 'LIBRARIAN'] },
-  { path: '/students', page: Students, roles: ['TEACHER', 'LIBRARIAN'] },
+  { path: '/', page: SchoolDashboard, roles: ['TEACHER'] },
+  { path: '/my-attendance', page: MyAttendance, roles: ['TEACHER'] },
+  { path: '/my-leave', page: MyLeave, roles: ['TEACHER'] },
+  { path: '/students', page: Students, roles: ['TEACHER'] },
   { path: '/classes', page: Classes, roles: ['TEACHER'] },
   { path: '/subjects', page: Subjects, roles: ['TEACHER'] },
   { path: '/fees', page: Fees },
   { path: '/exams', page: Exams, roles: ['TEACHER'] },
   { path: '/student-attendance', page: StudentAttendance, roles: ['TEACHER'] },
-  { path: '/calendar-events', page: CalendarEvents },
+  { path: '/calendar-events', page: CalendarEvents, roles: ['TEACHER'] },
   { path: '/routine', page: Routine, roles: ['TEACHER'] },
-  { path: '/notices', page: Notices, roles: ['TEACHER', 'LIBRARIAN'] },
+  { path: '/notices', page: Notices, roles: ['TEACHER'] },
   { path: '/study-materials', page: StudyMaterial, roles: ['TEACHER'] },
   { path: '/homework', page: Homework, roles: ['TEACHER'] },
-  { path: '/library', page: Library, roles: ['LIBRARIAN'] },
+  { path: '/library', page: Library },
   { path: '/hostel', page: Hostel },
   { path: '/transport', page: Transport },
-  { path: '/communication', page: Communication },
-  { path: '/memo', page: Memo },
+  // Communication and Memo are business-ERP modules (client/vendor task
+  // tracking, quotation/bill filing) — neither reaches students or parents,
+  // and Notices already covers school announcements, so they're deliberately
+  // excluded from schoolRoutes. Both remain fully intact for business companies.
   // Shared modules — reused as-is
   { path: '/employees', page: Employees },
   { path: '/attendance', page: Attendance },
   { path: '/payroll', page: Payroll },
   { path: '/ledger', page: Ledger },
   { path: '/transactions', page: Transactions },
-  { path: '/reports', page: SchoolReports },
+  { path: '/reports', page: SchoolReports, roles: ['TEACHER'] },
   { path: '/settings', page: Settings },
+  { path: '/audit-log', page: AuditLog },
 ];
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isAuthenticated, navigateToLogin, user } = useAuth();
   const isSchool = user?.defaultCompany?.businessType === 'SCHOOL';
   const role = user?.role;
-  const restrictedRole = role === 'TEACHER' || role === 'LIBRARIAN';
+  const restrictedRole = role === 'TEACHER';
 
   if (isLoadingAuth) {
     return (
@@ -105,6 +121,29 @@ const AuthenticatedApp = () => {
   if (!isAuthenticated) {
     navigateToLogin();
     return null;
+  }
+
+  // SUPER_ADMIN's job is creating/managing client companies, not running one
+  // themselves — they should never be forced to own a business/school just to
+  // have somewhere to land. With no default company, route everything to
+  // Settings → Clients (empty-state + "Create Client" form live there) instead
+  // of falling through to an empty/broken business-ERP dashboard.
+  if (role === 'SUPER_ADMIN' && !user?.defaultCompanyId) {
+    return (
+      <Routes>
+        <Route element={<Layout />}>
+          <Route path="/settings" element={<Settings />} />
+          <Route path="*" element={<Navigate to="/settings" replace state={{ tab: 'clients' }} />} />
+        </Route>
+      </Routes>
+    );
+  }
+
+  // Any other role with no company at all can't do anything in the app —
+  // surface that clearly instead of falling through to the same broken
+  // business-ERP dashboard (this was previously unreachable dead code).
+  if (role !== 'SUPER_ADMIN' && !user?.defaultCompanyId) {
+    return <UserNotRegisteredError />;
   }
 
   return (
@@ -121,6 +160,8 @@ const AuthenticatedApp = () => {
         ) : (
           <>
             <Route path="/" element={<Dashboard />} />
+            <Route path="/my-attendance" element={<MyAttendance />} />
+            <Route path="/my-leave" element={<MyLeave />} />
             <Route path="/ledger" element={<Ledger />} />
             <Route path="/transactions" element={<Transactions />} />
             <Route path="/vendors" element={<Vendors />} />
@@ -136,6 +177,7 @@ const AuthenticatedApp = () => {
             <Route path="/calendar" element={<CalendarPage />} />
             <Route path="/currency" element={<CurrencyConverter />} />
             <Route path="/settings" element={<Settings />} />
+            <Route path="/audit-log" element={<AuditLog />} />
             <Route path="/employees" element={<Employees />} />
             <Route path="/attendance" element={<Attendance />} />
             <Route path="/payroll" element={<Payroll />} />
@@ -157,24 +199,33 @@ function App() {
       <AuthProvider>
         <QueryClientProvider client={queryClientInstance}>
           <Router>
-            <Routes>
-              <Route path="/login" element={<Login />} />
-              {/* Portal — completely separate auth from admin */}
-              <Route path="/portal/login" element={<PortalLogin />} />
-              <Route path="/portal" element={<PortalLayout />}>
-                <Route index element={<PortalDashboard />} />
-                <Route path="attendance" element={<PortalAttendance />} />
-                <Route path="fees" element={<PortalFees />} />
-                <Route path="results" element={<PortalResults />} />
-                <Route path="homework" element={<PortalHomework />} />
-                <Route path="notices" element={<PortalNotices />} />
-                <Route path="timetable" element={<PortalTimetable />} />
-              </Route>
-              <Route path="/portal/payment/return" element={<PaymentReturn />} />
-              <Route path="*" element={<AuthenticatedApp />} />
-            </Routes>
+            <ErrorBoundary>
+              <Routes>
+                <Route path="/login" element={<Login />} />
+                <Route path="/terms" element={<Terms />} />
+                {/* Portal — completely separate auth from admin */}
+                <Route path="/portal/login" element={<PortalLogin />} />
+                <Route path="/portal/change-password" element={<PortalChangePassword />} />
+                <Route path="/portal" element={<PortalLayout />}>
+                  <Route index element={<PortalDashboard />} />
+                  <Route path="attendance" element={<PortalAttendance />} />
+                  <Route path="fees" element={<PortalFees />} />
+                  <Route path="results" element={<PortalResults />} />
+                  <Route path="homework" element={<PortalHomework />} />
+                  <Route path="notices" element={<PortalNotices />} />
+                  <Route path="timetable" element={<PortalTimetable />} />
+                  <Route path="study-materials" element={<PortalStudyMaterials />} />
+                  <Route path="exam-schedule" element={<PortalExamSchedule />} />
+                  <Route path="events" element={<PortalEvents />} />
+                </Route>
+                <Route path="/portal/payment/return" element={<PaymentReturn />} />
+                <Route path="*" element={<AuthenticatedApp />} />
+              </Routes>
+            </ErrorBoundary>
           </Router>
           <Toaster />
+          <SonnerToaster position="top-right" richColors />
+          <ConfirmDialogHost />
         </QueryClientProvider>
       </AuthProvider>
       </PreferencesProvider>

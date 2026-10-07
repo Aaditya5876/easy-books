@@ -24,6 +24,8 @@ export class VendorServiceImpl {
   }
 
   async update(id: string, companyId: string, dto: UpdateVendorDTO) {
+    const vendor = await this.prisma.vendor.findFirst({ where: { id, companyId, deletedAt: null } });
+    if (!vendor) throw new NotFoundException('Vendor not found');
     return this.prisma.vendor.update({ where: { id }, data: dto as any });
   }
 

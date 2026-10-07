@@ -1,15 +1,14 @@
-import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import { portalApi } from '@/api';
 import { Clock } from 'lucide-react';
 import { pageVariants, containerVariants, cardVariants } from '@/lib/portalAnimations';
+import PortalPageHeader from '@/components/portal/PortalPageHeader';
 import { useTranslation } from 'react-i18next';
 
 const DAYS = ['MONDAY','TUESDAY','WEDNESDAY','THURSDAY','FRIDAY','SATURDAY'];
 const DAY_LABEL = { MONDAY:'Monday', TUESDAY:'Tuesday', WEDNESDAY:'Wednesday', THURSDAY:'Thursday', FRIDAY:'Friday', SATURDAY:'Saturday' };
 const DAY_KEYS  = { MONDAY:'portal.monday', TUESDAY:'portal.tuesday', WEDNESDAY:'portal.wednesday', THURSDAY:'portal.thursday', FRIDAY:'portal.friday', SATURDAY:'portal.saturday' };
-const DAY_SHORT = { MONDAY:'Mon', TUESDAY:'Tue', WEDNESDAY:'Wed', THURSDAY:'Thu', FRIDAY:'Fri', SATURDAY:'Sat' };
 
 const SUBJECT_COLORS = ['#3B82F6','#10B981','#8B5CF6','#F97316','#F43F5E','#14B8A6','#F59E0B','#6366F1'];
 function subjectColor(name = '') {
@@ -22,10 +21,12 @@ const today = new Date().toLocaleDateString('en-US', { weekday: 'long' }).toUppe
 
 export default function PortalTimetable() {
   const { t } = useTranslation();
-  const [student, setStudent] = useState(null);
-  useEffect(() => {
-    try { setStudent(JSON.parse(localStorage.getItem('portal_student') || 'null')); } catch {}
-  }, []);
+
+  // Live, not the localStorage snapshot cached at login — see PortalStudyMaterials.jsx.
+  const { data: student } = useQuery({
+    queryKey: ['portal-me'],
+    queryFn: () => portalApi.me().then(r => r.data),
+  });
 
   const { data: timetable = [], isLoading } = useQuery({
     queryKey: ['portal-timetable', student?.classId],
@@ -42,7 +43,7 @@ export default function PortalTimetable() {
 
   return (
     <motion.div variants={pageVariants} initial="initial" animate="animate" exit="exit" className="p-5 md:p-7 space-y-5 max-w-7xl mx-auto">
-      <h1 className="text-2xl font-bold text-slate-900">{t('portal.routine', { defaultValue: 'Routine' })}</h1>
+      <PortalPageHeader icon={Clock} title={t('portal.routine', { defaultValue: 'Routine' })} />
 
       {isLoading ? (
         <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center text-slate-400 text-sm">{t('portal.loading', { defaultValue: 'Loading…' })}</div>

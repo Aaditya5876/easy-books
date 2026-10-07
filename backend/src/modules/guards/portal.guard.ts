@@ -1,7 +1,7 @@
 import { Injectable, CanActivate, ExecutionContext, UnauthorizedException, ForbiddenException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { JwtService } from '@nestjs/jwt';
-import { PORTAL_ROLES_KEY } from '../decorators/portal-roles.decorator';
+import { SKIP_PASSWORD_CHECK_KEY } from '../decorators/skip-password-check.decorator';
 
 @Injectable()
 export class PortalGuard implements CanActivate {
@@ -18,7 +18,7 @@ export class PortalGuard implements CanActivate {
     let payload: any;
     try {
       payload = this.jwtService.verify(token, {
-        secret: process.env.JWT_SECRET || 'easybooks-secret',
+        secret: process.env.JWT_SECRET,
       });
       if (payload.type !== 'portal') throw new UnauthorizedException('Invalid portal token');
     } catch {
@@ -26,12 +26,12 @@ export class PortalGuard implements CanActivate {
     }
     req.portalUser = payload;
 
-    const required = this.reflector.getAllAndOverride<string[]>(PORTAL_ROLES_KEY, [
+    const skipCheck = this.reflector.getAllAndOverride<boolean>(SKIP_PASSWORD_CHECK_KEY, [
       context.getHandler(),
       context.getClass(),
     ]);
-    if (required?.length && !required.includes(payload.portalType)) {
-      throw new ForbiddenException(`Portal role '${payload.portalType}' cannot access this resource`);
+    if (payload.mustChangePassword && !skipCheck) {
+      throw new ForbiddenException('PASSWORD_CHANGE_REQUIRED');
     }
 
     return true;

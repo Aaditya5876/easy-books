@@ -1,14 +1,14 @@
 import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import {
-  LayoutDashboard, BookOpen, ArrowLeftRight, Users, UserCheck,
+  LayoutDashboard, BookOpen, ArrowLeftRight, Users, UserCheck, Layers,
   Package, ShoppingCart, Receipt, FileText, MessageSquare,
   FileSpreadsheet, CalendarCheck, Banknote,
   ChevronLeft, ChevronRight, ChevronDown, ClipboardList, BarChart2,
   Kanban, UserCircle, Settings, Shield,
   GraduationCap, School, BookMarked, DollarSign, Trophy,
   Megaphone, CalendarDays, CalendarCheck2,
-  FolderOpen, Library, Home, Bus
+  FolderOpen, Library, Home, Bus, Fingerprint
 } from 'lucide-react';
 import { cn } from "@/lib/utils";
 import { useTranslation } from 'react-i18next';
@@ -23,6 +23,8 @@ const navSections = [
     activeClass: 'bg-sidebar-primary text-sidebar-primary-foreground shadow-sm',
     items: [
       { icon: LayoutDashboard, label: 'Dashboard', path: '/' },
+      { icon: Fingerprint, label: 'My Attendance', path: '/my-attendance', module: 'HRMS_ATTENDANCE' },
+      { icon: CalendarDays, label: 'My Leave', path: '/my-leave', module: 'HRMS_LEAVE' },
       { icon: BarChart2, label: 'Reports', path: '/reports' },
     ]
   },
@@ -30,9 +32,12 @@ const navSections = [
     label: 'Accounts',
     labelColor: 'text-blue-400',
     activeClass: 'bg-blue-600 text-white shadow-sm shadow-blue-900/30',
+    // Ledger/Transactions endpoints are ACCOUNTANT/ADMIN-only on the backend —
+    // keep STAFF from seeing a dead link.
+    minRole: 'accountant',
     items: [
-      { icon: BookOpen, label: 'Ledger', path: '/ledger' },
-      { icon: ArrowLeftRight, label: 'Transactions', path: '/transactions' },
+      { icon: BookOpen, label: 'Ledger', path: '/ledger', module: 'FINANCE_LEDGER' },
+      { icon: ArrowLeftRight, label: 'Transactions', path: '/transactions', module: 'FINANCE_TRANSACTIONS' },
     ]
   },
   {
@@ -42,7 +47,7 @@ const navSections = [
     items: [
       { icon: Users, label: 'Vendors', path: '/vendors' },
       { icon: UserCheck, label: 'Clients', path: '/clients' },
-      { icon: Package, label: 'Inventory', path: '/inventory' },
+      { icon: Package, label: 'Inventory', path: '/inventory', module: 'INVENTORY_STOCK' },
       { icon: ShoppingCart, label: 'Purchase', path: '/purchase' },
       { icon: Receipt, label: 'Sales', path: '/sales' },
       { icon: ClipboardList, label: 'Quotations', path: '/quotations' },
@@ -61,8 +66,8 @@ const navSections = [
     labelColor: 'text-violet-400',
     activeClass: 'bg-violet-600 text-white shadow-sm shadow-violet-900/30',
     items: [
-      { icon: FileText, label: 'Memo', path: '/memo' },
-      { icon: MessageSquare, label: 'Communication', path: '/communication' },
+      { icon: FileText, label: 'Memo', path: '/memo', module: 'COMMUNICATION_MEMO' },
+      { icon: MessageSquare, label: 'Communication', path: '/communication', module: 'COMMUNICATION' },
       { icon: FileSpreadsheet, label: 'Templates', path: '/templates' },
     ]
   },
@@ -70,12 +75,12 @@ const navSections = [
     label: 'HR',
     labelColor: 'text-sky-400',
     activeClass: 'bg-sky-600 text-white shadow-sm shadow-sky-900/30',
-    // visible to ACCOUNTANT + ADMIN
-    minRole: 'accountant',
+    // Employees/Attendance: ACCOUNTANT + ADMIN, or a STAFF member tagged HR
+    // (orStaffTag). Payroll stays ACCOUNTANT/ADMIN-only (minRole).
     items: [
-      { icon: UserCircle, label: 'Employees', path: '/employees' },
-      { icon: CalendarCheck, label: 'Attendance', path: '/attendance' },
-      { icon: Banknote, label: 'Payroll', path: '/payroll' },
+      { icon: UserCircle, label: 'Employees', path: '/employees', module: 'HRMS_EMPLOYEES', orStaffTag: 'HR' },
+      { icon: CalendarCheck, label: 'Attendance', path: '/attendance', module: 'HRMS_ATTENDANCE', orStaffTag: 'HR' },
+      { icon: Banknote, label: 'Payroll', path: '/payroll', module: 'HRMS_PAYROLL', minRole: 'accountant' },
     ]
   },
   {
@@ -85,11 +90,27 @@ const navSections = [
     minRole: 'admin',
     items: [
       { icon: Settings, label: 'Settings', path: '/settings' },
+      { icon: Shield, label: 'Audit Log', path: '/audit-log' },
     ]
   },
 ];
 
-// `roles` on an item = also visible to these restricted roles (TEACHER / LIBRARIAN).
+// SUPER_ADMIN with no company at all — App.jsx routes every path to
+// Settings -> Clients for this state, so the normal business/school nav
+// (Dashboard, Ledger, Vendors, ...) would just be dead links that bounce
+// straight back. Show only what's actually reachable.
+const superAdminNoCompanySections = [
+  {
+    label: 'Platform',
+    labelColor: 'text-sidebar-muted',
+    activeClass: 'bg-sidebar-primary text-sidebar-primary-foreground shadow-sm',
+    items: [
+      { icon: Layers, label: 'Clients', path: '/settings' },
+    ]
+  },
+];
+
+// `roles` on an item = also visible to the restricted TEACHER role.
 // Items without `roles` are hidden from restricted roles entirely.
 // `minRole` on an item mirrors the section-level gate (admin / accountant).
 // Sections are ordered by first-run dependency: Setup holds what everything
@@ -100,8 +121,13 @@ const schoolNavSections = [
     labelColor: 'text-sidebar-muted',
     activeClass: 'bg-sidebar-primary text-sidebar-primary-foreground shadow-sm',
     items: [
-      { icon: LayoutDashboard, label: 'Dashboard', path: '/', roles: ['TEACHER', 'LIBRARIAN'] },
-      { icon: BarChart2, label: 'Reports', path: '/reports' },
+      { icon: LayoutDashboard, label: 'Dashboard', path: '/', roles: ['TEACHER'] },
+      { icon: Fingerprint, label: 'My Attendance', path: '/my-attendance', roles: ['TEACHER'], module: 'HRMS_ATTENDANCE' },
+      { icon: CalendarDays, label: 'My Leave', path: '/my-leave', roles: ['TEACHER'], module: 'HRMS_LEAVE' },
+      // Reports is split by tab for TEACHER (see SchoolReports.jsx) — the backend
+      // only grants TEACHER the Attendance/Academics analytics endpoints, not
+      // Fees/Operations/Audit.
+      { icon: BarChart2, label: 'Reports', path: '/reports', roles: ['TEACHER'] },
     ]
   },
   {
@@ -109,8 +135,8 @@ const schoolNavSections = [
     labelColor: 'text-rose-400',
     activeClass: 'bg-rose-600 text-white shadow-sm shadow-rose-900/30',
     items: [
-      { icon: CalendarDays, label: 'Calendar and Events', path: '/calendar-events' },
-      { icon: UserCircle, label: 'Teachers', path: '/employees', minRole: 'accountant' },
+      { icon: CalendarDays, label: 'Calendar and Events', path: '/calendar-events', roles: ['TEACHER'] },
+      { icon: UserCircle, label: 'Employees', path: '/employees', orStaffTag: 'HR' },
       { icon: School, label: 'Classes', path: '/classes', roles: ['TEACHER'] },
       { icon: BookMarked, label: 'Subjects', path: '/subjects', roles: ['TEACHER'] },
     ]
@@ -120,12 +146,12 @@ const schoolNavSections = [
     labelColor: 'text-emerald-400',
     activeClass: 'bg-emerald-600 text-white shadow-sm shadow-emerald-900/30',
     items: [
-      { icon: GraduationCap, label: 'Students', path: '/students', roles: ['TEACHER', 'LIBRARIAN'] },
+      { icon: GraduationCap, label: 'Students', path: '/students', roles: ['TEACHER'] },
       { icon: CalendarCheck2, label: 'Attendance', path: '/student-attendance', roles: ['TEACHER'] },
-      { icon: CalendarDays, label: 'Routine', path: '/routine', roles: ['TEACHER'] },
-      { icon: Trophy, label: 'Exam', path: '/exams', roles: ['TEACHER'] },
-      { icon: FolderOpen, label: 'Study Material', path: '/study-materials', roles: ['TEACHER'] },
-      { icon: ClipboardList, label: 'Homework', path: '/homework', roles: ['TEACHER'] },
+      { icon: CalendarDays, label: 'Routine', path: '/routine', roles: ['TEACHER'], module: 'SCHOOL_ACADEMICS_ROUTINE' },
+      { icon: Trophy, label: 'Exam', path: '/exams', roles: ['TEACHER'], module: 'SCHOOL_ACADEMICS_EXAMS' },
+      { icon: FolderOpen, label: 'Study Material', path: '/study-materials', roles: ['TEACHER'], module: 'SCHOOL_ACADEMICS_STUDY_MATERIALS' },
+      { icon: ClipboardList, label: 'Homework', path: '/homework', roles: ['TEACHER'], module: 'SCHOOL_ACADEMICS_HOMEWORK' },
     ]
   },
   {
@@ -134,8 +160,10 @@ const schoolNavSections = [
     activeClass: 'bg-blue-600 text-white shadow-sm shadow-blue-900/30',
     items: [
       { icon: DollarSign, label: 'Fees', path: '/fees' },
-      { icon: BookOpen, label: 'Ledger', path: '/ledger' },
-      { icon: ArrowLeftRight, label: 'Transactions', path: '/transactions' },
+      // Ledger/Transactions endpoints are ACCOUNTANT/ADMIN-only on the backend —
+      // keep STAFF from seeing a dead link (Fees stays open to STAFF for front-desk use).
+      { icon: BookOpen, label: 'Ledger', path: '/ledger', minRole: 'accountant', module: 'FINANCE_LEDGER' },
+      { icon: ArrowLeftRight, label: 'Transactions', path: '/transactions', minRole: 'accountant', module: 'FINANCE_TRANSACTIONS' },
     ]
   },
   {
@@ -143,9 +171,11 @@ const schoolNavSections = [
     labelColor: 'text-amber-400',
     activeClass: 'bg-amber-600 text-white shadow-sm shadow-amber-900/30',
     items: [
-      { icon: Megaphone, label: 'Notices', path: '/notices', roles: ['TEACHER', 'LIBRARIAN'] },
-      { icon: MessageSquare, label: 'Communication', path: '/communication' },
-      { icon: FileText, label: 'Memo', path: '/memo' },
+      // Notices is SMS's own notice board — the shared Communication/Memo modules
+      // (client/vendor task tracking, quotation/bill filing) don't reach students
+      // or parents and are deliberately excluded here; both stay intact for
+      // business companies via the non-school sidebar/routes.
+      { icon: Megaphone, label: 'Notices', path: '/notices', roles: ['TEACHER'] },
     ]
   },
   {
@@ -153,19 +183,18 @@ const schoolNavSections = [
     labelColor: 'text-violet-400',
     activeClass: 'bg-violet-600 text-white shadow-sm shadow-violet-900/30',
     items: [
-      { icon: Library, label: 'Library', path: '/library', roles: ['LIBRARIAN'] },
-      { icon: Home, label: 'Hostel', path: '/hostel' },
-      { icon: Bus, label: 'Transport', path: '/transport' },
+      { icon: Library, label: 'Library', path: '/library', requiresStaffTag: 'LIBRARY', module: 'FACILITIES' },
+      { icon: Home, label: 'Hostel', path: '/hostel', requiresStaffTag: 'HOSTEL', module: 'FACILITIES' },
+      { icon: Bus, label: 'Transport', path: '/transport', requiresStaffTag: 'TRANSPORT', module: 'FACILITIES' },
     ]
   },
   {
     label: 'HR',
     labelColor: 'text-sky-400',
     activeClass: 'bg-sky-600 text-white shadow-sm shadow-sky-900/30',
-    minRole: 'accountant',
     items: [
-      { icon: CalendarCheck, label: 'Staff Attendance', path: '/attendance' },
-      { icon: Banknote, label: 'Payroll', path: '/payroll' },
+      { icon: CalendarCheck, label: 'Staff Attendance', path: '/attendance', module: 'HRMS_ATTENDANCE', orStaffTag: 'HR' },
+      { icon: Banknote, label: 'Payroll', path: '/payroll', module: 'HRMS_PAYROLL', minRole: 'accountant' },
     ]
   },
   {
@@ -175,6 +204,7 @@ const schoolNavSections = [
     minRole: 'admin',
     items: [
       { icon: Settings, label: 'Settings', path: '/settings' },
+      { icon: Shield, label: 'Audit Log', path: '/audit-log' },
     ]
   },
 ];
@@ -183,10 +213,16 @@ export default function SidebarNav({ collapsed, onToggle }) {
   const location = useLocation();
   const { t } = useTranslation();
   const nt = (label) => t(`nav.${label}`, { defaultValue: label });
-  const { isAdmin, canViewPayroll, isTeacher, isLibrarian, role } = useRole();
+  const { isAdmin, isSuperAdmin, canViewPayroll, isTeacher, isStaff, staffTags, role } = useRole();
   const { prefs } = usePreferences();
   const { user } = useAuth();
   const isSchool = user?.defaultCompany?.businessType === 'SCHOOL';
+  // Empty/missing enabledModules = unrestricted (legacy/full-access plan) —
+  // mirrors ModuleAccessGuard's backend behavior for the same field.
+  const enabledModules = user?.defaultCompany?.enabledModules || [];
+  const isModuleEnabled = (moduleKey) => !moduleKey || enabledModules.length === 0
+    || enabledModules.includes(moduleKey)
+    || enabledModules.includes(moduleKey.replace(/_(FEES|TRANSACTIONS|LEDGER)$/, ''));
   const [expandedSections, setExpandedSections] = useState(
     Array(Math.max(navSections.length, schoolNavSections.length)).fill(true)
   );
@@ -202,10 +238,12 @@ export default function SidebarNav({ collapsed, onToggle }) {
     });
   };
 
-  const activeSections = isSchool ? schoolNavSections : navSections;
+  const isSuperAdminNoCompany = role === 'SUPER_ADMIN' && !user?.defaultCompanyId;
+  const activeSections = isSuperAdminNoCompany ? superAdminNoCompanySections : (isSchool ? schoolNavSections : navSections);
 
-  // TEACHER / LIBRARIAN only see items explicitly tagged with their role
-  const restrictedRole = isTeacher || isLibrarian;
+  // TEACHER only sees items explicitly tagged with their role
+  const restrictedRole = isTeacher;
+  const hasStaffTag = (tag) => isStaff && staffTags.includes(tag);
 
   const visibleSections = activeSections
     .filter(section => {
@@ -218,6 +256,15 @@ export default function SidebarNav({ collapsed, onToggle }) {
       items: section.items.filter(item => {
         if (item.minRole === 'admin' && !isAdmin) return false;
         if (item.minRole === 'accountant' && !canViewPayroll) return false;
+        // Visible to ACCOUNTANT/ADMIN as usual, OR a STAFF member carrying
+        // this tag (e.g. HR) — an addition on top of minRole, not a narrowing.
+        if (item.orStaffTag && !(canViewPayroll || isAdmin || hasStaffTag(item.orStaffTag))) return false;
+        // Narrows a module already open to STAFF down to STAFF members
+        // carrying this tag (e.g. LIBRARY/HOSTEL/TRANSPORT) — only applies
+        // when the caller's role is literally STAFF; ADMIN/ACCOUNTANT/TEACHER
+        // are unaffected.
+        if (item.requiresStaffTag && isStaff && !staffTags.includes(item.requiresStaffTag)) return false;
+        if (!isModuleEnabled(item.module)) return false;
         return !restrictedRole || item.roles?.includes(role);
       }),
     }))
@@ -226,7 +273,7 @@ export default function SidebarNav({ collapsed, onToggle }) {
   return (
     <aside
       className={cn(
-        "fixed left-0 top-0 h-screen bg-sidebar text-sidebar-foreground z-40 flex flex-col transition-all duration-300",
+        "fixed left-0 top-0 h-screen bg-sidebar text-sidebar-foreground z-[60] flex flex-col pointer-events-auto transition-[width] duration-300",
         collapsed ? "w-[68px]" : "w-[240px]"
       )}
       style={hasBgColor ? { backgroundColor: prefs.sidebarColor } : undefined}
@@ -239,24 +286,30 @@ export default function SidebarNav({ collapsed, onToggle }) {
         {prefs.companyLogoUrl ? (
           <img src={prefs.companyLogoUrl} alt="Company" className="w-16 h-16 rounded-lg object-cover shrink-0 ring-1 ring-white/20" />
         ) : (
-          <img src="/logo-icon.png" alt="EasyBooks" className="w-16 h-16 object-contain shrink-0" />
+          <img src="/logo-icon.png" alt="OneBook" className="w-16 h-16 object-contain shrink-0" />
         )}
         {!collapsed && (
           <div className="animate-fade-in">
             <h1 className={cn(
               "text-sm font-bold tracking-tight",
               hasBgColor ? (bgIsDark ? "text-white" : "text-gray-900") : "text-sidebar-foreground"
-            )}>EasyBooks</h1>
+            )}>OneBook</h1>
             <p className={cn(
               "text-[10px] leading-none",
               hasBgColor ? (bgIsDark ? "text-white/50" : "text-gray-600") : "text-sidebar-muted"
-            )}>{isSchool ? 'School Management' : 'ERP · CRM · HRM'}</p>
+            )}>
+              {/* SUPER_ADMIN's identity isn't tied to whichever client they
+                  happen to be switched into — a school today, a pharmacy or
+                  tea shop tomorrow. Only a real company's own admin should
+                  see the branding rebrand around their business type. */}
+              {isSuperAdmin ? t('nav.clientManagement', { defaultValue: 'Client Management' }) : (isSchool ? 'School Management' : 'ERP · CRM · HRM')}
+            </p>
           </div>
         )}
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 overflow-y-auto py-3 px-2 space-y-1">
+      <nav className="flex-1 min-h-0 overflow-y-auto py-3 px-2 space-y-1">
         {visibleSections.map((section, sIdx) => (
           <div key={section.label} className="mb-1">
             {!collapsed && (
@@ -327,12 +380,13 @@ export default function SidebarNav({ collapsed, onToggle }) {
 
       {/* Collapse toggle */}
       <div className={cn(
-        "shrink-0 p-2 border-t",
+        "relative z-[62] shrink-0 border-t bg-sidebar",
         hasBgColor ? "border-white/10" : "border-sidebar-border"
       )}>
         <button
+          type="button"
           onClick={onToggle}
-          className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sidebar-muted hover:bg-sidebar-accent hover:text-sidebar-foreground transition-colors"
+          className="relative z-[63] flex w-full min-h-12 items-center justify-center gap-2 px-3 py-2 text-sidebar-muted hover:bg-sidebar-accent hover:text-sidebar-foreground cursor-pointer transition-colors"
         >
           {collapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
           {!collapsed && <span className="text-xs">Collapse</span>}

@@ -2,12 +2,14 @@ import { Controller, Get, Post, Put, Delete, Body, Param, Query } from '@nestjs/
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { MemoServiceImpl } from '../../../../application/services/memo.service.impl';
 import { Roles } from '../../../../modules/decorators/roles.decorator';
+import { RequiresModule } from '../../../../modules/decorators/requires-module.decorator';
 import { ZodValidationPipe } from '../../../../modules/pipes/zod-validation.pipe';
 import { CreateMemoDocumentSchema, UpdateMemoDocumentSchema, CreateMemoDocumentDTO, UpdateMemoDocumentDTO } from '@easy-books/shared';
 
 @ApiTags('Memos')
 @ApiBearerAuth()
 @Roles('STAFF', 'ACCOUNTANT', 'ADMIN')
+@RequiresModule('COMMUNICATION_MEMO')
 @Controller('api/v1/memos')
 export class MemoController {
   constructor(private readonly service: MemoServiceImpl) {}
@@ -27,12 +29,14 @@ export class MemoController {
   }
 
   @Post()
+  @Roles('ACCOUNTANT', 'ADMIN')
   @ApiOperation({ summary: 'Create a memo document' })
   create(@Body(new ZodValidationPipe(CreateMemoDocumentSchema)) dto: CreateMemoDocumentDTO) {
     return this.service.create(dto);
   }
 
   @Put(':id')
+  @Roles('ACCOUNTANT', 'ADMIN')
   @ApiOperation({ summary: 'Update a memo document' })
   @ApiQuery({ name: 'companyId', required: true })
   update(
@@ -44,6 +48,7 @@ export class MemoController {
   }
 
   @Delete(':id')
+  @Roles('ACCOUNTANT', 'ADMIN')
   @ApiOperation({ summary: 'Delete a memo document' })
   @ApiQuery({ name: 'companyId', required: true })
   remove(@Param('id') id: string, @Query('companyId') companyId: string) {

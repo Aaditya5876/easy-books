@@ -1,7 +1,8 @@
 import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { examSchedulesApi, classesApi, subjectsApi } from '@/api';
+import { examSchedulesApi, classesApi, subjectsApi, examsApi } from '@/api';
+import { confirm } from '@/lib/confirm';
 import { filterSubjectsByClass } from '@/lib/subjectFilter';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -22,7 +23,7 @@ const classLabel = (c) => `${c.name}${c.section ? ` - ${c.section}` : ''}`;
 
 // ── Edit a single already-scheduled paper ──────────────────────────────────────
 
-function EditScheduleDialog({ open, onClose, entry, classes, subjects }) {
+function EditScheduleDialog({ open, onClose, entry, classes, subjects, exams }) {
   const { t } = useTranslation();
   const qc = useQueryClient();
   const [form, setForm] = useState({
@@ -35,6 +36,7 @@ function EditScheduleDialog({ open, onClose, entry, classes, subjects }) {
     roomNumber: entry?.roomNumber || '',
     notes: entry?.notes || '',
   });
+  const [errors, setErrors] = useState({});
 
   const save = useMutation({
     mutationFn: (d) => examSchedulesApi.update(entry.id, d),
@@ -48,8 +50,15 @@ function EditScheduleDialog({ open, onClose, entry, classes, subjects }) {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (!form.examName.trim() || !form.classId || !form.examDate)
+    const errs = {};
+    if (!form.examName.trim()) errs.examName = t('examSchedule.examNameRequiredMsg', { defaultValue: 'Exam name is required' });
+    if (!form.classId) errs.classId = t('examSchedule.classRequiredMsg', { defaultValue: 'Class is required' });
+    if (!form.examDate) errs.examDate = t('examSchedule.dateRequiredMsg', { defaultValue: 'Exam date is required' });
+    if (Object.keys(errs).length) {
+      setErrors(errs);
       return toast.error(t('examSchedule.requiredFields', { defaultValue: 'Exam name, class and date are required' }));
+    }
+    setErrors({});
     save.mutate({
       ...form,
       subjectId: form.subjectId || undefined,
@@ -69,17 +78,27 @@ function EditScheduleDialog({ open, onClose, entry, classes, subjects }) {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-1">
             <Label>{t('examSchedule.examNameRequired', { defaultValue: 'Exam Name *' })}</Label>
-            <Input value={form.examName} onChange={e => setForm(p => ({ ...p, examName: e.target.value }))} placeholder={t('examSchedule.examNamePlaceholder', { defaultValue: 'e.g. First Terminal 2082' })} />
+            <Select value={form.examName} onValueChange={v => { setForm(p => ({ ...p, examName: v })); if (errors.examName) setErrors(er => ({ ...er, examName: undefined })); }}>
+              <SelectTrigger><SelectValue placeholder={t('examSchedule.selectExamName', { defaultValue: 'Select exam' })} /></SelectTrigger>
+              <SelectContent>
+                {exams.map(ex => <SelectItem key={ex.id} value={ex.name}>{ex.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            {errors.examName && <p className="text-xs text-red-600">{errors.examName}</p>}
+            {exams.length === 0 && (
+              <p className="text-xs text-muted-foreground">{t('examSchedule.noExamsYetHint', { defaultValue: 'No exams yet — create one from the Results tab\'s "Add Exam" button first.' })}</p>
+            )}
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
               <Label>{t('examSchedule.classRequired', { defaultValue: 'Class *' })}</Label>
-              <Select value={form.classId} onValueChange={v => setForm(p => ({ ...p, classId: v }))}>
+              <Select value={form.classId} onValueChange={v => { setForm(p => ({ ...p, classId: v })); if (errors.classId) setErrors(er => ({ ...er, classId: undefined })); }}>
                 <SelectTrigger><SelectValue placeholder={t('examSchedule.selectClass', { defaultValue: 'Select class' })} /></SelectTrigger>
                 <SelectContent>
                   {classes.map(c => <SelectItem key={c.id} value={c.id}>{classLabel(c)}</SelectItem>)}
                 </SelectContent>
               </Select>
+              {errors.classId && <p className="text-xs text-red-600">{errors.classId}</p>}
             </div>
             <div className="space-y-1">
               <Label>{t('examSchedule.subject', { defaultValue: 'Subject' })}</Label>
@@ -93,8 +112,9 @@ function EditScheduleDialog({ open, onClose, entry, classes, subjects }) {
           </div>
           <div className="space-y-1">
             <Label>{t('examSchedule.examDateRequired', { defaultValue: 'Exam Date *' })}</Label>
-            <input type="date" value={form.examDate} onChange={e => setForm(p => ({ ...p, examDate: e.target.value }))}
+            <input type="date" value={form.examDate} onChange={e => { setForm(p => ({ ...p, examDate: e.target.value })); if (errors.examDate) setErrors(er => ({ ...er, examDate: undefined })); }}
               className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm" />
+            {errors.examDate && <p className="text-xs text-red-600">{errors.examDate}</p>}
           </div>
           <div className="grid grid-cols-3 gap-3">
             <div className="space-y-1">
@@ -131,12 +151,13 @@ function EditScheduleDialog({ open, onClose, entry, classes, subjects }) {
 let rowSeq = 0;
 const newSubjectRow = () => ({ key: ++rowSeq, subjectId: '', examDate: '', startTime: '', endTime: '' });
 
-function NewScheduleDialog({ open, onClose, classes, subjects }) {
+function NewScheduleDialog({ open, onClose, classes, subjects, exams }) {
   const { t } = useTranslation();
   const qc = useQueryClient();
   const [examName, setExamName] = useState('');
   const [classId, setClassId] = useState('');
   const [rows, setRows] = useState([newSubjectRow()]);
+  const [errors, setErrors] = useState({});
 
   const updateRow = (key, patch) => setRows(rs => rs.map(r => r.key === key ? { ...r, ...patch } : r));
   const addRow = () => setRows(rs => [...rs, newSubjectRow()]);
@@ -161,7 +182,14 @@ function NewScheduleDialog({ open, onClose, classes, subjects }) {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (!examName.trim() || !classId) return toast.error(t('examSchedule.requiredFields', { defaultValue: 'Exam name, class and date are required' }));
+    const errs = {};
+    if (!examName.trim()) errs.examName = t('examSchedule.examNameRequiredMsg', { defaultValue: 'Exam name is required' });
+    if (!classId) errs.classId = t('examSchedule.classRequiredMsg', { defaultValue: 'Class is required' });
+    if (Object.keys(errs).length) {
+      setErrors(errs);
+      return toast.error(t('examSchedule.requiredFields', { defaultValue: 'Exam name, class and date are required' }));
+    }
+    setErrors({});
     if (rows.some(r => !r.examDate)) return toast.error(t('examSchedule.dateRequiredAllRows', { defaultValue: 'Enter a date for every subject row' }));
     save.mutate();
   };
@@ -176,16 +204,26 @@ function NewScheduleDialog({ open, onClose, classes, subjects }) {
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
               <Label>{t('examSchedule.examNameRequired', { defaultValue: 'Exam Name *' })}</Label>
-              <Input value={examName} onChange={e => setExamName(e.target.value)} placeholder={t('examSchedule.examNamePlaceholder', { defaultValue: 'e.g. First Terminal 2082' })} />
+              <Select value={examName} onValueChange={v => { setExamName(v); if (errors.examName) setErrors(er => ({ ...er, examName: undefined })); }}>
+                <SelectTrigger><SelectValue placeholder={t('examSchedule.selectExamName', { defaultValue: 'Select exam' })} /></SelectTrigger>
+                <SelectContent>
+                  {exams.map(ex => <SelectItem key={ex.id} value={ex.name}>{ex.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              {errors.examName && <p className="text-xs text-red-600">{errors.examName}</p>}
+              {exams.length === 0 && (
+                <p className="text-xs text-muted-foreground">{t('examSchedule.noExamsYetHint', { defaultValue: 'No exams yet — create one from the Results tab\'s "Add Exam" button first.' })}</p>
+              )}
             </div>
             <div className="space-y-1">
               <Label>{t('examSchedule.classRequired', { defaultValue: 'Class *' })}</Label>
-              <Select value={classId} onValueChange={setClassId}>
+              <Select value={classId} onValueChange={v => { setClassId(v); if (errors.classId) setErrors(er => ({ ...er, classId: undefined })); }}>
                 <SelectTrigger><SelectValue placeholder={t('examSchedule.selectClass', { defaultValue: 'Select class' })} /></SelectTrigger>
                 <SelectContent>
                   {classes.map(c => <SelectItem key={c.id} value={c.id}>{classLabel(c)}</SelectItem>)}
                 </SelectContent>
               </Select>
+              {errors.classId && <p className="text-xs text-red-600">{errors.classId}</p>}
             </div>
           </div>
 
@@ -263,6 +301,7 @@ export default function ExamSchedule() {
   const [showNew, setShowNew] = useState(false);
   const [editEntry, setEditEntry] = useState(null);
   const [classFilter, setClassFilter] = useState('ALL');
+  const [examFilter, setExamFilter] = useState('ALL');
 
   const { data: classes = [] } = useQuery({
     queryKey: ['school-classes'],
@@ -272,6 +311,11 @@ export default function ExamSchedule() {
   const { data: subjects = [] } = useQuery({
     queryKey: ['school-subjects'],
     queryFn: () => subjectsApi.list().then(r => r.data),
+  });
+
+  const { data: exams = [] } = useQuery({
+    queryKey: ['exams'],
+    queryFn: () => examsApi.list().then(r => r.data),
   });
 
   const { data: schedules = [], isLoading } = useQuery({
@@ -288,17 +332,40 @@ export default function ExamSchedule() {
     onError: (e) => toast.error(e.response?.data?.message || t('examSchedule.failedToDelete', { defaultValue: 'Failed to delete' })),
   });
 
+  // Options come from whatever exam names actually exist in the data
+  // (not the canonical Exam list) — a typo'd exam name still needs to be
+  // filterable so it can be found and cleaned up.
+  const examNameOptions = useMemo(
+    () => Array.from(new Set(schedules.map(s => s.examName))).sort(),
+    [schedules],
+  );
+
+  const filteredSchedules = useMemo(
+    () => (examFilter === 'ALL' ? schedules : schedules.filter(s => s.examName === examFilter)),
+    [schedules, examFilter],
+  );
+
   // Group by exam name so a full date-sheet reads as one block per exam
   const grouped = useMemo(() => {
     const map = new Map();
-    for (const s of schedules) {
+    for (const s of filteredSchedules) {
       if (!map.has(s.examName)) map.set(s.examName, []);
       map.get(s.examName).push(s);
     }
     return [...map.entries()];
-  }, [schedules]);
+  }, [filteredSchedules]);
 
   const isPast = (d) => new Date(d) < new Date(new Date().toDateString());
+
+  // Only meaningful for a multi-day date-sheet — a single-paper test or a
+  // daily quiz has just one date, so there's no "range" worth showing.
+  const dateRange = (entries) => {
+    const dates = entries.map(e => new Date(e.examDate)).sort((a, b) => a - b);
+    const first = dates[0];
+    const last = dates[dates.length - 1];
+    if (!first || first.toDateString() === last.toDateString()) return null;
+    return `${format(first, 'dd MMM')} – ${format(last, 'dd MMM yyyy')}`;
+  };
 
   return (
     <div className="p-6 space-y-6">
@@ -308,6 +375,13 @@ export default function ExamSchedule() {
           <h1 className="text-2xl font-bold">{t('examSchedule.title', { defaultValue: 'Exam Schedule' })}</h1>
         </div>
         <div className="flex items-center gap-2">
+          <Select value={examFilter} onValueChange={setExamFilter}>
+            <SelectTrigger className="w-52"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ALL">{t('examSchedule.allExams', { defaultValue: 'All Exams' })}</SelectItem>
+              {examNameOptions.map(name => <SelectItem key={name} value={name}>{name}</SelectItem>)}
+            </SelectContent>
+          </Select>
           <Select value={classFilter} onValueChange={setClassFilter}>
             <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
             <SelectContent>
@@ -330,7 +404,10 @@ export default function ExamSchedule() {
       ) : grouped.map(([examName, entries]) => (
         <div key={examName} className="bg-card border rounded-lg overflow-hidden">
           <div className="px-4 py-3 border-b bg-muted/50 flex items-center justify-between">
-            <h2 className="font-semibold">{examName}</h2>
+            <div className="flex items-center gap-2">
+              <h2 className="font-semibold">{examName}</h2>
+              {dateRange(entries) && <span className="text-xs text-muted-foreground">· {dateRange(entries)}</span>}
+            </div>
             <Badge variant="secondary">{entries.length > 1 ? t('examSchedule.papersCount', { count: entries.length, defaultValue: '{{count}} papers' }) : t('examSchedule.paperCount', { count: entries.length, defaultValue: '{{count}} paper' })}</Badge>
           </div>
           <div className="overflow-x-auto">
@@ -365,7 +442,7 @@ export default function ExamSchedule() {
                       <Button size="icon" variant="ghost" onClick={() => setEditEntry(s)}>
                         <Pencil className="h-4 w-4" />
                       </Button>
-                      <Button size="icon" variant="ghost" onClick={() => { if (window.confirm(t('examSchedule.deleteThisSchedule', { defaultValue: 'Delete this exam schedule?' }))) remove.mutate(s.id); }}>
+                      <Button size="icon" variant="ghost" onClick={async () => { if (await confirm({ description: t('examSchedule.deleteThisSchedule', { defaultValue: 'Delete this exam schedule?' }), variant: 'destructive' })) remove.mutate(s.id); }}>
                         <Trash2 className="h-4 w-4 text-destructive" />
                       </Button>
                     </td>
@@ -383,6 +460,7 @@ export default function ExamSchedule() {
           onClose={() => setShowNew(false)}
           classes={classes}
           subjects={subjects}
+          exams={exams}
         />
       )}
 
@@ -393,6 +471,7 @@ export default function ExamSchedule() {
           entry={editEntry}
           classes={classes}
           subjects={subjects}
+          exams={exams}
         />
       )}
     </div>

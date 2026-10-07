@@ -2,16 +2,24 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './modules/app.module';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { Logger } from 'nestjs-pino';
-import * as cookieParser from 'cookie-parser';
+import cookieParser from 'cookie-parser';
+import helmet from 'helmet';
 import { NestExpressApplication } from '@nestjs/platform-express';
-import { join } from 'path';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, { bufferLogs: true });
-  app.useStaticAssets(join(process.cwd(), 'uploads'), { prefix: '/uploads' });
+  // Uploaded files are served by UploadsDownloadController (requires an
+  // authenticated staff or portal session) instead of unauthenticated static
+  // hosting — see uploads-download.controller.ts.
 
   app.useLogger(app.get(Logger));
   app.use(cookieParser());
+  // Standard security response headers (HSTS, X-Content-Type-Options,
+  // X-Frame-Options/clickjacking protection, Referrer-Policy, etc.). CSP is
+  // disabled: this is a pure JSON API plus the Swagger UI at /docs, and a
+  // default CSP blocks Swagger UI's own inline scripts/styles — the other
+  // headers still apply everywhere, including /docs.
+  app.use(helmet({ contentSecurityPolicy: false }));
 
   app.enableCors({
     origin: process.env.CORS_ORIGIN?.split(',').map(o => o.trim()) || ['http://localhost:5173'],
@@ -23,7 +31,7 @@ async function bootstrap() {
   const envLabel = isProduction ? 'Production' : 'Development';
 
   const swaggerConfig = new DocumentBuilder()
-    .setTitle(`Easy Books API (${envLabel})`)
+    .setTitle(`OneBook API (${envLabel})`)
     .setDescription('Accounting & Inventory Management API — Nepal')
     .setVersion('1.0')
     .addBearerAuth()
@@ -69,7 +77,7 @@ async function bootstrap() {
 
   const port = process.env.PORT || 3000;
   await app.listen(port);
-  console.log(`Easy Books API (${envLabel}) running on http://localhost:${port}`);
+  console.log(`OneBook API (${envLabel}) running on http://localhost:${port}`);
   console.log(`Swagger docs at http://localhost:${port}/docs`);
 }
 

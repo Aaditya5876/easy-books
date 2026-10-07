@@ -1,11 +1,16 @@
 import { useState, useEffect, useRef } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
+import { useTranslation } from 'react-i18next';
 import { api } from '@/api/adapter';
-import { usersApi, companyApi, recycleBinApi } from '@/api';
+import { toast } from 'sonner';
+import { usersApi, companyApi, recycleBinApi, bankAccountApi, uploadApi, notificationsApi, fiscalYearApi } from '@/api';
+import apiClient from '@/api/client';
 import { useAuth } from '@/lib/AuthContext';
 import { useRole } from "@/lib/useRole";
 import { usePreferences } from '@/lib/PreferencesContext';
 import { getActiveCompanyId, setActiveCompanyId } from '@/lib/companyContext';
+import { confirm, alertPopup } from '@/lib/confirm';
 import PageHeader from '../components/shared/PageHeader';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,7 +23,8 @@ import {
 import {
   Building2, Plus, Trash2, Save, ImagePlus, X, UserPlus, Copy, Check, Shield,
   Phone, Mail, MapPin, Hash, User, Palette, Type, Bell, RotateCcw, Upload,
-  Recycle, RotateCw, Lock, AlertTriangle, Clock
+  Recycle, RotateCw, Lock, AlertTriangle, Clock, Zap, QrCode, Power, PowerOff, Layers, KeyRound, ExternalLink,
+  Search, ChevronRight, ChevronDown, UserCircle
 } from 'lucide-react';
 
 const SIDEBAR_PALETTE = ['#1e293b', '#1e3a5f', '#14532d', '#4c1d95', '#881337', '#7c2d12'];
@@ -30,14 +36,117 @@ const FONT_SIZES = [
   { key: 'xl',     label: 'XL',      px: '18px' },
 ];
 
+const FONT_SIZE_I18N_KEY = {
+  small: 'settings.fontSizeSmall',
+  medium: 'settings.fontSizeMedium',
+  large: 'settings.fontSizeLarge',
+  xl: 'settings.fontSizeXl',
+};
+
 const ROLE_COLORS = {
   ADMIN: 'bg-red-100 text-red-700',
   ACCOUNTANT: 'bg-blue-100 text-blue-700',
   STAFF: 'bg-green-100 text-green-700',
   TEACHER: 'bg-amber-100 text-amber-700',
-  LIBRARIAN: 'bg-teal-100 text-teal-700',
   SUPER_ADMIN: 'bg-purple-100 text-purple-700',
 };
+
+const ROLE_I18N_KEY = {
+  STAFF: 'settings.roleStaff',
+  ACCOUNTANT: 'settings.roleAccountant',
+  TEACHER: 'settings.roleTeacher',
+  ADMIN: 'settings.roleAdmin',
+  SUPER_ADMIN: 'settings.roleSuperAdmin',
+};
+
+// Assignable duties within the shared STAFF role — mirrors backend
+// core/modules/staff-tags.ts. Only meaningful when role === 'STAFF'.
+const STAFF_TAGS = [
+  { value: 'LIBRARY', i18n: 'settings.staffTagLibrary', label: 'Library', desc: 'Books, issues and returns' },
+  { value: 'HOSTEL', i18n: 'settings.staffTagHostel', label: 'Hostel', desc: 'Rooms and student allocations' },
+  { value: 'TRANSPORT', i18n: 'settings.staffTagTransport', label: 'Transport', desc: 'Routes and student assignments' },
+  { value: 'HR', i18n: 'settings.staffTagHr', label: 'HR', desc: 'Employee records and attendance for all staff' },
+  { value: 'FRONT_OFFICE', i18n: 'settings.staffTagFrontOffice', label: 'Front Office', desc: 'Admissions — set up student/parent portal access' },
+];
+
+// Every toggleable module a company's package can include — mirrors backend
+// core/modules/module-keys.ts. 'BASE' is deliberately excluded: it's a no-op
+// sentinel (see that file) that only exists so a scoped package's
+// enabledModules is never empty — it's added automatically whenever any
+// module here is selected, never shown as its own checkbox.
+const MODULE_CATALOG = [
+  { value: 'SCHOOL_ACADEMICS', i18n: 'settings.moduleSchoolAcademics', label: 'Academics', desc: 'School academic services', schoolOnly: true, children: [
+    { value: 'SCHOOL_ACADEMICS_ROUTINE', label: 'Routine', desc: 'Class routines and timetables' },
+    { value: 'SCHOOL_ACADEMICS_EXAMS', label: 'Exams', desc: 'Exams and exam schedules' },
+    { value: 'SCHOOL_ACADEMICS_STUDY_MATERIALS', label: 'Study Materials', desc: 'Study materials and library content' },
+    { value: 'SCHOOL_ACADEMICS_HOMEWORK', label: 'Homework', desc: 'Homework assignments and submissions' },
+  ] },
+  { value: 'FACILITIES', i18n: 'settings.moduleFacilities', label: 'Facilities', desc: 'School facility services', schoolOnly: true, children: [
+    { value: 'FACILITIES_LIBRARY', label: 'Library', desc: 'Library catalog, issues and returns' },
+    { value: 'FACILITIES_HOSTEL', label: 'Hostel', desc: 'Hostel rooms and allocations' },
+    { value: 'FACILITIES_TRANSPORT', label: 'Transport', desc: 'Transport routes and assignments' },
+  ] },
+  { value: 'HRMS', i18n: 'settings.moduleHrms', label: 'HR & Payroll', desc: 'People operations services', children: [
+    { value: 'HRMS_EMPLOYEES', label: 'Employees', desc: 'Employee records and staff directory' },
+    { value: 'HRMS_ATTENDANCE', label: 'Attendance', desc: 'Staff attendance' },
+    { value: 'HRMS_LEAVE', label: 'Leave', desc: 'Leave requests and approvals' },
+    { value: 'HRMS_PAYROLL', label: 'Payroll', desc: 'Payroll processing and payslips' },
+  ] },
+  { value: 'FINANCE', i18n: 'settings.moduleFinance', label: 'Finance', desc: 'Finance tools', children: [
+    { value: 'FINANCE_FEES', label: 'Fees', desc: 'Fee structures, invoices and payments', schoolOnly: true },
+    { value: 'FINANCE_TRANSACTIONS', label: 'Transactions', desc: 'Income and expense transactions' },
+    { value: 'FINANCE_LEDGER', label: 'Ledger', desc: 'Accounts, entries and financial reports' },
+  ] },
+  { value: 'INVENTORY', i18n: 'settings.moduleInventory', label: 'Inventory', desc: 'Inventory services', children: [
+    { value: 'INVENTORY_STOCK', label: 'Stock', desc: 'Items, stock movements and adjustments' },
+  ] },
+  { value: 'AI', i18n: 'settings.moduleAi', label: 'AI Tools', desc: 'AI services', children: [
+    { value: 'AI_NOTICES', label: 'Notices', desc: 'AI-assisted notices' },
+    { value: 'AI_INSIGHTS', label: 'Insights', desc: 'AI business and school insights' },
+    { value: 'AI_REPORT_CARDS', label: 'Report Cards', desc: 'AI report-card comments' },
+  ] },
+  { value: 'BULK_IMPORT', i18n: 'settings.moduleBulkImport', label: 'Bulk Import', desc: 'Import services', children: [
+    { value: 'BULK_IMPORT_STUDENTS', label: 'Students', desc: 'Import students in bulk' },
+    { value: 'BULK_IMPORT_EMPLOYEES', label: 'Employees', desc: 'Import employees in bulk' },
+    { value: 'BULK_IMPORT_ITEMS', label: 'Items', desc: 'Import inventory items in bulk' },
+  ] },
+];
+
+// A client's add-on checklist should only offer modules that mean something
+// for their product — Academics/Facilities have no backend routes at all for
+// a non-school company, so offering them there would be a toggle that lies.
+function moduleCatalogFor(company) {
+  const isSchoolClient = company?.businessType === 'SCHOOL';
+  return (isSchoolClient ? MODULE_CATALOG : MODULE_CATALOG.filter(m => !m.schoolOnly)).map(module => ({
+    ...module,
+    children: module.children?.filter(child => isSchoolClient || !child.schoolOnly),
+  }));
+}
+
+// Core tools that ship with every company on any package and have no
+// @RequiresModule gate at all (see school.controller.ts / sales, purchase,
+// vendor, client, quotation controllers) — shown as read-only chips so
+// SUPER_ADMIN sees the whole picture instead of a Base-tier client looking
+// like it has nothing, and isn't tempted to "toggle" something that was
+// never actually a switch.
+const CORE_TOOLS_SCHOOL = [
+  { i18n: 'settings.coreStudents', label: 'Students' },
+  { i18n: 'settings.coreClassesSubjects', label: 'Classes & Subjects' },
+  { i18n: 'settings.coreAttendance', label: 'Attendance' },
+  { i18n: 'settings.coreFees', label: 'Fees' },
+  { i18n: 'settings.coreTeachersStaff', label: 'Teachers & Staff' },
+  { i18n: 'settings.coreNoticesEvents', label: 'Notices & Events' },
+];
+const CORE_TOOLS_BUSINESS = [
+  { i18n: 'settings.coreSales', label: 'Sales' },
+  { i18n: 'settings.corePurchase', label: 'Purchase' },
+  { i18n: 'settings.coreVendors', label: 'Vendors' },
+  { i18n: 'settings.coreClients', label: 'Clients' },
+  { i18n: 'settings.coreQuotations', label: 'Quotations' },
+];
+function coreToolsFor(company) {
+  return company?.businessType === 'SCHOOL' ? CORE_TOOLS_SCHOOL : CORE_TOOLS_BUSINESS;
+}
 
 const BUSINESS_TYPES = [
   { value: 'RETAIL', label: 'Retail / General Store' },
@@ -51,14 +160,73 @@ const BUSINESS_TYPES = [
 
 const BUSINESS_TYPE_LABELS = Object.fromEntries(BUSINESS_TYPES.map(b => [b.value, b.label]));
 
+const BUSINESS_TYPE_I18N_KEY = {
+  RETAIL: 'settings.businessTypeRetail',
+  PHARMACY: 'settings.businessTypePharmacy',
+  ELECTRONICS: 'settings.businessTypeElectronics',
+  FOOD_BEVERAGE: 'settings.businessTypeFoodBeverage',
+  SERVICES: 'settings.businessTypeServices',
+  MANUFACTURING: 'settings.businessTypeManufacturing',
+  OTHER: 'settings.businessTypeOther',
+};
+
 export default function Settings() {
+  const { t } = useTranslation();
+  const location = useLocation();
+  const navigate = useNavigate();
   const { user } = useAuth();
   const { canEdit, canDelete, canManageUsers } = useRole();
   const { prefs, updatePref, resetPrefs } = usePreferences();
   const isAdmin = user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN';
+  const isSuperAdmin = user?.role === 'SUPER_ADMIN';
   const isSchool = user?.defaultCompany?.businessType === 'SCHOOL';
   const activeCompanyId = getActiveCompanyId();
   const logoInputRef = useRef(null);
+
+  function roleLabel(role) {
+    const key = ROLE_I18N_KEY[role];
+    return key ? t(key, { defaultValue: role }) : role;
+  }
+
+  function businessTypeLabel(value) {
+    if (!value) return value;
+    const key = BUSINESS_TYPE_I18N_KEY[value];
+    return key ? t(key, { defaultValue: BUSINESS_TYPE_LABELS[value] || value }) : value;
+  }
+
+  // Controlled so the selected tab survives `loading` toggling (see `if (loading)
+  // return (...)` below) — every company action (add/edit/delete/deactivate) calls
+  // loadCompanies(), which flips loading true→false, unmounting and remounting an
+  // uncontrolled <Tabs defaultValue="preferences"> each time and resetting it back
+  // to Preferences. Lifting the selection into state here fixes that for all of them.
+  // SUPER_ADMIN never owns a company of their own — Preferences (company
+  // branding/fiscal year/etc.) is meaningless for them, so land on Clients
+  // instead whenever they open Settings with no explicit tab requested.
+  const [activeTab, setActiveTab] = useState(location.state?.tab || (isSuperAdmin ? 'clients' : 'companies'));
+
+  // TopBar links here with e.g. navigate('/settings', { state: { tab: 'clients',
+  // openAddCompany: true } }) — a useEffect (not just the lazy initial state
+  // above) so it still takes effect on an in-place navigation to a route
+  // that's already mounted (state change without a remount).
+  useEffect(() => {
+    if (!location.state) return;
+    if (location.state?.tab) setActiveTab(location.state.tab);
+    if (location.state?.openAddCompany) setShowAddCompany(true);
+    if (location.state?.tab === 'clients') loadAllClients();
+    // Landed here from a SUBSCRIPTION_RENEWAL_REQUESTED notification click —
+    // jump straight to that client's row instead of leaving SUPER_ADMIN to
+    // hunt for it in a list that can run to 100+ companies.
+    if (location.state?.highlightCompanyId) {
+      setExpandedClientId(location.state.highlightCompanyId);
+      setTimeout(() => {
+        document.getElementById(`client-row-${location.state.highlightCompanyId}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 200);
+    }
+    // Consume it once — react-router keeps this state attached to the
+    // current history entry, so without clearing it here, hitting refresh
+    // replays the same "open this tab / pop this dialog" instruction forever.
+    navigate(location.pathname, { replace: true, state: null });
+  }, [location.state]);
 
   // ── Companies ─────────────────────────────────────────────────────────────
   const [companies, setCompanies] = useState([]);
@@ -66,9 +234,12 @@ export default function Settings() {
   const [showAddCompany, setShowAddCompany] = useState(false);
   const [editingCompany, setEditingCompany] = useState(null);
   const [uploadingLogo, setUploadingLogo] = useState(false);
+  // Self-registration is off (see Login.jsx) — the "Add Company" dialog below
+  // is now the only self-serve path to a new company, and every client
+  // onboarded through it is a school, so it defaults to and locks on SCHOOL.
   const [companyForm, setCompanyForm] = useState({
     name: '', address: '', phone: '', email: '', pan_vat: '',
-    registration_number: '', business_type: '', default_unit_type: '',
+    registration_number: '', business_type: 'SCHOOL', default_unit_type: '',
     currency: 'NPR', logo_url: '',
   });
 
@@ -76,11 +247,15 @@ export default function Settings() {
   const [users, setUsers] = useState([]);
   const [usersLoading, setUsersLoading] = useState(false);
   const [showInvite, setShowInvite] = useState(false);
-  const [inviteForm, setInviteForm] = useState({ name: '', email: '', role: 'STAFF' });
+  const [inviteForm, setInviteForm] = useState({ name: '', email: '', role: 'STAFF', staffTags: [] });
   const [inviteLoading, setInviteLoading] = useState(false);
   const [tempPassword, setTempPassword] = useState(null);
   const [copied, setCopied] = useState(false);
   const [roleChanging, setRoleChanging] = useState(null);
+  const [removingUserId, setRemovingUserId] = useState(null);
+  const [maxCompaniesSaving, setMaxCompaniesSaving] = useState(null);
+  const [resettingPasswordId, setResettingPasswordId] = useState(null);
+  const [togglingUserActiveId, setTogglingUserActiveId] = useState(null);
 
   // ── Recycle Bin ───────────────────────────────────────────────────────────
   const [binAccessGranted, setBinAccessGranted] = useState(false);
@@ -95,11 +270,119 @@ export default function Settings() {
   // ── Company Prefs (server-side) ───────────────────────────────────────────
   const [companyPrefs, setCompanyPrefs] = useState({
     abbreviation: '', workingDaysPerMonth: 26,
+    standardStartTime: '', standardEndTime: '', attendanceDeductionEnabled: false,
   });
   const [prefsSaving, setPrefsSaving] = useState(false);
   const [prefsSaved, setPrefsSaved] = useState(false);
 
+  // ── Clients — platform-wide client directory (SUPER_ADMIN only) ──────────
+  const [allClients, setAllClients] = useState([]);
+  const [allClientsLoading, setAllClientsLoading] = useState(false);
+  const [clientPackageSaving, setClientPackageSaving] = useState(null); // companyId mid-save
+  const [clientActiveSaving, setClientActiveSaving] = useState(null); // companyId mid-save
+  const [clientMaxCompaniesSaving, setClientMaxCompaniesSaving] = useState(null); // userId mid-save
+  const [pendingMaxCompanies, setPendingMaxCompanies] = useState({}); // { [userId]: number } — staged, unsaved
+  const [clientResettingPasswordId, setClientResettingPasswordId] = useState(null); // admin userId mid-reset
+  const [pendingClientModules, setPendingClientModules] = useState({}); // { [companyId]: string[] } — staged, unsaved package edits
+  const [expandedClientId, setExpandedClientId] = useState(null); // companyId whose package editor is open — one at a time
+  const [expandedClientModules, setExpandedClientModules] = useState({});
+  const [clientSearch, setClientSearch] = useState('');
+  const [clientSubscriptionSaving, setClientSubscriptionSaving] = useState(null); // companyId mid-save
+  const [pendingSubscriptionExpiry, setPendingSubscriptionExpiry] = useState({}); // { [companyId]: string (datetime-local) | '' } — staged, unsaved
+  // Only ticks while a client row is expanded (that's the only place a
+  // remaining-time/expired badge is shown) — no point running a timer for a
+  // collapsed list nobody's looking at.
+  const [nowTick, setNowTick] = useState(() => Date.now());
+  useEffect(() => {
+    if (!expandedClientId) return;
+    const id = setInterval(() => setNowTick(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [expandedClientId]);
+
+  // ── Create Client (SUPER_ADMIN only — sales-led onboarding) ──────────────
+  // No package picker here — every new client starts on BASE (never
+  // "unrestricted", which is what an empty enabledModules means to
+  // ModuleAccessGuard) and gets its real package set from the Clients tab
+  // right after, where the full tier + checklist editor already lives.
+  const [provisionForm, setProvisionForm] = useState({
+    companyName: '', product: 'SCHOOL', businessType: '', otherBusinessDesc: '', adminName: '', adminEmail: '',
+  });
+  const [provisioning, setProvisioning] = useState(false);
+
+  const [automation, setAutomation] = useState({
+    autoFeeBilling: true, autoInvoiceRelease: true, autoPayroll: true, autoReconciliation: true,
+    autoLibraryReminders: true,
+  });
+  const [automationSaving, setAutomationSaving] = useState(false);
+  const [automationSaved, setAutomationSaved] = useState(false);
+  const [fiscalYearStatus, setFiscalYearStatus] = useState(null);
+  const [closingFiscalYear, setClosingFiscalYear] = useState(false);
+  const [confirmingClose, setConfirmingClose] = useState(false);
+  const [closePassword, setClosePassword] = useState('');
+  const [reopeningYear, setReopeningYear] = useState(null); // fiscalYear string currently mid-confirm, or null
+  const [reopenPassword, setReopenPassword] = useState('');
+  const [reopenSaving, setReopenSaving] = useState(false);
+  const [bankAccounts, setBankAccounts] = useState([]);
+  const [qrUploadingId, setQrUploadingId] = useState(null);
+  const [showAddBank, setShowAddBank] = useState(false);
+  const [bankForm, setBankForm] = useState({ bankName: '', accountNumber: '', accountType: '', branch: '', currentBalance: '', paymentType: 'BANK' });
+  const [addBankSaving, setAddBankSaving] = useState(false);
+
   useEffect(() => { loadCompanies(); }, []);
+  // Clients is now SUPER_ADMIN's default landing tab (see activeTab above),
+  // not just something loaded on an explicit navigate-with-state — so it
+  // needs its own mount-time load instead of only firing from that effect.
+  useEffect(() => { if (isSuperAdmin) loadAllClients(); }, []);
+  useEffect(() => { loadFiscalYearStatus(); }, [activeCompanyId]);
+
+  async function loadFiscalYearStatus() {
+    if (!activeCompanyId) return;
+    try {
+      const res = await fiscalYearApi.status();
+      setFiscalYearStatus(res.data);
+    } catch {
+      setFiscalYearStatus(null);
+    }
+  }
+
+  async function handleCloseFiscalYear() {
+    if (!fiscalYearStatus?.preview || !closePassword) return;
+    setClosingFiscalYear(true);
+    try {
+      await fiscalYearApi.close(fiscalYearStatus.preview.fiscalYear, closePassword);
+      setConfirmingClose(false);
+      setClosePassword('');
+      await loadFiscalYearStatus();
+    } catch (err) {
+      toast.error(err?.response?.data?.message || t('settings.failedCloseFiscalYear', { defaultValue: 'Failed to close fiscal year' }));
+    } finally {
+      setClosingFiscalYear(false);
+    }
+  }
+
+  async function handleReopenFiscalYear(fiscalYear) {
+    if (!reopenPassword) return;
+    setReopenSaving(true);
+    try {
+      await fiscalYearApi.reopen(fiscalYear, reopenPassword);
+      setReopeningYear(null);
+      setReopenPassword('');
+      await loadFiscalYearStatus();
+    } catch (err) {
+      toast.error(err?.response?.data?.message || t('settings.failedReopenFiscalYear', { defaultValue: 'Failed to reopen fiscal year' }));
+    } finally {
+      setReopenSaving(false);
+    }
+  }
+
+  // Server is the source of truth for notification preferences (per-user,
+  // shared across devices) — localStorage is only the instant-UI cache
+  // (usePreferences default) until this hydrates it with the real value.
+  useEffect(() => {
+    notificationsApi.getPreferences()
+      .then(res => updatePref('notifications', res.data))
+      .catch(() => {});
+  }, []);
 
   async function loadCompanies() {
     setLoading(true);
@@ -112,8 +395,86 @@ export default function Settings() {
     setCompanyPrefs({
       abbreviation: active?.abbreviation || '',
       workingDaysPerMonth: payrollRes?.data?.workingDaysPerMonth ?? 26,
+      standardStartTime: payrollRes?.data?.standardStartTime ?? '',
+      standardEndTime: payrollRes?.data?.standardEndTime ?? '',
+      attendanceDeductionEnabled: payrollRes?.data?.attendanceDeductionEnabled ?? false,
+    });
+    setAutomation({
+      autoFeeBilling: active?.auto_fee_billing ?? true,
+      autoInvoiceRelease: active?.auto_invoice_release ?? true,
+      autoPayroll: active?.auto_payroll ?? true,
+      autoReconciliation: active?.auto_reconciliation ?? true,
+      autoLibraryReminders: active?.auto_library_reminders ?? true,
+      autoPaymentProofReminders: active?.auto_payment_proof_reminders ?? true,
     });
     setLoading(false);
+  }
+
+  async function loadBankAccounts() {
+    if (!activeCompanyId) return;
+    try {
+      const res = await bankAccountApi.list();
+      setBankAccounts(res.data ?? []);
+    } catch {
+      setBankAccounts([]);
+    }
+  }
+
+  async function saveAutomation() {
+    if (!activeCompanyId) return;
+    setAutomationSaving(true);
+    try {
+      await companyApi.update(activeCompanyId, automation);
+      setAutomationSaved(true);
+      setTimeout(() => setAutomationSaved(false), 2000);
+    } catch {
+      toast.error(t('settings.failedSaveAutomation', { defaultValue: 'Failed to save automation settings' }));
+    } finally {
+      setAutomationSaving(false);
+    }
+  }
+
+  function resolveFileUrl(url = '') {
+    return url.startsWith('http') ? url : `${apiClient.defaults.baseURL}${url}`;
+  }
+
+  async function handleQrUpload(bankAccountId, e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setQrUploadingId(bankAccountId);
+    try {
+      const uploadRes = await uploadApi.upload(file);
+      await bankAccountApi.update(bankAccountId, { qrCodeUrl: uploadRes.data.url });
+      await loadBankAccounts();
+    } catch {
+      toast.error(t('settings.failedUploadQr', { defaultValue: 'Failed to upload QR code' }));
+    } finally {
+      setQrUploadingId(null);
+    }
+  }
+
+  async function handleAddBank(e) {
+    e.preventDefault();
+    if (!activeCompanyId || !bankForm.bankName.trim() || !bankForm.accountNumber.trim()) return;
+    setAddBankSaving(true);
+    try {
+      await bankAccountApi.create({
+        companyId: activeCompanyId,
+        bankName: bankForm.bankName.trim(),
+        accountNumber: bankForm.accountNumber.trim(),
+        accountType: bankForm.accountType.trim() || undefined,
+        branch: bankForm.branch.trim() || undefined,
+        currentBalance: bankForm.currentBalance ? Number(bankForm.currentBalance) : 0,
+        paymentType: bankForm.paymentType,
+      });
+      setShowAddBank(false);
+      setBankForm({ bankName: '', accountNumber: '', accountType: '', branch: '', currentBalance: '', paymentType: 'BANK' });
+      await loadBankAccounts();
+    } catch (err) {
+      toast.error(err?.response?.data?.message || t('settings.failedAddBank', { defaultValue: 'Failed to add bank account' }));
+    } finally {
+      setAddBankSaving(false);
+    }
   }
 
   async function loadUsers() {
@@ -129,13 +490,32 @@ export default function Settings() {
     }
   }
 
+  const visibleUsers = isSuperAdmin ? users : users.filter(u => u.role !== 'SUPER_ADMIN');
+
   // ── Company CRUD ──────────────────────────────────────────────────────────
 
   async function addCompany() {
-    await api.Company.create({ ...companyForm, is_active: true });
-    setCompanyForm({ name: '', address: '', phone: '', email: '', pan_vat: '', registration_number: '', business_type: '', default_unit_type: '', currency: 'NPR', logo_url: '' });
-    setShowAddCompany(false);
-    loadCompanies();
+    try {
+      await api.Company.create({ ...companyForm, is_active: true });
+      setCompanyForm({ name: '', address: '', phone: '', email: '', pan_vat: '', registration_number: '', business_type: 'SCHOOL', default_unit_type: '', currency: 'NPR', logo_url: '' });
+      setShowAddCompany(false);
+      loadCompanies();
+    } catch (err) {
+      const message = err?.response?.data?.message || t('settings.failedAddCompany', { defaultValue: 'Failed to add company' });
+      // The company-limit message ("Contact GeoInfosys to add another") is
+      // easy to miss as a corner toast — it needs a real popup so the user
+      // actually sees why nothing happened.
+      if (message.includes('Contact GeoInfosys')) {
+        setShowAddCompany(false);
+        await alertPopup({
+          title: t('settings.companyLimitReachedTitle', { defaultValue: 'Company limit reached' }),
+          description: message,
+          confirmLabel: t('settings.gotIt', { defaultValue: 'Got it' }),
+        });
+      } else {
+        toast.error(message);
+      }
+    }
   }
 
   async function updateCompany() {
@@ -146,12 +526,47 @@ export default function Settings() {
   }
 
   async function deleteCompany(id) {
-    if (!confirm('Are you sure you want to delete this company?')) return;
+    // NOTE: this used to be `if (!confirm(...)) return` without an await — confirm()
+    // always returns a Promise (truthy), so that check never actually blocked anything;
+    // the delete fired immediately regardless of what the user clicked. Fixed here.
+    const ok = await confirm({
+      title: t('settings.confirmDeleteCompanyTitle', { defaultValue: 'Delete this company?' }),
+      description: t('settings.confirmDeleteCompany', { defaultValue: 'This permanently deletes the company and cannot be undone. If you just want to pause a school that stopped using OneBook, use Deactivate instead.' }),
+      confirmLabel: t('settings.delete', { defaultValue: 'Delete' }),
+      variant: 'destructive',
+    });
+    if (!ok) return;
     await api.Company.delete(id);
     if (getActiveCompanyId() === id) {
       const remaining = companies.filter(c => c.id !== id);
       if (remaining.length > 0) setActiveCompanyId(remaining[0].id);
     }
+    loadCompanies();
+  }
+
+  async function switchActiveCompany(company) {
+    const ok = await confirm({
+      title: t('settings.confirmSetActiveTitle', { defaultValue: 'Switch active company?' }),
+      description: t('settings.confirmSetActiveDescription', { defaultValue: "You'll be switched into {{name}} — the app will reload showing that company's data instead.", name: company.name }),
+      confirmLabel: t('settings.setActive', { defaultValue: 'Set Active' }),
+    });
+    if (!ok) return;
+    setActiveCompanyId(company.id);
+    window.location.href = '/';
+  }
+
+  async function toggleCompanyActive(company) {
+    const activating = !company.is_active;
+    if (!activating) {
+      const ok = await confirm({
+        title: t('settings.confirmDeactivateTitle', { defaultValue: 'Deactivate this school?' }),
+        description: t('settings.confirmDeactivateDescription', { defaultValue: 'The nightly automation (fee billing, payroll, reconciliation) will stop running for this school. You can reactivate it anytime.' }),
+        confirmLabel: t('settings.deactivate', { defaultValue: 'Deactivate' }),
+        variant: 'destructive',
+      });
+      if (!ok) return;
+    }
+    await companyApi.setActive(company.id, activating);
     loadCompanies();
   }
 
@@ -173,24 +588,113 @@ export default function Settings() {
     try {
       const res = await usersApi.invite(activeCompanyId, inviteForm);
       if (res.data.tempPassword) setTempPassword(res.data.tempPassword);
-      else { setShowInvite(false); setInviteForm({ name: '', email: '', role: 'STAFF' }); }
+      else { setShowInvite(false); setInviteForm({ name: '', email: '', role: 'STAFF', staffTags: [] }); }
       loadUsers();
     } catch (err) {
-      alert(err?.response?.data?.message || 'Failed to invite user');
+      toast.error(err?.response?.data?.message || t('settings.failedInviteUser', { defaultValue: 'Failed to invite user' }));
     } finally {
       setInviteLoading(false);
     }
   }
 
-  async function handleRoleChange(userId, newRole) {
+  async function handleRoleChange(userId, newRole, staffTags) {
     setRoleChanging(userId);
     try {
-      await usersApi.changeRole(userId, activeCompanyId, newRole);
+      await usersApi.changeRole(userId, activeCompanyId, newRole, staffTags);
       loadUsers();
     } catch (err) {
-      alert(err?.response?.data?.message || 'Failed to change role');
+      toast.error(err?.response?.data?.message || t('settings.failedChangeRole', { defaultValue: 'Failed to change role' }));
     } finally {
       setRoleChanging(null);
+    }
+  }
+
+  function toggleUserStaffTag(u, tag) {
+    const next = (u.staffTags || []).includes(tag)
+      ? u.staffTags.filter(tg => tg !== tag)
+      : [...(u.staffTags || []), tag];
+    handleRoleChange(u.id, 'STAFF', next);
+  }
+
+  async function handleMaxCompaniesChange(userId, value) {
+    const n = parseInt(value, 10);
+    if (!n || n < 1) return;
+    setMaxCompaniesSaving(userId);
+    try {
+      await usersApi.updateMaxCompanies(userId, n);
+      loadUsers();
+      toast.success(t('settings.maxCompaniesUpdated', { defaultValue: 'Company limit updated' }));
+    } catch (err) {
+      toast.error(err?.response?.data?.message || t('settings.failedUpdateMaxCompanies', { defaultValue: 'Failed to update company limit' }));
+    } finally {
+      setMaxCompaniesSaving(null);
+    }
+  }
+
+  async function handleRemoveUser(u) {
+    const ok = await confirm({
+      title: t('settings.removeUserTitle', { defaultValue: 'Remove user?' }),
+      description: t('settings.removeUserDescription', { defaultValue: 'Remove {{name}} from this company? They will lose access immediately.', name: u.name || u.email }),
+      confirmLabel: t('settings.remove', { defaultValue: 'Remove' }),
+      variant: 'destructive',
+    });
+    if (!ok) return;
+    setRemovingUserId(u.id);
+    try {
+      await usersApi.remove(u.id, activeCompanyId);
+      loadUsers();
+    } catch (err) {
+      toast.error(err?.response?.data?.message || t('settings.failedRemoveUser', { defaultValue: 'Failed to remove user' }));
+    } finally {
+      setRemovingUserId(null);
+    }
+  }
+
+  async function handleResetPassword(u) {
+    const ok = await confirm({
+      title: t('settings.confirmResetPasswordTitle', { defaultValue: 'Reset password for {{name}}?', name: u.name || u.email }),
+      description: t('settings.confirmResetPasswordDesc', { defaultValue: 'Generates a new temporary password and signs them out of any active session. They will be required to change it on next login.' }),
+      confirmLabel: t('settings.resetPassword', { defaultValue: 'Reset Password' }),
+      variant: 'destructive',
+    });
+    if (!ok) return;
+    setResettingPasswordId(u.id);
+    try {
+      const res = await usersApi.resetPassword(u.id, activeCompanyId);
+      if (res.data.emailSent) {
+        toast.success(t('settings.passwordResetEmailed', { defaultValue: 'Password reset — new credentials emailed to {{email}}', email: u.email }));
+      } else {
+        // Email delivery failed — this is the only remaining way to hand over
+        // the password, so fall back to showing it (same pattern as invite/provision).
+        toast.error(t('settings.passwordResetEmailFailed', { defaultValue: 'Password reset, but the email failed to send — share this password manually' }));
+        setTempPassword(res.data.tempPassword);
+      }
+    } catch (err) {
+      toast.error(err?.response?.data?.message || t('settings.failedResetPassword', { defaultValue: 'Failed to reset password' }));
+    } finally {
+      setResettingPasswordId(null);
+    }
+  }
+
+  async function handleToggleUserActive(u) {
+    const activating = u.isActive === false;
+    if (!activating) {
+      const ok = await confirm({
+        title: t('settings.confirmSuspendUserTitle', { defaultValue: 'Suspend {{name}}?', name: u.name || u.email }),
+        description: t('settings.confirmSuspendUserDesc', { defaultValue: 'They will be signed out immediately and unable to log back in until reactivated. The rest of the company is unaffected.' }),
+        confirmLabel: t('settings.suspend', { defaultValue: 'Suspend' }),
+        variant: 'destructive',
+      });
+      if (!ok) return;
+    }
+    setTogglingUserActiveId(u.id);
+    try {
+      await usersApi.setStatus(u.id, activeCompanyId, activating);
+      loadUsers();
+    } catch (err) {
+      toast.error(err?.response?.data?.message || t('settings.failedToggleUserActive', { defaultValue: 'Failed to update status' }));
+    } finally {
+      setTogglingUserActiveId(null);
     }
   }
 
@@ -203,7 +707,7 @@ export default function Settings() {
   function closeTempPasswordDialog() {
     setTempPassword(null);
     setShowInvite(false);
-    setInviteForm({ name: '', email: '', role: 'STAFF' });
+    setInviteForm({ name: '', email: '', role: 'STAFF', staffTags: [] });
   }
 
   // ── Preferences ───────────────────────────────────────────────────────────
@@ -216,14 +720,344 @@ export default function Settings() {
         companyApi.update(activeCompanyId, { abbreviation: companyPrefs.abbreviation || undefined }),
         companyApi.upsertPayrollSettings(activeCompanyId, {
           workingDaysPerMonth: Number(companyPrefs.workingDaysPerMonth),
+          standardStartTime: companyPrefs.standardStartTime || undefined,
+          standardEndTime: companyPrefs.standardEndTime || undefined,
+          attendanceDeductionEnabled: companyPrefs.attendanceDeductionEnabled,
         }),
       ]);
       setPrefsSaved(true);
       setTimeout(() => setPrefsSaved(false), 2000);
     } catch {
-      alert('Failed to save preferences');
+      toast.error(t('settings.failedSavePreferences', { defaultValue: 'Failed to save preferences' }));
     } finally {
       setPrefsSaving(false);
+    }
+  }
+
+  // ── Clients — platform-wide client directory (SUPER_ADMIN only) ──────────
+  const PACKAGE_MODULES = {
+    BASE: ['BASE'],
+    STANDARD: ['BASE', 'SCHOOL_ACADEMICS', 'SCHOOL_ACADEMICS_ROUTINE', 'SCHOOL_ACADEMICS_EXAMS', 'SCHOOL_ACADEMICS_STUDY_MATERIALS', 'SCHOOL_ACADEMICS_HOMEWORK'],
+    PREMIUM: ['BASE', 'SCHOOL_ACADEMICS', 'SCHOOL_ACADEMICS_ROUTINE', 'SCHOOL_ACADEMICS_EXAMS', 'SCHOOL_ACADEMICS_STUDY_MATERIALS', 'SCHOOL_ACADEMICS_HOMEWORK', 'FACILITIES', 'FACILITIES_LIBRARY', 'FACILITIES_HOSTEL', 'FACILITIES_TRANSPORT', 'HRMS', 'HRMS_EMPLOYEES', 'HRMS_ATTENDANCE', 'HRMS_LEAVE', 'HRMS_PAYROLL', 'AI', 'AI_NOTICES', 'AI_INSIGHTS', 'AI_REPORT_CARDS', 'BULK_IMPORT', 'BULK_IMPORT_STUDENTS', 'BULK_IMPORT_EMPLOYEES', 'BULK_IMPORT_ITEMS', 'FINANCE_FEES', 'FINANCE_TRANSACTIONS', 'FINANCE_LEDGER', 'INVENTORY', 'INVENTORY_STOCK'],
+  };
+
+  function packageTierOf(enabledModules) {
+    if (!enabledModules || enabledModules.length === 0) return null; // legacy/unrestricted — not on a tier yet
+    if (enabledModules.includes('FACILITIES')) return 'PREMIUM';
+    if (enabledModules.includes('SCHOOL_ACADEMICS')) return 'STANDARD';
+    return 'BASE';
+  }
+
+  // Same admin can end up running more than one company (e.g. they self-serve
+  // "Add Company" for a second branch via their own Companies tab). Grouping
+  // by admin surfaces that directly in the layout instead of a text hint on
+  // each card, and doubles as the only thing keeping the list readable once
+  // there are dozens of clients — most groups are one row, not a full card.
+  function groupClientsByAdmin(clients) {
+    const groups = [];
+    const indexByKey = {};
+    clients.forEach(c => {
+      const admin = c.admins?.[0] || null;
+      const key = admin?.email || `__no-admin-${c.id}`;
+      if (indexByKey[key] === undefined) {
+        indexByKey[key] = groups.length;
+        groups.push({ key, admin, companies: [] });
+      }
+      groups[indexByKey[key]].companies.push(c);
+    });
+    return groups;
+  }
+
+  async function loadAllClients() {
+    if (!isSuperAdmin) return;
+    setAllClientsLoading(true);
+    try {
+      const res = await companyApi.listAll();
+      setAllClients(res.data);
+    } catch {
+      setAllClients([]);
+    } finally {
+      setAllClientsLoading(false);
+    }
+  }
+
+  // Tier buttons and module checkboxes below only stage a change locally —
+  // nothing is sent to the server until "Save" is clicked and confirmed.
+  // pendingClientModules[companyId] undefined = no staged change, show the
+  // company's actual saved enabledModules instead.
+  function stageClientTier(company, tier) {
+    setPendingClientModules(p => ({ ...p, [company.id]: PACKAGE_MODULES[tier] }));
+  }
+
+  // BASE is force-included whenever the resulting set is non-empty (an empty
+  // enabledModules means "unrestricted/legacy" to ModuleAccessGuard — the
+  // opposite of what unchecking everything should mean).
+  function stageClientModuleToggle(company, moduleKey) {
+    setPendingClientModules(p => {
+      const current = p[company.id] ?? company.enabledModules ?? [];
+      const module = moduleCatalogFor(company).find(item => item.value === moduleKey)
+        || moduleCatalogFor(company).find(item => item.children?.some(child => child.value === moduleKey));
+      const childKeys = module?.children?.map(child => child.value) || [];
+      if (module && module.value !== moduleKey && childKeys.length > 0) {
+        const next = current.includes(moduleKey)
+          ? current.filter(key => key !== moduleKey)
+          : [...current, moduleKey];
+        const modules = next.filter(m => m !== 'BASE').length > 0 ? [...new Set(['BASE', ...next])] : [];
+        return { ...p, [company.id]: modules };
+      }
+      const currentChildren = childKeys.length
+        ? childKeys.filter(key => current.includes(key) || current.includes(moduleKey))
+        : [];
+      const toggledKeys = childKeys.length
+        ? (currentChildren.length === childKeys.length ? [] : childKeys)
+        : (current.includes(moduleKey) ? [] : [moduleKey]);
+      const keysToReplace = childKeys.length ? [moduleKey, ...childKeys] : [moduleKey];
+      const next = [...current.filter(key => !keysToReplace.includes(key)), ...toggledKeys];
+      const modules = next.filter(m => m !== 'BASE').length > 0 ? [...new Set(['BASE', ...next])] : [];
+      return { ...p, [company.id]: modules };
+    });
+  }
+
+  function isClientModuleActive(effectiveModules, module, child) {
+    const key = child?.value || module.value;
+    return (effectiveModules || []).includes(key) || (!child && (effectiveModules || []).includes(module.value));
+  }
+
+  function toggleClientModuleExpanded(companyId, moduleValue) {
+    const key = `${companyId}:${moduleValue}`;
+    setExpandedClientModules(current => ({ ...current, [key]: !current[key] }));
+  }
+
+  function discardClientPackageChange(company) {
+    setPendingClientModules(p => {
+      const next = { ...p };
+      delete next[company.id];
+      return next;
+    });
+  }
+
+  async function handleSaveClientPackage(company) {
+    const modules = pendingClientModules[company.id];
+    if (modules === undefined) return;
+    const ok = await confirm({
+      title: t('settings.confirmSavePackageTitle', { defaultValue: 'Save package changes for {{name}}?', name: company.name }),
+      description: t('settings.confirmSavePackageDesc', { defaultValue: 'This changes which features they can access immediately.' }),
+      confirmLabel: t('settings.save', { defaultValue: 'Save' }),
+    });
+    if (!ok) return;
+    setClientPackageSaving(company.id);
+    try {
+      await companyApi.updatePackage(company.id, modules);
+      // If this is the company we're currently "viewing" (via the View
+      // button), our own sidebar/enabledModules snapshot is now stale —
+      // user.defaultCompany was fetched once at login and won't refetch
+      // itself. A different client admin's own separate session still won't
+      // see this until THEY reload/relogin (no live push between sessions).
+      if (company.id === activeCompanyId) {
+        window.location.reload();
+        return;
+      }
+      setAllClients(list => list.map(c => c.id === company.id ? { ...c, enabledModules: modules } : c));
+      discardClientPackageChange(company);
+      toast.success(t('settings.packageSaved', { defaultValue: 'Package updated' }));
+    } catch (err) {
+      toast.error(err?.response?.data?.message || t('settings.packageSaveFailed', { defaultValue: 'Failed to update package' }));
+    } finally {
+      setClientPackageSaving(null);
+    }
+  }
+
+  async function handleClientActiveToggle(company) {
+    const activating = !company.isActive;
+    if (!activating) {
+      // Real-time, not just "at next login" — CompanyAccessGuard checks
+      // isActive fresh on every companyId-scoped request, so this locks out
+      // an already-logged-in session immediately, not only new sign-ins.
+      // Reactivating flips it back and access resumes just as instantly —
+      // this is the actual subscription pause/resume switch, not cosmetic.
+      const ok = await confirm({
+        title: t('settings.confirmDeactivateClientTitle', { defaultValue: 'Deactivate {{name}}?', name: company.name }),
+        description: t('settings.confirmDeactivateClientDescription', { defaultValue: "Their users are signed out immediately and locked out of every module — everything they do stops working right away, not just at their next login. Any nightly automation (billing, payroll, reconciliation) for them stops too. Reactivate any time to resume instantly, e.g. once they've paid." }),
+        confirmLabel: t('settings.deactivate', { defaultValue: 'Deactivate' }),
+        variant: 'destructive',
+      });
+      if (!ok) return;
+    }
+    setClientActiveSaving(company.id);
+    try {
+      await companyApi.setActive(company.id, activating);
+      setAllClients(list => list.map(c => c.id === company.id ? { ...c, isActive: activating } : c));
+    } catch (err) {
+      toast.error(err?.response?.data?.message || t('settings.failedToggleActive', { defaultValue: 'Failed to update status' }));
+    } finally {
+      setClientActiveSaving(null);
+    }
+  }
+
+  // datetime-local inputs show/take local wall-clock time with no offset —
+  // convert to/from the ISO string the API and Date() both expect.
+  function toDatetimeLocalValue(iso) {
+    if (!iso) return '';
+    const d = new Date(iso);
+    const pad = n => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+  }
+
+  // Short "2d 4h" / "45s" countdown for the subscription badge — precise
+  // enough down to seconds so a test expiry a few seconds out is visibly
+  // ticking, not just "today".
+  function formatRemaining(ms) {
+    if (ms <= 0) return t('settings.subscriptionExpired', { defaultValue: 'Expired' });
+    const totalSeconds = Math.floor(ms / 1000);
+    const days = Math.floor(totalSeconds / 86400);
+    const hours = Math.floor((totalSeconds % 86400) / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+    if (days > 0) return `${days}d ${hours}h`;
+    if (hours > 0) return `${hours}h ${minutes}m`;
+    if (minutes > 0) return `${minutes}m ${seconds}s`;
+    return `${seconds}s`;
+  }
+
+  function discardSubscriptionExpiryChange(companyId) {
+    setPendingSubscriptionExpiry(p => {
+      const next = { ...p };
+      delete next[companyId];
+      return next;
+    });
+  }
+
+  async function handleSaveSubscriptionExpiry(company) {
+    const staged = pendingSubscriptionExpiry[company.id];
+    if (staged === undefined) return;
+    const expiresAt = staged ? new Date(staged).toISOString() : null;
+    const ok = await confirm({
+      title: t('settings.confirmSaveSubscriptionTitle', { defaultValue: 'Update subscription for {{name}}?', name: company.name }),
+      description: expiresAt
+        ? t('settings.confirmSaveSubscriptionDesc', { defaultValue: 'Access locks out automatically at {{date}} unless renewed before then.', date: new Date(expiresAt).toLocaleString() })
+        : t('settings.confirmClearSubscriptionDesc', { defaultValue: 'Removes the automatic expiry — access stays on until manually deactivated.' }),
+    });
+    if (!ok) return;
+    setClientSubscriptionSaving(company.id);
+    try {
+      await companyApi.setSubscriptionExpiry(company.id, expiresAt);
+      setAllClients(list => list.map(c => c.id === company.id ? { ...c, subscriptionExpiresAt: expiresAt } : c));
+      discardSubscriptionExpiryChange(company.id);
+      toast.success(t('settings.subscriptionSaved', { defaultValue: 'Subscription updated' }));
+    } catch (err) {
+      toast.error(err?.response?.data?.message || t('settings.subscriptionSaveFailed', { defaultValue: 'Failed to update subscription' }));
+    } finally {
+      setClientSubscriptionSaving(null);
+    }
+  }
+
+  async function handleClientDelete(company) {
+    const ok = await confirm({
+      title: t('settings.confirmDeleteCompanyTitle', { defaultValue: 'Delete this company?' }),
+      description: t('settings.confirmDeleteCompany', { defaultValue: 'This permanently deletes the company and cannot be undone. If you just want to pause a school that stopped using OneBook, use Deactivate instead.' }),
+      confirmLabel: t('settings.delete', { defaultValue: 'Delete' }),
+      variant: 'destructive',
+    });
+    if (!ok) return;
+    try {
+      await api.Company.delete(company.id);
+      setAllClients(list => list.filter(c => c.id !== company.id));
+      if (getActiveCompanyId() === company.id) loadCompanies();
+    } catch (err) {
+      toast.error(err?.response?.data?.message || t('settings.failedDeleteCompany', { defaultValue: 'Failed to delete company' }));
+    }
+  }
+
+  function discardMaxCompaniesChange(userId) {
+    setPendingMaxCompanies(p => {
+      const next = { ...p };
+      delete next[userId];
+      return next;
+    });
+  }
+
+  async function handleSaveMaxCompanies(admin) {
+    const n = pendingMaxCompanies[admin.id];
+    if (n === undefined) return;
+    const ok = await confirm({
+      title: t('settings.confirmSaveMaxCompaniesTitle', { defaultValue: 'Update company limit for {{name}}?', name: admin.name || admin.email }),
+      description: t('settings.confirmSaveMaxCompaniesDesc', { defaultValue: 'They will be able to self-serve create up to {{n}} companies.', n }),
+      confirmLabel: t('settings.save', { defaultValue: 'Save' }),
+    });
+    if (!ok) return;
+    if (!n || n < 1) return;
+    setClientMaxCompaniesSaving(admin.id);
+    try {
+      await usersApi.updateMaxCompanies(admin.id, n);
+      setAllClients(list => list.map(c => ({
+        ...c,
+        admins: c.admins.map(a => a.id === admin.id ? { ...a, maxCompanies: n } : a),
+      })));
+      discardMaxCompaniesChange(admin.id);
+      toast.success(t('settings.maxCompaniesUpdated', { defaultValue: 'Company limit updated' }));
+    } catch (err) {
+      toast.error(err?.response?.data?.message || t('settings.failedUpdateMaxCompanies', { defaultValue: 'Failed to update company limit' }));
+    } finally {
+      setClientMaxCompaniesSaving(null);
+    }
+  }
+
+  async function handleClientAdminResetPassword(company, admin) {
+    const ok = await confirm({
+      title: t('settings.confirmResetPasswordTitle', { defaultValue: 'Reset password for {{name}}?', name: admin.name || admin.email }),
+      description: t('settings.confirmResetPasswordDesc', { defaultValue: 'Generates a new temporary password and signs them out of any active session. They will be required to change it on next login.' }),
+      confirmLabel: t('settings.resetPassword', { defaultValue: 'Reset Password' }),
+      variant: 'destructive',
+    });
+    if (!ok) return;
+    setClientResettingPasswordId(admin.id);
+    try {
+      const res = await usersApi.resetPassword(admin.id, company.id);
+      if (res.data.emailSent) {
+        toast.success(t('settings.passwordResetEmailed', { defaultValue: 'Password reset — new credentials emailed to {{email}}', email: admin.email }));
+      } else {
+        toast.error(t('settings.passwordResetEmailFailed', { defaultValue: 'Password reset, but the email failed to send — share this password manually' }));
+        setTempPassword(res.data.tempPassword);
+      }
+    } catch (err) {
+      toast.error(err?.response?.data?.message || t('settings.failedResetPassword', { defaultValue: 'Failed to reset password' }));
+    } finally {
+      setClientResettingPasswordId(null);
+    }
+  }
+
+  async function handleProvisionClient(e) {
+    e.preventDefault();
+    setProvisioning(true);
+    try {
+      let businessType = 'SCHOOL';
+      if (provisionForm.product === 'BUSINESS') {
+        businessType = provisionForm.businessType === 'OTHER' && provisionForm.otherBusinessDesc.trim()
+          ? provisionForm.otherBusinessDesc.trim()
+          : provisionForm.businessType;
+      }
+      const res = await usersApi.provisionClient({
+        companyName: provisionForm.companyName,
+        businessType,
+        adminName: provisionForm.adminName,
+        adminEmail: provisionForm.adminEmail,
+        enabledModules: businessType === 'SCHOOL' ? ['BASE'] : [],
+      });
+      if (res.data.emailSent) {
+        toast.success(t('settings.clientCreatedEmailed', { defaultValue: 'Client created — login details emailed to {{email}}', email: provisionForm.adminEmail }));
+      } else if (res.data.tempPassword) {
+        // Email delivery failed — this is the only remaining way to hand over
+        // the password, so fall back to showing it instead of losing it.
+        toast.error(t('settings.clientCreatedEmailFailed', { defaultValue: 'Client created, but the invite email failed to send — share this password manually' }));
+        setTempPassword(res.data.tempPassword);
+      }
+      setProvisionForm({ companyName: '', product: 'SCHOOL', businessType: '', otherBusinessDesc: '', adminName: '', adminEmail: '' });
+      loadCompanies();
+      loadAllClients();
+    } catch (err) {
+      toast.error(err?.response?.data?.message || t('settings.provisionFailed', { defaultValue: 'Failed to create client' }));
+    } finally {
+      setProvisioning(false);
     }
   }
 
@@ -238,10 +1072,10 @@ export default function Settings() {
         setBinPassword('');
         loadBinItems();
       } else {
-        setBinPasswordError('Incorrect password.');
+        setBinPasswordError(t('settings.binIncorrectPassword', { defaultValue: 'Incorrect password.' }));
       }
     } catch {
-      setBinPasswordError('Incorrect password.');
+      setBinPasswordError(t('settings.binIncorrectPassword', { defaultValue: 'Incorrect password.' }));
     } finally {
       setBinVerifying(false);
     }
@@ -270,7 +1104,7 @@ export default function Settings() {
   }
 
   async function permanentDeleteItem(id, type) {
-    if (!confirm('Permanently delete this item? This cannot be undone.')) return;
+    if (!confirm(t('settings.confirmPermanentDelete', { defaultValue: 'Permanently delete this item? This cannot be undone.' }))) return;
     await recycleBinApi.permanentDelete(id, type, activeCompanyId);
     loadBinItems();
   }
@@ -302,27 +1136,512 @@ export default function Settings() {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <PageHeader title="Settings" subtitle="Manage companies, users and preferences" />
+      <PageHeader title={t('settings.title', { defaultValue: 'Settings' })} subtitle={t('settings.subtitle', { defaultValue: 'Manage companies, users and preferences' })} />
 
-      <Tabs defaultValue="preferences">
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList>
-          <TabsTrigger value="companies">Companies</TabsTrigger>
-          <TabsTrigger value="users" onClick={loadUsers}>Users</TabsTrigger>
-          <TabsTrigger value="preferences">Preferences</TabsTrigger>
+          {/* SUPER_ADMIN never has a company of their own to switch between or
+              edit — that's the whole point of Clients (below) instead — so
+              this tab would only ever be empty and confusing for them. */}
+          {!isSuperAdmin && (
+            <TabsTrigger value="companies">{t('settings.tabCompanies', { defaultValue: 'Companies' })}</TabsTrigger>
+          )}
+          {isSuperAdmin && (
+            <TabsTrigger value="clients" onClick={loadAllClients} className="gap-1.5">
+              <Layers className="w-3.5 h-3.5" />{t('settings.tabClients', { defaultValue: 'Clients' })}
+            </TabsTrigger>
+          )}
+          <TabsTrigger value="users" onClick={loadUsers}>{t('settings.tabUsers', { defaultValue: 'Users' })}</TabsTrigger>
+          <TabsTrigger value="preferences">{t('settings.tabPreferences', { defaultValue: 'Preferences' })}</TabsTrigger>
+          <TabsTrigger value="automation" onClick={loadBankAccounts}>{t('settings.tabAutomation', { defaultValue: 'Automation' })}</TabsTrigger>
           {isAdmin && (
             <TabsTrigger value="recycle-bin" className="gap-1.5">
-              <Recycle className="w-3.5 h-3.5" />Recycle Bin
+              <Recycle className="w-3.5 h-3.5" />{t('settings.tabRecycleBin', { defaultValue: 'Recycle Bin' })}
             </TabsTrigger>
           )}
         </TabsList>
 
+        {/* ── Clients Tab (SUPER_ADMIN only) ────────────────────────────────
+            Platform-wide client directory — every company GeoInfosys has sold,
+            regardless of whether this SUPER_ADMIN account is personally linked
+            to it. Package/company-limit/active-status are all editable inline,
+            without needing to "Set Active" into that client's company first
+            (unlike the Companies tab below, which only lists linked companies). */}
+        {isSuperAdmin && (
+          <TabsContent value="clients" className="mt-4 space-y-6">
+            {allClientsLoading ? (
+              <div className="flex justify-center py-10">
+                <div className="w-6 h-6 border-4 border-primary/20 border-t-primary rounded-full animate-spin" />
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {allClients.length > 5 && (
+                  <div className="relative max-w-sm">
+                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                    <Input
+                      className="pl-8 h-9 text-sm"
+                      placeholder={t('settings.searchClients', { defaultValue: 'Search by school or admin…' })}
+                      value={clientSearch}
+                      onChange={e => setClientSearch(e.target.value)}
+                    />
+                  </div>
+                )}
+
+                {(() => {
+                  const q = clientSearch.trim().toLowerCase();
+                  const filtered = !q ? allClients : allClients.filter(c => {
+                    const admin = c.admins?.[0];
+                    return c.name.toLowerCase().includes(q)
+                      || admin?.name?.toLowerCase().includes(q)
+                      || admin?.email?.toLowerCase().includes(q);
+                  });
+                  const groups = groupClientsByAdmin(filtered);
+
+                  if (groups.length === 0) {
+                    return (
+                      <div className="text-center py-12 text-muted-foreground">
+                        {allClients.length === 0
+                          ? t('settings.noCompaniesYet', { defaultValue: 'No companies yet' })
+                          : t('settings.noClientsMatch', { defaultValue: 'No clients match "{{query}}"', query: clientSearch })}
+                      </div>
+                    );
+                  }
+
+                  return groups.map(group => (
+                    <div key={group.key} className="bg-card rounded-xl border overflow-hidden">
+                      <div className="px-4 py-2.5 bg-muted/40 border-b flex flex-wrap items-center gap-x-2 gap-y-1.5 text-xs">
+                        <UserCircle className="w-3.5 h-3.5 text-muted-foreground" />
+                        <span className="font-medium">{group.admin?.name || t('settings.noAdminYet', { defaultValue: 'No admin user found' })}</span>
+                        {group.admin?.email && <span className="text-muted-foreground">{group.admin.email}</span>}
+                        <span className="text-muted-foreground">
+                          {t('settings.schoolCount', { defaultValue: '{{count}} schools', count: group.companies.length })}
+                        </span>
+                        {group.admin && (() => {
+                          const maxCompaniesPending = pendingMaxCompanies[group.admin.id] !== undefined;
+                          return (
+                            <div className="flex items-center gap-1.5 ml-auto" title={t('settings.maxCompaniesHint', { defaultValue: 'How many companies this admin may self-serve create' })}>
+                              <span className="font-medium text-muted-foreground">{t('settings.maxCompaniesLabel', { defaultValue: 'Max Companies' })}</span>
+                              <input
+                                type="number"
+                                min={1}
+                                className="w-14 h-7 text-xs border rounded-md px-1.5 bg-background focus:outline-none focus:ring-1 focus:ring-ring"
+                                value={pendingMaxCompanies[group.admin.id] ?? group.admin.maxCompanies ?? 1}
+                                disabled={clientMaxCompaniesSaving === group.admin.id}
+                                onChange={e => setPendingMaxCompanies(p => ({ ...p, [group.admin.id]: Number(e.target.value) }))}
+                              />
+                              {maxCompaniesPending && (
+                                <>
+                                  <Button size="sm" className="h-7 px-2" onClick={() => handleSaveMaxCompanies(group.admin)} disabled={clientMaxCompaniesSaving === group.admin.id}>
+                                    <Save className="w-3.5 h-3.5 mr-1" />
+                                    {clientMaxCompaniesSaving === group.admin.id ? t('settings.savingEllipsis', { defaultValue: 'Saving…' }) : t('settings.save', { defaultValue: 'Save' })}
+                                  </Button>
+                                  <button
+                                    type="button"
+                                    onClick={() => discardMaxCompaniesChange(group.admin.id)}
+                                    disabled={clientMaxCompaniesSaving === group.admin.id}
+                                    className="h-7 rounded-md px-1.5 font-medium text-muted-foreground underline-offset-2 hover:bg-muted hover:text-foreground hover:underline disabled:opacity-50"
+                                  >
+                                    {t('settings.cancel', { defaultValue: 'Cancel' })}
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          );
+                        })()}
+                      </div>
+                      <div className="divide-y">
+                        {group.companies.map(c => {
+                          const admin = group.admin;
+                          const isExpanded = expandedClientId === c.id;
+                          const hasPendingChange = pendingClientModules[c.id] !== undefined;
+                          const effectiveModules = pendingClientModules[c.id] ?? c.enabledModules;
+                          const tier = packageTierOf(effectiveModules);
+                          const hasThreeDayExtension = !!c.subscriptionExtensionUsedAt;
+                          const isExpired = c.subscriptionExpiresAt && new Date(c.subscriptionExpiresAt).getTime() <= nowTick;
+                          const extensionStatusText = hasThreeDayExtension && !isExpired ? 'Extended' : null;
+                          return (
+                            <div key={c.id} id={`client-row-${c.id}`}>
+                              {/* Compact row — this is ALL that renders per client until expanded,
+                                  which is what keeps a 100-client list scrollable instead of 100
+                                  fully-expanded package editors stacked on top of each other. */}
+                              <button
+                                type="button"
+                                onClick={() => setExpandedClientId(isExpanded ? null : c.id)}
+                                className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-muted/30 transition-colors"
+                              >
+                                <ChevronRight className={`w-3.5 h-3.5 text-muted-foreground shrink-0 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
+                                {c.id === activeCompanyId && (
+                                  <span
+                                    className="w-2 h-2 rounded-full bg-emerald-500 ring-2 ring-emerald-500/25 shrink-0"
+                                    title={t('settings.currentlyActiveCompany', { defaultValue: 'Currently active company' })}
+                                  />
+                                )}
+                                <span className="font-medium text-sm truncate">{c.name}</span>
+                                <span className="text-[10px] bg-secondary text-muted-foreground px-1.5 py-0.5 rounded-full shrink-0">
+                                  {businessTypeLabel(c.businessType) || c.businessType}
+                                </span>
+                                {tier && (
+                                  <span className="text-[10px] border px-1.5 py-0.5 rounded-full text-muted-foreground shrink-0">
+                                    {t(`settings.package${tier}`, { defaultValue: tier.charAt(0) + tier.slice(1).toLowerCase() })}
+                                  </span>
+                                )}
+                                {c.isActive === false && (
+                                  <span className="text-[10px] bg-red-50 text-red-600 px-1.5 py-0.5 rounded-full font-medium shrink-0">
+                                    {t('settings.deactivated', { defaultValue: 'Deactivated' })}
+                                  </span>
+                                )}
+                                {c.isActive !== false && extensionStatusText && (
+                                  <span className="text-[10px] bg-emerald-50 text-emerald-700 px-1.5 py-0.5 rounded-full font-medium shrink-0" title={t('settings.subscriptionExtendedHint', { defaultValue: 'Used the one-time 3-day extension' })}>
+                                    {t('settings.subscriptionExtended', { defaultValue: 'Extended' })}
+                                  </span>
+                                )}
+                                {c.isActive !== false && isExpired && !hasThreeDayExtension && (
+                                  <span className="text-[10px] bg-amber-50 text-amber-600 px-1.5 py-0.5 rounded-full font-medium shrink-0" title={t('settings.subscriptionExpiredHint', { defaultValue: 'Subscription expiry has passed — locked out the same as Deactivated' })}>
+                                    {t('settings.subscriptionExpired', { defaultValue: 'Expired' })}
+                                  </span>
+                                )}
+                                {group.companies.length === 1 && (
+                                  <span className="text-xs text-muted-foreground truncate ml-auto">
+                                    {admin ? `${admin.name} · ${admin.email}` : t('settings.noAdminYet', { defaultValue: 'No admin user found' })}
+                                  </span>
+                                )}
+                              </button>
+
+                              {isExpanded && (
+                                <div className="px-4 pb-4 space-y-3 border-t bg-muted/10">
+                                  {admin && (
+                                    <p className="text-[11px] text-muted-foreground pt-3">
+                                      {admin.lastLoginAt
+                                        ? t('settings.lastLoginAt', { defaultValue: 'Last login: {{date}}', date: new Date(admin.lastLoginAt).toLocaleString('en-NP', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) })
+                                        : t('settings.neverLoggedIn', { defaultValue: 'Never logged in' })}
+                                    </p>
+                                  )}
+
+                                  <div className="flex flex-wrap gap-2 pt-1">
+                                    {/* Switches your active company to this client's — same as
+                                        their own admin sees, not a read-only preview (named
+                                        "Switch To" rather than "View" for that reason). The
+                                        header resolves this correctly even when SUPER_ADMIN
+                                        isn't personally linked to the company — see TopBar.jsx
+                                        loadData() and AuthContext.jsx's resolveActiveCompanyOverride. */}
+                                    {c.isActive !== false && (
+                                      <Button size="sm" variant="outline" onClick={() => { setActiveCompanyId(c.id); window.location.href = '/'; }}>
+                                        <ExternalLink className="w-3.5 h-3.5 mr-1.5" />{t('settings.switchToCompany', { defaultValue: 'Switch To' })}
+                                      </Button>
+                                    )}
+                                    {admin && (
+                                      <Button size="sm" variant="outline" onClick={() => handleClientAdminResetPassword(c, admin)} disabled={clientResettingPasswordId === admin.id}>
+                                        <KeyRound className="w-3.5 h-3.5 mr-1.5" />{t('settings.resetPassword', { defaultValue: 'Reset Password' })}
+                                      </Button>
+                                    )}
+                                    <Button size="sm" variant="outline" onClick={() => handleClientActiveToggle(c)}>
+                                      {c.isActive === false
+                                        ? <><Power className="w-3.5 h-3.5 mr-1.5" />{t('settings.reactivate', { defaultValue: 'Reactivate' })}</>
+                                        : <><PowerOff className="w-3.5 h-3.5 mr-1.5" />{t('settings.deactivate', { defaultValue: 'Deactivate' })}</>}
+                                    </Button>
+                                    <Button size="icon" variant="ghost" onClick={() => handleClientDelete(c)}>
+                                      <Trash2 className="w-4 h-4 text-destructive" />
+                                    </Button>
+                                  </div>
+
+                                  <div className="rounded-lg border divide-y overflow-hidden mt-1">
+                                    {/* Plan row */}
+                                    <div className="flex flex-wrap items-center gap-4 px-3 py-2.5 bg-card">
+                                      <div className="flex items-center gap-1.5">
+                                        <span className="text-xs font-medium text-muted-foreground">{t('settings.packageHeading', { defaultValue: 'Package' })}</span>
+                                        {['BASE', 'STANDARD', 'PREMIUM'].map(pt => (
+                                          <button
+                                            key={pt}
+                                            type="button"
+                                            disabled={clientPackageSaving === c.id}
+                                            onClick={() => stageClientTier(c, pt)}
+                                            className={`px-2 py-1 rounded-md border text-xs font-medium transition-colors disabled:opacity-50 ${
+                                              tier === pt ? 'border-primary bg-primary/10 text-primary' : 'border-border hover:bg-muted'
+                                            }`}
+                                          >
+                                            {t(`settings.package${pt}`, { defaultValue: pt.charAt(0) + pt.slice(1).toLowerCase() })}
+                                          </button>
+                                        ))}
+                                        {!tier && <span className="text-xs text-muted-foreground">{t('settings.noPackageSetShort', { defaultValue: '(unrestricted/legacy)' })}</span>}
+                                      </div>
+
+                                    </div>
+
+                                    {/* Subscription expiry — automatic, time-based counterpart to
+                                        the Deactivate button above. Checked live server-side (not
+                                        a nightly job), so it locks the company out to the second —
+                                        set a few seconds out here to watch it happen. */}
+                                    <div className="flex flex-wrap items-center gap-2 px-3 py-2.5 bg-card">
+                                      <Clock className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                                      <span className="text-xs font-medium text-muted-foreground">{t('settings.subscriptionExpiryLabel', { defaultValue: 'Subscription Expiry' })}</span>
+                                      <input
+                                        type="datetime-local"
+                                        step="1"
+                                        className="text-xs border rounded-md px-1.5 py-1 bg-background focus:outline-none focus:ring-1 focus:ring-ring"
+                                        value={pendingSubscriptionExpiry[c.id] ?? toDatetimeLocalValue(c.subscriptionExpiresAt)}
+                                        disabled={clientSubscriptionSaving === c.id}
+                                        onChange={e => {
+                                          setPendingSubscriptionExpiry(p => ({ ...p, [c.id]: e.target.value }));
+                                          // Native datetime-local pickers stay open while the input
+                                          // owns focus. Release it after the complete value changes
+                                          // so the Save action is visible immediately.
+                                          requestAnimationFrame(() => e.currentTarget.blur());
+                                        }}
+                                      />
+                                      {(pendingSubscriptionExpiry[c.id] ?? toDatetimeLocalValue(c.subscriptionExpiresAt)) && (
+                                        <button
+                                          type="button"
+                                          disabled={clientSubscriptionSaving === c.id}
+                                          onClick={() => setPendingSubscriptionExpiry(p => ({ ...p, [c.id]: '' }))}
+                                          className="text-xs text-muted-foreground hover:text-foreground underline disabled:opacity-50"
+                                        >
+                                          {t('settings.clear', { defaultValue: 'Clear' })}
+                                        </button>
+                                      )}
+                                      {!c.subscriptionExpiresAt && pendingSubscriptionExpiry[c.id] === undefined && (
+                                        <span className="text-xs text-muted-foreground">{t('settings.noExpirySet', { defaultValue: 'No expiry set (unlimited access)' })}</span>
+                                      )}
+                                      {c.subscriptionExpiresAt && pendingSubscriptionExpiry[c.id] === undefined && (
+                                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${isExpired ? 'bg-amber-50 text-amber-600' : 'bg-secondary text-muted-foreground'}`}>
+                                          {isExpired
+                                            ? t('settings.subscriptionExpired', { defaultValue: 'Expired' })
+                                            : t('settings.subscriptionRemaining', { defaultValue: '{{time}} left', time: formatRemaining(new Date(c.subscriptionExpiresAt).getTime() - nowTick) })}
+                                        </span>
+                                      )}
+                                      {pendingSubscriptionExpiry[c.id] !== undefined && (
+                                        <div className="flex w-full flex-wrap items-center gap-2 pt-1">
+                                          <span className="text-xs font-medium text-amber-600">{t('settings.unsavedChanges', { defaultValue: 'Unsaved changes' })}</span>
+                                          <Button size="sm" className="h-8 gap-1.5 px-3" onClick={() => handleSaveSubscriptionExpiry(c)} disabled={clientSubscriptionSaving === c.id}>
+                                            <Save className="w-3.5 h-3.5 mr-1.5" />
+                                            {clientSubscriptionSaving === c.id ? t('settings.savingEllipsis', { defaultValue: 'Saving…' }) : t('settings.save', { defaultValue: 'Save' })}
+                                          </Button>
+                                          <button
+                                            type="button"
+                                            onClick={() => discardSubscriptionExpiryChange(c.id)}
+                                            disabled={clientSubscriptionSaving === c.id}
+                                            className="h-8 rounded-md px-2 text-xs font-medium text-muted-foreground underline-offset-2 hover:bg-muted hover:text-foreground hover:underline disabled:opacity-50"
+                                          >
+                                            {t('settings.cancel', { defaultValue: 'Cancel' })}
+                                          </button>
+                                        </div>
+                                      )}
+                                    </div>
+
+                                    {/* Core tools — ship with every company on any package, no
+                                        backend toggle exists for them (see moduleCatalogFor /
+                                        coreToolsFor above), shown read-only so the picture is
+                                        complete instead of a Base client looking bare. Split by
+                                        product: a school's core has nothing to do with a
+                                        business's core. */}
+                                    <div className="px-3 py-2.5 bg-muted/20">
+                                      <div className="flex items-center gap-1.5 mb-1.5">
+                                        <Lock className="w-3 h-3 text-muted-foreground" />
+                                        <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                                          {t('settings.coreToolsHeading', { defaultValue: 'Always Included' })}
+                                        </span>
+                                      </div>
+                                      <div className="flex flex-wrap gap-1.5">
+                                        {coreToolsFor(c).map(tool => (
+                                          <span
+                                            key={tool.i18n}
+                                            title={t('settings.coreToolHint', { defaultValue: 'Included on every plan — not a toggle' })}
+                                            className="px-2 py-1 rounded-full bg-secondary text-muted-foreground text-xs cursor-default"
+                                          >
+                                            {t(tool.i18n, { defaultValue: tool.label })}
+                                          </span>
+                                        ))}
+                                      </div>
+                                    </div>
+
+                                    {/* Add-on modules — the fine-grained, toggleable alternative
+                                        to the tier buttons above; filtered per product so a
+                                        business client is never offered a School Academics/
+                                        Facilities checkbox that has nothing behind it. */}
+                                    <div className="px-3 py-2.5 bg-card">
+                                      <div className="flex items-center gap-1.5 mb-1.5">
+                                        <Layers className="w-3 h-3 text-muted-foreground" />
+                                        <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                                          {t('settings.addOnModulesHeading', { defaultValue: 'Add-on Modules' })}
+                                        </span>
+                                      </div>
+                                      <div className="space-y-1.5">
+                                        {moduleCatalogFor(c).map(mod => {
+                                          const children = mod.children || [];
+                                          const active = children.length
+                                            ? children.some(child => isClientModuleActive(effectiveModules, mod, child))
+                                            : isClientModuleActive(effectiveModules, mod);
+                                          const allChildrenActive = children.length > 0 && children.every(child => isClientModuleActive(effectiveModules, mod, child));
+                                          const moduleExpanded = !!expandedClientModules[`${c.id}:${mod.value}`];
+                                          return (
+                                            <div key={mod.value} className="rounded-md border border-border/70 overflow-hidden">
+                                              <div className="flex items-center gap-1.5 px-2 py-1.5 bg-muted/20">
+                                                <button
+                                                  type="button"
+                                                  disabled={clientPackageSaving === c.id}
+                                                  onClick={() => stageClientModuleToggle(c, mod.value)}
+                                                  title={t(`${mod.i18n}Desc`, { defaultValue: mod.desc })}
+                                                  className={`flex flex-1 items-center gap-1.5 text-left text-xs font-medium transition-colors disabled:opacity-50 ${
+                                                    active ? 'text-primary' : 'text-muted-foreground hover:text-foreground'
+                                                  }`}
+                                                >
+                                                  <span className={`w-3.5 h-3.5 rounded-sm border flex items-center justify-center ${allChildrenActive || (children.length === 0 && active) ? 'bg-primary border-primary' : 'border-muted-foreground/40'}`}>
+                                                    {(allChildrenActive || (children.length === 0 && active)) && <Check className="w-2.5 h-2.5 text-primary-foreground" />}
+                                                  </span>
+                                                  {t(mod.i18n, { defaultValue: mod.label })}
+                                                  {children.length > 0 && <span className="text-[10px] text-muted-foreground">{children.filter(child => isClientModuleActive(effectiveModules, mod, child)).length}/{children.length}</span>}
+                                                </button>
+                                                {children.length > 0 && (
+                                                  <button
+                                                    type="button"
+                                                    aria-label={`${moduleExpanded ? 'Collapse' : 'Expand'} ${mod.label}`}
+                                                    onClick={() => toggleClientModuleExpanded(c.id, mod.value)}
+                                                    className="p-1 text-muted-foreground hover:text-foreground"
+                                                  >
+                                                    <ChevronDown className={`w-3.5 h-3.5 transition-transform ${moduleExpanded ? '' : '-rotate-90'}`} />
+                                                  </button>
+                                                )}
+                                              </div>
+                                              {moduleExpanded && (
+                                                <div className="flex flex-wrap gap-1.5 px-2 py-2 bg-card border-t">
+                                                  {children.map(child => {
+                                                    const childActive = isClientModuleActive(effectiveModules, mod, child);
+                                                    return (
+                                                      <button
+                                                        key={child.value}
+                                                        type="button"
+                                                        disabled={clientPackageSaving === c.id}
+                                                        onClick={() => stageClientModuleToggle(c, child.value)}
+                                                        title={child.desc}
+                                                        className={`flex items-center gap-1 px-2 py-1 rounded-full border text-xs transition-colors disabled:opacity-50 ${
+                                                          childActive ? 'bg-primary/10 border-primary text-primary' : 'border-border text-muted-foreground hover:border-primary/50'
+                                                        }`}
+                                                      >
+                                                        <span className={`w-3 h-3 rounded-sm border flex items-center justify-center ${childActive ? 'bg-primary border-primary' : 'border-muted-foreground/40'}`}>
+                                                          {childActive && <Check className="w-2.5 h-2.5 text-primary-foreground" />}
+                                                        </span>
+                                                        {child.label}
+                                                      </button>
+                                                    );
+                                                  })}
+                                                </div>
+                                              )}
+                                            </div>
+                                          );
+                                        })}
+
+                                        {hasPendingChange && (
+                                          <div className="flex w-full flex-wrap items-center gap-2 pt-1">
+                                            <span className="text-xs font-medium text-amber-600">
+                                              {t('settings.unsavedChanges', { defaultValue: 'Unsaved changes' })}
+                                            </span>
+                                            <Button size="sm" className="h-8 gap-1.5 px-3" onClick={() => handleSaveClientPackage(c)} disabled={clientPackageSaving === c.id}>
+                                              <Save className="w-3.5 h-3.5 mr-1.5" />
+                                              {clientPackageSaving === c.id ? t('settings.savingEllipsis', { defaultValue: 'Saving…' }) : t('settings.save', { defaultValue: 'Save' })}
+                                            </Button>
+                                            <button
+                                              type="button"
+                                              onClick={() => discardClientPackageChange(c)}
+                                              disabled={clientPackageSaving === c.id}
+                                              className="h-8 rounded-md px-2 text-xs font-medium text-muted-foreground underline-offset-2 hover:bg-muted hover:text-foreground hover:underline disabled:opacity-50"
+                                            >
+                                              {t('settings.cancel', { defaultValue: 'Cancel' })}
+                                            </button>
+                                          </div>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ));
+                })()}
+              </div>
+            )}
+
+            {/* Create Client — sales-led onboarding: creates the company + its
+                first ADMIN login, instead of self-registration. */}
+            <div className="bg-card rounded-xl border p-6 space-y-4 max-w-lg">
+              <div>
+                <h3 className="font-semibold flex items-center gap-1.5"><UserPlus className="w-4 h-4 text-primary" />{t('settings.createClientHeading', { defaultValue: 'Create Client' })}</h3>
+                <p className="text-sm text-muted-foreground mt-0.5">{t('settings.createClientSubtitle', { defaultValue: "Sets up a new client's company and their first admin login — for after they've paid, instead of self-registration." })}</p>
+              </div>
+              <form onSubmit={handleProvisionClient} className="space-y-3">
+                <div className="space-y-1.5">
+                  <Label>{t('settings.companyNameLabel', { defaultValue: 'Company / School Name' })}</Label>
+                  <Input required value={provisionForm.companyName} onChange={e => setProvisionForm(f => ({ ...f, companyName: e.target.value }))} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>{t('settings.productLabel', { defaultValue: 'Product' })}</Label>
+                  <select
+                    className="w-full border rounded-md px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring"
+                    value={provisionForm.product}
+                    onChange={e => setProvisionForm(f => ({ ...f, product: e.target.value, businessType: '', otherBusinessDesc: '' }))}
+                  >
+                    <option value="SCHOOL">{t('settings.productSchool', { defaultValue: 'School Management System' })}</option>
+                    <option value="BUSINESS">{t('settings.productOneBook', { defaultValue: 'OneBook (Business)' })}</option>
+                  </select>
+                </div>
+                {provisionForm.product === 'BUSINESS' && (
+                  <div className="space-y-1.5">
+                    <Label>{t('settings.businessTypeLabel', { defaultValue: 'Business Type' })}</Label>
+                    <select
+                      required
+                      className="w-full border rounded-md px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring"
+                      value={provisionForm.businessType}
+                      onChange={e => setProvisionForm(f => ({ ...f, businessType: e.target.value, otherBusinessDesc: '' }))}
+                    >
+                      <option value="">{t('auth.selectBusinessTypeEllipsis', { defaultValue: 'Select business type…' })}</option>
+                      {BUSINESS_TYPES.map(bt => (
+                        <option key={bt.value} value={bt.value}>{businessTypeLabel(bt.value)}</option>
+                      ))}
+                    </select>
+                    {provisionForm.businessType === 'OTHER' && (
+                      <Input
+                        required
+                        placeholder={t('auth.describeBusinessPlaceholder', { defaultValue: 'Describe your business (e.g. Tailoring Shop, Laundry)' })}
+                        value={provisionForm.otherBusinessDesc}
+                        onChange={e => setProvisionForm(f => ({ ...f, otherBusinessDesc: e.target.value }))}
+                        autoFocus
+                      />
+                    )}
+                  </div>
+                )}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label>{t('settings.adminNameLabel', { defaultValue: "Admin's Name" })}</Label>
+                    <Input required value={provisionForm.adminName} onChange={e => setProvisionForm(f => ({ ...f, adminName: e.target.value }))} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>{t('settings.adminEmailLabel', { defaultValue: "Admin's Email" })}</Label>
+                    <Input type="email" required value={provisionForm.adminEmail} onChange={e => setProvisionForm(f => ({ ...f, adminEmail: e.target.value }))} />
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground -mt-1">
+                  {t('settings.packageSetAfterCreation', { defaultValue: 'Starts on the Base package — set their real package from the Clients list right after creating them.' })}
+                </p>
+                <Button type="submit" disabled={provisioning} className="w-full">
+                  {provisioning ? t('settings.creatingClient', { defaultValue: 'Creating…' }) : t('settings.createClientButton', { defaultValue: 'Create Client & Send Login' })}
+                </Button>
+              </form>
+            </div>
+          </TabsContent>
+        )}
+
         {/* ── Companies Tab ─────────────────────────────────────────────── */}
         <TabsContent value="companies" className="mt-4 space-y-4">
           <div className="flex justify-end">
-            <Button onClick={() => setShowAddCompany(true)}><Plus className="w-4 h-4 mr-1" />Add Company</Button>
+            <Button onClick={() => setShowAddCompany(true)}><Plus className="w-4 h-4 mr-1" />{t('settings.addCompany', { defaultValue: 'Add Company' })}</Button>
           </div>
           <div className="grid gap-4">
-            {companies.map(c => (
+            {companies.map(c => {
+              const subscriptionExpiry = c.subscriptionExpiresAt || c.subscription_expires_at;
+              const isExpired = subscriptionExpiry && new Date(subscriptionExpiry).getTime() <= Date.now();
+              return (
               <div key={c.id} className={`bg-card rounded-xl border p-5 flex items-start justify-between ${c.id === activeCompanyId ? 'border-primary/50 ring-1 ring-primary/20' : ''}`}>
                 <div className="flex items-start gap-4">
                   <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center overflow-hidden">
@@ -335,38 +1654,55 @@ export default function Settings() {
                   <div>
                     <div className="flex items-center gap-2">
                       <h3 className="font-semibold">{c.name}</h3>
-                      {c.id === activeCompanyId && <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full">Active</span>}
+                      {c.id === activeCompanyId && (
+                        <span className="inline-flex items-center gap-1.5 text-xs bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-full" title={t('settings.currentlyViewingHint', { defaultValue: "You're currently viewing this company" })}>
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                          {t('settings.active', { defaultValue: 'Active' })}
+                        </span>
+                      )}
+                      {c.is_active === false && <span className="text-xs bg-red-50 text-red-600 px-2 py-0.5 rounded-full font-medium">{t('settings.deactivated', { defaultValue: 'Deactivated' })}</span>}
+                      {c.is_active !== false && isExpired && <span className="text-xs bg-amber-50 text-amber-600 px-2 py-0.5 rounded-full font-medium">{t('settings.subscriptionExpired', { defaultValue: 'Expired' })}</span>}
                       {c.business_type && (
                         <span className="text-xs bg-secondary text-muted-foreground px-2 py-0.5 rounded-full">
-                          {BUSINESS_TYPE_LABELS[c.business_type] || c.business_type}
+                          {businessTypeLabel(c.business_type)}
                         </span>
                       )}
                     </div>
-                    <p className="text-sm text-muted-foreground">{c.address || 'No address'}</p>
+                    <p className="text-sm text-muted-foreground">{c.address || t('settings.noAddress', { defaultValue: 'No address' })}</p>
                     <div className="flex gap-4 mt-1 text-xs text-muted-foreground">
                       {c.phone && <span>{c.phone}</span>}
                       {c.email && <span>{c.email}</span>}
-                      {c.pan_vat && <span>PAN: {c.pan_vat}</span>}
+                      {c.pan_vat && <span>{t('settings.panWithValue', { defaultValue: 'PAN: {{value}}', value: c.pan_vat })}</span>}
                     </div>
                   </div>
                 </div>
                 <div className="flex gap-2">
                   {canEdit && (
-                    <Button size="sm" variant="outline" onClick={() => setEditingCompany({ ...c })}>Edit</Button>
+                    <Button size="sm" variant="outline" onClick={() => setEditingCompany({ ...c })}>{t('settings.edit', { defaultValue: 'Edit' })}</Button>
                   )}
                   {c.id !== activeCompanyId && (
-                    <Button size="sm" variant="outline" onClick={() => { setActiveCompanyId(c.id); window.location.href = '/'; }}>Set Active</Button>
+                    <Button size="sm" variant="outline" onClick={() => switchActiveCompany(c)}>{t('settings.setActive', { defaultValue: 'Set Active' })}</Button>
                   )}
-                  {canDelete && (
+                  {/* Suspend/delete a company is GeoInfosys's call, not the
+                      client's own admin's — SUPER_ADMIN-only, enforced server-side too. */}
+                  {isSuperAdmin && (
+                    <Button size="sm" variant="outline" onClick={() => toggleCompanyActive(c)}>
+                      {c.is_active === false
+                        ? <><Power className="w-3.5 h-3.5 mr-1.5" />{t('settings.reactivate', { defaultValue: 'Reactivate' })}</>
+                        : <><PowerOff className="w-3.5 h-3.5 mr-1.5" />{t('settings.deactivate', { defaultValue: 'Deactivate' })}</>}
+                    </Button>
+                  )}
+                  {isSuperAdmin && (
                     <Button size="icon" variant="ghost" onClick={() => deleteCompany(c.id)}>
                       <Trash2 className="w-4 h-4 text-destructive" />
                     </Button>
                   )}
                 </div>
               </div>
-            ))}
+              );
+            })}
             {companies.length === 0 && (
-              <div className="text-center py-12 text-muted-foreground">No companies yet</div>
+              <div className="text-center py-12 text-muted-foreground">{t('settings.noCompaniesYet', { defaultValue: 'No companies yet' })}</div>
             )}
           </div>
         </TabsContent>
@@ -376,15 +1712,15 @@ export default function Settings() {
           {!isAdmin ? (
             <div className="flex flex-col items-center justify-center py-16 gap-3 text-muted-foreground">
               <Shield className="w-10 h-10 opacity-30" />
-              <p className="text-sm">Only Admins can manage team members.</p>
+              <p className="text-sm">{t('settings.adminOnlyManageUsers', { defaultValue: 'Only Admins can manage team members.' })}</p>
             </div>
           ) : (
             <>
               <div className="flex items-center justify-between">
-                <p className="text-sm text-muted-foreground">{users.length} member{users.length !== 1 ? 's' : ''} in this company</p>
+                <p className="text-sm text-muted-foreground">{t('settings.membersCount', { defaultValue: '{{count}} members in this company', count: visibleUsers.length })}</p>
                 {canManageUsers && (
                   <Button onClick={() => setShowInvite(true)}>
-                    <UserPlus className="w-4 h-4 mr-1" />Invite User
+                    <UserPlus className="w-4 h-4 mr-1" />{t('settings.inviteUser', { defaultValue: 'Invite User' })}
                   </Button>
                 )}
               </div>
@@ -395,43 +1731,121 @@ export default function Settings() {
                 </div>
               ) : (
                 <div className="grid gap-3">
-                  {users.map(u => (
+                  {visibleUsers.map(u => (
                     <div key={u.id} className="bg-card rounded-xl border p-4 flex items-center justify-between">
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-primary-foreground text-sm font-semibold">
                           {u.name?.[0]?.toUpperCase() || 'U'}
                         </div>
                         <div>
-                          <p className="font-medium text-sm">{u.name || 'Unknown'}</p>
+                          <div className="flex items-center gap-1.5">
+                            <p className="font-medium text-sm">{u.name || t('settings.unknownUser', { defaultValue: 'Unknown' })}</p>
+                            {u.isActive === false && (
+                              <span className="text-[10px] bg-red-50 text-red-600 px-1.5 py-0.5 rounded-full font-medium">
+                                {t('settings.suspended', { defaultValue: 'Suspended' })}
+                              </span>
+                            )}
+                          </div>
                           <p className="text-xs text-muted-foreground">{u.email}</p>
+                          <p className="text-[11px] text-muted-foreground">
+                            {u.lastLoginAt
+                              ? t('settings.lastLoginAt', { defaultValue: 'Last login: {{date}}', date: new Date(u.lastLoginAt).toLocaleString('en-NP', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) })
+                              : t('settings.neverLoggedIn', { defaultValue: 'Never logged in' })}
+                          </p>
                         </div>
                       </div>
                       <div className="flex items-center gap-3">
-                        {u.id === user?.sub ? (
+                        {isSuperAdmin && u.role === 'ADMIN' && (
+                          <div className="flex items-center gap-1.5" title={t('settings.maxCompaniesHint', { defaultValue: 'How many companies this admin may self-serve create' })}>
+                            <span className="text-xs text-muted-foreground">{t('settings.maxCompaniesLabel', { defaultValue: 'Max Companies' })}</span>
+                            <input
+                              type="number"
+                              min={1}
+                              className="w-14 text-xs border rounded-md px-1.5 py-1 bg-background focus:outline-none focus:ring-1 focus:ring-ring"
+                              defaultValue={u.maxCompanies ?? 1}
+                              disabled={maxCompaniesSaving === u.id}
+                              onBlur={e => { if (Number(e.target.value) !== u.maxCompanies) handleMaxCompaniesChange(u.id, e.target.value); }}
+                            />
+                          </div>
+                        )}
+                        {u.id === user?.id ? (
                           <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${ROLE_COLORS[u.role] || 'bg-secondary'}`}>
-                            {u.role} (you)
+                            {roleLabel(u.role)} {t('settings.youSuffix', { defaultValue: '(you)' })}
                           </span>
                         ) : u.role === 'SUPER_ADMIN' ? (
-                          <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${ROLE_COLORS.SUPER_ADMIN}`}>SUPER_ADMIN</span>
+                          <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${ROLE_COLORS.SUPER_ADMIN}`}>{roleLabel('SUPER_ADMIN')}</span>
                         ) : (
-                          <select
-                            className="text-xs border rounded-md px-2 py-1 bg-background focus:outline-none focus:ring-1 focus:ring-ring"
-                            value={u.role}
-                            disabled={roleChanging === u.id}
-                            onChange={e => handleRoleChange(u.id, e.target.value)}
+                          <div className="flex flex-col items-end gap-1">
+                            <select
+                              className="text-xs border rounded-md px-2 py-1 bg-background focus:outline-none focus:ring-1 focus:ring-ring"
+                              value={u.role}
+                              disabled={roleChanging === u.id}
+                              onChange={e => handleRoleChange(u.id, e.target.value, [])}
+                            >
+                              <option value="STAFF">{roleLabel('STAFF')}</option>
+                              <option value="ACCOUNTANT">{roleLabel('ACCOUNTANT')}</option>
+                              {isSchool && <option value="TEACHER">{roleLabel('TEACHER')}</option>}
+                              <option value="ADMIN">{roleLabel('ADMIN')}</option>
+                            </select>
+                            {u.role === 'STAFF' && (
+                              <div className="flex flex-wrap justify-end gap-1 max-w-[220px]">
+                                {STAFF_TAGS.map(tag => (
+                                  <button
+                                    key={tag.value}
+                                    type="button"
+                                    disabled={roleChanging === u.id}
+                                    onClick={() => toggleUserStaffTag(u, tag.value)}
+                                    className={`text-[10px] px-1.5 py-0.5 rounded-full border transition-colors ${
+                                      (u.staffTags || []).includes(tag.value)
+                                        ? 'bg-primary/10 border-primary text-primary'
+                                        : 'border-border text-muted-foreground hover:border-primary/50'
+                                    }`}
+                                    title={t(`${tag.i18n}Desc`, { defaultValue: tag.desc })}
+                                  >
+                                    {t(tag.i18n, { defaultValue: tag.label })}
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                        {canManageUsers && u.id !== user?.id && u.role !== 'SUPER_ADMIN' && (
+                          <button
+                            onClick={() => handleResetPassword(u)}
+                            disabled={resettingPasswordId === u.id}
+                            className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
+                            title={t('settings.resetPassword', { defaultValue: 'Reset Password' })}
                           >
-                            <option value="STAFF">STAFF</option>
-                            <option value="ACCOUNTANT">ACCOUNTANT</option>
-                            {isSchool && <option value="TEACHER">TEACHER</option>}
-                            {isSchool && <option value="LIBRARIAN">LIBRARIAN</option>}
-                            <option value="ADMIN">ADMIN</option>
-                          </select>
+                            <KeyRound className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                        {canManageUsers && u.id !== user?.id && u.role !== 'SUPER_ADMIN' && (
+                          <button
+                            onClick={() => handleToggleUserActive(u)}
+                            disabled={togglingUserActiveId === u.id}
+                            className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
+                            title={u.isActive === false
+                              ? t('settings.reactivateUser', { defaultValue: 'Reactivate' })
+                              : t('settings.suspend', { defaultValue: 'Suspend' })}
+                          >
+                            {u.isActive === false ? <Power className="w-3.5 h-3.5" /> : <PowerOff className="w-3.5 h-3.5" />}
+                          </button>
+                        )}
+                        {canManageUsers && u.id !== user?.id && u.role !== 'SUPER_ADMIN' && (
+                          <button
+                            onClick={() => handleRemoveUser(u)}
+                            disabled={removingUserId === u.id}
+                            className="p-1.5 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600 transition-colors disabled:opacity-50"
+                            title={t('settings.removeFromCompany', { defaultValue: 'Remove from company' })}
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
                         )}
                       </div>
                     </div>
                   ))}
-                  {users.length === 0 && (
-                    <div className="text-center py-12 text-muted-foreground text-sm">No users yet. Invite your team.</div>
+                  {visibleUsers.length === 0 && (
+                    <div className="text-center py-12 text-muted-foreground text-sm">{t('settings.noUsersYet', { defaultValue: 'No users yet. Invite your team.' })}</div>
                   )}
                 </div>
               )}
@@ -444,44 +1858,164 @@ export default function Settings() {
 
           {/* Company Settings */}
           <div className="bg-card rounded-xl border p-6 space-y-5 max-w-lg">
-            <h3 className="font-semibold">Company Settings</h3>
+            <h3 className="font-semibold">{t('settings.companySettingsHeading', { defaultValue: 'Company Settings' })}</h3>
 
             <div className="space-y-1.5">
-              <Label>Invoice Prefix / Abbreviation</Label>
-              <Input placeholder="e.g. INV, ABC, XYZ" value={companyPrefs.abbreviation}
+              <Label>{t('settings.invoicePrefixLabel', { defaultValue: 'Invoice Prefix / Abbreviation' })}</Label>
+              <Input placeholder={t('settings.invoicePrefixPlaceholder', { defaultValue: 'e.g. INV, ABC, XYZ' })} value={companyPrefs.abbreviation}
                 onChange={e => setCompanyPrefs({ ...companyPrefs, abbreviation: e.target.value.toUpperCase().slice(0, 6) })} />
-              <p className="text-xs text-muted-foreground">Used in invoice numbers: ABC/2081-82/0001</p>
+              <p className="text-xs text-muted-foreground">{t('settings.invoiceNumberHint', { defaultValue: 'Used in invoice numbers: ABC/2081-82/0001' })}</p>
             </div>
 
             <div className="space-y-1.5">
-              <Label>Working Days per Month</Label>
+              <Label>{t('settings.workingDaysLabel', { defaultValue: 'Working Days per Month' })}</Label>
               <SmartNumberInput min={20} max={31} value={companyPrefs.workingDaysPerMonth}
                 onChange={e => setCompanyPrefs({ ...companyPrefs, workingDaysPerMonth: parseInt(e.target.value) || 26 })} />
-              <p className="text-xs text-muted-foreground">Used for absent-day salary deduction (default: 26)</p>
+              <p className="text-xs text-muted-foreground">{t('settings.workingDaysHint', { defaultValue: 'Used for absent-day salary deduction (default: 26)' })}</p>
             </div>
 
             <div className="pt-1 border-t space-y-3">
-              <h4 className="text-sm font-medium text-muted-foreground">System Defaults (read-only)</h4>
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <h4 className="text-sm font-medium flex items-center gap-1.5"><Clock className="w-3.5 h-3.5 text-primary" />{t('settings.workingHoursHeading', { defaultValue: 'Working Hours & Attendance Deduction' })}</h4>
+                  <p className="text-xs text-muted-foreground mt-0.5">{t('settings.workingHoursSubtitle', { defaultValue: 'If enabled, staff who check in/out for fewer hours than expected get a prorated salary deduction — on top of absent-day deduction, not instead of it.' })}</p>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={companyPrefs.attendanceDeductionEnabled}
+                  onClick={() => setCompanyPrefs(p => ({ ...p, attendanceDeductionEnabled: !p.attendanceDeductionEnabled }))}
+                  className={`relative shrink-0 w-10 h-5 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 ${
+                    companyPrefs.attendanceDeductionEnabled ? 'bg-primary' : 'bg-muted'
+                  }`}
+                >
+                  <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-transform ${
+                    companyPrefs.attendanceDeductionEnabled ? 'translate-x-5' : 'translate-x-0'
+                  }`} />
+                </button>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label className="text-xs">{t('settings.standardStartTimeLabel', { defaultValue: 'Standard Start Time' })}</Label>
+                  <Input type="time" className="text-sm" value={companyPrefs.standardStartTime}
+                    onChange={e => setCompanyPrefs({ ...companyPrefs, standardStartTime: e.target.value })} />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">{t('settings.standardEndTimeLabel', { defaultValue: 'Standard End Time' })}</Label>
+                  <Input type="time" className="text-sm" value={companyPrefs.standardEndTime}
+                    onChange={e => setCompanyPrefs({ ...companyPrefs, standardEndTime: e.target.value })} />
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {t('settings.workingHoursHint', { defaultValue: 'Applies to full-time staff. Part-time staff are judged against their own contracted hours/day, set per employee on the Employees page.' })}
+              </p>
+            </div>
+
+            <div className="pt-1 border-t space-y-3">
+              <h4 className="text-sm font-medium text-muted-foreground">{t('settings.systemDefaultsHeading', { defaultValue: 'System Defaults (read-only)' })}</h4>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <Label className="text-xs">Currency</Label>
-                  <Input value="NPR — Nepali Rupee" disabled className="text-sm" />
+                  <Label className="text-xs">{t('settings.currencyLabel', { defaultValue: 'Currency' })}</Label>
+                  <Input value={t('settings.currencyValue', { defaultValue: 'NPR — Nepali Rupee' })} disabled className="text-sm" />
                 </div>
                 <div>
-                  <Label className="text-xs">VAT Rate</Label>
+                  <Label className="text-xs">{t('settings.vatRateLabel', { defaultValue: 'VAT Rate' })}</Label>
                   <Input value="13%" disabled className="text-sm" />
                 </div>
               </div>
               <div>
-                <Label className="text-xs">Fiscal Year</Label>
-                <Input value="Shrawan 1 – Ashadh End (Nepali BS Calendar)" disabled className="text-sm" />
+                <Label className="text-xs">{t('settings.fiscalYearLabel', { defaultValue: 'Fiscal Year' })}</Label>
+                <Input value={t('settings.fiscalYearValue', { defaultValue: 'Shrawan 1 – Ashadh End (Nepali BS Calendar)' })} disabled className="text-sm" />
+                <p className="text-xs text-muted-foreground mt-1">{t('settings.fiscalYearFixedHint', { defaultValue: "Nepal's fiscal year is fixed by law — not configurable." })}</p>
               </div>
+
+              {fiscalYearStatus && (
+                <div className="rounded-lg border p-3 space-y-2.5">
+                  <p className="text-sm">{t('settings.currentlyIn', { defaultValue: 'Currently in:' })} <strong>{fiscalYearStatus.currentFiscalYear}</strong></p>
+
+                  {fiscalYearStatus.closedYears.length > 0 && (
+                    <div className="space-y-2 pt-1 border-t">
+                      {fiscalYearStatus.closedYears.map(y => (
+                        <div key={y.fiscalYear} className="space-y-1">
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="text-muted-foreground">
+                              {y.fiscalYear} — {y.reopenedAt ? t('settings.reopened', { defaultValue: 'Reopened' }) : t('settings.closed', { defaultValue: 'Closed' })}
+                            </span>
+                            <span className={`font-medium tabular-nums ${y.netProfit >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>
+                              Rs. {Math.abs(y.netProfit).toLocaleString('en-NP')}{y.netProfit < 0 ? ` ${t('settings.loss', { defaultValue: 'loss' })}` : ''}
+                            </span>
+                          </div>
+                          {isAdmin && !y.reopenedAt && (
+                            reopeningYear === y.fiscalYear ? (
+                              <div className="flex gap-1.5 items-center pl-2">
+                                <Input
+                                  type="password" placeholder={t('settings.enterPassword', { defaultValue: 'Password' })}
+                                  value={reopenPassword} onChange={e => setReopenPassword(e.target.value)}
+                                  className="h-7 text-xs"
+                                />
+                                <Button size="sm" variant="destructive" className="h-7 px-2 text-xs" disabled={reopenSaving || !reopenPassword} onClick={() => handleReopenFiscalYear(y.fiscalYear)}>
+                                  {reopenSaving ? t('settings.reopening', { defaultValue: 'Reopening…' }) : t('settings.confirm', { defaultValue: 'Confirm' })}
+                                </Button>
+                                <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => { setReopeningYear(null); setReopenPassword(''); }}>{t('settings.cancel', { defaultValue: 'Cancel' })}</Button>
+                              </div>
+                            ) : (
+                              <button type="button" className="text-xs text-muted-foreground underline hover:text-foreground pl-2" onClick={() => setReopeningYear(y.fiscalYear)}>
+                                {t('settings.reopenFiscalYear', { defaultValue: 'Reopen' })}
+                              </button>
+                            )
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {fiscalYearStatus.preview ? (
+                    <div className="rounded-md bg-amber-50 border border-amber-200 p-2.5 space-y-2">
+                      <p className="text-xs font-medium text-amber-800">
+                        {t('settings.fiscalYearEndedNotClosed', { defaultValue: 'Fiscal year {{fy}} has ended and isn\'t closed yet.', fy: fiscalYearStatus.preview.fiscalYear })}
+                      </p>
+                      <div className="grid grid-cols-3 gap-2 text-xs">
+                        <div><p className="text-muted-foreground">{t('settings.income', { defaultValue: 'Income' })}</p><p className="font-medium tabular-nums">Rs. {fiscalYearStatus.preview.totalIncome.toLocaleString('en-NP')}</p></div>
+                        <div><p className="text-muted-foreground">{t('settings.expense', { defaultValue: 'Expense' })}</p><p className="font-medium tabular-nums">Rs. {fiscalYearStatus.preview.totalExpense.toLocaleString('en-NP')}</p></div>
+                        <div><p className="text-muted-foreground">{t('settings.net', { defaultValue: 'Net' })}</p><p className="font-medium tabular-nums">Rs. {fiscalYearStatus.preview.netProfit.toLocaleString('en-NP')}</p></div>
+                      </div>
+                      {isAdmin && (
+                        confirmingClose ? (
+                          <div className="space-y-2 pt-1">
+                            <p className="text-xs text-amber-800">
+                              {t('settings.closeFiscalYearWarning', { defaultValue: 'This posts closing entries and cannot be undone lightly. Enter your password to confirm closing {{fy}}.', fy: fiscalYearStatus.preview.fiscalYear })}
+                            </p>
+                            <Input
+                              type="password" placeholder={t('settings.enterPassword', { defaultValue: 'Password' })}
+                              value={closePassword} onChange={e => setClosePassword(e.target.value)}
+                              className="h-8 text-sm"
+                            />
+                            <div className="flex gap-2">
+                              <Button size="sm" disabled={closingFiscalYear || !closePassword} onClick={handleCloseFiscalYear}>
+                                {closingFiscalYear ? t('settings.closing', { defaultValue: 'Closing…' }) : t('settings.confirmClose', { defaultValue: 'Confirm Close' })}
+                              </Button>
+                              <Button size="sm" variant="outline" onClick={() => { setConfirmingClose(false); setClosePassword(''); }}>{t('settings.cancel', { defaultValue: 'Cancel' })}</Button>
+                            </div>
+                          </div>
+                        ) : (
+                          <Button size="sm" variant="outline" onClick={() => setConfirmingClose(true)}>
+                            {t('settings.closeFiscalYearButton', { defaultValue: 'Close Fiscal Year {{fy}}', fy: fiscalYearStatus.preview.fiscalYear })}
+                          </Button>
+                        )
+                      )}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">{t('settings.noFiscalYearPendingClose', { defaultValue: 'No fiscal year is pending close.' })}</p>
+                  )}
+                </div>
+              )}
             </div>
 
             <Button onClick={savePreferences} disabled={prefsSaving || !isAdmin} className="w-full">
-              {prefsSaved ? <><Check className="w-4 h-4 mr-1" />Saved!</> : prefsSaving ? 'Saving…' : <><Save className="w-4 h-4 mr-1" />Save Preferences</>}
+              {prefsSaved ? <><Check className="w-4 h-4 mr-1" />{t('settings.saved', { defaultValue: 'Saved!' })}</> : prefsSaving ? t('settings.savingEllipsis', { defaultValue: 'Saving…' }) : <><Save className="w-4 h-4 mr-1" />{t('settings.savePreferences', { defaultValue: 'Save Preferences' })}</>}
             </Button>
-            {!isAdmin && <p className="text-xs text-muted-foreground text-center">Only Admins can change preferences.</p>}
+            {!isAdmin && <p className="text-xs text-muted-foreground text-center">{t('settings.adminOnlyPreferences', { defaultValue: 'Only Admins can change preferences.' })}</p>}
           </div>
 
           {/* Appearance */}
@@ -489,7 +2023,7 @@ export default function Settings() {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Palette className="w-4 h-4 text-primary" />
-                <h3 className="font-semibold">Appearance</h3>
+                <h3 className="font-semibold">{t('settings.appearanceHeading', { defaultValue: 'Appearance' })}</h3>
               </div>
               <Button
                 variant="ghost"
@@ -497,14 +2031,14 @@ export default function Settings() {
                 onClick={resetPrefs}
                 className="text-muted-foreground gap-1.5"
               >
-                <RotateCcw className="w-3.5 h-3.5" />Reset to Defaults
+                <RotateCcw className="w-3.5 h-3.5" />{t('settings.resetToDefaults', { defaultValue: 'Reset to Defaults' })}
               </Button>
             </div>
 
             {/* Company Logo */}
             <div className="space-y-2">
-              <Label className="flex items-center gap-1.5"><Upload className="w-3.5 h-3.5" />Sidebar Logo</Label>
-              <p className="text-xs text-muted-foreground">Replaces the Building icon in the sidebar top-left. Shows "Powered by GeoInfosys" badge below.</p>
+              <Label className="flex items-center gap-1.5"><Upload className="w-3.5 h-3.5" />{t('settings.sidebarLogoLabel', { defaultValue: 'Sidebar Logo' })}</Label>
+              <p className="text-xs text-muted-foreground">{t('settings.sidebarLogoHint', { defaultValue: 'Replaces the Building icon in the sidebar top-left. Shows "Powered by GeoInfosys" badge below.' })}</p>
               <div className="flex items-center gap-3">
                 {prefs.companyLogoUrl ? (
                   <div className="relative">
@@ -520,19 +2054,19 @@ export default function Settings() {
                 ) : (
                   <label className="flex flex-col items-center justify-center w-14 h-14 border-2 border-dashed border-muted-foreground/25 rounded-xl cursor-pointer hover:border-primary/50 hover:bg-primary/5 transition-colors">
                     <ImagePlus className="w-4 h-4 text-muted-foreground mb-0.5" />
-                    <span className="text-[10px] text-muted-foreground">Upload</span>
+                    <span className="text-[10px] text-muted-foreground">{t('settings.uploadLabel', { defaultValue: 'Upload' })}</span>
                     <input ref={logoInputRef} type="file" accept="image/*" className="hidden" onChange={handleUiLogoUpload} />
                   </label>
                 )}
                 {!prefs.companyLogoUrl && (
-                  <p className="text-xs text-muted-foreground">PNG, JPG, SVG up to 2 MB</p>
+                  <p className="text-xs text-muted-foreground">{t('settings.fileSizeHint', { defaultValue: 'PNG, JPG, SVG up to 2 MB' })}</p>
                 )}
               </div>
             </div>
 
             {/* Sidebar Color */}
             <div className="space-y-2">
-              <Label>Sidebar Background Color</Label>
+              <Label>{t('settings.sidebarColorLabel', { defaultValue: 'Sidebar Background Color' })}</Label>
               <div className="flex items-center gap-2 flex-wrap">
                 {SIDEBAR_PALETTE.map(c => (
                   <button
@@ -551,7 +2085,7 @@ export default function Settings() {
                 ))}
                 <label
                   className="w-7 h-7 rounded-lg border-2 border-dashed border-muted-foreground/40 flex items-center justify-center cursor-pointer hover:border-primary/60 transition-colors overflow-hidden"
-                  title="Custom color"
+                  title={t('settings.customColor', { defaultValue: 'Custom color' })}
                   style={prefs.sidebarColor && !SIDEBAR_PALETTE.includes(prefs.sidebarColor) ? { backgroundColor: prefs.sidebarColor } : {}}
                 >
                   <Palette className="w-3.5 h-3.5 text-muted-foreground" />
@@ -568,18 +2102,18 @@ export default function Settings() {
                     onClick={() => updatePref('sidebarColor', '')}
                     className="text-xs text-muted-foreground hover:text-foreground underline"
                   >
-                    Reset
+                    {t('settings.reset', { defaultValue: 'Reset' })}
                   </button>
                 )}
               </div>
               {prefs.sidebarColor && (
-                <p className="text-xs text-muted-foreground">Current: {prefs.sidebarColor}</p>
+                <p className="text-xs text-muted-foreground">{t('settings.currentColor', { defaultValue: 'Current: {{color}}', color: prefs.sidebarColor })}</p>
               )}
             </div>
 
             {/* Topbar Color */}
             <div className="space-y-2">
-              <Label>Topbar Background Color</Label>
+              <Label>{t('settings.topbarColorLabel', { defaultValue: 'Topbar Background Color' })}</Label>
               <div className="flex items-center gap-2 flex-wrap">
                 {TOPBAR_PALETTE.map(c => (
                   <button
@@ -598,7 +2132,7 @@ export default function Settings() {
                 ))}
                 <label
                   className="w-7 h-7 rounded-lg border-2 border-dashed border-muted-foreground/40 flex items-center justify-center cursor-pointer hover:border-primary/60 transition-colors overflow-hidden"
-                  title="Custom color"
+                  title={t('settings.customColor', { defaultValue: 'Custom color' })}
                   style={prefs.topbarColor && !TOPBAR_PALETTE.includes(prefs.topbarColor) ? { backgroundColor: prefs.topbarColor } : {}}
                 >
                   <Palette className="w-3.5 h-3.5 text-muted-foreground" />
@@ -615,18 +2149,18 @@ export default function Settings() {
                     onClick={() => updatePref('topbarColor', '')}
                     className="text-xs text-muted-foreground hover:text-foreground underline"
                   >
-                    Reset
+                    {t('settings.reset', { defaultValue: 'Reset' })}
                   </button>
                 )}
               </div>
               {prefs.topbarColor && (
-                <p className="text-xs text-muted-foreground">Current: {prefs.topbarColor}</p>
+                <p className="text-xs text-muted-foreground">{t('settings.currentColor', { defaultValue: 'Current: {{color}}', color: prefs.topbarColor })}</p>
               )}
             </div>
 
             {/* Font Size */}
             <div className="space-y-2">
-              <Label className="flex items-center gap-1.5"><Type className="w-3.5 h-3.5" />Font Size</Label>
+              <Label className="flex items-center gap-1.5"><Type className="w-3.5 h-3.5" />{t('settings.fontSizeLabel', { defaultValue: 'Font Size' })}</Label>
               <div className="flex gap-2">
                 {FONT_SIZES.map(f => (
                   <button
@@ -640,7 +2174,7 @@ export default function Settings() {
                     }`}
                   >
                     <span className="font-semibold" style={{ fontSize: f.px }}>A</span>
-                    <span className="text-[10px] text-muted-foreground mt-0.5">{f.label}</span>
+                    <span className="text-[10px] text-muted-foreground mt-0.5">{t(FONT_SIZE_I18N_KEY[f.key], { defaultValue: f.label })}</span>
                     <span className="text-[9px] text-muted-foreground/60">{f.px}</span>
                   </button>
                 ))}
@@ -649,12 +2183,12 @@ export default function Settings() {
 
             {/* Notifications */}
             <div className="space-y-2">
-              <Label className="flex items-center gap-1.5"><Bell className="w-3.5 h-3.5" />Notification Preferences</Label>
+              <Label className="flex items-center gap-1.5"><Bell className="w-3.5 h-3.5" />{t('settings.notificationPreferencesLabel', { defaultValue: 'Notification Preferences' })}</Label>
               <div className="space-y-2">
                 {[
-                  { key: 'transactions', label: 'Transaction Alerts', desc: 'Low stock, stale cheques, expiring bank guarantees' },
-                  { key: 'reminders',    label: 'Reminders',          desc: 'Payroll due, attendance missing, task deadlines' },
-                  { key: 'system',       label: 'System Notices',     desc: 'Updates, maintenance, role changes' },
+                  { key: 'transactions', label: t('settings.notifTransactionsLabel', { defaultValue: 'Transaction Alerts' }), desc: t('settings.notifTransactionsDesc', { defaultValue: 'Low stock, stale cheques, expiring bank guarantees' }) },
+                  { key: 'reminders',    label: t('settings.notifRemindersLabel', { defaultValue: 'Reminders' }),          desc: t('settings.notifRemindersDesc', { defaultValue: 'Payroll due, attendance missing, task deadlines' }) },
+                  { key: 'system',       label: t('settings.notifSystemLabel', { defaultValue: 'System Notices' }),     desc: t('settings.notifSystemDesc', { defaultValue: 'Updates, maintenance, role changes' }) },
                 ].map(n => (
                   <div key={n.key} className="flex items-start justify-between gap-4 py-2 border-b border-border/50 last:border-0">
                     <div>
@@ -665,7 +2199,11 @@ export default function Settings() {
                       type="button"
                       role="switch"
                       aria-checked={prefs.notifications[n.key]}
-                      onClick={() => updatePref('notifications', { [n.key]: !prefs.notifications[n.key] })}
+                      onClick={() => {
+                        const value = !prefs.notifications[n.key];
+                        updatePref('notifications', { [n.key]: value });
+                        notificationsApi.updatePreferences({ [n.key]: value }).catch(() => {});
+                      }}
                       className={`relative shrink-0 w-10 h-5 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 ${
                         prefs.notifications[n.key] ? 'bg-primary' : 'bg-muted'
                       }`}
@@ -681,6 +2219,107 @@ export default function Settings() {
           </div>
         </TabsContent>
 
+        {/* ── Automation Tab ─────────────────────────────────────────────── */}
+        <TabsContent value="automation" className="mt-4 space-y-6">
+          <div className="bg-card rounded-xl border p-5 space-y-1">
+            <h3 className="font-semibold flex items-center gap-1.5"><Zap className="w-4 h-4 text-primary" />{t('settings.automationTitle', { defaultValue: 'Nightly Automation (runs at 1 AM)' })}</h3>
+            <p className="text-sm text-muted-foreground">{t('settings.automationSubtitle', { defaultValue: 'Turn off anything you\'d rather trigger manually.' })}</p>
+          </div>
+
+          <div className="bg-card rounded-xl border p-5 space-y-1 divide-y divide-border/50">
+            {[
+              ...(isSchool ? [
+                { key: 'autoFeeBilling', label: t('settings.autoFeeBillingLabel', { defaultValue: 'Auto Fee Billing' }), desc: t('settings.autoFeeBillingDesc', { defaultValue: 'Automatically generate monthly fee invoices for every active student' }) },
+                { key: 'autoInvoiceRelease', label: t('settings.autoInvoiceReleaseLabel', { defaultValue: 'Auto-Release Invoices' }), desc: t('settings.autoInvoiceReleaseDesc', { defaultValue: 'Immediately release auto-billed invoices to the student portal (notifies students). If off, invoices are created but held for manual review/release.' }) },
+                { key: 'autoLibraryReminders', label: t('settings.autoLibraryRemindersLabel', { defaultValue: 'Library Due-Date Reminders' }), desc: t('settings.autoLibraryRemindersDesc', { defaultValue: 'Nightly "book due in 3 days" reminder to students in the portal' }) },
+                { key: 'autoPaymentProofReminders', label: t('settings.autoPaymentProofRemindersLabel', { defaultValue: 'Payment Proof Reminders' }), desc: t('settings.autoPaymentProofRemindersDesc', { defaultValue: 'Nightly nudge to Admin/Accountant about payment proofs still awaiting review. Never auto-approves — a person always has to check the screenshot.' }) },
+              ] : []),
+              { key: 'autoPayroll', label: t('settings.autoPayrollLabel', { defaultValue: 'Auto Payroll Processing' }), desc: t('settings.autoPayrollDesc', { defaultValue: 'Automatically process monthly payroll for all employees' }) },
+              { key: 'autoReconciliation', label: t('settings.autoReconciliationLabel', { defaultValue: 'Daily Reconciliation Summary' }), desc: t('settings.autoReconciliationDesc', { defaultValue: 'Nightly summary of income, expenses, overdue invoices and ledger balance sent to admins' }) },
+            ].map(item => (
+              <div key={item.key} className="flex items-start justify-between gap-4 py-3 first:pt-0 last:pb-0">
+                <div>
+                  <p className="text-sm font-medium">{item.label}</p>
+                  <p className="text-xs text-muted-foreground">{item.desc}</p>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={automation[item.key]}
+                  onClick={() => setAutomation(a => ({ ...a, [item.key]: !a[item.key] }))}
+                  className={`relative shrink-0 w-10 h-5 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 ${
+                    automation[item.key] ? 'bg-primary' : 'bg-muted'
+                  }`}
+                >
+                  <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-transform ${
+                    automation[item.key] ? 'translate-x-5' : 'translate-x-0'
+                  }`} />
+                </button>
+              </div>
+            ))}
+            <div className="pt-4 flex items-center gap-3">
+              <Button onClick={saveAutomation} disabled={automationSaving}>
+                <Save className="w-4 h-4 mr-1.5" />
+                {automationSaving ? t('settings.saving', { defaultValue: 'Saving…' }) : t('settings.saveChanges', { defaultValue: 'Save Changes' })}
+              </Button>
+              {automationSaved && <span className="text-sm text-emerald-600 flex items-center gap-1"><Check className="w-4 h-4" />{t('settings.saved', { defaultValue: 'Saved' })}</span>}
+            </div>
+          </div>
+
+          <div className="bg-card rounded-xl border p-5 space-y-4">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h3 className="font-semibold flex items-center gap-1.5"><QrCode className="w-4 h-4 text-primary" />{t('settings.paymentQrTitle', { defaultValue: 'Payment QR Codes' })}</h3>
+                <p className="text-sm text-muted-foreground">{t('settings.paymentQrSubtitle', { defaultValue: 'Upload a photo of your eSewa, Khalti or bank QR code — it will print on every fee invoice so parents can scan to pay.' })}</p>
+              </div>
+              <Button size="sm" variant="outline" onClick={() => setShowAddBank(true)} className="shrink-0">
+                <Plus className="w-3.5 h-3.5 mr-1" />{t('settings.addBank', { defaultValue: 'Add Bank' })}
+              </Button>
+            </div>
+            {bankAccounts.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-4">{t('settings.noBankAccountsYet', { defaultValue: 'No bank accounts set up yet.' })}</p>
+            ) : (
+              <div className="grid gap-3">
+                {bankAccounts.map(b => (
+                  <div key={b.id} className="flex items-center justify-between gap-4 border rounded-lg p-3">
+                    <div className="flex items-center gap-3">
+                      {b.qrCodeUrl ? (
+                        <img src={resolveFileUrl(b.qrCodeUrl)} alt={b.bankName} className="w-14 h-14 object-contain border rounded-md p-1" />
+                      ) : (
+                        <div className="w-14 h-14 rounded-md border border-dashed flex items-center justify-center text-muted-foreground">
+                          <QrCode className="w-5 h-5" />
+                        </div>
+                      )}
+                      <div>
+                        <p className="text-sm font-medium inline-flex items-center gap-1.5">
+                          {b.bankName}
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide bg-muted text-muted-foreground">
+                            {b.paymentType === 'ESEWA' ? t('settings.paymentTypeEsewa', { defaultValue: 'eSewa' })
+                              : b.paymentType === 'KHALTI' ? t('settings.paymentTypeKhalti', { defaultValue: 'Khalti' })
+                              : t('settings.paymentTypeBank', { defaultValue: 'Bank' })}
+                          </span>
+                        </p>
+                        <p className="text-xs text-muted-foreground">{b.accountNumber}</p>
+                      </div>
+                    </div>
+                    <label className="cursor-pointer">
+                      <input type="file" accept="image/*" className="hidden" disabled={qrUploadingId === b.id} onChange={e => handleQrUpload(b.id, e)} />
+                      <span className="inline-flex items-center gap-1.5 text-sm border rounded-md px-3 py-1.5 hover:bg-secondary">
+                        <Upload className="w-3.5 h-3.5" />
+                        {qrUploadingId === b.id
+                          ? t('settings.uploading', { defaultValue: 'Uploading…' })
+                          : b.qrCodeUrl
+                            ? t('settings.replaceQr', { defaultValue: 'Replace' })
+                            : t('settings.uploadQr', { defaultValue: 'Upload QR' })}
+                      </span>
+                    </label>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </TabsContent>
+
         {/* ── Recycle Bin Tab ────────────────────────────────────────────── */}
         <TabsContent value="recycle-bin" className="mt-4 space-y-4">
           {!binAccessGranted ? (
@@ -691,13 +2330,13 @@ export default function Settings() {
                   <Lock className="w-6 h-6 text-amber-600" />
                 </div>
                 <div>
-                  <h3 className="font-semibold text-lg">Admin Access Required</h3>
-                  <p className="text-sm text-muted-foreground mt-1">Enter your admin password to access the Recycle Bin.</p>
+                  <h3 className="font-semibold text-lg">{t('settings.binAdminAccessRequired', { defaultValue: 'Admin Access Required' })}</h3>
+                  <p className="text-sm text-muted-foreground mt-1">{t('settings.binAdminAccessDesc', { defaultValue: 'Enter your admin password to access the Recycle Bin.' })}</p>
                 </div>
                 <div className="space-y-2 text-left">
                   <input
                     type="password"
-                    placeholder="Admin password"
+                    placeholder={t('settings.binPasswordPlaceholder', { defaultValue: 'Admin password' })}
                     value={binPassword}
                     onChange={e => { setBinPassword(e.target.value); setBinPasswordError(''); }}
                     onKeyDown={e => e.key === 'Enter' && verifyBinPassword()}
@@ -706,7 +2345,7 @@ export default function Settings() {
                   {binPasswordError && <p className="text-xs text-destructive">{binPasswordError}</p>}
                 </div>
                 <Button onClick={verifyBinPassword} disabled={binVerifying || !binPassword} className="w-full">
-                  {binVerifying ? 'Verifying…' : 'Unlock Recycle Bin'}
+                  {binVerifying ? t('settings.verifyingEllipsis', { defaultValue: 'Verifying…' }) : t('settings.unlockRecycleBin', { defaultValue: 'Unlock Recycle Bin' })}
                 </Button>
               </div>
             </div>
@@ -717,10 +2356,15 @@ export default function Settings() {
                 <div className="flex items-center gap-3">
                   <div className="flex items-center gap-2">
                     <Clock className="w-4 h-4 text-muted-foreground" />
-                    <span className="text-sm text-muted-foreground">Auto-delete after:</span>
+                    <span className="text-sm text-muted-foreground">{t('settings.autoDeleteAfterLabel', { defaultValue: 'Auto-delete after:' })}</span>
                   </div>
                   <div className="flex gap-1">
-                    {[{ v: 0, l: 'Never' }, { v: 7, l: '7 days' }, { v: 30, l: '30 days' }, { v: 90, l: '90 days' }].map(opt => (
+                    {[
+                      { v: 0, l: t('settings.autoDeleteNever', { defaultValue: 'Never' }) },
+                      { v: 7, l: t('settings.autoDelete7Days', { defaultValue: '7 days' }) },
+                      { v: 30, l: t('settings.autoDelete30Days', { defaultValue: '30 days' }) },
+                      { v: 90, l: t('settings.autoDelete90Days', { defaultValue: '90 days' }) },
+                    ].map(opt => (
                       <button
                         key={opt.v}
                         onClick={() => setBinAutoDeletePref(opt.v)}
@@ -735,7 +2379,7 @@ export default function Settings() {
                 </div>
                 <div className="flex gap-2">
                   <Button variant="outline" size="sm" onClick={loadBinItems}>
-                    <RotateCw className="w-3.5 h-3.5 mr-1" />Refresh
+                    <RotateCw className="w-3.5 h-3.5 mr-1" />{t('settings.refresh', { defaultValue: 'Refresh' })}
                   </Button>
                   <Button
                     variant="destructive"
@@ -743,7 +2387,7 @@ export default function Settings() {
                     onClick={() => setBinConfirmEmpty(true)}
                     disabled={!binItems || Object.values(binItems).every(arr => arr.length === 0)}
                   >
-                    <Trash2 className="w-3.5 h-3.5 mr-1" />Empty Bin
+                    <Trash2 className="w-3.5 h-3.5 mr-1" />{t('settings.emptyBin', { defaultValue: 'Empty Bin' })}
                   </Button>
                 </div>
               </div>
@@ -753,11 +2397,11 @@ export default function Settings() {
                 <div className="bg-destructive/10 border border-destructive/30 rounded-xl p-4 flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <AlertTriangle className="w-4 h-4 text-destructive" />
-                    <span className="text-sm font-medium">Permanently delete ALL items in the bin?</span>
+                    <span className="text-sm font-medium">{t('settings.confirmEmptyBinMessage', { defaultValue: 'Permanently delete ALL items in the bin?' })}</span>
                   </div>
                   <div className="flex gap-2">
-                    <Button variant="outline" size="sm" onClick={() => setBinConfirmEmpty(false)}>Cancel</Button>
-                    <Button variant="destructive" size="sm" onClick={emptyBin}>Yes, empty bin</Button>
+                    <Button variant="outline" size="sm" onClick={() => setBinConfirmEmpty(false)}>{t('settings.cancel', { defaultValue: 'Cancel' })}</Button>
+                    <Button variant="destructive" size="sm" onClick={emptyBin}>{t('settings.yesEmptyBin', { defaultValue: 'Yes, empty bin' })}</Button>
                   </div>
                 </div>
               )}
@@ -769,19 +2413,19 @@ export default function Settings() {
               ) : !binItems || Object.values(binItems).every(arr => arr.length === 0) ? (
                 <div className="flex flex-col items-center justify-center py-20 gap-3 text-muted-foreground">
                   <Recycle className="w-12 h-12 opacity-20" />
-                  <p className="text-sm font-medium">Recycle bin is empty</p>
+                  <p className="text-sm font-medium">{t('settings.recycleBinEmpty', { defaultValue: 'Recycle bin is empty' })}</p>
                 </div>
               ) : (
                 <div className="space-y-4">
                   {[
-                    { key: 'clients',   label: 'Clients',         icon: '👤', type: 'client',   nameKey: 'name',         subKey: 'email' },
-                    { key: 'vendors',   label: 'Vendors',         icon: '🏢', type: 'vendor',   nameKey: 'name',         subKey: 'phone' },
-                    { key: 'employees', label: 'Employees',       icon: '👷', type: 'employee', nameKey: 'name',         subKey: 'designation' },
-                    { key: 'inventory', label: 'Inventory Items', icon: '📦', type: 'inventory',nameKey: 'itemName',     subKey: 'brand' },
-                    { key: 'sales',     label: 'Sales Orders',    icon: '🧾', type: 'sales',    nameKey: 'invoiceNumber',subKey: 'clientName' },
-                    { key: 'purchases', label: 'Purchase Orders', icon: '🛒', type: 'purchase', nameKey: 'orderNumber',  subKey: 'vendorName' },
-                    { key: 'tasks',     label: 'Tasks',           icon: '✅', type: 'task',     nameKey: 'title',        subKey: 'assignedTo' },
-                    { key: 'memos',     label: 'Memos',           icon: '📝', type: 'memo',     nameKey: 'title',        subKey: 'documentType' },
+                    { key: 'clients',   label: t('settings.sectionClients', { defaultValue: 'Clients' }),         icon: '👤', type: 'client',   nameKey: 'name',         subKey: 'email' },
+                    { key: 'vendors',   label: t('settings.sectionVendors', { defaultValue: 'Vendors' }),         icon: '🏢', type: 'vendor',   nameKey: 'name',         subKey: 'phone' },
+                    { key: 'employees', label: t('settings.sectionEmployees', { defaultValue: 'Employees' }),       icon: '👷', type: 'employee', nameKey: 'name',         subKey: 'designation' },
+                    { key: 'inventory', label: t('settings.sectionInventoryItems', { defaultValue: 'Inventory Items' }), icon: '📦', type: 'inventory',nameKey: 'itemName',     subKey: 'brand' },
+                    { key: 'sales',     label: t('settings.sectionSalesOrders', { defaultValue: 'Sales Orders' }),    icon: '🧾', type: 'sales',    nameKey: 'invoiceNumber',subKey: 'clientName' },
+                    { key: 'purchases', label: t('settings.sectionPurchaseOrders', { defaultValue: 'Purchase Orders' }), icon: '🛒', type: 'purchase', nameKey: 'orderNumber',  subKey: 'vendorName' },
+                    { key: 'tasks',     label: t('settings.sectionTasks', { defaultValue: 'Tasks' }),           icon: '✅', type: 'task',     nameKey: 'title',        subKey: 'assignedTo' },
+                    { key: 'memos',     label: t('settings.sectionMemos', { defaultValue: 'Memos' }),           icon: '📝', type: 'memo',     nameKey: 'title',        subKey: 'documentType' },
                   ].filter(s => binItems[s.key]?.length > 0).map(section => (
                     <div key={section.key} className="bg-card rounded-xl border overflow-hidden">
                       <div className="px-4 py-3 bg-secondary/50 border-b flex items-center gap-2">
@@ -798,7 +2442,7 @@ export default function Settings() {
                               <p className="text-sm font-medium truncate">{item[section.nameKey] || '—'}</p>
                               <p className="text-xs text-muted-foreground truncate">
                                 {item[section.subKey] && `${item[section.subKey]} · `}
-                                Deleted {new Date(item.deletedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                {t('settings.deletedOn', { defaultValue: 'Deleted {{date}}', date: new Date(item.deletedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) })}
                               </p>
                             </div>
                             <div className="flex gap-2 ml-3 shrink-0">
@@ -808,7 +2452,7 @@ export default function Settings() {
                                 onClick={() => restoreItem(item.id, section.type)}
                                 className="h-7 text-xs gap-1"
                               >
-                                <RotateCcw className="w-3 h-3" />Restore
+                                <RotateCcw className="w-3 h-3" />{t('settings.restore', { defaultValue: 'Restore' })}
                               </Button>
                               <Button
                                 size="sm"
@@ -831,13 +2475,67 @@ export default function Settings() {
         </TabsContent>
       </Tabs>
 
+      {/* ── Add Bank Account Dialog ───────────────────────────────────────── */}
+      <Dialog open={showAddBank} onOpenChange={v => { setShowAddBank(v); if (!v) setBankForm({ bankName: '', accountNumber: '', accountType: '', branch: '', currentBalance: '', paymentType: 'BANK' }); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>{t('settings.addBankAccount', { defaultValue: 'Add Bank Account' })}</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleAddBank} className="space-y-4 pt-2">
+            <div className="space-y-1.5">
+              <Label>{t('settings.paymentTypeLabel', { defaultValue: 'Payment Type *' })}</Label>
+              <select
+                className="w-full border rounded-md px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring"
+                value={bankForm.paymentType}
+                onChange={e => setBankForm(f => ({ ...f, paymentType: e.target.value }))}
+              >
+                <option value="BANK">{t('settings.paymentTypeBank', { defaultValue: 'Bank' })}</option>
+                <option value="ESEWA">{t('settings.paymentTypeEsewa', { defaultValue: 'eSewa' })}</option>
+                <option value="KHALTI">{t('settings.paymentTypeKhalti', { defaultValue: 'Khalti' })}</option>
+              </select>
+              <p className="text-xs text-muted-foreground">
+                {t('settings.paymentTypeHint', { defaultValue: 'Which "Paid To" list this account shows up in for staff and the student portal.' })}
+              </p>
+            </div>
+            <div className="space-y-1.5">
+              <Label>{t('settings.bankNameLabel', { defaultValue: 'Bank / Wallet Name *' })}</Label>
+              <Input placeholder={t('settings.bankNamePlaceholder', { defaultValue: 'e.g. eSewa, Khalti, Nabil Bank' })} value={bankForm.bankName} onChange={e => setBankForm(f => ({ ...f, bankName: e.target.value }))} required />
+            </div>
+            <div className="space-y-1.5">
+              <Label>{t('settings.accountNumberLabel', { defaultValue: 'Account / Wallet Number *' })}</Label>
+              <Input value={bankForm.accountNumber} onChange={e => setBankForm(f => ({ ...f, accountNumber: e.target.value }))} required />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>{t('settings.accountTypeLabel', { defaultValue: 'Account Type' })}</Label>
+                <Input placeholder={t('settings.accountTypePlaceholder', { defaultValue: 'Savings, Current…' })} value={bankForm.accountType} onChange={e => setBankForm(f => ({ ...f, accountType: e.target.value }))} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>{t('settings.branchLabel', { defaultValue: 'Branch' })}</Label>
+                <Input value={bankForm.branch} onChange={e => setBankForm(f => ({ ...f, branch: e.target.value }))} />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label>{t('settings.openingBalanceLabel', { defaultValue: 'Opening Balance' })}</Label>
+              <Input type="number" step="0.01" placeholder="0.00" value={bankForm.currentBalance} onChange={e => setBankForm(f => ({ ...f, currentBalance: e.target.value }))} />
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setShowAddBank(false)}>{t('settings.cancel', { defaultValue: 'Cancel' })}</Button>
+              <Button type="submit" disabled={addBankSaving}>
+                {addBankSaving ? t('settings.saving', { defaultValue: 'Saving…' }) : t('settings.addBank', { defaultValue: 'Add Bank' })}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
       {/* ── Add Company Dialog ────────────────────────────────────────────── */}
       <Dialog open={showAddCompany} onOpenChange={setShowAddCompany}>
         <DialogContent className="glass-dialog max-w-3xl overflow-hidden">
           <div className="h-1 bg-gradient-to-r from-blue-800 to-blue-500 -mx-6 -mt-6 mb-4" />
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Building2 className="w-5 h-5 text-primary" />Add Company
+              <Building2 className="w-5 h-5 text-primary" />{t('settings.addCompanyDialogTitle', { defaultValue: 'Add Company' })}
             </DialogTitle>
           </DialogHeader>
 
@@ -850,13 +2548,13 @@ export default function Settings() {
               className="space-y-3 overflow-y-auto pr-1"
             >
               <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-                <Building2 className="w-3.5 h-3.5" />Company Info
+                <Building2 className="w-3.5 h-3.5" />{t('settings.companyInfoSection', { defaultValue: 'Company Info' })}
               </p>
 
               <LogoUpload value={companyForm.logo_url} onChange={url => setCompanyForm(f => ({ ...f, logo_url: url }))} onFile={e => handleLogoUpload(e, false)} uploading={uploadingLogo} />
 
               <div className="space-y-1">
-                <Label>Company Name *</Label>
+                <Label>{t('settings.companyNameRequired', { defaultValue: 'Company Name *' })}</Label>
                 <div className="relative">
                   <Building2 className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
                   <Input className="pl-8 h-9 text-sm" value={companyForm.name} onChange={e => setCompanyForm({ ...companyForm, name: e.target.value })} />
@@ -864,27 +2562,32 @@ export default function Settings() {
               </div>
 
               <div className="space-y-1">
-                <Label>Business Type</Label>
+                <Label>{t('settings.businessTypeLabel', { defaultValue: 'Business Type' })}</Label>
+                {/* SUPER_ADMIN no longer reaches this dialog (they use Create
+                    Client instead, see TopBar.jsx) — only a regular ADMIN gets
+                    here, and they may run any business as long as they pay,
+                    so let them pick freely instead of locking to SCHOOL. */}
                 <select
                   className="w-full border rounded-md px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring mt-1"
                   value={BUSINESS_TYPES.some(b => b.value === companyForm.business_type) ? companyForm.business_type : (companyForm.business_type ? 'OTHER' : '')}
                   onChange={e => setCompanyForm({ ...companyForm, business_type: e.target.value })}
                 >
-                  <option value="">Select business type…</option>
-                  {BUSINESS_TYPES.map(bt => <option key={bt.value} value={bt.value}>{bt.label}</option>)}
+                  <option value="">{t('settings.selectBusinessType', { defaultValue: 'Select business type…' })}</option>
+                  <option value="SCHOOL">{t('settings.businessTypeSchoolLocked', { defaultValue: 'School / Educational Institution' })}</option>
+                  {BUSINESS_TYPES.map(bt => <option key={bt.value} value={bt.value}>{businessTypeLabel(bt.value)}</option>)}
                 </select>
                 {companyForm.business_type === 'OTHER' && (
-                  <Input className="mt-2" placeholder="Describe your business (e.g. Tailoring Shop, Laundry)" autoFocus
+                  <Input className="mt-2" placeholder={t('settings.describeBusinessPlaceholder', { defaultValue: 'Describe your business (e.g. Tailoring Shop, Laundry)' })} autoFocus
                     value='' onChange={e => setCompanyForm({ ...companyForm, business_type: e.target.value })} />
                 )}
-                {companyForm.business_type && !BUSINESS_TYPES.some(b => b.value === companyForm.business_type) && companyForm.business_type !== 'OTHER' && (
-                  <Input className="mt-2" placeholder="Describe your business"
+                {companyForm.business_type && companyForm.business_type !== 'SCHOOL' && !BUSINESS_TYPES.some(b => b.value === companyForm.business_type) && companyForm.business_type !== 'OTHER' && (
+                  <Input className="mt-2" placeholder={t('settings.describeBusinessShortPlaceholder', { defaultValue: 'Describe your business' })}
                     value={companyForm.business_type} onChange={e => setCompanyForm({ ...companyForm, business_type: e.target.value })} />
                 )}
               </div>
 
               <div className="space-y-1">
-                <Label>Registration Number</Label>
+                <Label>{t('settings.registrationNumberLabel', { defaultValue: 'Registration Number' })}</Label>
                 <div className="relative">
                   <Hash className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
                   <Input className="pl-8 h-9 text-sm" value={companyForm.registration_number} onChange={e => setCompanyForm({ ...companyForm, registration_number: e.target.value })} />
@@ -900,11 +2603,11 @@ export default function Settings() {
               className="space-y-3 overflow-y-auto pr-1"
             >
               <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-                <Phone className="w-3.5 h-3.5" />Contact Details
+                <Phone className="w-3.5 h-3.5" />{t('settings.contactDetailsSection', { defaultValue: 'Contact Details' })}
               </p>
 
               <div className="space-y-1">
-                <Label>Address</Label>
+                <Label>{t('settings.addressLabel', { defaultValue: 'Address' })}</Label>
                 <div className="relative">
                   <MapPin className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
                   <Input className="pl-8 h-9 text-sm" value={companyForm.address} onChange={e => setCompanyForm({ ...companyForm, address: e.target.value })} />
@@ -912,7 +2615,7 @@ export default function Settings() {
               </div>
 
               <div className="space-y-1">
-                <Label>Phone</Label>
+                <Label>{t('settings.phoneLabel', { defaultValue: 'Phone' })}</Label>
                 <div className="relative">
                   <Phone className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
                   <Input className="pl-8 h-9 text-sm" value={companyForm.phone} onChange={e => setCompanyForm({ ...companyForm, phone: e.target.value })} />
@@ -920,7 +2623,7 @@ export default function Settings() {
               </div>
 
               <div className="space-y-1">
-                <Label>Email</Label>
+                <Label>{t('settings.emailLabel', { defaultValue: 'Email' })}</Label>
                 <div className="relative">
                   <Mail className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
                   <Input className="pl-8 h-9 text-sm" value={companyForm.email} onChange={e => setCompanyForm({ ...companyForm, email: e.target.value })} />
@@ -928,7 +2631,7 @@ export default function Settings() {
               </div>
 
               <div className="space-y-1">
-                <Label>PAN/VAT Number</Label>
+                <Label>{t('settings.panVatLabel', { defaultValue: 'PAN/VAT Number' })}</Label>
                 <div className="relative">
                   <Hash className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
                   <Input className="pl-8 h-9 text-sm" value={companyForm.pan_vat} onChange={e => setCompanyForm({ ...companyForm, pan_vat: e.target.value })} />
@@ -938,8 +2641,8 @@ export default function Settings() {
           </div>
 
           <DialogFooter className="mt-4">
-            <Button variant="outline" onClick={() => setShowAddCompany(false)}>Cancel</Button>
-            <Button onClick={addCompany} disabled={!companyForm.name}>Create</Button>
+            <Button variant="outline" onClick={() => setShowAddCompany(false)}>{t('settings.cancel', { defaultValue: 'Cancel' })}</Button>
+            <Button onClick={addCompany} disabled={!companyForm.name}>{t('settings.create', { defaultValue: 'Create' })}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -950,7 +2653,7 @@ export default function Settings() {
           <div className="h-1 bg-gradient-to-r from-blue-800 to-blue-500 -mx-6 -mt-6 mb-4" />
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Building2 className="w-5 h-5 text-primary" />Edit Company
+              <Building2 className="w-5 h-5 text-primary" />{t('settings.editCompanyDialogTitle', { defaultValue: 'Edit Company' })}
             </DialogTitle>
           </DialogHeader>
 
@@ -964,13 +2667,13 @@ export default function Settings() {
                 className="space-y-3 overflow-y-auto pr-1"
               >
                 <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-                  <Building2 className="w-3.5 h-3.5" />Company Info
+                  <Building2 className="w-3.5 h-3.5" />{t('settings.companyInfoSection', { defaultValue: 'Company Info' })}
                 </p>
 
                 <LogoUpload value={editingCompany.logo_url} onChange={url => setEditingCompany(c => ({ ...c, logo_url: url }))} onFile={e => handleLogoUpload(e, true)} uploading={uploadingLogo} />
 
                 <div className="space-y-1">
-                  <Label>Company Name</Label>
+                  <Label>{t('settings.companyNameLabel', { defaultValue: 'Company Name' })}</Label>
                   <div className="relative">
                     <Building2 className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
                     <Input className="pl-8 h-9 text-sm" value={editingCompany.name} onChange={e => setEditingCompany({ ...editingCompany, name: e.target.value })} />
@@ -978,27 +2681,27 @@ export default function Settings() {
                 </div>
 
                 <div className="space-y-1">
-                  <Label>Business Type</Label>
+                  <Label>{t('settings.businessTypeLabel', { defaultValue: 'Business Type' })}</Label>
                   <select
                     className="w-full border rounded-md px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring mt-1"
                     value={BUSINESS_TYPES.some(b => b.value === editingCompany.business_type) ? editingCompany.business_type : (editingCompany.business_type ? 'OTHER' : '')}
                     onChange={e => setEditingCompany({ ...editingCompany, business_type: e.target.value })}
                   >
-                    <option value="">Select business type…</option>
-                    {BUSINESS_TYPES.map(bt => <option key={bt.value} value={bt.value}>{bt.label}</option>)}
+                    <option value="">{t('settings.selectBusinessType', { defaultValue: 'Select business type…' })}</option>
+                    {BUSINESS_TYPES.map(bt => <option key={bt.value} value={bt.value}>{businessTypeLabel(bt.value)}</option>)}
                   </select>
                   {editingCompany.business_type === 'OTHER' && (
-                    <Input className="mt-2" placeholder="Describe your business (e.g. Tailoring Shop, Laundry)" autoFocus
+                    <Input className="mt-2" placeholder={t('settings.describeBusinessPlaceholder', { defaultValue: 'Describe your business (e.g. Tailoring Shop, Laundry)' })} autoFocus
                       value='' onChange={e => setEditingCompany({ ...editingCompany, business_type: e.target.value })} />
                   )}
                   {editingCompany.business_type && !BUSINESS_TYPES.some(b => b.value === editingCompany.business_type) && editingCompany.business_type !== 'OTHER' && (
-                    <Input className="mt-2" placeholder="Describe your business"
+                    <Input className="mt-2" placeholder={t('settings.describeBusinessShortPlaceholder', { defaultValue: 'Describe your business' })}
                       value={editingCompany.business_type} onChange={e => setEditingCompany({ ...editingCompany, business_type: e.target.value })} />
                   )}
                 </div>
 
                 <div className="space-y-1">
-                  <Label>Registration Number</Label>
+                  <Label>{t('settings.registrationNumberLabel', { defaultValue: 'Registration Number' })}</Label>
                   <div className="relative">
                     <Hash className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
                     <Input className="pl-8 h-9 text-sm" value={editingCompany.registration_number || ''} onChange={e => setEditingCompany({ ...editingCompany, registration_number: e.target.value })} />
@@ -1014,11 +2717,11 @@ export default function Settings() {
                 className="space-y-3 overflow-y-auto pr-1"
               >
                 <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-                  <Phone className="w-3.5 h-3.5" />Contact Details
+                  <Phone className="w-3.5 h-3.5" />{t('settings.contactDetailsSection', { defaultValue: 'Contact Details' })}
                 </p>
 
                 <div className="space-y-1">
-                  <Label>Address</Label>
+                  <Label>{t('settings.addressLabel', { defaultValue: 'Address' })}</Label>
                   <div className="relative">
                     <MapPin className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
                     <Input className="pl-8 h-9 text-sm" value={editingCompany.address || ''} onChange={e => setEditingCompany({ ...editingCompany, address: e.target.value })} />
@@ -1026,7 +2729,7 @@ export default function Settings() {
                 </div>
 
                 <div className="space-y-1">
-                  <Label>Phone</Label>
+                  <Label>{t('settings.phoneLabel', { defaultValue: 'Phone' })}</Label>
                   <div className="relative">
                     <Phone className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
                     <Input className="pl-8 h-9 text-sm" value={editingCompany.phone || ''} onChange={e => setEditingCompany({ ...editingCompany, phone: e.target.value })} />
@@ -1034,7 +2737,7 @@ export default function Settings() {
                 </div>
 
                 <div className="space-y-1">
-                  <Label>Email</Label>
+                  <Label>{t('settings.emailLabel', { defaultValue: 'Email' })}</Label>
                   <div className="relative">
                     <Mail className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
                     <Input className="pl-8 h-9 text-sm" value={editingCompany.email || ''} onChange={e => setEditingCompany({ ...editingCompany, email: e.target.value })} />
@@ -1042,7 +2745,7 @@ export default function Settings() {
                 </div>
 
                 <div className="space-y-1">
-                  <Label>PAN/VAT Number</Label>
+                  <Label>{t('settings.panVatLabel', { defaultValue: 'PAN/VAT Number' })}</Label>
                   <div className="relative">
                     <Hash className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
                     <Input className="pl-8 h-9 text-sm" value={editingCompany.pan_vat || ''} onChange={e => setEditingCompany({ ...editingCompany, pan_vat: e.target.value })} />
@@ -1053,19 +2756,19 @@ export default function Settings() {
           )}
 
           <DialogFooter className="mt-4">
-            <Button variant="outline" onClick={() => setEditingCompany(null)}>Cancel</Button>
-            <Button onClick={updateCompany}><Save className="w-4 h-4 mr-1" />Save</Button>
+            <Button variant="outline" onClick={() => setEditingCompany(null)}>{t('settings.cancel', { defaultValue: 'Cancel' })}</Button>
+            <Button onClick={updateCompany}><Save className="w-4 h-4 mr-1" />{t('settings.save', { defaultValue: 'Save' })}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       {/* ── Invite User Dialog ────────────────────────────────────────────── */}
-      <Dialog open={showInvite && !tempPassword} onOpenChange={v => { if (!v) { setShowInvite(false); setInviteForm({ name: '', email: '', role: 'STAFF' }); } }}>
+      <Dialog open={showInvite && !tempPassword} onOpenChange={v => { if (!v) { setShowInvite(false); setInviteForm({ name: '', email: '', role: 'STAFF', staffTags: [] }); } }}>
         <DialogContent className="glass-dialog max-w-md overflow-hidden">
           <div className="h-1 bg-gradient-to-r from-blue-800 to-blue-500 -mx-6 -mt-6 mb-4" />
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <UserPlus className="w-5 h-5 text-primary" />Invite Team Member
+              <UserPlus className="w-5 h-5 text-primary" />{t('settings.inviteTeamMemberTitle', { defaultValue: 'Invite Team Member' })}
             </DialogTitle>
           </DialogHeader>
 
@@ -1078,12 +2781,12 @@ export default function Settings() {
             >
               {/* Full Name */}
               <div className="space-y-1">
-                <Label>Full Name *</Label>
+                <Label>{t('settings.fullNameRequired', { defaultValue: 'Full Name *' })}</Label>
                 <div className="relative">
                   <User className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
                   <Input
                     className="pl-8 h-9 text-sm"
-                    placeholder="Ram Sharma"
+                    placeholder={t('settings.fullNamePlaceholder', { defaultValue: 'Ram Sharma' })}
                     value={inviteForm.name}
                     onChange={e => setInviteForm({ ...inviteForm, name: e.target.value })}
                     required
@@ -1093,13 +2796,13 @@ export default function Settings() {
 
               {/* Email */}
               <div className="space-y-1">
-                <Label>Email *</Label>
+                <Label>{t('settings.emailRequired', { defaultValue: 'Email *' })}</Label>
                 <div className="relative">
                   <Mail className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
                   <Input
                     type="email"
                     className="pl-8 h-9 text-sm"
-                    placeholder="ram@company.com"
+                    placeholder={t('settings.emailPlaceholder', { defaultValue: 'ram@company.com' })}
                     value={inviteForm.email}
                     onChange={e => setInviteForm({ ...inviteForm, email: e.target.value })}
                     required
@@ -1109,20 +2812,19 @@ export default function Settings() {
 
               {/* Role chips */}
               <div className="space-y-2">
-                <Label>Role *</Label>
+                <Label>{t('settings.roleRequired', { defaultValue: 'Role *' })}</Label>
                 <div className="flex flex-col gap-2">
                   {[
-                    { v: 'STAFF', label: 'Staff', desc: 'Day-to-day operations' },
-                    { v: 'ACCOUNTANT', label: 'Accountant', desc: 'Full financial access' },
+                    { v: 'STAFF', label: t('settings.roleStaffLabel', { defaultValue: 'Staff' }), desc: t('settings.roleStaffDesc', { defaultValue: 'Day-to-day operations' }) },
+                    { v: 'ACCOUNTANT', label: t('settings.roleAccountantLabel', { defaultValue: 'Accountant' }), desc: t('settings.roleAccountantDesc', { defaultValue: 'Full financial access' }) },
                     ...(isSchool ? [
-                      { v: 'TEACHER', label: 'Teacher', desc: 'Attendance, exams, homework, materials' },
-                      { v: 'LIBRARIAN', label: 'Librarian', desc: 'Library books, issues and returns' },
+                      { v: 'TEACHER', label: t('settings.roleTeacherLabel', { defaultValue: 'Teacher' }), desc: t('settings.roleTeacherDesc', { defaultValue: 'Attendance, exams, homework, materials' }) },
                     ] : []),
                   ].map(r => (
                     <button
                       key={r.v}
                       type="button"
-                      onClick={() => setInviteForm({ ...inviteForm, role: r.v })}
+                      onClick={() => setInviteForm({ ...inviteForm, role: r.v, staffTags: [] })}
                       className={`flex flex-col items-start p-3 rounded-lg border-2 transition-all text-left w-full ${inviteForm.role === r.v ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/50'}`}
                     >
                       <span className="text-sm font-semibold">{r.label}</span>
@@ -1132,12 +2834,43 @@ export default function Settings() {
                 </div>
               </div>
 
-              <p className="text-xs text-muted-foreground">A temporary password will be generated. Share it with the user so they can log in.</p>
+              {/* Staff duty tags — only meaningful for STAFF (e.g. a librarian is
+                  now "Staff" + the Library tag rather than a separate role). */}
+              {inviteForm.role === 'STAFF' && (
+                <div className="space-y-2">
+                  <Label>{t('settings.staffDutiesLabel', { defaultValue: 'Duties (optional)' })}</Label>
+                  <div className="flex flex-wrap gap-2">
+                    {STAFF_TAGS.map(tag => {
+                      const active = inviteForm.staffTags.includes(tag.value);
+                      return (
+                        <button
+                          key={tag.value}
+                          type="button"
+                          onClick={() => setInviteForm({
+                            ...inviteForm,
+                            staffTags: active
+                              ? inviteForm.staffTags.filter(tg => tg !== tag.value)
+                              : [...inviteForm.staffTags, tag.value],
+                          })}
+                          className={`px-2.5 py-1 rounded-full border text-xs transition-colors ${
+                            active ? 'bg-primary/10 border-primary text-primary' : 'border-border text-muted-foreground hover:border-primary/50'
+                          }`}
+                          title={t(`${tag.i18n}Desc`, { defaultValue: tag.desc })}
+                        >
+                          {t(tag.i18n, { defaultValue: tag.label })}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              <p className="text-xs text-muted-foreground">{t('settings.tempPasswordNotice', { defaultValue: 'A temporary password will be generated. Share it with the user so they can log in.' })}</p>
             </motion.div>
 
             <DialogFooter className="mt-4">
-              <Button type="button" variant="outline" onClick={() => { setShowInvite(false); setInviteForm({ name: '', email: '', role: 'STAFF' }); }}>Cancel</Button>
-              <Button type="submit" disabled={inviteLoading}>{inviteLoading ? 'Inviting…' : 'Send Invite'}</Button>
+              <Button type="button" variant="outline" onClick={() => { setShowInvite(false); setInviteForm({ name: '', email: '', role: 'STAFF', staffTags: [] }); }}>{t('settings.cancel', { defaultValue: 'Cancel' })}</Button>
+              <Button type="submit" disabled={inviteLoading}>{inviteLoading ? t('settings.invitingEllipsis', { defaultValue: 'Inviting…' }) : t('settings.sendInvite', { defaultValue: 'Send Invite' })}</Button>
             </DialogFooter>
           </form>
         </DialogContent>
@@ -1146,9 +2879,9 @@ export default function Settings() {
       {/* ── Temp Password Dialog ──────────────────────────────────────────── */}
       <Dialog open={!!tempPassword} onOpenChange={() => {}}>
         <DialogContent className="max-w-sm">
-          <DialogHeader><DialogTitle>User Invited</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{t('settings.userInvitedTitle', { defaultValue: 'User Invited' })}</DialogTitle></DialogHeader>
           <div className="space-y-4">
-            <p className="text-sm text-muted-foreground">The user has been created. Share this temporary password with them — they should change it after first login.</p>
+            <p className="text-sm text-muted-foreground">{t('settings.tempPasswordDesc', { defaultValue: 'The user has been created. Share this temporary password with them — they should change it after first login.' })}</p>
             <div className="flex items-center gap-2 bg-secondary rounded-lg px-4 py-3">
               <code className="flex-1 text-sm font-mono tracking-widest">{tempPassword}</code>
               <button type="button" onClick={copyTempPassword} className="text-muted-foreground hover:text-foreground transition-colors">
@@ -1157,7 +2890,7 @@ export default function Settings() {
             </div>
           </div>
           <DialogFooter>
-            <Button className="w-full" onClick={closeTempPasswordDialog}>Done</Button>
+            <Button className="w-full" onClick={closeTempPasswordDialog}>{t('settings.done', { defaultValue: 'Done' })}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -1166,9 +2899,10 @@ export default function Settings() {
 }
 
 function LogoUpload({ value, onChange, onFile, uploading }) {
+  const { t } = useTranslation();
   return (
     <div>
-      <Label className="text-sm font-medium mb-2 block">Company Logo</Label>
+      <Label className="text-sm font-medium mb-2 block">{t('settings.companyLogoLabel', { defaultValue: 'Company Logo' })}</Label>
       {value ? (
         <div className="relative w-16 h-16">
           <img src={value} alt="logo" className="w-16 h-16 rounded-lg object-cover border shadow-sm" />
@@ -1180,7 +2914,7 @@ function LogoUpload({ value, onChange, onFile, uploading }) {
       ) : (
         <label className="flex flex-col items-center justify-center w-16 h-16 border-2 border-dashed border-muted-foreground/25 rounded-lg cursor-pointer hover:border-primary/50 hover:bg-primary/5 transition-colors">
           <ImagePlus className="w-4 h-4 text-muted-foreground mb-1" />
-          <span className="text-xs text-muted-foreground">Logo</span>
+          <span className="text-xs text-muted-foreground">{t('settings.logoLabel', { defaultValue: 'Logo' })}</span>
           <input type="file" accept="image/*" className="hidden" onChange={onFile} disabled={uploading} />
         </label>
       )}

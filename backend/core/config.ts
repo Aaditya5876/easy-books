@@ -6,6 +6,10 @@ const EnvSchema = z.object({
   DATABASE_URL: z.string(),
   JWT_ACCESS_SECRET: z.string(),
   JWT_REFRESH_SECRET: z.string(),
+  // Signs/verifies parent/student portal tokens (PortalGuard) — required, not
+  // defaulted, so a deployment that forgets to set it fails to boot instead
+  // of silently running on a hardcoded, guessable fallback secret.
+  JWT_SECRET: z.string(),
   JWT_ACCESS_EXPIRES_IN: z.string().default('15m'),
   JWT_REFRESH_EXPIRES_IN: z.string().default('7d'),
   REDIS_HOST: z.string().default('localhost'),

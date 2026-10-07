@@ -27,11 +27,16 @@ export class TaskController {
   }
 
   @Post()
+  @Roles('ACCOUNTANT', 'ADMIN')
   @ApiOperation({ summary: 'Create a task' })
   create(@Body(new ZodValidationPipe(CreateTaskSchema)) dto: CreateTaskDTO) {
     return this.service.create(dto);
   }
 
+  // No per-method @Roles override — STAFF actively uses this to change task
+  // status from Communication.jsx's inline dropdown (updateTaskStatus), so it
+  // must stay open to STAFF/ACCOUNTANT/ADMIN (the class-level default) even
+  // though the full "edit task" form is hidden from STAFF in the frontend.
   @Put(':id')
   @ApiOperation({ summary: 'Update a task' })
   @ApiQuery({ name: 'companyId', required: true })
@@ -44,6 +49,7 @@ export class TaskController {
   }
 
   @Delete(':id')
+  @Roles('ACCOUNTANT', 'ADMIN')
   @ApiOperation({ summary: 'Delete a task' })
   @ApiQuery({ name: 'companyId', required: true })
   remove(@Param('id') id: string, @Query('companyId') companyId: string) {

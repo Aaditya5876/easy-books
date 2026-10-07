@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { X, Minus, Maximize2, RefreshCw, ExternalLink, Copy, Eye, EyeOff, Lock } from 'lucide-react';
+import { RefreshCw, ExternalLink, Copy, Eye, EyeOff, Lock } from 'lucide-react';
 
 export default function FloatingBankBrowser({ account, onClose }) {
   const [minimized, setMinimized] = useState(false);

@@ -13,6 +13,10 @@ export const authApi = {
   logout: () => apiClient.post('/api/v1/auth/logout'),
   me: () => apiClient.get('/api/v1/auth/me'),
   refresh: () => apiClient.post('/api/v1/auth/refresh'),
+  // Login-page quick attendance — validates credentials and marks the check
+  // in/out without starting a session (no redirect into the app).
+  quickAttendance: (email: string, password: string, action: 'IN' | 'OUT') =>
+    apiClient.post('/api/v1/auth/quick-attendance', { email, password, action }),
 };
 
 // Inventory
@@ -67,6 +71,9 @@ export const vendorApi = {
 // Employees
 export const employeeApi = {
   list: () => apiClient.get('/api/v1/employees', { params: { companyId: companyId() } }),
+  // Name-only listing — safe for roles (TEACHER, plain STAFF) that shouldn't
+  // see salary/PAN/bank data but still need to resolve/pick an employee by name.
+  directory: () => apiClient.get('/api/v1/employees/directory', { params: { companyId: companyId() } }),
   get: (id: string) => apiClient.get(`/api/v1/employees/${id}`, { params: { companyId: companyId() } }),
   create: (data: object) => apiClient.post('/api/v1/employees', data),
   update: (id: string, data: object) => apiClient.put(`/api/v1/employees/${id}`, data, { params: { companyId: companyId() } }),
@@ -80,6 +87,30 @@ export const attendanceApi = {
   create: (data: object) => apiClient.post('/api/v1/attendance', data),
   update: (id: string, data: object) => apiClient.put(`/api/v1/attendance/${id}`, data, { params: { companyId: companyId() } }),
   remove: (id: string) => apiClient.delete(`/api/v1/attendance/${id}`, { params: { companyId: companyId() } }),
+  // Self-service — open to every role, unlike the HR endpoints above.
+  selfToday: () => apiClient.get('/api/v1/attendance/self/today', { params: { companyId: companyId() } }),
+  selfMark: (action: 'IN' | 'OUT') => apiClient.post('/api/v1/attendance/self', { action }, { params: { companyId: companyId() } }),
+};
+
+// Leave
+export const leaveApi = {
+  // Self-service — open to every role.
+  selfContext: () => apiClient.get('/api/v1/leave/self/context', { params: { companyId: companyId() } }),
+  selfRequests: () => apiClient.get('/api/v1/leave/self/requests', { params: { companyId: companyId() } }),
+  applySelf: (data: { leaveTypeId: string; startDate: string; endDate: string; reason?: string }) =>
+    apiClient.post('/api/v1/leave/self/requests', data, { params: { companyId: companyId() } }),
+  cancelSelf: (id: string) => apiClient.patch(`/api/v1/leave/self/requests/${id}/cancel`, {}, { params: { companyId: companyId() } }),
+  // Leave types — ADMIN manages, everyone can list (needed to populate the apply form).
+  listTypes: () => apiClient.get('/api/v1/leave/types', { params: { companyId: companyId() } }),
+  createType: (data: { name: string; daysPerYear: number; isPaid?: boolean }) =>
+    apiClient.post('/api/v1/leave/types', data, { params: { companyId: companyId() } }),
+  updateType: (id: string, data: object) => apiClient.put(`/api/v1/leave/types/${id}`, data, { params: { companyId: companyId() } }),
+  removeType: (id: string) => apiClient.delete(`/api/v1/leave/types/${id}`, { params: { companyId: companyId() } }),
+  // HR approvals — ACCOUNTANT/ADMIN.
+  listRequests: (params?: { employeeId?: string; status?: string }) =>
+    apiClient.get('/api/v1/leave/requests', { params: { companyId: companyId(), ...params } }),
+  approve: (id: string) => apiClient.patch(`/api/v1/leave/requests/${id}/approve`, {}, { params: { companyId: companyId() } }),
+  reject: (id: string) => apiClient.patch(`/api/v1/leave/requests/${id}/reject`, {}, { params: { companyId: companyId() } }),
 };
 
 // Payroll
@@ -184,6 +215,9 @@ export const notificationsApi = {
   unreadCount: () => apiClient.get('/api/v1/notifications/unread-count'),
   markRead: (id: string) => apiClient.patch(`/api/v1/notifications/${id}/read`),
   markAllRead: () => apiClient.patch('/api/v1/notifications/mark-all-read'),
+  getPreferences: () => apiClient.get('/api/v1/notifications/preferences'),
+  updatePreferences: (data: { transactions?: boolean; reminders?: boolean; system?: boolean }) =>
+    apiClient.put('/api/v1/notifications/preferences', data),
 };
 
 // Companies
@@ -196,6 +230,18 @@ export const companyApi = {
   update: (id: string, data: object) => apiClient.put(`/api/v1/companies/${id}`, data),
   getPayrollSettings: (id: string) => apiClient.get(`/api/v1/companies/${id}/payroll-settings`),
   upsertPayrollSettings: (id: string, data: object) => apiClient.patch(`/api/v1/companies/${id}/payroll-settings`, data),
+  // SUPER_ADMIN only — sets which package (Base/Standard/Premium) a company is on.
+  updatePackage: (id: string, enabledModules: string[]) => apiClient.patch(`/api/v1/companies/${id}/package`, { enabledModules }),
+  // SUPER_ADMIN only — every company on the platform (client directory), not just ones this account is linked to.
+  listAll: () => apiClient.get('/api/v1/companies/all'),
+  // SUPER_ADMIN only — suspend/restore a client company (blocks their users' login while inactive).
+  setActive: (id: string, isActive: boolean) => apiClient.patch(`/api/v1/companies/${id}/active`, { isActive }),
+  // SUPER_ADMIN only — set (ISO string) or clear (null) a company's automatic subscription expiry.
+  setSubscriptionExpiry: (id: string, expiresAt: string | null) => apiClient.patch(`/api/v1/companies/${id}/subscription`, { expiresAt }),
+  // ADMIN only — "Request Renewal" button shown once a company loses access. Notifies every SUPER_ADMIN.
+  requestRenewal: (id: string) => apiClient.post(`/api/v1/companies/${id}/request-renewal`),
+  // ADMIN only — claim the one-time three-day extension after expiry.
+  extendSubscription: (id: string) => apiClient.post(`/api/v1/companies/${id}/extend-subscription`),
 };
 
 // File Upload
@@ -245,7 +291,7 @@ export const studentsApi = {
   },
   get: (id: string) => apiClient.get(`/api/v1/school/students/${id}`, { params: { companyId: companyId() } }),
   create: (data: object) => apiClient.post('/api/v1/school/students', data),
-  update: (id: string, data: object) => apiClient.put(`/api/v1/school/students/${id}`, data),
+  update: (id: string, data: object) => apiClient.put(`/api/v1/school/students/${id}`, data, { params: { companyId: companyId() } }),
   remove: (id: string) => apiClient.delete(`/api/v1/school/students/${id}`, { params: { companyId: companyId() } }),
   promote: (data: object) => apiClient.post('/api/v1/school/students/promote', data),
 };
@@ -253,14 +299,14 @@ export const studentsApi = {
 export const classesApi = {
   list: () => apiClient.get('/api/v1/school/classes', { params: { companyId: companyId() } }),
   create: (data: object) => apiClient.post('/api/v1/school/classes', data),
-  update: (id: string, data: object) => apiClient.put(`/api/v1/school/classes/${id}`, data),
+  update: (id: string, data: object) => apiClient.put(`/api/v1/school/classes/${id}`, data, { params: { companyId: companyId() } }),
   remove: (id: string) => apiClient.delete(`/api/v1/school/classes/${id}`, { params: { companyId: companyId() } }),
 };
 
 export const subjectsApi = {
   list: (classId?: string) => apiClient.get('/api/v1/school/subjects', { params: { companyId: companyId(), classId: classId || undefined } }),
   create: (data: object) => apiClient.post('/api/v1/school/subjects', data),
-  update: (id: string, data: object) => apiClient.put(`/api/v1/school/subjects/${id}`, data),
+  update: (id: string, data: object) => apiClient.put(`/api/v1/school/subjects/${id}`, data, { params: { companyId: companyId() } }),
   remove: (id: string) => apiClient.delete(`/api/v1/school/subjects/${id}`, { params: { companyId: companyId() } }),
 };
 
@@ -278,7 +324,7 @@ export const feesApi = {
   listStructures: (classId?: string) =>
     apiClient.get('/api/v1/school/fee-structures', { params: { companyId: companyId(), classId } }),
   createStructure: (data: object) => apiClient.post('/api/v1/school/fee-structures', data),
-  updateStructure: (id: string, data: object) => apiClient.put(`/api/v1/school/fee-structures/${id}`, data),
+  updateStructure: (id: string, data: object) => apiClient.put(`/api/v1/school/fee-structures/${id}`, data, { params: { companyId: companyId() } }),
   removeStructure: (id: string) =>
     apiClient.delete(`/api/v1/school/fee-structures/${id}`, { params: { companyId: companyId() } }),
   listInvoices: (params?: object) =>
@@ -291,6 +337,18 @@ export const feesApi = {
     apiClient.get(`/api/v1/school/fee-invoices/${id}/receipt`, { params: { companyId: companyId() } }),
   sendFeeReminderSms: (invoiceId: string) =>
     apiClient.post(`/api/v1/school/sms/fee-reminder/${invoiceId}`, { companyId: companyId() }),
+  release: (id: string) =>
+    apiClient.patch(`/api/v1/school/fee-invoices/${id}/release`, {}, { params: { companyId: companyId() } }),
+  releaseBulk: () =>
+    apiClient.post('/api/v1/school/fee-invoices/release-bulk', { companyId: companyId() }),
+  listPendingProofs: () =>
+    apiClient.get('/api/v1/school/fee-payments/pending', { params: { companyId: companyId() } }),
+  confirmProof: (id: string) =>
+    apiClient.patch(`/api/v1/school/fee-payments/${id}/confirm`, {}, { params: { companyId: companyId() } }),
+  rejectProof: (id: string, reason: string) =>
+    apiClient.patch(`/api/v1/school/fee-payments/${id}/reject`, { reason }, { params: { companyId: companyId() } }),
+  verifyByCode: (code: string) =>
+    apiClient.get(`/api/v1/school/fee-payments/verify/${encodeURIComponent(code)}`, { params: { companyId: companyId() } }),
 };
 
 export const examResultsApi = {
@@ -305,6 +363,7 @@ export const examResultsApi = {
     apiClient.put(`/api/v1/school/exam-results/${id}`, data, { params: { companyId: companyId() } }),
   remove: (id: string) =>
     apiClient.delete(`/api/v1/school/exam-results/${id}`, { params: { companyId: companyId() } }),
+  bulkUpsert: (data: object) => apiClient.post('/api/v1/school/exam-results/bulk', { ...data, companyId: companyId() }),
 };
 
 export const examsApi = {
@@ -339,7 +398,7 @@ export const schoolFinanceApi = {
   assignPackage: (studentId: string, packageId: string | null) =>
     apiClient.patch(`/api/v1/school/students/${studentId}/package`, { packageId }, { params: { companyId: companyId() } }),
 
-  billingRun: (data: { month: string; classId?: string; dueDate?: string }) =>
+  billingRun: (data: { classId?: string; dueDate?: string; invoiceDate?: string }) =>
     apiClient.post('/api/v1/school/billing-run', { ...data, companyId: companyId() }),
 
   listInvoicePayments: (invoiceId: string) =>
@@ -467,8 +526,22 @@ export const transportApi = {
 export const usersApi = {
   list: (cid: string) => apiClient.get('/api/v1/users', { params: { companyId: cid } }),
   invite: (cid: string, data: object) => apiClient.post('/api/v1/users/invite', data, { params: { companyId: cid } }),
-  changeRole: (userId: string, cid: string, role: string) =>
-    apiClient.patch(`/api/v1/users/${userId}/role`, { role }, { params: { companyId: cid } }),
+  changeRole: (userId: string, cid: string, role: string, staffTags?: string[]) =>
+    apiClient.patch(`/api/v1/users/${userId}/role`, { role, staffTags }, { params: { companyId: cid } }),
+  remove: (userId: string, cid: string) =>
+    apiClient.delete(`/api/v1/users/${userId}`, { params: { companyId: cid } }),
+  // SUPER_ADMIN only — sales-led onboarding: new company + its first ADMIN login.
+  provisionClient: (data: { companyName: string; businessType: string; adminName: string; adminEmail: string; enabledModules?: string[] }) =>
+    apiClient.post('/api/v1/users/provision-client', data),
+  // SUPER_ADMIN only — how many companies this user may self-serve create.
+  updateMaxCompanies: (userId: string, maxCompanies: number) =>
+    apiClient.patch(`/api/v1/users/${userId}/max-companies`, { maxCompanies }),
+  // ADMIN (or SUPER_ADMIN) — generates a fresh temp password for a user who lost theirs.
+  resetPassword: (userId: string, cid: string) =>
+    apiClient.post(`/api/v1/users/${userId}/reset-password`, {}, { params: { companyId: cid } }),
+  // ADMIN (or SUPER_ADMIN) — suspend/restore a single user login.
+  setStatus: (userId: string, cid: string, isActive: boolean) =>
+    apiClient.patch(`/api/v1/users/${userId}/status`, { isActive }, { params: { companyId: cid } }),
 };
 
 // ── Portal API (parent/student token-based auth) ─────────────────────────────
@@ -479,14 +552,27 @@ const portalHeaders = () => ({ Authorization: `Bearer ${portalToken()}` });
 export const portalApi = {
   login: (data: object) => apiClient.post('/api/v1/portal/login', data),
   setPassword: (data: object) => apiClient.post('/api/v1/portal/set-password', data),
+  bulkSetAccess: (data: object) => apiClient.post('/api/v1/portal/bulk-set-access', data),
+  changePassword: (data: { currentPassword: string; newPassword: string }) =>
+    apiClient.patch('/api/v1/portal/change-password', data, { headers: portalHeaders() }),
   me: () => apiClient.get('/api/v1/portal/me', { headers: portalHeaders() }),
   attendance: () => apiClient.get('/api/v1/portal/attendance', { headers: portalHeaders() }),
   fees: () => apiClient.get('/api/v1/portal/fees', { headers: portalHeaders() }),
   feeReceipt: (invoiceId: string) => apiClient.get(`/api/v1/portal/fees/${invoiceId}/receipt`, { headers: portalHeaders() }),
+  paymentQrCodes: () => apiClient.get('/api/v1/portal/payment-qr-codes', { headers: portalHeaders() }),
+  notifications: () => apiClient.get('/api/v1/portal/notifications', { headers: portalHeaders() }),
+  notificationsUnreadCount: () => apiClient.get('/api/v1/portal/notifications/unread-count', { headers: portalHeaders() }),
+  markNotificationRead: (id: string) => apiClient.patch(`/api/v1/portal/notifications/${id}/read`, {}, { headers: portalHeaders() }),
+  markAllNotificationsRead: () => apiClient.patch('/api/v1/portal/notifications/mark-all-read', {}, { headers: portalHeaders() }),
   results: () => apiClient.get('/api/v1/portal/results', { headers: portalHeaders() }),
   homework: (classId?: string) => apiClient.get('/api/v1/portal/homework', { headers: portalHeaders(), params: { classId } }),
   notices: () => apiClient.get('/api/v1/portal/notices', { headers: portalHeaders() }),
   timetable: (classId?: string) => apiClient.get('/api/v1/portal/timetable', { headers: portalHeaders(), params: { classId } }),
+  studyMaterials: (classId?: string, subjectId?: string) =>
+    apiClient.get('/api/v1/portal/study-materials', { headers: portalHeaders(), params: { classId, subjectId } }),
+  examSchedule: (classId?: string) =>
+    apiClient.get('/api/v1/portal/exam-schedule', { headers: portalHeaders(), params: { classId } }),
+  events: () => apiClient.get('/api/v1/portal/events', { headers: portalHeaders() }),
   initiateEsewa: (invoiceId: string) =>
     apiClient.post(`/api/v1/portal/pay/esewa/${invoiceId}`, {}, { headers: portalHeaders() }),
   verifyEsewa: (data: { data: string; invoiceId: string; companyId: string }) =>
@@ -495,6 +581,15 @@ export const portalApi = {
     apiClient.post(`/api/v1/portal/pay/khalti/${invoiceId}`, {}, { headers: portalHeaders() }),
   verifyKhalti: (data: { pidx: string; invoiceId: string; companyId: string }) =>
     apiClient.post('/api/v1/portal/pay/khalti/verify', data),
+  uploadProof: (file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return apiClient.post('/api/v1/portal/upload', formData, {
+      headers: { ...portalHeaders(), 'Content-Type': 'multipart/form-data' },
+    });
+  },
+  submitPaymentProof: (invoiceId: string, data: object) =>
+    apiClient.post(`/api/v1/portal/fees/${invoiceId}/payment-proof`, data, { headers: portalHeaders() }),
 };
 
 // ── AI API (admin only, requires GEMINI_API_KEY on server) ───────────────────
@@ -505,4 +600,22 @@ export const aiApi = {
   classInsights: (data: object) => apiClient.post('/api/v1/ai/class-insights', data),
   feeReminder: (data: object) => apiClient.post('/api/v1/ai/fee-reminder', data),
   homeworkDescription: (data: object) => apiClient.post('/api/v1/ai/homework-description', data),
+};
+
+// ── Reports ──────────────────────────────────────────────────────────────────
+// Trial Balance is the only one surfaced in the UI (Reports > Audit tab) — it's
+// real, computed server-side from ledger entries (see backend ReportsService).
+// Day Book / Party Statement / Balance Sheet / Cash Flow exist on the backend
+// but have no frontend consumer right now.
+
+export const reportsApi = {
+  trialBalance: () => apiClient.get('/api/v1/reports/trial-balance', { params: { companyId: companyId() } }),
+};
+
+export const fiscalYearApi = {
+  status: () => apiClient.get('/api/v1/fiscal-year/status', { params: { companyId: companyId() } }),
+  close: (fiscalYear: string, password: string) =>
+    apiClient.post('/api/v1/fiscal-year/close', { companyId: companyId(), fiscalYear, password }),
+  reopen: (fiscalYear: string, password: string) =>
+    apiClient.post('/api/v1/fiscal-year/reopen', { companyId: companyId(), fiscalYear, password }),
 };

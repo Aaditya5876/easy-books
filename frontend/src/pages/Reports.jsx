@@ -108,18 +108,23 @@ export default function Reports() {
   useEffect(() => {
     async function load() {
       if (!companyId) { setLoading(false); return; }
-      const [s, p, t, inv, q] = await Promise.all([
+      // Promise.allSettled, not Promise.all — Transaction is ACCOUNTANT/ADMIN-only
+      // on the backend, so a STAFF viewer 403s on that one call alone. With
+      // Promise.all that single rejection sinks the whole page (setLoading(false)
+      // never runs, page hangs on the skeleton forever); settle each independently
+      // so STAFF still sees every section they do have access to.
+      const [s, p, t, inv, q] = await Promise.allSettled([
         api.SalesOrder.filter({ company_id: companyId }),
         api.PurchaseOrder.filter({ company_id: companyId }),
         api.Transaction.filter({ company_id: companyId }),
         api.InventoryItem.filter({ company_id: companyId }),
         api.Quotation.filter({ company_id: companyId }),
       ]);
-      setSales(s || []);
-      setPurchases(p || []);
-      setTransactions(t || []);
-      setInventory(inv || []);
-      setQuotations(q || []);
+      setSales(s.value || []);
+      setPurchases(p.value || []);
+      setTransactions(t.value || []);
+      setInventory(inv.value || []);
+      setQuotations(q.value || []);
       setLoading(false);
     }
     load();

@@ -5,6 +5,9 @@ import { Roles } from '../../../../modules/decorators/roles.decorator';
 import { ZodValidationPipe } from '../../../../modules/pipes/zod-validation.pipe';
 import { CreateBankAccountSchema, UpdateBankAccountSchema, CreateBankAccountDTO, UpdateBankAccountDTO } from '@easy-books/shared';
 
+// Not gated by @RequiresModule — School's Fee module reads the bank account
+// list for its "which account received this payment" dropdown regardless of
+// whether the FINANCE module is enabled for that company.
 @ApiTags('Bank Accounts')
 @ApiBearerAuth()
 @Roles('ACCOUNTANT', 'ADMIN')

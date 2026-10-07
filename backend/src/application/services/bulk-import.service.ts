@@ -117,7 +117,7 @@ export class BulkImportService {
   private async importSubjects(companyId: string, rows: any[]): Promise<BulkResult> {
     const skipped: BulkResult['skipped'] = [];
     const existing = await this.prisma.subject.findMany({ where: { companyId }, select: { name: true } });
-    const seen = new Set(existing.map(s => s.name.toLowerCase()));
+    const seen = new Set(existing.map(s => s.name.trim().toLowerCase()));
 
     const data: any[] = [];
     rows.forEach((row, i) => {
@@ -164,13 +164,13 @@ export class BulkImportService {
   private async importEmployees(companyId: string, rows: any[]): Promise<BulkResult> {
     const skipped: BulkResult['skipped'] = [];
     const existing = await this.prisma.employee.findMany({ where: { companyId }, select: { employeeId: true } });
-    const seen = new Set(existing.map(e => e.employeeId));
+    const seen = new Set(existing.map(e => e.employeeId.trim().toLowerCase()));
 
     // Auto-generate EMP-<n> ids for rows without one
     let nextSeq = existing.length + 1;
     const nextId = () => {
       let id = `EMP-${String(nextSeq).padStart(3, '0')}`;
-      while (seen.has(id)) { nextSeq++; id = `EMP-${String(nextSeq).padStart(3, '0')}`; }
+      while (seen.has(id.toLowerCase())) { nextSeq++; id = `EMP-${String(nextSeq).padStart(3, '0')}`; }
       nextSeq++;
       return id;
     };
@@ -181,11 +181,11 @@ export class BulkImportService {
       if (!name) return skipped.push({ row: i + 1, reason: 'Name is required' });
 
       let employeeId = str(row.employeeId);
-      if (employeeId && seen.has(employeeId)) {
+      if (employeeId && seen.has(employeeId.toLowerCase())) {
         return skipped.push({ row: i + 1, reason: `Duplicate employee ID "${employeeId}"` });
       }
       if (!employeeId) employeeId = nextId();
-      seen.add(employeeId);
+      seen.add(employeeId.toLowerCase());
 
       data.push({
         companyId,

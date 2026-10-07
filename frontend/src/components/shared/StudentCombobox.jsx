@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Check, ChevronsUpDown, Search, Loader2 } from 'lucide-react';
 import { studentsApi } from '@/api';

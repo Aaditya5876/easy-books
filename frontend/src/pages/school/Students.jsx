@@ -6,6 +6,8 @@ import BulkImportDialog from '@/components/shared/BulkImportDialog';
 import { STUDENT_FIELDS } from '@/components/shared/bulkImportFields';
 import { studentsApi, classesApi, portalApi } from '@/api';
 import { getActiveCompanyId } from '@/lib/companyContext';
+import { useRole } from '@/lib/useRole';
+import { confirm } from '@/lib/confirm';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -13,7 +15,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { toast } from 'sonner';
 
 const EMPTY_FORM = {
-  name: '', rollNumber: '', examRollNumber: '', section: '', classId: '', gender: '', dateOfBirth: '',
+  name: '', rollNumber: '', examRollNumber: '', classId: '', gender: '', dateOfBirth: '',
   address: '', guardianName: '', guardianPhone: '', guardianEmail: '',
 };
 
@@ -27,6 +29,7 @@ function StudentDialog({ open, onClose, initial, classes, companyId }) {
       : EMPTY_FORM,
   );
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const [errors, setErrors] = useState({});
 
   const save = useMutation({
     mutationFn: (data) =>
@@ -42,7 +45,12 @@ function StudentDialog({ open, onClose, initial, classes, companyId }) {
 
   function handleSubmit(e) {
     e.preventDefault();
-    if (!form.name.trim()) { toast.error(t('students.nameRequired', { defaultValue: 'Student name is required' })); return; }
+    if (!form.name.trim()) {
+      setErrors({ name: t('students.nameRequired', { defaultValue: 'Student name is required' }) });
+      toast.error(t('students.nameRequired', { defaultValue: 'Student name is required' }));
+      return;
+    }
+    setErrors({});
     save.mutate({ ...form, companyId });
   }
 
@@ -56,7 +64,8 @@ function StudentDialog({ open, onClose, initial, classes, companyId }) {
           <div className="grid grid-cols-2 gap-3">
             <div className="col-span-2 space-y-1.5">
               <Label>{t('students.fullName', { defaultValue: 'Full Name *' })}</Label>
-              <Input placeholder={t('students.fullNamePlaceholder', { defaultValue: 'Student full name' })} value={form.name} onChange={e => set('name', e.target.value)} />
+              <Input placeholder={t('students.fullNamePlaceholder', { defaultValue: 'Student full name' })} value={form.name} onChange={e => { set('name', e.target.value); if (errors.name) setErrors({}); }} />
+              {errors.name && <p className="text-xs text-red-600">{errors.name}</p>}
             </div>
             <div className="space-y-1.5">
               <Label>{t('students.rollNumber', { defaultValue: 'Roll Number' })}</Label>
@@ -66,11 +75,6 @@ function StudentDialog({ open, onClose, initial, classes, companyId }) {
             <div className="space-y-1.5">
               <Label>{t('students.examRollNumber', { defaultValue: 'Exam Roll Number' })}</Label>
               <Input placeholder={t('students.examRollNumberPlaceholder', { defaultValue: 'e.g. 20821234' })} value={form.examRollNumber} onChange={e => set('examRollNumber', e.target.value)} />
-            </div>
-
-            <div className="space-y-1.5">
-              <Label>Section</Label>
-              <Input placeholder="e.g. A" value={form.section} onChange={e => set('section', e.target.value)} />
             </div>
 
             <div className="space-y-1.5">
@@ -145,11 +149,12 @@ function StudentDialog({ open, onClose, initial, classes, companyId }) {
 
 function PortalPasswordDialog({ open, onClose, student, companyId }) {
   const { t } = useTranslation();
-  const [form, setForm] = useState({ phone: student?.guardianPhone || '', password: '', type: 'PARENT' });
+  const [form, setForm] = useState({ phone: student?.guardianPhone || '', password: '' });
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [errors, setErrors] = useState({});
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
-  const portalLink = `${window.location.origin}/portal/login?company=${companyId}`;
+  const portalLink = `${window.location.origin}/portal/login`;
 
   function copyPortalLink() {
     navigator.clipboard.writeText(portalLink);
@@ -159,12 +164,19 @@ function PortalPasswordDialog({ open, onClose, student, companyId }) {
 
   async function handleSubmit(e) {
     e.preventDefault();
-    if (!form.phone.trim()) { toast.error(t('students.phoneRequired', { defaultValue: 'Phone number is required' })); return; }
-    if (form.password.length < 6) { toast.error(t('students.passwordMinLength', { defaultValue: 'Password must be at least 6 characters' })); return; }
+    const errs = {};
+    if (!form.phone.trim()) errs.phone = t('students.phoneRequired', { defaultValue: 'Phone number is required' });
+    if (form.password.length < 6) errs.password = t('students.passwordMinLength', { defaultValue: 'Password must be at least 6 characters' });
+    if (Object.keys(errs).length) {
+      setErrors(errs);
+      toast.error(errs.phone || errs.password);
+      return;
+    }
+    setErrors({});
     setLoading(true);
     try {
       await portalApi.setPassword({ studentId: student.id, ...form, companyId });
-      toast.success(t('students.portalAccessSetFor', { defaultValue: "Portal access set for {{name}}'s {{type}}", name: student.name, type: form.type.toLowerCase() }));
+      toast.success(t('students.portalAccessSetFor', { defaultValue: 'Portal access set for {{name}}', name: student.name }));
       onClose();
     } catch (err) {
       toast.error(err?.response?.data?.message || t('students.failedToSetPassword', { defaultValue: 'Failed to set password' }));
@@ -191,25 +203,20 @@ function PortalPasswordDialog({ open, onClose, student, companyId }) {
             </Button>
           </div>
           <p className="text-xs text-muted-foreground">
-            {t('students.portalLoginLinkHint', { defaultValue: 'Share this link with the phone number and password below — it pre-fills the School ID so they only enter their credentials.' })}
+            {t('students.portalLoginLinkHint', { defaultValue: 'Share this link along with the phone number and password below. One login works for both the parent and the student.' })}
           </p>
         </div>
         <form onSubmit={handleSubmit} className="space-y-4 pt-1">
           <div className="space-y-1.5">
-            <Label>{t('students.accessType', { defaultValue: 'Access Type' })}</Label>
-            <select className="w-full border rounded-md px-3 py-2 text-sm bg-background" value={form.type} onChange={e => set('type', e.target.value)}>
-              <option value="PARENT">{t('students.parent', { defaultValue: 'Parent' })}</option>
-              <option value="STUDENT">{t('students.student', { defaultValue: 'Student' })}</option>
-            </select>
-          </div>
-          <div className="space-y-1.5">
             <Label>{t('students.phoneNumber', { defaultValue: 'Phone Number *' })}</Label>
-            <Input placeholder={t('students.phonePlaceholder', { defaultValue: '98XXXXXXXX' })} value={form.phone} onChange={e => set('phone', e.target.value)} />
+            <Input placeholder={t('students.phonePlaceholder', { defaultValue: '98XXXXXXXX' })} value={form.phone} onChange={e => { set('phone', e.target.value); if (errors.phone) setErrors(er => ({ ...er, phone: undefined })); }} />
+            {errors.phone && <p className="text-xs text-red-600">{errors.phone}</p>}
             <p className="text-xs text-muted-foreground">{t('students.loginUsernameHint', { defaultValue: 'This will be the login username' })}</p>
           </div>
           <div className="space-y-1.5">
             <Label>{t('students.password', { defaultValue: 'Password *' })}</Label>
-            <Input type="password" placeholder={t('students.passwordPlaceholder', { defaultValue: 'Min 6 characters' })} value={form.password} onChange={e => set('password', e.target.value)} />
+            <Input type="password" placeholder={t('students.passwordPlaceholder', { defaultValue: 'Min 6 characters' })} value={form.password} onChange={e => { set('password', e.target.value); if (errors.password) setErrors(er => ({ ...er, password: undefined })); }} />
+            {errors.password && <p className="text-xs text-red-600">{errors.password}</p>}
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose}>{t('students.cancel', { defaultValue: 'Cancel' })}</Button>
@@ -314,6 +321,7 @@ const PAGE_SIZE = 50;
 export default function Students() {
   const { t } = useTranslation();
   const companyId = getActiveCompanyId();
+  const { canCreateRecords, canEditRecords, canDeleteRecords, isAdmin, isAccountant, isTeacher } = useRole();
   const qc = useQueryClient();
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
@@ -323,6 +331,7 @@ export default function Students() {
   const [promoteDialog, setPromoteDialog] = useState(false);
   const [portalDialog, setPortalDialog] = useState(null);
   const [importOpen, setImportOpen] = useState(false);
+  const [bulkPortalResult, setBulkPortalResult] = useState(null);
 
   // Debounce the search box so we don't hit the server on every keystroke
   useEffect(() => {
@@ -365,6 +374,31 @@ export default function Students() {
     return c ? `${c.name}${c.section ? ` (${c.section})` : ''}` : '—';
   };
 
+  const bulkPortalAccess = useMutation({
+    mutationFn: () => portalApi.bulkSetAccess({ companyId, classId: filterClass || undefined }),
+    onSuccess: (res) => setBulkPortalResult(res.data),
+    onError: (err) => toast.error(err?.response?.data?.message || t('students.failedToSetPortalAccessAll', { defaultValue: 'Failed to set portal access' })),
+  });
+
+  async function handleBulkPortalAccess() {
+    const scopeLabel = filterClass ? classLabel(filterClass) : null;
+    const ok = await confirm({
+      title: scopeLabel
+        ? t('students.setPortalAccessClassTitle', { defaultValue: 'Set portal access for {{className}}?', className: scopeLabel })
+        : t('students.setPortalAccessAllTitle', { defaultValue: 'Set portal access for all students?' }),
+      description: scopeLabel
+        ? t('students.setPortalAccessClassDesc', {
+            defaultValue: "Creates a portal login for every active student in {{className}} who doesn't already have one, using their guardian's phone number, and texts each guardian their password.",
+            className: scopeLabel,
+          })
+        : t('students.setPortalAccessAllDesc', {
+            defaultValue: "Creates a portal login for every active student who doesn't already have one, using their guardian's phone number, and texts each guardian their password. This can send a large number of SMS messages.",
+          }),
+      confirmLabel: t('students.proceed', { defaultValue: 'Proceed' }),
+    });
+    if (ok) bulkPortalAccess.mutate();
+  }
+
   return (
     <div className="p-6 space-y-5">
       <div className="flex items-center justify-between">
@@ -373,15 +407,31 @@ export default function Students() {
           <p className="text-muted-foreground text-sm mt-1">{t('students.enrolled', { defaultValue: '{{count}} enrolled', count: total })}</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={() => setImportOpen(true)}>
-            <Upload className="w-4 h-4 mr-1" /> {t('students.import', { defaultValue: 'Import' })}
-          </Button>
-          <Button variant="outline" onClick={() => setPromoteDialog(true)}>
-            <ArrowRight className="w-4 h-4 mr-1" /> {t('students.promote', { defaultValue: 'Promote' })}
-          </Button>
-          <Button onClick={() => setDialog({ mode: 'add' })}>
-            <Plus className="w-4 h-4 mr-2" /> {t('students.enrollStudent', { defaultValue: 'Enroll Student' })}
-          </Button>
+          {!isTeacher && (
+            <Button variant="outline" onClick={() => setImportOpen(true)}>
+              <Upload className="w-4 h-4 mr-1" /> {t('students.import', { defaultValue: 'Import' })}
+            </Button>
+          )}
+          {isAdmin && (
+            <Button variant="outline" onClick={() => setPromoteDialog(true)}>
+              <ArrowRight className="w-4 h-4 mr-1" /> {t('students.promote', { defaultValue: 'Promote' })}
+            </Button>
+          )}
+          {(isAdmin || isAccountant) && (
+            <Button variant="outline" onClick={handleBulkPortalAccess} disabled={bulkPortalAccess.isPending}>
+              <KeyRound className="w-4 h-4 mr-1" />
+              {bulkPortalAccess.isPending
+                ? t('students.settingPortalAccessAll', { defaultValue: 'Setting Access…' })
+                : filterClass
+                  ? t('students.setPortalAccessClass', { defaultValue: 'Set Portal Access for {{className}}', className: classLabel(filterClass) })
+                  : t('students.setPortalAccessAll', { defaultValue: 'Set Portal Access for All' })}
+            </Button>
+          )}
+          {canCreateRecords && (
+            <Button onClick={() => setDialog({ mode: 'add' })}>
+              <Plus className="w-4 h-4 mr-2" /> {t('students.enrollStudent', { defaultValue: 'Enroll Student' })}
+            </Button>
+          )}
         </div>
       </div>
 
@@ -438,7 +488,7 @@ export default function Students() {
             <p className="text-muted-foreground text-sm">
               {search || filterClass ? t('students.noMatch', { defaultValue: 'No students match your search' }) : t('students.noStudentsYet', { defaultValue: 'No students enrolled yet' })}
             </p>
-            {!search && !filterClass && (
+            {!search && !filterClass && canCreateRecords && (
               <Button className="mt-4" size="sm" onClick={() => setDialog({ mode: 'add' })}>
                 {t('students.enrollFirstStudent', { defaultValue: 'Enroll First Student' })}
               </Button>
@@ -477,27 +527,35 @@ export default function Students() {
                     </td>
                     <td className="px-5 py-3">
                       <div className="flex items-center gap-2 justify-end">
-                        <button
-                          onClick={() => setPortalDialog(student)}
-                          className="p-1.5 rounded hover:bg-emerald-50 text-muted-foreground hover:text-emerald-700 transition-colors"
-                          title={t('students.setPortalAccess', { defaultValue: 'Set Portal Access' })}
-                        >
-                          <KeyRound className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          onClick={() => setDialog({ mode: 'edit', student })}
-                          className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
-                        >
-                          <Pencil className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          onClick={() => {
-                            if (confirm(t('students.confirmRemove', { defaultValue: 'Remove {{name}}?', name: student.name }))) remove.mutate(student.id);
-                          }}
-                          className="p-1.5 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600 transition-colors"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                        {(isAdmin || isAccountant) && (
+                          <button
+                            onClick={() => setPortalDialog(student)}
+                            className="p-1.5 rounded hover:bg-emerald-50 text-muted-foreground hover:text-emerald-700 transition-colors"
+                            title={t('students.setPortalAccess', { defaultValue: 'Set Portal Access' })}
+                          >
+                            <KeyRound className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                        {canEditRecords && (
+                          <button
+                            onClick={() => setDialog({ mode: 'edit', student })}
+                            className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                        {canDeleteRecords && (
+                          <button
+                            onClick={async () => {
+                              const ok = await confirm({ description: t('students.confirmRemove', { defaultValue: 'Remove {{name}}?', name: student.name }), variant: 'destructive' });
+                              if (!ok) return;
+                              remove.mutate(student.id);
+                            }}
+                            className="p-1.5 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600 transition-colors"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -552,6 +610,35 @@ export default function Students() {
           student={portalDialog}
           companyId={companyId}
         />
+      )}
+
+      {bulkPortalResult && (
+        <Dialog open onOpenChange={() => setBulkPortalResult(null)}>
+          <DialogContent className="max-w-sm">
+            <DialogHeader>
+              <DialogTitle>{t('students.portalAccessSummaryTitle', { defaultValue: 'Portal Access Set' })}</DialogTitle>
+            </DialogHeader>
+            <p className="text-sm">
+              {t('students.portalAccessSummaryLead', {
+                defaultValue: '{{count}} student/parent portal(s) created — credentials have been texted to the guardian’s phone number.',
+                count: bulkPortalResult.created,
+              })}
+            </p>
+            <ul className="text-sm space-y-1.5 text-muted-foreground">
+              <li>{t('students.portalAccessCreated', { defaultValue: '{{count}} account(s) created and texted', count: bulkPortalResult.created })}</li>
+              <li>{t('students.portalAccessSkippedExisting', { defaultValue: '{{count}} already had portal access', count: bulkPortalResult.skippedExisting })}</li>
+              <li>{t('students.portalAccessSkippedNoPhone', { defaultValue: '{{count}} skipped — no guardian phone on file', count: bulkPortalResult.skippedNoPhone })}</li>
+              {bulkPortalResult.smsFailed > 0 && (
+                <li className="text-amber-600">
+                  {t('students.portalAccessSmsFailed', { defaultValue: '{{count}} account(s) created but the SMS failed to send — check SMS settings', count: bulkPortalResult.smsFailed })}
+                </li>
+              )}
+            </ul>
+            <DialogFooter>
+              <Button onClick={() => setBulkPortalResult(null)}>{t('students.close', { defaultValue: 'Close' })}</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       )}
     </div>
   );

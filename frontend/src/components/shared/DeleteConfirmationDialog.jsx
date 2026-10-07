@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { AlertCircle } from 'lucide-react';
+import { formatDate } from '@/lib/utils';
 
 export default function DeleteConfirmationDialog({ open, onOpenChange, document, onConfirm }) {
   const [step, setStep] = useState(1); // 1: password, 2: final confirmation
@@ -83,7 +84,7 @@ export default function DeleteConfirmationDialog({ open, onOpenChange, document,
               </p>
               <div className="bg-secondary p-3 rounded-md text-sm">
                 <p><strong>Client:</strong> {document?.client_name}</p>
-                <p><strong>Date:</strong> {document?.date_ad}</p>
+                <p><strong>Date:</strong> {formatDate(document?.date_ad)}</p>
               </div>
             </div>
             <DialogFooter>

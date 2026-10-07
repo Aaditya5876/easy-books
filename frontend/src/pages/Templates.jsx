@@ -82,7 +82,6 @@ export default function Templates() {
 
   const subtotal = form.items.reduce((sum, i) => sum + (i.quantity || 0) * (i.unit_price || 0), 0);
   const vat = form.is_vat ? subtotal * 0.13 : 0;
-  const selectedCompany = companies.find(c => c.id === form.company_id);
 
   return (
     <div className="space-y-6 animate-fade-in">

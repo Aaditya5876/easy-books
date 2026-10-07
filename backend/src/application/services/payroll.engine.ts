@@ -18,6 +18,8 @@ export interface PayrollResult {
   absentDays: number;
   halfDays: number;
   absentDeduction: number;
+  hoursShortfallDeduction: number;
+  incompleteAttendanceDays: number;
   overtimeAmount: number;
   ssfEmployee: number;
   ssfEmployer: number;
@@ -25,6 +27,29 @@ export interface PayrollResult {
   dashainBonus: number;
   isDashainBonus: boolean;
   netSalary: number;
+}
+
+// "HH:mm" -> minutes since midnight, or null if unparseable/out of range.
+function parseTimeToMinutes(time: string | null | undefined): number | null {
+  if (!time) return null;
+  const m = /^(\d{1,2}):(\d{2})$/.exec(time.trim());
+  if (!m) return null;
+  const h = Number(m[1]);
+  const min = Number(m[2]);
+  if (h < 0 || h > 23 || min < 0 || min > 59) return null;
+  return h * 60 + min;
+}
+
+// Hours between two "HH:mm" strings, or null if unparseable or non-positive
+// (e.g. checkOut before checkIn) — callers must treat null as "can't judge
+// this day" rather than guessing, never as a zero-hour shortfall.
+function hoursBetween(start: string | null | undefined, end: string | null | undefined): number | null {
+  const startMin = parseTimeToMinutes(start);
+  const endMin = parseTimeToMinutes(end);
+  if (startMin === null || endMin === null) return null;
+  const diff = endMin - startMin;
+  if (diff <= 0) return null;
+  return diff / 60;
 }
 
 function calculateSSF(basicSalary: number, employeeRate: number, employerRate: number) {
@@ -86,6 +111,31 @@ export class PayrollEngineService {
     return { queued: employees.length };
   }
 
+  // Used only by the nightly automation cron (ScheduledTasksService), which needs the
+  // actual per-employee results (not just a queued count) to report what it did. Waits
+  // on each queued job via Bull's job.finished() rather than duplicating the queue path.
+  async processMonthlyPayrollAwaited(
+    companyId: string,
+    month: string,
+  ): Promise<{ queued: number; results: PayrollResult[] }> {
+    const employees = await this.prisma.employee.findMany({
+      where: { companyId, status: 'ACTIVE' },
+    });
+
+    const jobs = await Promise.all(
+      employees.map((emp) =>
+        this.payrollQueue.add('process-employee-payroll', { companyId, employeeId: emp.id, month }),
+      ),
+    );
+
+    const settled = await Promise.allSettled(jobs.map((job) => job.finished()));
+    const results = settled
+      .filter((r): r is PromiseFulfilledResult<PayrollResult> => r.status === 'fulfilled')
+      .map((r) => r.value);
+
+    return { queued: employees.length, results };
+  }
+
   async calculateEmployeePayroll(companyId: string, employeeId: string, month: string): Promise<PayrollResult> {
     const [employee, settings] = await Promise.all([
       this.prisma.employee.findFirst({ where: { id: employeeId, companyId } }),
@@ -126,6 +176,35 @@ export class PayrollEngineService {
     const perDaySalary = grossSalary / workingDaysPerMonth;
     const absentDeduction = Number(((absentDays + halfDays * 0.5) * perDaySalary).toFixed(2));
 
+    // Attendance-based salary deduction (opt-in) — for PRESENT days only, not
+    // a replacement for the absent/half-day deduction above. Each employee is
+    // judged against their OWN expected hours (their contracted hours if
+    // PART_TIME, else the company's standard hours), so a part-timer's already
+    // smaller basicSalary is prorated the same way a full-timer's is.
+    let hoursShortfallDeduction = 0;
+    let incompleteAttendanceDays = 0;
+    if (settings?.attendanceDeductionEnabled) {
+      const isPartTime = employee.employmentType === 'PART_TIME';
+      const expectedHours = isPartTime
+        ? (employee.contractedHoursPerDay != null ? Number(employee.contractedHoursPerDay) : null)
+        : hoursBetween(settings?.standardStartTime, settings?.standardEndTime);
+
+      if (expectedHours && expectedHours > 0) {
+        const presentDays = attendance.filter((a) => a.status === 'PRESENT');
+        let shortfallTotal = 0;
+        for (const day of presentDays) {
+          const actualHours = hoursBetween(day.checkInTime, day.checkOutTime);
+          if (actualHours === null) {
+            incompleteAttendanceDays += 1;
+            continue;
+          }
+          const shortfall = Math.max(0, expectedHours - actualHours);
+          if (shortfall > 0) shortfallTotal += perDaySalary * (shortfall / expectedHours);
+        }
+        hoursShortfallDeduction = Number(shortfallTotal.toFixed(2));
+      }
+    }
+
     const overtimeHoursTotal = attendance.reduce((sum, a) => sum + Number(a.overtimeHours ?? 0), 0);
     const overtimeRatePerHour = Number(settings?.overtimeRatePerHour ?? 0);
     const overtimeAmount = Number((overtimeHoursTotal * overtimeRatePerHour).toFixed(2));
@@ -139,69 +218,75 @@ export class PayrollEngineService {
     const isDashainBonus = !!(settings?.dashainBonusApplicable && dashainMonthNum && bsMonth === dashainMonthNum);
     const dashainBonus = isDashainBonus ? basicSalary : 0;
 
-    const netSalary = Number((grossSalary - absentDeduction - ssf.employee - pit + overtimeAmount + dashainBonus).toFixed(2));
+    const netSalary = Number((grossSalary - absentDeduction - hoursShortfallDeduction - ssf.employee - pit + overtimeAmount + dashainBonus).toFixed(2));
 
-    await this.prisma.payroll.upsert({
-      where: { employeeId_month: { employeeId, month } },
-      create: {
-        companyId,
-        employeeId,
-        month,
-        basicSalary,
-        allowances,
-        grossSalary,
-        absentDays,
-        halfDays,
-        absentDeduction,
-        overtimeAmount,
-        ssfEmployee: ssf.employee,
-        ssfEmployer: ssf.employer,
-        pit,
-        netSalary,
-        isDashainBonus,
-        status: 'PROCESSED',
-      },
-      update: {
-        basicSalary,
-        allowances,
-        grossSalary,
-        absentDays,
-        halfDays,
-        absentDeduction,
-        overtimeAmount,
-        ssfEmployee: ssf.employee,
-        ssfEmployer: ssf.employer,
-        pit,
-        netSalary,
-        isDashainBonus,
-        status: 'PROCESSED',
-      },
+    const data = {
+      basicSalary, allowances, grossSalary, absentDays, halfDays, absentDeduction,
+      hoursShortfallDeduction, incompleteAttendanceDays,
+      overtimeAmount, ssfEmployee: ssf.employee, ssfEmployer: ssf.employer, pit,
+      netSalary, isDashainBonus, status: 'PROCESSED' as const,
+    };
+
+    const existing = await this.prisma.payroll.findUnique({ where: { employeeId_month: { employeeId, month } } });
+
+    // A paid payroll is final — the accrual is already settled, so silently
+    // recalculating it (e.g. a stale re-trigger) would corrupt closed books.
+    if (existing?.status === 'PAID') {
+      return this.toPayrollResult(employeeId, employee.name, month, data, dashainBonus);
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      if (!existing) {
+        // First time this employee/month is computed — create the row and
+        // post its accrual (Salary Expense/SSF/Tax/Salary Payable) immediately,
+        // same moment the monthly run computes it, no "Mark Paid" needed.
+        const payroll = await tx.payroll.create({ data: { companyId, employeeId, month, ...data } });
+        await this.ledgerPosting.postPayrollAccrualTx(tx, companyId, payroll.id);
+      } else {
+        // Recalculating before payment (e.g. attendance changed) — undo the
+        // old accrual and post a fresh one with the corrected numbers.
+        await tx.payroll.update({ where: { id: existing.id }, data });
+        await this.ledgerPosting.reversePayrollAccrualTx(tx, companyId, existing.id);
+        await this.ledgerPosting.postPayrollAccrualTx(tx, companyId, existing.id);
+      }
     });
 
+    return this.toPayrollResult(employeeId, employee.name, month, data, dashainBonus);
+  }
+
+  private toPayrollResult(
+    employeeId: string,
+    employeeName: string,
+    month: string,
+    data: { basicSalary: number; allowances: number; grossSalary: number; absentDays: number; halfDays: number; absentDeduction: number; hoursShortfallDeduction: number; incompleteAttendanceDays: number; overtimeAmount: number; ssfEmployee: number; ssfEmployer: number; pit: number; netSalary: number; isDashainBonus: boolean },
+    dashainBonus: number,
+  ): PayrollResult {
     return {
       employeeId,
-      employeeName: employee.name,
+      employeeName,
       month,
-      basicSalary,
-      allowances,
-      grossSalary,
-      absentDays,
-      halfDays,
-      absentDeduction,
-      overtimeAmount,
-      ssfEmployee: ssf.employee,
-      ssfEmployer: ssf.employer,
-      pit,
+      basicSalary: data.basicSalary,
+      allowances: data.allowances,
+      grossSalary: data.grossSalary,
+      absentDays: data.absentDays,
+      halfDays: data.halfDays,
+      absentDeduction: data.absentDeduction,
+      hoursShortfallDeduction: data.hoursShortfallDeduction,
+      incompleteAttendanceDays: data.incompleteAttendanceDays,
+      overtimeAmount: data.overtimeAmount,
+      ssfEmployee: data.ssfEmployee,
+      ssfEmployer: data.ssfEmployer,
+      pit: data.pit,
       dashainBonus,
-      isDashainBonus,
-      netSalary,
+      isDashainBonus: data.isDashainBonus,
+      netSalary: data.netSalary,
     };
   }
 
   async getPayrollSummary(companyId: string, month: string) {
     const payrolls = await this.prisma.payroll.findMany({
       where: { companyId, month },
-      include: { employee: { select: { name: true, designation: true, department: true } } },
+      include: { employee: { select: { name: true, employeeId: true, designation: true, department: true } } },
     });
 
     const summary = {
@@ -229,6 +314,7 @@ export class PayrollEngineService {
       (
         Number(payroll.grossSalary) -
         Number(payroll.absentDeduction) -
+        Number(payroll.hoursShortfallDeduction) -
         Number(payroll.ssfEmployee) -
         Number(payroll.pit) +
         Number(payroll.overtimeAmount) +
@@ -244,6 +330,8 @@ export class PayrollEngineService {
   }
 
   async setHold(companyId: string, payrollId: string, isOnHold: boolean, holdReason?: string) {
+    const existing = await this.prisma.payroll.findFirst({ where: { id: payrollId, companyId } });
+    if (!existing) throw new Error('Payroll record not found');
     return this.prisma.payroll.update({
       where: { id: payrollId },
       data: { isOnHold, holdReason: isOnHold ? holdReason : null, status: isOnHold ? 'ON_HOLD' : 'PROCESSED' },
@@ -251,13 +339,16 @@ export class PayrollEngineService {
   }
 
   async markAsPaid(companyId: string, payrollId: string) {
+    const existing = await this.prisma.payroll.findFirst({ where: { id: payrollId, companyId } });
+    if (!existing) throw new Error('Payroll record not found');
     const payroll = await this.prisma.payroll.update({
       where: { id: payrollId },
       data: { status: 'PAID', paidAt: new Date() },
     });
 
-    // Post to GL after marking paid — outside the update so a ledger failure doesn't prevent status change
-    await this.ledgerPosting.postPayroll(companyId, payrollId);
+    // Post the settlement (clears Salary Payable via Cash) — the accrual itself
+    // was already posted back when this payroll row was first computed.
+    await this.ledgerPosting.postPayrollSettlement(companyId, payrollId);
 
     try {
       const employee = await this.prisma.employee.findUnique({ where: { id: payroll.employeeId }, select: { name: true } });

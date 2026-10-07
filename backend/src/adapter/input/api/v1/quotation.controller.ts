@@ -27,12 +27,14 @@ export class QuotationController {
   }
 
   @Post()
+  @Roles('ACCOUNTANT', 'ADMIN')
   @ApiOperation({ summary: 'Create a quotation' })
   create(@Body(new ZodValidationPipe(CreateQuotationSchema)) dto: CreateQuotationDTO) {
     return this.service.create(dto);
   }
 
   @Post(':id/convert')
+  @Roles('ACCOUNTANT', 'ADMIN')
   @ApiOperation({ summary: 'Convert a quotation to a sales order' })
   @ApiQuery({ name: 'companyId', required: true })
   convertToSalesOrder(@Param('id') id: string, @Query('companyId') companyId: string) {
@@ -40,6 +42,7 @@ export class QuotationController {
   }
 
   @Put(':id')
+  @Roles('ACCOUNTANT', 'ADMIN')
   @ApiOperation({ summary: 'Update a quotation' })
   @ApiQuery({ name: 'companyId', required: true })
   update(
@@ -51,6 +54,7 @@ export class QuotationController {
   }
 
   @Delete(':id')
+  @Roles('ACCOUNTANT', 'ADMIN')
   @ApiOperation({ summary: 'Delete a quotation' })
   @ApiQuery({ name: 'companyId', required: true })
   remove(@Param('id') id: string, @Query('companyId') companyId: string) {

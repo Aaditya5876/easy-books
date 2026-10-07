@@ -1,7 +1,10 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { motion } from 'framer-motion';
 import { api } from '@/api/adapter';
 import { getActiveCompanyId } from '@/lib/companyContext';
+import { formatDate } from '@/lib/utils';
+import { confirm } from '@/lib/confirm';
 import PageHeader from '../components/shared/PageHeader';
 import DataTable from '../components/shared/DataTable';
 import { Button } from "@/components/ui/button";
@@ -9,22 +12,24 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
 import PageLoader from '../components/PageLoader';
 import EmptyState from '../components/EmptyState';
 import {
   UserCircle, User, Phone, Mail, MapPin, Hash,
-  Building2, Award, Calendar, Briefcase, Upload,
+  Building2, Award, Calendar, Briefcase, Upload, Trash2,
 } from 'lucide-react';
+import { toast } from 'sonner';
 import { useRole } from "@/lib/useRole";
 import BulkImportDialog from '../components/shared/BulkImportDialog';
 import { EMPLOYEE_FIELDS } from '../components/shared/bulkImportFields';
 
+// Backend enum (EmployeeStatus in schema.prisma) is uppercase — these keys must
+// match exactly or the status badge silently fails to color (and, more importantly,
+// sending a lowercase value to the API fails Zod validation entirely, see save()).
 const statusColors = {
-  active: 'bg-green-100 text-green-700',
-  inactive: 'bg-slate-100 text-slate-600',
-  on_leave: 'bg-amber-100 text-amber-700',
-  resigned: 'bg-red-100 text-red-700',
+  ACTIVE: 'bg-green-100 text-green-700',
+  INACTIVE: 'bg-slate-100 text-slate-600',
+  ON_LEAVE: 'bg-amber-100 text-amber-700',
 };
 
 const EMPTY_FORM = {
@@ -37,15 +42,14 @@ const EMPTY_FORM = {
   address: '',
   date_of_joining: '',
   salary: '',
-  status: 'active',
-  subject: '',
-  subjects: [],
-  section_from: '',
-  section_to: '',
+  status: 'ACTIVE',
+  employment_type: 'FULL_TIME',
+  contracted_hours_per_day: '',
 };
 
 /* ── Reusable two-column dialog body ─────────────────────────────────── */
-function EmployeeFormBody({ data, onChange }) {
+function EmployeeFormBody({ data, onChange, errors = {} }) {
+  const { t } = useTranslation();
   return (
     <div className="grid grid-cols-2 gap-x-5 gap-y-0 mt-1">
       {/* LEFT column — Personal Info */}
@@ -56,12 +60,12 @@ function EmployeeFormBody({ data, onChange }) {
         className="space-y-3"
       >
         <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1.5 border-b pb-1.5 mb-2">
-          <UserCircle className="w-3.5 h-3.5" />Personal Info
+          <UserCircle className="w-3.5 h-3.5" />{t('employees.personalInfo', { defaultValue: 'Personal Info' })}
         </h4>
 
         {/* Full Name */}
         <div className="space-y-1">
-          <Label className="text-xs">Full Name *</Label>
+          <Label className="text-xs">{t('employees.fullName', { defaultValue: 'Full Name' })} *</Label>
           <div className="relative">
             <User className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
             <Input
@@ -70,11 +74,12 @@ function EmployeeFormBody({ data, onChange }) {
               onChange={e => onChange('name', e.target.value)}
             />
           </div>
+          {errors.name && <p className="text-xs text-red-600">{errors.name}</p>}
         </div>
 
         {/* Phone */}
         <div className="space-y-1">
-          <Label className="text-xs">Phone</Label>
+          <Label className="text-xs">{t('employees.phone', { defaultValue: 'Phone' })}</Label>
           <div className="relative">
             <Phone className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
             <Input
@@ -87,7 +92,7 @@ function EmployeeFormBody({ data, onChange }) {
 
         {/* Email */}
         <div className="space-y-1">
-          <Label className="text-xs">Email</Label>
+          <Label className="text-xs">{t('employees.email', { defaultValue: 'Email' })}</Label>
           <div className="relative">
             <Mail className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
             <Input
@@ -101,7 +106,7 @@ function EmployeeFormBody({ data, onChange }) {
 
         {/* Address */}
         <div className="space-y-1">
-          <Label className="text-xs">Address</Label>
+          <Label className="text-xs">{t('employees.address', { defaultValue: 'Address' })}</Label>
           <div className="relative">
             <MapPin className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
             <Input
@@ -112,64 +117,6 @@ function EmployeeFormBody({ data, onChange }) {
           </div>
         </div>
 
-        {/* Subjects (single entry + add) */}
-        <div className="space-y-3">
-          <div className="grid grid-cols-[1fr_auto] gap-3 items-end">
-            <div className="space-y-1">
-              <Label className="text-xs">Subject</Label>
-              <Input
-                className="h-9 text-sm"
-                value={data.subject}
-                onChange={e => onChange('subject', e.target.value)}
-                placeholder="e.g. Mathematics"
-              />
-            </div>
-            <Button
-              type="button"
-              variant="outline"
-              className="h-9 px-4"
-              onClick={() => {
-                const next = data.subject?.trim();
-                if (!next) return;
-                onChange('subjects', [...(data.subjects || []), next]);
-                onChange('subject', '');
-              }}
-              disabled={!data.subject || !data.subject.trim()}
-            >
-              Add
-            </Button>
-          </div>
-          {data.subjects && data.subjects.length > 0 && (
-            <div className="flex flex-wrap gap-2">
-              {data.subjects.map((s, i) => (
-                <button key={i} type="button" className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-2.5 py-1 text-xs text-slate-700 hover:bg-slate-200" onClick={() => onChange('subjects', data.subjects.filter((_, idx) => idx !== i))}>
-                  <span>{s}</span>
-                  <span className="font-bold">×</span>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Standard Range */}
-        <div className="grid grid-cols-2 gap-3">
-          <div className="space-y-1">
-            <Label className="text-xs">Standards From</Label>
-            <Input
-              className="h-9 text-sm"
-              value={data.section_from}
-              onChange={e => onChange('section_from', e.target.value)}
-            />
-          </div>
-          <div className="space-y-1">
-            <Label className="text-xs">Standards To</Label>
-            <Input
-              className="h-9 text-sm"
-              value={data.section_to}
-              onChange={e => onChange('section_to', e.target.value)}
-            />
-          </div>
-        </div>
       </motion.div>
 
       {/* RIGHT column — Employment Details */}
@@ -180,12 +127,12 @@ function EmployeeFormBody({ data, onChange }) {
         className="space-y-3"
       >
         <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1.5 border-b pb-1.5 mb-2">
-          <Briefcase className="w-3.5 h-3.5" />Employment Details
+          <Briefcase className="w-3.5 h-3.5" />{t('employees.employmentDetails', { defaultValue: 'Employment Details' })}
         </h4>
 
         {/* Employee ID */}
         <div className="space-y-1">
-          <Label className="text-xs">Employee ID</Label>
+          <Label className="text-xs">{t('employees.employeeId', { defaultValue: 'Employee ID' })} *</Label>
           <div className="relative">
             <Hash className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
             <Input
@@ -194,11 +141,12 @@ function EmployeeFormBody({ data, onChange }) {
               onChange={e => onChange('employee_id', e.target.value)}
             />
           </div>
+          {errors.employee_id && <p className="text-xs text-red-600">{errors.employee_id}</p>}
         </div>
 
         {/* Department */}
         <div className="space-y-1">
-          <Label className="text-xs">Department</Label>
+          <Label className="text-xs">{t('employees.department', { defaultValue: 'Department' })}</Label>
           <div className="relative">
             <Building2 className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
             <Input
@@ -211,7 +159,7 @@ function EmployeeFormBody({ data, onChange }) {
 
         {/* Designation */}
         <div className="space-y-1">
-          <Label className="text-xs">Designation</Label>
+          <Label className="text-xs">{t('employees.designation', { defaultValue: 'Designation' })}</Label>
           <div className="relative">
             <Award className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
             <Input
@@ -224,7 +172,7 @@ function EmployeeFormBody({ data, onChange }) {
 
         {/* Date of Joining */}
         <div className="space-y-1">
-          <Label className="text-xs">Date of Joining</Label>
+          <Label className="text-xs">{t('employees.dateOfJoining', { defaultValue: 'Date of Joining' })}</Label>
           <div className="relative">
             <Calendar className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
             <Input
@@ -238,7 +186,7 @@ function EmployeeFormBody({ data, onChange }) {
 
         {/* Salary */}
         <div className="space-y-1">
-          <Label className="text-xs">Salary</Label>
+          <Label className="text-xs">{t('employees.salary', { defaultValue: 'Salary' })}</Label>
           <div className="flex items-stretch">
             <span className="flex items-center px-2.5 text-xs font-bold text-muted-foreground bg-muted border border-r-0 border-input rounded-l-md select-none shrink-0">
               NPR
@@ -254,25 +202,56 @@ function EmployeeFormBody({ data, onChange }) {
 
         {/* Status */}
         <div className="space-y-1">
-          <Label className="text-xs">Status</Label>
+          <Label className="text-xs">{t('employees.status', { defaultValue: 'Status' })}</Label>
           <Select value={data.status} onValueChange={v => onChange('status', v)}>
             <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="active">Active</SelectItem>
-              <SelectItem value="inactive">Inactive</SelectItem>
-              <SelectItem value="on_leave">On Leave</SelectItem>
-              <SelectItem value="resigned">Resigned</SelectItem>
+              <SelectItem value="ACTIVE">{t('employees.active', { defaultValue: 'Active' })}</SelectItem>
+              <SelectItem value="INACTIVE">{t('employees.inactive', { defaultValue: 'Inactive' })}</SelectItem>
+              <SelectItem value="ON_LEAVE">{t('employees.onLeave', { defaultValue: 'On Leave' })}</SelectItem>
             </SelectContent>
           </Select>
         </div>
+
+        {/* Employment Type */}
+        <div className="space-y-1">
+          <Label className="text-xs">{t('employees.employmentType', { defaultValue: 'Employment Type' })}</Label>
+          <Select value={data.employment_type || 'FULL_TIME'} onValueChange={v => onChange('employment_type', v)}>
+            <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="FULL_TIME">{t('employees.fullTime', { defaultValue: 'Full-time' })}</SelectItem>
+              <SelectItem value="PART_TIME">{t('employees.partTime', { defaultValue: 'Part-time' })}</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* Contracted Hours/Day — part-time only */}
+        {data.employment_type === 'PART_TIME' && (
+          <div className="space-y-1">
+            <Label className="text-xs">{t('employees.contractedHoursPerDay', { defaultValue: 'Contracted Hours / Day' })} *</Label>
+            <Input
+              type="number"
+              min="0.5"
+              max="24"
+              step="0.5"
+              className="h-9 text-sm"
+              value={data.contracted_hours_per_day}
+              onChange={e => onChange('contracted_hours_per_day', e.target.value)}
+              placeholder={t('employees.contractedHoursPlaceholder', { defaultValue: 'e.g. 4' })}
+            />
+            {errors.contracted_hours_per_day && <p className="text-xs text-red-600">{errors.contracted_hours_per_day}</p>}
+            <p className="text-xs text-muted-foreground">{t('employees.contractedHoursHint', { defaultValue: 'Used to prorate salary if attendance-based deduction is enabled (Settings → Preferences).' })}</p>
+          </div>
+        )}
       </motion.div>
     </div>
   );
 }
 
 export default function Employees() {
+  const { t } = useTranslation();
   const companyId = getActiveCompanyId();
-  const { canEdit } = useRole();
+  const { canEdit, canDelete } = useRole();
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -281,6 +260,8 @@ export default function Employees() {
   const [colFilters, setColFilters] = useState({ name: '', department: '', designation: '', status: '' });
   const setCol = (key, val) => setColFilters(f => ({ ...f, [key]: val }));
   const [form, setForm] = useState(EMPTY_FORM);
+  const [formErrors, setFormErrors] = useState({});
+  const [editErrors, setEditErrors] = useState({});
 
   useEffect(() => { if (companyId) load(); }, [companyId]);
 
@@ -291,20 +272,88 @@ export default function Employees() {
     setLoading(false);
   }
 
+  // Employee ID is required by the backend (CreateEmployeeSchema) even though
+  // nothing in the UI used to say so — validate it here instead of letting the
+  // API 400 silently.
+  function validateEmployee(data) {
+    const errs = {};
+    if (!data.name?.trim()) errs.name = t('employees.fullNameRequired', { defaultValue: 'Full name is required' });
+    if (!data.employee_id?.trim()) errs.employee_id = t('employees.employeeIdRequired', { defaultValue: 'Employee ID is required' });
+    if (data.employment_type === 'PART_TIME' && !(parseFloat(data.contracted_hours_per_day) > 0)) {
+      errs.contracted_hours_per_day = t('employees.contractedHoursRequired', { defaultValue: 'Contracted hours/day is required for part-time employees' });
+    }
+    return errs;
+  }
+
   async function save() {
-    const { subject, subjects, ...rest } = form;
-    await api.Employee.create({ ...rest, company_id: companyId, salary: parseFloat(form.salary) || 0 });
-    setForm(EMPTY_FORM);
-    setShowForm(false);
-    load();
+    const errs = validateEmployee(form);
+    if (Object.keys(errs).length) {
+      setFormErrors(errs);
+      toast.error(t('employees.fixHighlightedFields', { defaultValue: 'Please fix the highlighted fields' }));
+      return;
+    }
+    setFormErrors({});
+    // salary in the DTO is named `basicSalary` — the UI field is called
+    // "Salary" for the user but must be renamed on the way out.
+    const { salary, contracted_hours_per_day, ...rest } = form;
+    try {
+      await api.Employee.create({
+        ...rest,
+        company_id: companyId,
+        basic_salary: parseFloat(salary) || 0,
+        ...(rest.employment_type === 'PART_TIME' ? { contracted_hours_per_day: parseFloat(contracted_hours_per_day) } : {}),
+      });
+      setForm(EMPTY_FORM);
+      setShowForm(false);
+      toast.success(t('employees.employeeAdded', { defaultValue: 'Employee added' }));
+      load();
+    } catch (err) {
+      toast.error(err?.response?.data?.message || t('employees.failedToSaveEmployee', { defaultValue: 'Failed to save employee' }));
+    }
   }
 
   async function updateEmployee() {
     if (!editEmployee) return;
-    const { subject, subjects, ...rest } = editEmployee;
-    await api.Employee.update(editEmployee.id, { ...rest, salary: parseFloat(rest.salary) || 0 });
-    setEditEmployee(null);
-    load();
+    const errs = validateEmployee(editEmployee);
+    if (Object.keys(errs).length) {
+      setEditErrors(errs);
+      toast.error(t('employees.fixHighlightedFields', { defaultValue: 'Please fix the highlighted fields' }));
+      return;
+    }
+    setEditErrors({});
+    const { salary, contracted_hours_per_day, ...rest } = editEmployee;
+    try {
+      await api.Employee.update(editEmployee.id, {
+        ...rest,
+        basic_salary: parseFloat(salary) || 0,
+        ...(rest.employment_type === 'PART_TIME' ? { contracted_hours_per_day: parseFloat(contracted_hours_per_day) } : {}),
+      }, { company_id: companyId });
+      setEditEmployee(null);
+      toast.success(t('employees.employeeUpdated', { defaultValue: 'Employee updated' }));
+      load();
+    } catch (err) {
+      toast.error(err?.response?.data?.message || t('employees.failedToUpdateEmployee', { defaultValue: 'Failed to update employee' }));
+    }
+  }
+
+  async function removeEmployee(emp) {
+    const ok = await confirm({
+      title: t('employees.removeEmployeeTitle', { defaultValue: 'Remove employee?' }),
+      description: t('employees.removeEmployeeDescription', {
+        defaultValue: 'Remove {{name}}? They will no longer appear in this list (use this when a staff member or teacher leaves the school).',
+        name: emp.name,
+      }),
+      confirmLabel: t('employees.remove', { defaultValue: 'Remove' }),
+      variant: 'destructive',
+    });
+    if (!ok) return;
+    try {
+      await api.Employee.delete(emp.id);
+      toast.success(t('employees.employeeRemoved', { defaultValue: 'Employee removed' }));
+      load();
+    } catch (err) {
+      toast.error(err?.response?.data?.message || t('employees.failedToRemoveEmployee', { defaultValue: 'Failed to remove employee' }));
+    }
   }
 
   const filtered = employees.filter(e =>
@@ -314,31 +363,61 @@ export default function Employees() {
     (!colFilters.status || e.status?.toLowerCase().includes(colFilters.status.toLowerCase()))
   );
 
+  const statusLabels = {
+    ACTIVE: t('employees.active', { defaultValue: 'Active' }),
+    INACTIVE: t('employees.inactive', { defaultValue: 'Inactive' }),
+    ON_LEAVE: t('employees.onLeave', { defaultValue: 'On Leave' }),
+  };
+
   const columns = [
-    { key: 'employee_id', label: 'ID' },
+    { key: 'employee_id', label: t('employees.id', { defaultValue: 'ID' }) },
     {
       key: 'name',
-      label: 'Name',
+      label: t('employees.name', { defaultValue: 'Name' }),
       filterValue: colFilters.name,
       onFilterChange: v => setCol('name', v),
       render: r => <span className="font-medium">{r.name}</span>,
     },
-    { key: 'department', label: 'Department', filterValue: colFilters.department, onFilterChange: v => setCol('department', v) },
-    { key: 'designation', label: 'Designation', filterValue: colFilters.designation, onFilterChange: v => setCol('designation', v) },
-    { key: 'phone', label: 'Phone' },
-    { key: 'date_of_joining', label: 'Joined' },
-    { key: 'salary', label: 'Salary', render: r => r.salary ? `NPR ${r.salary.toLocaleString()}` : '—' },
+    { key: 'department', label: t('employees.department', { defaultValue: 'Department' }), filterValue: colFilters.department, onFilterChange: v => setCol('department', v) },
+    { key: 'designation', label: t('employees.designation', { defaultValue: 'Designation' }), filterValue: colFilters.designation, onFilterChange: v => setCol('designation', v) },
+    { key: 'phone', label: t('employees.phone', { defaultValue: 'Phone' }) },
+    { key: 'date_of_joining', label: t('employees.joined', { defaultValue: 'Joined' }), render: r => formatDate(r.date_of_joining) },
+    { key: 'basic_salary', label: t('employees.salary', { defaultValue: 'Salary' }), render: r => r.basic_salary ? `NPR ${Number(r.basic_salary).toLocaleString()}` : '—' },
+    {
+      key: 'employment_type',
+      label: t('employees.employmentType', { defaultValue: 'Employment Type' }),
+      render: r => (
+        <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-slate-100 text-slate-600">
+          {r.employment_type === 'PART_TIME' ? t('employees.partTime', { defaultValue: 'Part-time' }) : t('employees.fullTime', { defaultValue: 'Full-time' })}
+        </span>
+      ),
+    },
     {
       key: 'status',
-      label: 'Status',
+      label: t('employees.status', { defaultValue: 'Status' }),
       filterValue: colFilters.status,
       onFilterChange: v => setCol('status', v),
       render: r => (
         <span className={`text-xs px-2 py-0.5 rounded-full font-medium capitalize ${statusColors[r.status] || ''}`}>
-          {r.status?.replace('_', ' ')}
+          {statusLabels[r.status] || r.status?.replace('_', ' ')}
         </span>
       ),
     },
+    ...(canDelete ? [{
+      key: 'actions',
+      label: '',
+      render: r => (
+        <div className="flex justify-end">
+          <button
+            onClick={(e) => { e.stopPropagation(); removeEmployee(r); }}
+            className="p-1.5 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600 transition-colors"
+            title={t('employees.removeEmployeeTooltip', { defaultValue: 'Remove employee' })}
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      ),
+    }] : []),
   ];
 
   if (loading) return <PageLoader />;
@@ -346,14 +425,14 @@ export default function Employees() {
   return (
     <div className="space-y-6 animate-fade-in">
       <PageHeader
-        title="Employees"
-        subtitle="Manage employee records"
+        title={t('employees.title', { defaultValue: 'Employees' })}
+        subtitle={t('employees.subtitle', { defaultValue: 'Manage employee records' })}
         onAdd={() => setShowForm(true)}
-        addLabel="Add Employee"
+        addLabel={t('employees.addEmployee', { defaultValue: 'Add Employee' })}
       >
         {canEdit && (
           <Button variant="outline" className="gap-2" onClick={() => setImportOpen(true)}>
-            <Upload className="w-4 h-4" /> Import
+            <Upload className="w-4 h-4" /> {t('employees.import', { defaultValue: 'Import' })}
           </Button>
         )}
       </PageHeader>
@@ -362,7 +441,7 @@ export default function Employees() {
         open={importOpen}
         onClose={() => setImportOpen(false)}
         entity="employees"
-        title="Import Employees"
+        title={t('employees.importEmployees', { defaultValue: 'Import Employees' })}
         fields={EMPLOYEE_FIELDS}
         onDone={load}
       />
@@ -370,16 +449,16 @@ export default function Employees() {
       {employees.length === 0 ? (
         <EmptyState
           icon={UserCircle}
-          title="No employees yet"
-          description="Add your first employee to start tracking attendance and payroll."
-          action={<Button onClick={() => setShowForm(true)}>Add Employee</Button>}
+          title={t('employees.noEmployeesYet', { defaultValue: 'No employees yet' })}
+          description={t('employees.noEmployeesYetHint', { defaultValue: 'Add your first employee to start tracking attendance and payroll.' })}
+          action={<Button onClick={() => setShowForm(true)}>{t('employees.addEmployee', { defaultValue: 'Add Employee' })}</Button>}
         />
       ) : (
         <DataTable
           columns={columns}
           data={filtered}
-          emptyMessage="No employees match your search."
-          onRowClick={canEdit ? (row) => setEditEmployee({ ...row }) : undefined}
+          emptyMessage={t('employees.noEmployeesMatch', { defaultValue: 'No employees match your search.' })}
+          onRowClick={canEdit ? (row) => setEditEmployee({ ...row, salary: row.basic_salary ?? '' }) : undefined}
         />
       )}
 
@@ -389,16 +468,17 @@ export default function Employees() {
           <div className="h-1 bg-gradient-to-r from-indigo-400 to-blue-500 -mx-6 -mt-6 mb-4" />
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <UserCircle className="w-5 h-5 text-primary" />Add Employee
+              <UserCircle className="w-5 h-5 text-primary" />{t('employees.addEmployee', { defaultValue: 'Add Employee' })}
             </DialogTitle>
           </DialogHeader>
           <EmployeeFormBody
             data={form}
             onChange={(key, val) => setForm(f => ({ ...f, [key]: val }))}
+            errors={formErrors}
           />
           <DialogFooter className="mt-4">
-            <Button variant="outline" onClick={() => { setShowForm(false); setForm(EMPTY_FORM); }}>Cancel</Button>
-            <Button onClick={save} disabled={!form.name}>Save</Button>
+            <Button variant="outline" onClick={() => { setShowForm(false); setForm(EMPTY_FORM); setFormErrors({}); }}>{t('employees.cancel', { defaultValue: 'Cancel' })}</Button>
+            <Button onClick={save}>{t('employees.save', { defaultValue: 'Save' })}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -409,18 +489,19 @@ export default function Employees() {
           <div className="h-1 bg-gradient-to-r from-indigo-400 to-blue-500 -mx-6 -mt-6 mb-4" />
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <UserCircle className="w-5 h-5 text-primary" />Edit Employee
+              <UserCircle className="w-5 h-5 text-primary" />{t('employees.editEmployee', { defaultValue: 'Edit Employee' })}
             </DialogTitle>
           </DialogHeader>
           {editEmployee && (
             <EmployeeFormBody
               data={editEmployee}
               onChange={(key, val) => setEditEmployee(e => ({ ...e, [key]: val }))}
+              errors={editErrors}
             />
           )}
           <DialogFooter className="mt-4">
-            <Button variant="outline" onClick={() => setEditEmployee(null)}>Cancel</Button>
-            {canEdit && <Button onClick={updateEmployee} disabled={!editEmployee?.name}>Save Changes</Button>}
+            <Button variant="outline" onClick={() => { setEditEmployee(null); setEditErrors({}); }}>{t('employees.cancel', { defaultValue: 'Cancel' })}</Button>
+            {canEdit && <Button onClick={updateEmployee}>{t('employees.saveChanges', { defaultValue: 'Save Changes' })}</Button>}
           </DialogFooter>
         </DialogContent>
       </Dialog>

@@ -2,10 +2,12 @@ import { Controller, Get, Post, Patch, Body, Param, Query } from '@nestjs/common
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { ChequeServiceImpl } from '../../../../application/services/cheque.service.impl';
 import { Roles } from '../../../../modules/decorators/roles.decorator';
+import { RequiresModule } from '../../../../modules/decorators/requires-module.decorator';
 
 @ApiTags('Cheques')
 @ApiBearerAuth()
 @Roles('ACCOUNTANT', 'ADMIN')
+@RequiresModule('FINANCE')
 @Controller('api/v1/cheques')
 export class ChequeController {
   constructor(private readonly service: ChequeServiceImpl) {}

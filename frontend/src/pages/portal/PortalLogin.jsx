@@ -1,36 +1,37 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { portalApi } from '@/api';
 import { toast } from 'sonner';
 import { BookOpen, Eye, EyeOff, Loader2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { decodePortalToken } from '@/lib/portalToken';
 
 export default function PortalLogin() {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const [params] = useSearchParams();
-  const [form, setForm]       = useState({ phone: '', password: '', companyId: params.get('company') || '' });
+  const [form, setForm]       = useState({ phone: '', password: '' });
   const [loading, setLoading] = useState(false);
   const [showPw, setShowPw]   = useState(false);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   useEffect(() => {
-    if (localStorage.getItem('portal_token')) navigate('/portal', { replace: true });
+    const token = localStorage.getItem('portal_token');
+    if (!token) return;
+    const claims = decodePortalToken(token);
+    navigate(claims?.mustChangePassword ? '/portal/change-password' : '/portal', { replace: true });
   }, [navigate]);
 
   async function handleSubmit(e) {
     e.preventDefault();
-    if (!form.phone.trim())    { toast.error(t('portal.phoneRequired', { defaultValue: 'Phone number is required' })); return; }
-    if (!form.password)        { toast.error(t('portal.passwordRequired', { defaultValue: 'Password is required' })); return; }
-    if (!form.companyId.trim()) { toast.error(t('portal.schoolIdRequired', { defaultValue: 'School ID is required' })); return; }
+    if (!form.phone.trim()) { toast.error(t('portal.phoneRequired', { defaultValue: 'Phone number is required' })); return; }
+    if (!form.password)     { toast.error(t('portal.passwordRequired', { defaultValue: 'Password is required' })); return; }
     setLoading(true);
     try {
       const res = await portalApi.login(form);
       localStorage.setItem('portal_token',   res.data.token);
       localStorage.setItem('portal_student', JSON.stringify(res.data.student));
-      localStorage.setItem('portal_type',    res.data.portalType);
-      navigate('/portal', { replace: true });
+      navigate(res.data.mustChangePassword ? '/portal/change-password' : '/portal', { replace: true });
     } catch (err) {
       toast.error(err?.response?.data?.message || t('portal.loginFailed', { defaultValue: 'Login failed. Check your details.' }));
     } finally {
@@ -133,17 +134,6 @@ export default function PortalLogin() {
               </div>
             </div>
 
-            <div className="space-y-1.5">
-              <label className="block text-sm font-semibold text-slate-700">{t('portal.schoolId', { defaultValue: 'School ID' })}</label>
-              <input
-                placeholder={t('portal.schoolIdPlaceholder', { defaultValue: 'Provided by your school admin' })}
-                value={form.companyId}
-                onChange={e => set('companyId', e.target.value)}
-                className="w-full h-12 px-4 rounded-xl border border-slate-200 text-slate-900 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all bg-slate-50"
-              />
-              <p className="text-xs text-slate-400">{t('portal.schoolIdHint', { defaultValue: 'Ask your school administrator for this ID' })}</p>
-            </div>
-
             <motion.button
               type="submit"
               disabled={loading}
@@ -159,7 +149,7 @@ export default function PortalLogin() {
         </div>
 
         <p className="text-center text-xs text-slate-600 mt-6">
-          {t('portal.footerTagline', { defaultValue: 'EasyBooks School Management · Nepal' })}
+          {t('portal.footerTagline', { defaultValue: 'OneBook School Management · Nepal' })}
         </p>
       </motion.div>
     </div>

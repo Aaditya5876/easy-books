@@ -6,9 +6,10 @@ import {
   BarChart, Bar, LineChart, Line, ComposedChart, XAxis, YAxis, Tooltip,
   ResponsiveContainer, CartesianGrid, Legend,
 } from 'recharts';
-import { ledgerApi, schoolAnalyticsApi, transactionApi, schoolDashboardApi } from '@/api';
+import { ledgerApi, schoolAnalyticsApi, transactionApi, schoolDashboardApi, reportsApi } from '@/api';
 import { getActiveCompanyId } from '@/lib/companyContext';
-import { getCurrentFiscalYear } from '@/lib/nepaliDate';
+import { getCurrentFiscalYear, formatBsYearMonth } from '@/lib/nepaliDate';
+import { useRole } from '@/lib/useRole';
 import { BarChart2, CalendarCheck2, DollarSign, Trophy, Boxes, Phone, ShieldCheck, Printer } from 'lucide-react';
 
 const fmtRs = (n) => `Rs. ${Number(n ?? 0).toLocaleString('en-NP')}`;
@@ -87,6 +88,56 @@ function printReport(title, rows, previousFiscalYearLabel, currentFiscalYearLabe
   win.document.close();
   win.focus();
   setTimeout(() => win.print(), 250);
+}
+
+// The one real, live-verified statement on this tab — everything else here is
+// a rough placeholder (fabricated previous-year deltas, name-regex account
+// classification). This is computed server-side from actual ledger entries and
+// is guaranteed to balance (see ReportsService.getTrialBalance).
+function TrialBalanceCard({ trialBalance }) {
+  if (!trialBalance) return null;
+  return (
+    <div className="rounded-xl border border-border bg-white p-4 xl:col-span-2">
+      <div className="mb-3 flex items-start justify-between gap-3">
+        <div>
+          <h3 className="font-semibold text-sm">Trial Balance</h3>
+          <p className="text-xs text-muted-foreground mt-0.5">Live, verified — every account's real debit/credit balance.</p>
+        </div>
+        <span className={`text-xs font-medium px-2 py-1 rounded-md ${trialBalance.balanced ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>
+          {trialBalance.balanced ? 'Balanced' : 'Not Balanced'}
+        </span>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b text-left text-xs uppercase tracking-wide text-muted-foreground">
+              <th className="py-2 pr-3">Account</th>
+              <th className="py-2 pr-3">Type</th>
+              <th className="py-2 pr-3 text-right">Debit</th>
+              <th className="py-2 text-right">Credit</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y">
+            {trialBalance.rows.map(row => (
+              <tr key={row.accountId}>
+                <td className="py-2 pr-3">{row.accountName}</td>
+                <td className="py-2 pr-3 text-muted-foreground">{row.accountType}</td>
+                <td className="py-2 pr-3 text-right font-medium tabular-nums">{row.debit ? fmtRs(row.debit) : ''}</td>
+                <td className="py-2 text-right font-medium tabular-nums">{row.credit ? fmtRs(row.credit) : ''}</td>
+              </tr>
+            ))}
+          </tbody>
+          <tfoot>
+            <tr className="border-t font-semibold">
+              <td className="py-2 pr-3" colSpan={2}>Total</td>
+              <td className="py-2 pr-3 text-right tabular-nums">{fmtRs(trialBalance.totalDebit)}</td>
+              <td className="py-2 text-right tabular-nums">{fmtRs(trialBalance.totalCredit)}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+  );
 }
 
 function FinancialReportCard({ title, description, rows, previousFiscalYearLabel, currentFiscalYearLabel }) {
@@ -264,10 +315,10 @@ function FeesTab({ auditStartDate, auditEndDate }) {
           <ResponsiveContainer width="100%" height={260}>
             <ComposedChart data={data.byMonth} margin={{ top: 5, right: 0, left: -10, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-              <XAxis dataKey="month" tick={{ fontSize: 11 }} />
+              <XAxis dataKey="month" tick={{ fontSize: 11 }} tickFormatter={formatBsYearMonth} />
               <YAxis yAxisId="amt" tick={{ fontSize: 11 }} tickFormatter={kFmt} />
               <YAxis yAxisId="rate" orientation="right" domain={[0, 100]} tick={{ fontSize: 11 }} unit="%" />
-              <Tooltip formatter={(v, name) => name === 'rate' ? [`${v}%`, t('reports.collectionRate', { defaultValue: 'Collection rate' })] : [fmtRs(v), name === 'collected' ? t('reports.collected', { defaultValue: 'Collected' }) : t('reports.pending', { defaultValue: 'Pending' })]} />
+              <Tooltip labelFormatter={formatBsYearMonth} formatter={(v, name) => name === 'rate' ? [`${v}%`, t('reports.collectionRate', { defaultValue: 'Collection rate' })] : [fmtRs(v), name === 'collected' ? t('reports.collected', { defaultValue: 'Collected' }) : t('reports.pending', { defaultValue: 'Pending' })]} />
               <Legend wrapperStyle={{ fontSize: 12 }} formatter={v => v === 'collected' ? t('reports.collected', { defaultValue: 'Collected' }) : v === 'pending' ? t('reports.pending', { defaultValue: 'Pending' }) : t('reports.ratePercent', { defaultValue: 'Rate %' })} />
               <Bar yAxisId="amt" dataKey="collected" stackId="a" fill="#10b981" />
               <Bar yAxisId="amt" dataKey="pending" stackId="a" fill="#f59e0b" radius={[4, 4, 0, 0]} />
@@ -330,7 +381,7 @@ function FeesTab({ auditStartDate, auditEndDate }) {
                   <tr key={i}>
                     <td className="px-3 py-2 font-medium">{r.studentName}</td>
                     <td className="px-3 py-2 text-muted-foreground">{r.className}</td>
-                    <td className="px-3 py-2 text-muted-foreground">{r.month}</td>
+                    <td className="px-3 py-2 text-muted-foreground">{formatBsYearMonth(r.month)}</td>
                     <td className="px-3 py-2 text-right tabular-nums">{r.daysOver}</td>
                     <td className="px-3 py-2 text-right tabular-nums font-medium text-amber-700">{fmtRs(r.due)}</td>
                   </tr>
@@ -492,9 +543,9 @@ function OperationsTab({ auditStartDate, auditEndDate }) {
           <ResponsiveContainer width="100%" height={220}>
             <BarChart data={data.payrollByMonth} margin={{ top: 5, right: 10, left: -10, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-              <XAxis dataKey="month" tick={{ fontSize: 11 }} />
+              <XAxis dataKey="month" tick={{ fontSize: 11 }} tickFormatter={formatBsYearMonth} />
               <YAxis tick={{ fontSize: 11 }} tickFormatter={kFmt} />
-              <Tooltip formatter={(v) => [fmtRs(v), t('reports.netPayroll', { defaultValue: 'Net payroll' })]} />
+              <Tooltip labelFormatter={formatBsYearMonth} formatter={(v) => [fmtRs(v), t('reports.netPayroll', { defaultValue: 'Net payroll' })]} />
               <Bar dataKey="total" fill="#0ea5e9" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
@@ -549,6 +600,15 @@ function AuditTab({ auditStartDate, auditEndDate }) {
     queryFn: () => ledgerApi.entries.list().then(r => r.data ?? []),
     enabled: !!companyId,
   });
+  // Unlike the rest of this tab (fabricated previous-year comparisons, name-regex
+  // account classification), Trial Balance is real: computed server-side directly
+  // from LedgerEntry rows (see ReportsService.getTrialBalance), excluding only
+  // single-sided vendor/customer memo entries — so it always actually balances.
+  const { data: trialBalance } = useQuery({
+    queryKey: ['audit-trial-balance', companyId],
+    queryFn: () => reportsApi.trialBalance().then(r => r.data),
+    enabled: !!companyId,
+  });
 
   const liveSummary = useMemo(() => {
     const income = sumBy(transactions, t => (t.category === 'income' ? t.amount : 0));
@@ -557,15 +617,21 @@ function AuditTab({ auditStartDate, auditEndDate }) {
     const feeBilled = sumBy(feeTransactions, t => t.amount || 0);
     const feeCollected = sumBy(feeTransactions.filter(t => t.category === 'income'), t => t.amount || 0);
     const concessions = sumBy(feeTransactions.filter(t => /discount|concession|scholarship/i.test(t.description || '')), t => t.amount || 0);
-    const cashInHand = sumBy(ledgerAccounts, a => /cash/i.test(a.account_name || '') ? (a.current_balance ?? a.opening_balance ?? 0) : 0);
-    const cashAtBank = sumBy(ledgerAccounts, a => /bank/i.test(a.account_name || '') ? (a.current_balance ?? a.opening_balance ?? 0) : 0);
-    const fixedDeposits = sumBy(ledgerAccounts, a => /fixed deposit|fd|deposit/i.test(a.account_name || '') ? (a.current_balance ?? a.opening_balance ?? 0) : 0);
-    const currentAssets = cashInHand + cashAtBank + fixedDeposits + sumBy(ledgerAccounts, a => /receivable|advance|asset|deposit/i.test(a.account_name || '') ? (a.current_balance ?? a.opening_balance ?? 0) : 0);
-    const currentLiabilities = sumBy(ledgerAccounts, a => /payable|creditor|tax|tds|pf|loan|liability/i.test(a.account_name || '') ? (a.current_balance ?? a.opening_balance ?? 0) : 0);
+    // Vendor/customer "Purchase Account"/"Sales Account" entries are deliberately
+    // single-sided memo tracking (see backend LedgerPostingService.postPartyMemoEntryTx)
+    // — they have no offsetting entry anywhere else in the ledger, so they must
+    // never be folded into these totals. Only real system (double-entry) accounts
+    // count toward the books here.
+    const systemAccounts = ledgerAccounts.filter(a => a.is_system ?? a.isSystem);
+    const cashInHand = sumBy(systemAccounts, a => /cash/i.test(a.account_name || '') ? (a.current_balance ?? a.opening_balance ?? 0) : 0);
+    const cashAtBank = sumBy(systemAccounts, a => /bank/i.test(a.account_name || '') ? (a.current_balance ?? a.opening_balance ?? 0) : 0);
+    const fixedDeposits = sumBy(systemAccounts, a => /fixed deposit|fd|deposit/i.test(a.account_name || '') ? (a.current_balance ?? a.opening_balance ?? 0) : 0);
+    const currentAssets = cashInHand + cashAtBank + fixedDeposits + sumBy(systemAccounts, a => /receivable|advance|asset|deposit/i.test(a.account_name || '') ? (a.current_balance ?? a.opening_balance ?? 0) : 0);
+    const currentLiabilities = sumBy(systemAccounts, a => /payable|creditor|tax|tds|pf|loan|liability/i.test(a.account_name || '') ? (a.current_balance ?? a.opening_balance ?? 0) : 0);
     const netCurrentAssets = currentAssets - currentLiabilities;
-    const fixedAssets = sumBy(ledgerAccounts, a => /building|furniture|equipment|book|bus|vehicle|sports|solar|hostel|kitchen|asset/i.test(a.account_name || '') ? (a.current_balance ?? a.opening_balance ?? 0) : 0);
-    const ownerCapital = sumBy(ledgerAccounts, a => /capital|owner|equity|reserve/i.test(a.account_name || '') ? (a.current_balance ?? a.opening_balance ?? 0) : 0);
-    const borrowedFunds = sumBy(ledgerAccounts, a => /loan|borrow|overdraft|director/i.test(a.account_name || '') ? (a.current_balance ?? a.opening_balance ?? 0) : 0);
+    const fixedAssets = sumBy(systemAccounts, a => /building|furniture|equipment|book|bus|vehicle|sports|solar|hostel|kitchen|asset/i.test(a.account_name || '') ? (a.current_balance ?? a.opening_balance ?? 0) : 0);
+    const ownerCapital = sumBy(systemAccounts, a => /capital|owner|equity|reserve/i.test(a.account_name || '') ? (a.current_balance ?? a.opening_balance ?? 0) : 0);
+    const borrowedFunds = sumBy(systemAccounts, a => /loan|borrow|overdraft|director/i.test(a.account_name || '') ? (a.current_balance ?? a.opening_balance ?? 0) : 0);
     const totalSources = ownerCapital + borrowedFunds;
     const ledgerDebits = sumBy(ledgerEntries, e => e.debit || 0);
     const ledgerCredits = sumBy(ledgerEntries, e => e.credit || 0);
@@ -784,6 +850,7 @@ function AuditTab({ auditStartDate, auditEndDate }) {
           <button type="button" onClick={() => navigate('/transactions')} className="rounded-md border border-border bg-white px-3 py-2 text-sm shadow-sm hover:bg-slate-100">Open Transactions</button>
         </div>
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+          <TrialBalanceCard trialBalance={trialBalance} />
           {financialReports.map(report => (
             <FinancialReportCard key={report.title} {...report} previousFiscalYearLabel={previousFiscalYearLabel} currentFiscalYearLabel={currentFiscalYearLabel} />
           ))}
@@ -802,16 +869,22 @@ const TABS = [
   { key: 'operations', label: 'Operations', icon: Boxes, component: OperationsTab },
   { key: 'audit', label: 'Audit', icon: ShieldCheck, component: AuditTab },
 ];
+// The backend only grants TEACHER the analytics/attendance and analytics/academics
+// endpoints (fees/operations/audit stay STAFF/ACCOUNTANT/ADMIN-only) — show only
+// the tabs a teacher can actually load data for.
+const TEACHER_VISIBLE_TABS = ['attendance', 'academics'];
 
 export default function SchoolReports() {
   const { t } = useTranslation();
   const companyId = getActiveCompanyId();
+  const { isTeacher } = useRole();
+  const visibleTabs = isTeacher ? TABS.filter(x => TEACHER_VISIBLE_TABS.includes(x.key)) : TABS;
   const [tab, setTab] = useState('attendance');
   const [auditStartDate, setAuditStartDate] = useState('');
   const [auditEndDate, setAuditEndDate] = useState('');
   const [filterStartDate, setFilterStartDate] = useState('');
   const [filterEndDate, setFilterEndDate] = useState('');
-  const Active = TABS.find(x => x.key === tab)?.component ?? AttendanceTab;
+  const Active = visibleTabs.find(x => x.key === tab)?.component ?? AttendanceTab;
 
   if (!companyId) return null;
 
@@ -875,7 +948,7 @@ export default function SchoolReports() {
       </div>
 
       <div className="flex gap-1 bg-muted/40 p-1 rounded-lg w-fit">
-        {TABS.map(item => {
+        {visibleTabs.map(item => {
           const Icon = item.icon;
           return (
             <button

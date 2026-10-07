@@ -1,9 +1,11 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Pencil, Trash2, School } from 'lucide-react';
+import { Plus, Pencil, Trash2, School, Search } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { classesApi, employeeApi } from '@/api';
 import { getActiveCompanyId } from '@/lib/companyContext';
+import { useRole } from '@/lib/useRole';
+import { confirm } from '@/lib/confirm';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -17,6 +19,7 @@ function ClassDialog({ open, onClose, initial, employees, companyId }) {
   const qc = useQueryClient();
   const isEdit = !!initial?.id;
   const [form, setForm] = useState(initial ? { name: initial.name, section: initial.section || '', classTeacherId: initial.classTeacherId || '' } : EMPTY_FORM);
+  const [errors, setErrors] = useState({});
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   const save = useMutation({
@@ -32,7 +35,13 @@ function ClassDialog({ open, onClose, initial, employees, companyId }) {
 
   function handleSubmit(e) {
     e.preventDefault();
-    if (!form.name.trim()) { toast.error(t('classes.classNameRequired', { defaultValue: 'Class name is required' })); return; }
+    if (!form.name.trim()) {
+      const msg = t('classes.classNameRequired', { defaultValue: 'Class name is required' });
+      setErrors({ name: msg });
+      toast.error(msg);
+      return;
+    }
+    setErrors({});
     save.mutate({ ...form, companyId });
   }
 
@@ -45,7 +54,8 @@ function ClassDialog({ open, onClose, initial, employees, companyId }) {
         <form onSubmit={handleSubmit} className="space-y-4 pt-2">
           <div className="space-y-1.5">
             <Label>{t('classes.className', { defaultValue: 'Class Name *' })}</Label>
-            <Input placeholder={t('classes.classNamePlaceholder', { defaultValue: 'e.g. Grade 5, Class 10' })} value={form.name} onChange={e => set('name', e.target.value)} />
+            <Input placeholder={t('classes.classNamePlaceholder', { defaultValue: 'e.g. Grade 5, Class 10' })} value={form.name} onChange={e => { set('name', e.target.value); if (errors.name) setErrors({}); }} />
+            {errors.name && <p className="text-xs text-red-600">{errors.name}</p>}
           </div>
           <div className="space-y-1.5">
             <Label>{t('classes.section', { defaultValue: 'Section' })} <span className="text-muted-foreground">{t('classes.optional', { defaultValue: '(Optional)' })}</span></Label>
@@ -79,8 +89,11 @@ function ClassDialog({ open, onClose, initial, employees, companyId }) {
 export default function Classes() {
   const { t } = useTranslation();
   const companyId = getActiveCompanyId();
+  const { canManageAcademicContent, canDelete } = useRole();
   const qc = useQueryClient();
   const [dialog, setDialog] = useState(null);
+  const [search, setSearch] = useState('');
+  const [teacherFilter, setTeacherFilter] = useState('all');
 
   const { data: classes = [], isLoading } = useQuery({
     queryKey: ['classes', companyId],
@@ -89,8 +102,8 @@ export default function Classes() {
   });
 
   const { data: employees = [] } = useQuery({
-    queryKey: ['employees', companyId],
-    queryFn: () => employeeApi.list().then(r => r.data),
+    queryKey: ['employees-directory', companyId],
+    queryFn: () => employeeApi.directory().then(r => r.data),
     enabled: !!companyId,
   });
 
@@ -105,6 +118,15 @@ export default function Classes() {
 
   const teacherName = (id) => employees.find(e => e.id === id)?.name || '—';
 
+  const assignedTeacherIds = [...new Set(classes.map(c => c.classTeacherId).filter(Boolean))];
+  const q = search.trim().toLowerCase();
+  const filteredClasses = classes.filter(cls => {
+    const matchesSearch = !q || cls.name.toLowerCase().includes(q) || (cls.section || '').toLowerCase().includes(q);
+    const matchesTeacher = teacherFilter === 'all'
+      || (teacherFilter === 'unassigned' ? !cls.classTeacherId : cls.classTeacherId === teacherFilter);
+    return matchesSearch && matchesTeacher;
+  });
+
   return (
     <div className="p-6 space-y-5">
       <div className="flex items-center justify-between">
@@ -112,10 +134,37 @@ export default function Classes() {
           <h1 className="text-2xl font-bold">{t('classes.title', { defaultValue: 'Classes & Sections' })}</h1>
           <p className="text-muted-foreground text-sm mt-1">{t('classes.classesConfigured', { defaultValue: '{{count}} classes configured', count: classes.length })}</p>
         </div>
-        <Button onClick={() => setDialog({ mode: 'add' })}>
-          <Plus className="w-4 h-4 mr-2" /> {t('classes.addClass', { defaultValue: 'Add Class' })}
-        </Button>
+        {canManageAcademicContent && (
+          <Button onClick={() => setDialog({ mode: 'add' })}>
+            <Plus className="w-4 h-4 mr-2" /> {t('classes.addClass', { defaultValue: 'Add Class' })}
+          </Button>
+        )}
       </div>
+
+      {classes.length > 0 && (
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="relative w-full max-w-xs">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Input
+              className="pl-8"
+              placeholder={t('classes.searchPlaceholder', { defaultValue: 'Search by class or section…' })}
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+            />
+          </div>
+          {assignedTeacherIds.length > 0 && (
+            <select
+              className="text-sm border rounded-md px-2 py-2 bg-background focus:outline-none focus:ring-2 focus:ring-ring"
+              value={teacherFilter}
+              onChange={e => setTeacherFilter(e.target.value)}
+            >
+              <option value="all">{t('classes.allTeachers', { defaultValue: 'All class teachers' })}</option>
+              <option value="unassigned">{t('classes.unassigned', { defaultValue: 'Unassigned' })}</option>
+              {assignedTeacherIds.map(id => <option key={id} value={id}>{teacherName(id)}</option>)}
+            </select>
+          )}
+        </div>
+      )}
 
       <div className="bg-white rounded-xl border border-border overflow-hidden">
         {isLoading ? (
@@ -124,8 +173,12 @@ export default function Classes() {
           <div className="p-12 text-center">
             <School className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
             <p className="text-muted-foreground text-sm">{t('classes.noClassesYet', { defaultValue: 'No classes yet. Add your first class to get started.' })}</p>
-            <Button className="mt-4" size="sm" onClick={() => setDialog({ mode: 'add' })}>{t('classes.addFirstClass', { defaultValue: 'Add First Class' })}</Button>
+            {canManageAcademicContent && (
+              <Button className="mt-4" size="sm" onClick={() => setDialog({ mode: 'add' })}>{t('classes.addFirstClass', { defaultValue: 'Add First Class' })}</Button>
+            )}
           </div>
+        ) : filteredClasses.length === 0 ? (
+          <div className="p-12 text-center text-muted-foreground text-sm">{t('classes.noMatches', { defaultValue: 'No classes match your filters.' })}</div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -139,7 +192,7 @@ export default function Classes() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {classes.map(cls => (
+                {filteredClasses.map(cls => (
                   <tr key={cls.id} className="hover:bg-muted/20">
                     <td className="px-5 py-3 font-medium">{cls.name}</td>
                     <td className="px-5 py-3 text-muted-foreground">{cls.section || '—'}</td>
@@ -147,20 +200,26 @@ export default function Classes() {
                     <td className="px-5 py-3 text-right tabular-nums text-muted-foreground">{cls._count?.students ?? 0}</td>
                     <td className="px-5 py-3">
                       <div className="flex items-center gap-2 justify-end">
-                        <button
-                          onClick={() => setDialog({ mode: 'edit', cls })}
-                          className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
-                        >
-                          <Pencil className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          onClick={() => {
-                            if (confirm(t('classes.confirmDelete', { defaultValue: 'Delete {{name}}?', name: `${cls.name}${cls.section ? ` (${cls.section})` : ''}` }))) remove.mutate(cls.id);
-                          }}
-                          className="p-1.5 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600 transition-colors"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                        {canManageAcademicContent && (
+                          <button
+                            onClick={() => setDialog({ mode: 'edit', cls })}
+                            className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                        {canDelete && (
+                          <button
+                            onClick={async () => {
+                              const ok = await confirm({ description: t('classes.confirmDelete', { defaultValue: 'Delete {{name}}?', name: `${cls.name}${cls.section ? ` (${cls.section})` : ''}` }), variant: 'destructive' });
+                              if (!ok) return;
+                              remove.mutate(cls.id);
+                            }}
+                            className="p-1.5 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600 transition-colors"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>

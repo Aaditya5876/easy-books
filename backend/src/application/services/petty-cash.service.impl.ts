@@ -33,28 +33,36 @@ export class PettyCashServiceImpl {
     approvedBy?: string;
   }) {
     const dateAd = new Date(data.dateAd);
-    const voucher = await this.prisma.pettyCashVoucher.create({
-      data: {
-        companyId,
-        voucherNo: data.voucherNo,
-        dateAd,
-        dateBs: adToBs(dateAd),
-        amount: data.amount,
-        description: data.description,
-        category: data.category,
-        paidTo: data.paidTo,
-        approvedBy: data.approvedBy,
-      },
-    });
+    return this.prisma.$transaction(async (tx) => {
+      const voucher = await tx.pettyCashVoucher.create({
+        data: {
+          companyId,
+          voucherNo: data.voucherNo,
+          dateAd,
+          dateBs: adToBs(dateAd),
+          amount: data.amount,
+          description: data.description,
+          category: data.category,
+          paidTo: data.paidTo,
+          approvedBy: data.approvedBy,
+        },
+      });
 
-    await this.ledgerPosting.postPettyCash(companyId, voucher.id);
-    return voucher;
+      await this.ledgerPosting.postPettyCashTx(tx, companyId, voucher.id);
+      return voucher;
+    });
   }
 
+  // Reverses the voucher's ledger entries before deleting it — otherwise the
+  // voucher row disappears but its Cash in Hand / expense-account movement
+  // stays behind forever with nothing left to explain it.
   async remove(id: string, companyId: string) {
-    const v = await this.prisma.pettyCashVoucher.findFirst({ where: { id, companyId } });
-    if (!v) throw new NotFoundException('Petty cash voucher not found');
-    return this.prisma.pettyCashVoucher.delete({ where: { id } });
+    return this.prisma.$transaction(async (tx) => {
+      const v = await tx.pettyCashVoucher.findFirst({ where: { id, companyId } });
+      if (!v) throw new NotFoundException('Petty cash voucher not found');
+      await this.ledgerPosting.reverseEntriesTx(tx, companyId, 'PETTY_CASH', id);
+      return tx.pettyCashVoucher.delete({ where: { id } });
+    });
   }
 
   async getSummary(companyId: string, fromDate: string, toDate: string) {

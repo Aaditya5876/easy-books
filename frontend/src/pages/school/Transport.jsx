@@ -1,17 +1,22 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { Plus, Pencil, Trash2, Bus, UserMinus } from 'lucide-react';
+import { Plus, Pencil, Trash2, Bus, UserMinus, X } from 'lucide-react';
 import { transportApi } from '@/api';
 import StudentCombobox from '@/components/shared/StudentCombobox';
+import StaffCombobox from '@/components/shared/StaffCombobox';
+import TransportRouteMap from '@/components/shared/TransportRouteMap';
+import PlaceAutocomplete from '@/components/shared/PlaceAutocomplete';
 import { getActiveCompanyId } from '@/lib/companyContext';
+import { confirm } from '@/lib/confirm';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetFooter } from '@/components/ui/sheet';
 import { toast } from 'sonner';
 
-const EMPTY_ROUTE = { routeName: '', description: '', stops: '', monthlyFee: 0, driverName: '', vehicleNumber: '' };
+const EMPTY_ROUTE = { routeName: '', description: '', stops: [''], monthlyFee: 0, driverName: '', vehicleNumber: '' };
 
 function RouteDialog({ open, onClose, initial, companyId }) {
   const { t } = useTranslation();
@@ -19,10 +24,15 @@ function RouteDialog({ open, onClose, initial, companyId }) {
   const isEdit = !!initial?.id;
   const [form, setForm] = useState(initial ? {
     routeName: initial.routeName, description: initial.description || '',
-    stops: initial.stops || '', monthlyFee: initial.monthlyFee,
+    stops: initial.stops ? initial.stops.split(',').map(s => s.trim()).filter(Boolean) : [''],
+    monthlyFee: initial.monthlyFee,
     driverName: initial.driverName || '', vehicleNumber: initial.vehicleNumber || '',
   } : EMPTY_ROUTE);
+  const [errors, setErrors] = useState({});
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const setStop = (i, v) => setForm(f => ({ ...f, stops: f.stops.map((s, idx) => idx === i ? v : s) }));
+  const addStop = () => setForm(f => ({ ...f, stops: [...f.stops, ''] }));
+  const removeStop = (i) => setForm(f => ({ ...f, stops: f.stops.length > 1 ? f.stops.filter((_, idx) => idx !== i) : f.stops }));
 
   const save = useMutation({
     mutationFn: (data) => isEdit ? transportApi.updateRoute(initial.id, data) : transportApi.createRoute(data),
@@ -32,28 +42,54 @@ function RouteDialog({ open, onClose, initial, companyId }) {
 
   function handleSubmit(e) {
     e.preventDefault();
-    if (!form.routeName.trim()) { toast.error(t('transport.routeNameRequired', { defaultValue: 'Route name is required' })); return; }
-    save.mutate({ ...form, companyId, monthlyFee: Number(form.monthlyFee) });
+    if (!form.routeName.trim()) {
+      const msg = t('transport.routeNameRequired', { defaultValue: 'Route name is required' });
+      setErrors({ routeName: msg });
+      toast.error(msg);
+      return;
+    }
+    setErrors({});
+    const stops = form.stops.map(s => s.trim()).filter(Boolean).join(', ');
+    save.mutate({ ...form, stops, companyId, monthlyFee: Number(form.monthlyFee) });
   }
 
   return (
-    <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-md">
-        <DialogHeader><DialogTitle>{isEdit ? t('transport.editRoute', { defaultValue: 'Edit Route' }) : t('transport.addRoute', { defaultValue: 'Add Route' })}</DialogTitle></DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4 pt-2">
+    <Sheet open={open} onOpenChange={onClose}>
+      <SheetContent side="right" className="w-full sm:max-w-2xl overflow-y-auto">
+        <SheetHeader>
+          <SheetTitle>{isEdit ? t('transport.editRoute', { defaultValue: 'Edit Route' }) : t('transport.addRoute', { defaultValue: 'Add Route' })}</SheetTitle>
+        </SheetHeader>
+        <form onSubmit={handleSubmit} className="space-y-4 pt-4">
           <div className="space-y-1.5">
             <Label>{t('transport.routeNameLabel', { defaultValue: 'Route Name *' })}</Label>
-            <Input placeholder={t('transport.routeNamePlaceholder', { defaultValue: 'e.g. Kathmandu - Lalitpur' })} value={form.routeName} onChange={e => set('routeName', e.target.value)} />
+            <Input placeholder={t('transport.routeNamePlaceholder', { defaultValue: 'e.g. Baneshwor to Satdobato' })} value={form.routeName} onChange={e => { set('routeName', e.target.value); if (errors.routeName) setErrors({}); }} />
+            {errors.routeName && <p className="text-xs text-red-600">{errors.routeName}</p>}
           </div>
+
+          <TransportRouteMap stops={form.stops} />
+
           <div className="space-y-1.5">
-            <Label>{t('transport.stops', { defaultValue: 'Stops' })}</Label>
-            <Input placeholder={t('transport.stopsPlaceholder', { defaultValue: 'e.g. Chabahil, Baudha, Thimi' })} value={form.stops} onChange={e => set('stops', e.target.value)} />
-            <p className="text-xs text-muted-foreground">{t('transport.stopsHint', { defaultValue: 'Comma-separated list of stops' })}</p>
+            <Label>{t('transport.stops', { defaultValue: 'Stops (in order)' })}</Label>
+            <div className="space-y-2">
+              {form.stops.map((stop, i) => (
+                <div key={i} className="flex gap-2">
+                  <PlaceAutocomplete placeholder={t('transport.stopPlaceholder', { defaultValue: 'e.g. Koteshwor' })} value={stop} onChange={v => setStop(i, v)} />
+                  <button type="button" onClick={() => removeStop(i)} className="p-2 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600 transition-colors shrink-0">
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              ))}
+            </div>
+            <Button type="button" variant="outline" size="sm" onClick={addStop}>
+              <Plus className="w-3.5 h-3.5 mr-1" /> {t('transport.addStop', { defaultValue: 'Add Stop' })}
+            </Button>
+            <p className="text-xs text-muted-foreground">{t('transport.stopsHint', { defaultValue: 'Order matters — the map routes through these in sequence. Pick a suggestion for the most accurate route.' })}</p>
           </div>
+
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label>{t('transport.driverName', { defaultValue: 'Driver Name' })}</Label>
-              <Input placeholder={t('transport.driverNamePlaceholder', { defaultValue: 'Driver name' })} value={form.driverName} onChange={e => set('driverName', e.target.value)} />
+              <Label>{t('transport.driverName', { defaultValue: 'Driver' })}</Label>
+              <StaffCombobox displayValue={form.driverName} onSelect={name => set('driverName', name)} placeholder={t('transport.selectDriver', { defaultValue: 'Search staff…' })} />
             </div>
             <div className="space-y-1.5">
               <Label>{t('transport.vehicleNumber', { defaultValue: 'Vehicle Number' })}</Label>
@@ -64,13 +100,13 @@ function RouteDialog({ open, onClose, initial, companyId }) {
             <Label>{t('transport.monthlyFee', { defaultValue: 'Monthly Fee (Rs.)' })}</Label>
             <Input type="number" min="0" value={form.monthlyFee} onChange={e => set('monthlyFee', e.target.value)} />
           </div>
-          <DialogFooter>
+          <SheetFooter>
             <Button type="button" variant="outline" onClick={onClose}>{t('transport.cancel', { defaultValue: 'Cancel' })}</Button>
             <Button type="submit" disabled={save.isPending}>{save.isPending ? t('transport.saving', { defaultValue: 'Saving…' }) : isEdit ? t('transport.saveChanges', { defaultValue: 'Save Changes' }) : t('transport.addRoute', { defaultValue: 'Add Route' })}</Button>
-          </DialogFooter>
+          </SheetFooter>
         </form>
-      </DialogContent>
-    </Dialog>
+      </SheetContent>
+    </Sheet>
   );
 }
 
@@ -78,6 +114,7 @@ function AssignDialog({ open, onClose, routes, companyId }) {
   const { t } = useTranslation();
   const qc = useQueryClient();
   const [form, setForm] = useState({ routeId: '', studentId: '', pickupStop: '' });
+  const [errors, setErrors] = useState({});
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   const assign = useMutation({
@@ -92,8 +129,15 @@ function AssignDialog({ open, onClose, routes, companyId }) {
 
   function handleSubmit(e) {
     e.preventDefault();
-    if (!form.routeId) { toast.error(t('transport.selectARoute', { defaultValue: 'Select a route' })); return; }
-    if (!form.studentId) { toast.error(t('transport.selectAStudent', { defaultValue: 'Select a student' })); return; }
+    const errs = {};
+    if (!form.routeId) errs.routeId = t('transport.selectARoute', { defaultValue: 'Select a route' });
+    if (!form.studentId) errs.studentId = t('transport.selectAStudent', { defaultValue: 'Select a student' });
+    if (Object.keys(errs).length) {
+      setErrors(errs);
+      toast.error(Object.values(errs)[0]);
+      return;
+    }
+    setErrors({});
     assign.mutate({ companyId, routeId: form.routeId, studentId: form.studentId, pickupStop: form.pickupStop || undefined });
   }
 
@@ -104,18 +148,20 @@ function AssignDialog({ open, onClose, routes, companyId }) {
         <form onSubmit={handleSubmit} className="space-y-4 pt-2">
           <div className="space-y-1.5">
             <Label>{t('transport.routeLabel', { defaultValue: 'Route *' })}</Label>
-            <select className="w-full border rounded-md px-3 py-2 text-sm bg-background" value={form.routeId} onChange={e => set('routeId', e.target.value)}>
+            <select className="w-full border rounded-md px-3 py-2 text-sm bg-background" value={form.routeId} onChange={e => { set('routeId', e.target.value); if (errors.routeId) setErrors(er => ({ ...er, routeId: undefined })); }}>
               <option value="">{t('transport.selectRoute', { defaultValue: 'Select route…' })}</option>
               {routes.map(r => <option key={r.id} value={r.id}>{r.routeName}</option>)}
             </select>
+            {errors.routeId && <p className="text-xs text-red-600">{errors.routeId}</p>}
           </div>
           <div className="space-y-1.5">
             <Label>{t('transport.studentLabel', { defaultValue: 'Student *' })}</Label>
             <StudentCombobox
               value={form.studentId}
-              onChange={id => set('studentId', id)}
+              onChange={id => { set('studentId', id); if (errors.studentId) setErrors(er => ({ ...er, studentId: undefined })); }}
               placeholder={t('transport.selectStudent', { defaultValue: 'Select student…' })}
             />
+            {errors.studentId && <p className="text-xs text-red-600">{errors.studentId}</p>}
           </div>
           <div className="space-y-1.5">
             <Label>{t('transport.pickupStop', { defaultValue: 'Pickup Stop' })}</Label>
@@ -229,7 +275,11 @@ export default function Transport() {
                   <button onClick={() => setRouteDialog({ mode: 'edit', route })} className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors">
                     <Pencil className="w-3.5 h-3.5" />
                   </button>
-                  <button onClick={() => { if (confirm(t('transport.deleteConfirm', { defaultValue: 'Delete "{{name}}"?', name: route.routeName }))) removeRoute.mutate(route.id); }}
+                  <button onClick={async () => {
+                    const ok = await confirm({ description: t('transport.deleteConfirm', { defaultValue: 'Delete "{{name}}"?', name: route.routeName }), variant: 'destructive' });
+                    if (!ok) return;
+                    removeRoute.mutate(route.id);
+                  }}
                     className="p-1.5 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600 transition-colors">
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
@@ -270,7 +320,11 @@ export default function Transport() {
                       <td className="px-5 py-3">{a.route?.routeName}</td>
                       <td className="px-5 py-3 text-muted-foreground">{a.pickupStop || '—'}</td>
                       <td className="px-5 py-3">
-                        <button onClick={() => { if (confirm(t('transport.removeConfirm', { defaultValue: 'Remove {{name}} from transport?', name: a.student?.name }))) unassign.mutate(a.id); }}
+                        <button onClick={async () => {
+                          const ok = await confirm({ description: t('transport.removeConfirm', { defaultValue: 'Remove {{name}} from transport?', name: a.student?.name }), variant: 'destructive' });
+                          if (!ok) return;
+                          unassign.mutate(a.id);
+                        }}
                           className="flex items-center gap-1 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 px-2 py-1 rounded transition-colors">
                           <UserMinus className="w-3.5 h-3.5" /> {t('transport.remove', { defaultValue: 'Remove' })}
                         </button>

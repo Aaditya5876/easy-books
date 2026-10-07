@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { academicYearsApi } from '@/api';
+import { confirm } from '@/lib/confirm';
+import { useRole } from '@/lib/useRole';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -30,6 +32,8 @@ function AcademicYearDialog({ open, onClose, year }) {
     isCurrent: year?.isCurrent || false,
   });
 
+  const [errors, setErrors] = useState({});
+
   const save = useMutation({
     mutationFn: (d) =>
       isEdit
@@ -45,9 +49,15 @@ function AcademicYearDialog({ open, onClose, year }) {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (!form.name.trim() || !form.startDate || !form.endDate) {
+    const errs = {};
+    if (!form.name.trim()) errs.name = t('years.nameRequired', { defaultValue: 'Year name is required' });
+    if (!form.startDate) errs.startDate = t('years.startDateRequired', { defaultValue: 'Start date is required' });
+    if (!form.endDate) errs.endDate = t('years.endDateRequired', { defaultValue: 'End date is required' });
+    if (Object.keys(errs).length) {
+      setErrors(errs);
       return toast.error(t('years.fieldsRequired', { defaultValue: 'Name, start date and end date are required' }));
     }
+    setErrors({});
     save.mutate(form);
   };
 
@@ -62,9 +72,10 @@ function AcademicYearDialog({ open, onClose, year }) {
             <Label>{t('years.yearName', { defaultValue: 'Year Name *' })}</Label>
             <Input
               value={form.name}
-              onChange={e => setForm(p => ({ ...p, name: e.target.value }))}
+              onChange={e => { setForm(p => ({ ...p, name: e.target.value })); if (errors.name) setErrors(er => ({ ...er, name: undefined })); }}
               placeholder={t('years.yearNamePlaceholder', { defaultValue: 'e.g. 2081-82' })}
             />
+            {errors.name && <p className="text-xs text-red-600">{errors.name}</p>}
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
@@ -72,16 +83,18 @@ function AcademicYearDialog({ open, onClose, year }) {
               <Input
                 type="date"
                 value={form.startDate}
-                onChange={e => setForm(p => ({ ...p, startDate: e.target.value }))}
+                onChange={e => { setForm(p => ({ ...p, startDate: e.target.value })); if (errors.startDate) setErrors(er => ({ ...er, startDate: undefined })); }}
               />
+              {errors.startDate && <p className="text-xs text-red-600">{errors.startDate}</p>}
             </div>
             <div className="space-y-1">
               <Label>{t('years.endDate', { defaultValue: 'End Date *' })}</Label>
               <Input
                 type="date"
                 value={form.endDate}
-                onChange={e => setForm(p => ({ ...p, endDate: e.target.value }))}
+                onChange={e => { setForm(p => ({ ...p, endDate: e.target.value })); if (errors.endDate) setErrors(er => ({ ...er, endDate: undefined })); }}
               />
+              {errors.endDate && <p className="text-xs text-red-600">{errors.endDate}</p>}
             </div>
           </div>
           <div className="flex items-center gap-3">
@@ -105,6 +118,7 @@ function AcademicYearDialog({ open, onClose, year }) {
 
 export default function AcademicYear() {
   const { t } = useTranslation();
+  const { canEdit, canDelete } = useRole();
   const qc = useQueryClient();
   const [dialog, setDialog] = useState({ open: false, year: null });
 
@@ -119,8 +133,14 @@ export default function AcademicYear() {
     onError: (e) => toast.error(e.response?.data?.message || t('years.cannotDelete', { defaultValue: 'Cannot delete' })),
   });
 
-  const handleDelete = (y) => {
-    if (!window.confirm(t('years.confirmDelete', { defaultValue: 'Delete "{{name}}"?', name: y.name }))) return;
+  const handleDelete = async (y) => {
+    const ok = await confirm({
+      title: t('common.deleteConfirmTitle', { defaultValue: 'Delete?' }),
+      description: t('years.confirmDelete', { defaultValue: 'Delete "{{name}}"?', name: y.name }),
+      confirmLabel: t('common.delete', { defaultValue: 'Delete' }),
+      variant: 'destructive',
+    });
+    if (!ok) return;
     remove.mutate(y.id);
   };
 
@@ -135,9 +155,11 @@ export default function AcademicYear() {
           <CalendarDays className="h-6 w-6 text-primary" />
           <h1 className="text-2xl font-bold">{t('years.title', { defaultValue: 'Academic Years' })}</h1>
         </div>
-        <Button onClick={() => setDialog({ open: true, year: null })}>
-          <Plus className="h-4 w-4 mr-1" /> {t('years.addYearButton', { defaultValue: 'Add Year' })}
-        </Button>
+        {canEdit && (
+          <Button onClick={() => setDialog({ open: true, year: null })}>
+            <Plus className="h-4 w-4 mr-1" /> {t('years.addYearButton', { defaultValue: 'Add Year' })}
+          </Button>
+        )}
       </div>
 
       <div className="rounded-md border bg-card">
@@ -170,12 +192,16 @@ export default function AcademicYear() {
                 </TableCell>
                 <TableCell>
                   <div className="flex gap-1">
-                    <Button size="icon" variant="ghost" onClick={() => setDialog({ open: true, year: y })}>
-                      <Pencil className="h-4 w-4" />
-                    </Button>
-                    <Button size="icon" variant="ghost" onClick={() => handleDelete(y)}>
-                      <Trash2 className="h-4 w-4 text-destructive" />
-                    </Button>
+                    {canEdit && (
+                      <Button size="icon" variant="ghost" onClick={() => setDialog({ open: true, year: y })}>
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                    )}
+                    {canDelete && (
+                      <Button size="icon" variant="ghost" onClick={() => handleDelete(y)}>
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    )}
                   </div>
                 </TableCell>
               </TableRow>

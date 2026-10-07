@@ -16,6 +16,7 @@ export class PayrollJobHandler {
     try {
       const result = await this.payrollEngine.calculateEmployeePayroll(companyId, employeeId, month);
       this.logger.log(`Payroll processed: ${result.employeeName} — Net: ${result.netSalary}`);
+      return result;
     } catch (err) {
       this.logger.error(`Payroll failed for employee ${employeeId}: ${(err as Error).message}`);
       throw err;
