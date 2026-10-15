@@ -8,6 +8,7 @@
   "scripts": {
     "postinstall": "prisma generate",
     "dev": "nest start --watch --entry-file backend/src/main",
+    "prebuild": "npm run build --prefix ../shared",
     "build": "prisma generate && nest build",
     "start": "node dist/backend/src/main",
     "test": "jest",
