@@ -35,3 +35,4 @@ backend/dist/
 frontend/dist/
 backend/uploads/*
 !backend/uploads/.gitkeep
+.vercel
