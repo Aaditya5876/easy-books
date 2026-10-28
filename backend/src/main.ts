@@ -88,9 +88,14 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './modules/app.module';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { Logger } from 'nestjs-pino';
-import cookieParser from 'cookie-parser';
+import * as cookieParserModule from 'cookie-parser';
 import helmet from 'helmet';
 import { NestExpressApplication } from '@nestjs/platform-express';
+
+// Local tsc (no esModuleInterop) yields the function itself; Vercel's
+// compiler wraps it as { default }. Accept either.
+const cookieParser: typeof cookieParserModule =
+  (cookieParserModule as any).default ?? cookieParserModule;
 
 async function createApp() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, { bufferLogs: true });
