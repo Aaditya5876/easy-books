@@ -168,8 +168,9 @@ async function createApp() {
     .addTag('Upload')
     .build();
 
-  const document = SwaggerModule.createDocument(app, swaggerConfig);
-  SwaggerModule.setup('docs', app, document, {
+  // Factory form: the document is built on the first /docs request instead of
+  // at boot, which keeps serverless cold starts fast.
+  SwaggerModule.setup('docs', app, () => SwaggerModule.createDocument(app, swaggerConfig), {
     swaggerOptions: { persistAuthorization: true },
   });
 

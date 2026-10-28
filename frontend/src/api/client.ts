@@ -65,4 +65,18 @@ apiClient.interceptors.response.use(
   },
 );
 
+// Identical GETs fired while one is still in flight (header + page both
+// loading /auth/me, a list loaded on mount and again by a tab handler) share
+// the first request instead of each paying a round trip to the API.
+const inflightGets = new Map<string, Promise<any>>();
+const rawGet = apiClient.get.bind(apiClient);
+apiClient.get = ((url: string, config?: any) => {
+  const key = `${url}|${JSON.stringify(config?.params ?? null)}|${config?.responseType ?? ''}`;
+  const pending = inflightGets.get(key);
+  if (pending) return pending;
+  const request = rawGet(url, config).finally(() => inflightGets.delete(key));
+  inflightGets.set(key, request);
+  return request;
+}) as typeof apiClient.get;
+
 export default apiClient;
