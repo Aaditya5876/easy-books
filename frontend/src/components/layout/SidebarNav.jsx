@@ -8,7 +8,7 @@ import {
   Kanban, UserCircle, Settings, Shield,
   GraduationCap, School, BookMarked, DollarSign, Trophy,
   Megaphone, CalendarDays, CalendarCheck2,
-  FolderOpen, Library, Home, Bus, Fingerprint
+  FolderOpen, Library, Home, Bus, Fingerprint, LifeBuoy
 } from 'lucide-react';
 import { cn } from "@/lib/utils";
 import { useTranslation } from 'react-i18next';
@@ -26,6 +26,7 @@ const navSections = [
       { icon: Fingerprint, label: 'My Attendance', path: '/my-attendance', module: 'HRMS_ATTENDANCE' },
       { icon: CalendarDays, label: 'My Leave', path: '/my-leave', module: 'HRMS_LEAVE' },
       { icon: BarChart2, label: 'Reports', path: '/reports' },
+      { icon: LifeBuoy, label: 'Help & Guide', path: '/help' },
     ]
   },
   {
@@ -106,6 +107,7 @@ const superAdminNoCompanySections = [
     activeClass: 'bg-sidebar-primary text-sidebar-primary-foreground shadow-sm',
     items: [
       { icon: Layers, label: 'Clients', path: '/settings' },
+      { icon: LifeBuoy, label: 'Help & Guide', path: '/help' },
     ]
   },
 ];
@@ -128,6 +130,7 @@ const schoolNavSections = [
       // only grants TEACHER the Attendance/Academics analytics endpoints, not
       // Fees/Operations/Audit.
       { icon: BarChart2, label: 'Reports', path: '/reports', roles: ['TEACHER'] },
+      { icon: LifeBuoy, label: 'Help & Guide', path: '/help', roles: ['TEACHER'] },
     ]
   },
   {
@@ -340,6 +343,7 @@ export default function SidebarNav({ collapsed, onToggle }) {
                     <Link
                       key={item.path}
                       to={item.path}
+                      data-tour={item.path}
                       className={cn(
                         "flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all group relative",
                         isActive
