@@ -140,7 +140,8 @@ export class AuthController {
   }
 
   private setTokenCookies(res: Response, tokens: { accessToken: string; refreshToken: string; userId: string }) {
-    const secure = process.env.NODE_ENV === 'production';
+    // Vercel doesn't set NODE_ENV=production at runtime, but is always HTTPS.
+    const secure = process.env.NODE_ENV === 'production' || !!process.env.VERCEL;
     res.cookie('accessToken', tokens.accessToken, {
       httpOnly: true, secure, sameSite: 'strict', maxAge: 15 * 60 * 1000,
     });
