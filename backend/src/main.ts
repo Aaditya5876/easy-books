@@ -92,7 +92,7 @@ import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
 import { NestExpressApplication } from '@nestjs/platform-express';
 
-async function bootstrap() {
+async function createApp() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, { bufferLogs: true });
 
   app.useLogger(app.get(Logger));
@@ -168,10 +168,26 @@ async function bootstrap() {
     swaggerOptions: { persistAuthorization: true },
   });
 
+  return { app, envLabel };
+}
+
+// Vercel runs this file as a serverless function and needs an exported
+// handler; the Nest app is built once per warm instance and reused.
+let server: Promise<(req: any, res: any) => void> | undefined;
+export default async function handler(req: any, res: any) {
+  server ??= createApp().then(async ({ app }) => {
+    await app.init();
+    return app.getHttpAdapter().getInstance();
+  });
+  (await server)(req, res);
+}
+
+async function bootstrap() {
+  const { app, envLabel } = await createApp();
   const port = process.env.PORT || 3000;
   await app.listen(port);
   console.log(`OneBook API (${envLabel}) running on http://localhost:${port}`);
   console.log(`Swagger docs at http://localhost:${port}/docs`);
 }
 
-bootstrap();
+if (!process.env.VERCEL) bootstrap();
