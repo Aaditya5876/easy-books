@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import { PrismaService } from '../../../core/db/psql/prisma.client';
 import { InjectQueue } from '@nestjs/bull';
 import { Queue } from 'bull';
@@ -94,7 +94,8 @@ function getDashainMonthNumber(value: string | null | undefined): number | null 
 export class PayrollEngineService {
   constructor(
     private readonly prisma: PrismaService,
-    @InjectQueue(QUEUE_NAMES.PAYROLL) private readonly payrollQueue: Queue,
+    // Absent when QUEUES_ENABLED is false (Vercel) — payroll then runs inline.
+    @Optional() @InjectQueue(QUEUE_NAMES.PAYROLL) private readonly payrollQueue: Queue | undefined,
     private readonly ledgerPosting: LedgerPostingService,
     private readonly notifications: NotificationServiceImpl,
   ) {}
@@ -103,6 +104,11 @@ export class PayrollEngineService {
     const employees = await this.prisma.employee.findMany({
       where: { companyId, status: 'ACTIVE' },
     });
+
+    if (!this.payrollQueue) {
+      await this.calculateAllInline(companyId, employees, month);
+      return { queued: employees.length };
+    }
 
     for (const emp of employees) {
       await this.payrollQueue.add('process-employee-payroll', { companyId, employeeId: emp.id, month });
@@ -122,9 +128,14 @@ export class PayrollEngineService {
       where: { companyId, status: 'ACTIVE' },
     });
 
+    if (!this.payrollQueue) {
+      return { queued: employees.length, results: await this.calculateAllInline(companyId, employees, month) };
+    }
+
+    const queue = this.payrollQueue;
     const jobs = await Promise.all(
       employees.map((emp) =>
-        this.payrollQueue.add('process-employee-payroll', { companyId, employeeId: emp.id, month }),
+        queue.add('process-employee-payroll', { companyId, employeeId: emp.id, month }),
       ),
     );
 
@@ -134,6 +145,20 @@ export class PayrollEngineService {
       .map((r) => r.value);
 
     return { queued: employees.length, results };
+  }
+
+  // Queue-less path: same per-employee calculation the Bull job runs, one at a
+  // time; a failed employee is skipped like a failed job would be.
+  private async calculateAllInline(companyId: string, employees: { id: string }[], month: string) {
+    const results: PayrollResult[] = [];
+    for (const emp of employees) {
+      try {
+        results.push(await this.calculateEmployeePayroll(companyId, emp.id, month));
+      } catch {
+        // matches the queued path, which drops rejected jobs from results
+      }
+    }
+    return results;
   }
 
   async calculateEmployeePayroll(companyId: string, employeeId: string, month: string): Promise<PayrollResult> {

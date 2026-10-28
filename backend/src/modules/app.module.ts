@@ -5,7 +5,7 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { validateEnv } from '../../core/config';
 import { PinoLoggerModule } from '../../core/utils/logger';
-import { BullRootModule } from '../../core/queue/bull.client';
+import { BullRootModule, QUEUES_ENABLED } from '../../core/queue/bull.client';
 import { AuthModule } from './identity-admin/auth.module';
 import { CompanyModule } from './identity-admin/company.module';
 import { UserModule } from './identity-admin/user.module';
@@ -50,10 +50,9 @@ import { PrismaService } from '../../core/db/psql/prisma.client';
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true, validate: validateEnv }),
-    ScheduleModule.forRoot(),
+    ...(QUEUES_ENABLED ? [ScheduleModule.forRoot(), BullRootModule] : []),
     ThrottlerModule.forRoot([{ ttl: 60000, limit: 200 }]),
     PinoLoggerModule,
-    BullRootModule,
     AuthModule,
     CompanyModule,
     InventoryModule,
