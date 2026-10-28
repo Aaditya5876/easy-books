@@ -94,7 +94,7 @@ import { NestExpressApplication } from '@nestjs/platform-express';
 
 // Local tsc (no esModuleInterop) yields the function itself; Vercel's
 // compiler wraps it as { default }. Accept either.
-const cookieParser: typeof cookieParserModule =
+const cookieParser: (secret?: string | string[]) => any =
   (cookieParserModule as any).default ?? cookieParserModule;
 
 async function createApp() {
