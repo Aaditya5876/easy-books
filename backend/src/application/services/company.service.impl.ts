@@ -302,8 +302,8 @@ export class CompanyServiceImpl {
     workingDaysPerMonth?: number;
     overtimeRatePerHour?: number;
     attendanceDeductionEnabled?: boolean;
-    standardStartTime?: string;
-    standardEndTime?: string;
+    standardStartTime?: string | null;
+    standardEndTime?: string | null;
   }) {
     await this.assertMembership(companyId, userId, role);
     return this.prisma.companyPayrollSettings.upsert({

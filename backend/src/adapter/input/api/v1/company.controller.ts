@@ -1,3 +1,5 @@
+import { UpdatePayrollSettingsSchema, UpdatePayrollSettingsDTO } from '@easy-books/shared';
+import { ZodValidationPipe } from '../../../../modules/pipes/zod-validation.pipe';
 import { Controller, Get, Post, Put, Patch, Delete, Body, Param, Req } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { CompanyServiceImpl } from '../../../../application/services/company.service.impl';
@@ -126,7 +128,7 @@ export class CompanyController {
   @Patch(':id/payroll-settings')
   @Roles('ADMIN')
   @ApiOperation({ summary: 'Create or update payroll settings (SSF %, PIT, Dashain bonus)' })
-  upsertPayrollSettings(@Param('id') id: string, @Body() body: any, @Req() req: any) {
+  upsertPayrollSettings(@Param('id') id: string, @Body(new ZodValidationPipe(UpdatePayrollSettingsSchema)) body: UpdatePayrollSettingsDTO, @Req() req: any) {
     return this.service.upsertPayrollSettings(id, req.user.sub, req.user.role, body);
   }
 }

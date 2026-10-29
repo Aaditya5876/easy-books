@@ -51,7 +51,11 @@ import { PrismaService } from '../../core/db/psql/prisma.client';
   imports: [
     ConfigModule.forRoot({ isGlobal: true, validate: validateEnv }),
     ...(QUEUES_ENABLED ? [ScheduleModule.forRoot(), BullRootModule] : []),
-    ThrottlerModule.forRoot([{ ttl: 60000, limit: 200 }]),
+    ThrottlerModule.forRoot({
+      throttlers: [{ ttl: 60000, limit: 200 }],
+      // The e2e suite logs in dozens of users per minute from one IP.
+      skipIf: () => process.env.NODE_ENV === 'test',
+    }),
     PinoLoggerModule,
     AuthModule,
     CompanyModule,

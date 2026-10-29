@@ -315,7 +315,7 @@ export default function Payroll() {
         {canEdit && (
           <Button size="sm" variant="outline" onClick={e => { e.stopPropagation(); setShowDetail(r); setDetailOtherDed(num(r.otherDeductions)); }}>{t('payroll.details', { defaultValue: 'Details' })}</Button>
         )}
-        {canProcessPayroll && r.status === 'PROCESSED' && (
+        {canProcessPayroll && r.status === 'PROCESSED' && !r.isOnHold && (
           <Button size="sm" variant="outline" onClick={e => { e.stopPropagation(); markPaid(r.id); }}>
             <CheckCircle2 className="w-3 h-3 mr-1" /> {t('payroll.markPaid', { defaultValue: 'Mark Paid' })}
           </Button>
@@ -532,7 +532,7 @@ export default function Payroll() {
                     )}
                     <div className="flex justify-between items-center">
                       <span>{t('payroll.otherDeductions', { defaultValue: 'Other Deductions' })}</span>
-                      <SmartNumberInput value={detailOtherDed} onChange={e => setDetailOtherDed(parseFloat(e.target.value) || 0)} className="w-32 h-8 text-sm text-right" />
+                      <SmartNumberInput value={detailOtherDed} min={0} disabled={showDetail.status === 'PAID'} onChange={e => setDetailOtherDed(Math.max(0, parseFloat(e.target.value) || 0))} className="w-32 h-8 text-sm text-right" />
                     </div>
                     <div className="border-t pt-2.5 flex justify-between items-center">
                       <span className="font-bold text-base">{t('payroll.netSalary', { defaultValue: 'Net Salary' })}</span>
@@ -544,7 +544,7 @@ export default function Payroll() {
             </motion.div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setShowDetail(null)}>{t('payroll.close', { defaultValue: 'Close' })}</Button>
-              <Button variant="outline" onClick={savePayrollAdjustments} className="gap-2"><Save className="w-4 h-4" />{t('payroll.saveAdjustments', { defaultValue: 'Save Adjustments' })}</Button>
+              <Button variant="outline" onClick={savePayrollAdjustments} disabled={showDetail.status === 'PAID'} title={showDetail.status === 'PAID' ? t('payroll.paidLocked', { defaultValue: 'Paid payslips can no longer be changed' }) : undefined} className="gap-2"><Save className="w-4 h-4" />{t('payroll.saveAdjustments', { defaultValue: 'Save Adjustments' })}</Button>
               <Button onClick={() => exportPDF(showDetail)} className="gap-2"><Download className="w-4 h-4" />{t('payroll.exportPdf', { defaultValue: 'Export PDF' })}</Button>
             </DialogFooter>
           </DialogContent>

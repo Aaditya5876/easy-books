@@ -4,7 +4,8 @@ import { ConfigService } from '@nestjs/config';
 // Serverless (Vercel) has no Redis and no long-lived worker to drain a queue,
 // so queues and in-process cron timers are off there: payroll runs inline and
 // scheduled tasks are triggered by Vercel Cron via CronController.
-export const QUEUES_ENABLED = !process.env.VERCEL;
+// Tests take the same inline path so payroll results are deterministic.
+export const QUEUES_ENABLED = !process.env.VERCEL && process.env.NODE_ENV !== 'test';
 
 export const BullRootModule =BullModule.forRootAsync({
   inject: [ConfigService],
