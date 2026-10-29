@@ -7,12 +7,16 @@ import { resolveLinkedEmployee } from './self-service-employee.util';
 // entry points mark attendance identically. See self-service-employee.util.ts
 // for how a logged-in User is mapped to their Employee record.
 
+// Always Nepal time: the server's own clock is UTC on Vercel, which would
+// record a 9:00 check-in as 03:15 and put pre-5:45am check-ins on yesterday.
+const TZ = 'Asia/Kathmandu';
+
 function todayDateOnly(): Date {
-  return new Date(new Date().toISOString().split('T')[0]);
+  return new Date(new Intl.DateTimeFormat('en-CA', { timeZone: TZ }).format(new Date()));
 }
 
 function nowTime(): string {
-  return new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false });
+  return new Date().toLocaleTimeString('en-GB', { timeZone: TZ, hour: '2-digit', minute: '2-digit', hour12: false });
 }
 
 export async function getSelfAttendanceToday(prisma: PrismaService, companyId: string, email: string) {
