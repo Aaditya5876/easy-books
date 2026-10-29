@@ -7,7 +7,7 @@ import { RequiresModule } from '../../../../modules/decorators/requires-module.d
 @ApiTags('Petty Cash')
 @ApiBearerAuth()
 @Roles('ACCOUNTANT', 'ADMIN')
-@RequiresModule('FINANCE')
+@RequiresModule('FINANCE_TRANSACTIONS')
 @Controller('api/v1/petty-cash')
 export class PettyCashController {
   constructor(private readonly service: PettyCashServiceImpl) {}

@@ -7,7 +7,7 @@ import { RequiresModule } from '../../../../modules/decorators/requires-module.d
 @ApiTags('Fiscal Year')
 @ApiBearerAuth()
 @Roles('ACCOUNTANT', 'ADMIN')
-@RequiresModule('FINANCE')
+@RequiresModule('FINANCE_LEDGER')
 @Controller('api/v1/fiscal-year')
 export class FiscalYearController {
   constructor(private readonly service: FiscalYearService) {}

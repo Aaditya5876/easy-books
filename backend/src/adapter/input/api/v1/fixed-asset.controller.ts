@@ -7,7 +7,7 @@ import { RequiresModule } from '../../../../modules/decorators/requires-module.d
 @ApiTags('Fixed Assets')
 @ApiBearerAuth()
 @Roles('ACCOUNTANT', 'ADMIN')
-@RequiresModule('FINANCE')
+@RequiresModule('FINANCE_LEDGER')
 @Controller('api/v1/fixed-assets')
 export class FixedAssetController {
   constructor(private readonly service: FixedAssetServiceImpl) {}

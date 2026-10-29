@@ -110,6 +110,10 @@ export const leaveApi = {
   listRequests: (params?: { employeeId?: string; status?: string }) =>
     apiClient.get('/api/v1/leave/requests', { params: { companyId: companyId(), ...params } }),
   approve: (id: string) => apiClient.patch(`/api/v1/leave/requests/${id}/approve`, {}, { params: { companyId: companyId() } }),
+  // Balances — ACCOUNTANT/ADMIN override one employee's yearly allowance.
+  balances: (employeeId: string) => apiClient.get(`/api/v1/leave/balances/${employeeId}`, { params: { companyId: companyId() } }),
+  allocate: (data: { employeeId: string; leaveTypeId: string; fiscalYear: string; totalDays: number }) =>
+    apiClient.post('/api/v1/leave/balances/allocate', data, { params: { companyId: companyId() } }),
   reject: (id: string) => apiClient.patch(`/api/v1/leave/requests/${id}/reject`, {}, { params: { companyId: companyId() } }),
 };
 

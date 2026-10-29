@@ -190,7 +190,20 @@ export class PayrollEngineService {
       },
     });
 
-    const absentDays = attendance.filter((a) => a.status === 'ABSENT').length;
+    // Approved unpaid leave counts as absence; paid leave doesn't. Read from the
+    // requests (attendance only says LEAVE) and clipped to this month.
+    const unpaidLeave = await this.prisma.leaveRequest.findMany({
+      where: { employeeId, companyId, status: 'APPROVED', leaveType: { isPaid: false }, startDate: { lt: endAd }, endDate: { gte: startAd } },
+    });
+    const unpaidLeaveDays = unpaidLeave.reduce((sum, r) => {
+      let days = 0;
+      const cur = new Date(Math.max(r.startDate.getTime(), startAd.getTime()));
+      const last = new Date(Math.min(r.endDate.getTime(), endAd.getTime() - 1));
+      for (; cur <= last; cur.setUTCDate(cur.getUTCDate() + 1)) if (cur.getUTCDay() !== 6) days++;
+      return sum + days;
+    }, 0);
+
+    const absentDays = attendance.filter((a) => a.status === 'ABSENT').length + unpaidLeaveDays;
     const halfDays = attendance.filter((a) => a.status === 'HALF_DAY').length;
 
     const basicSalary = Number(employee.basicSalary);
