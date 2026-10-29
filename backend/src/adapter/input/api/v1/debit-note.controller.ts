@@ -1,3 +1,5 @@
+import { ZodValidationPipe } from '../../../../modules/pipes/zod-validation.pipe';
+import { CreateDebitNoteSchema } from '@easy-books/shared';
 import { Controller, Get, Post, Patch, Body, Param, Query } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { DebitNoteServiceImpl } from '../../../../application/services/debit-note.service.impl';
@@ -27,7 +29,7 @@ export class DebitNoteController {
   @Post()
   @ApiOperation({ summary: 'Create a debit note' })
   @ApiQuery({ name: 'companyId', required: true })
-  create(@Query('companyId') companyId: string, @Body() body: any) {
+  create(@Query('companyId') companyId: string, @Body(new ZodValidationPipe(CreateDebitNoteSchema)) body: any) {
     return this.service.create(companyId, body);
   }
 

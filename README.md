@@ -195,6 +195,27 @@ This starts both backend and frontend together.
 
 ---
 
+## Tests
+
+New features and bug fixes are written test-first: add a failing test that
+describes the behaviour, then make it pass.
+
+```bash
+npm test                         # everything (backend + frontend)
+npm test --workspace=backend     # API tests (needs the Docker Postgres from Step 3)
+npm test --workspace=frontend    # Vitest unit tests
+```
+
+- **Backend** (`backend/test/`): boots the real NestJS app against a separate
+  `easybooks_test` database (created and migrated automatically; your dev data
+  is never touched). Email, SMS and AI are stubbed. `helpers/app.ts` and
+  `helpers/school.ts` create schools, users of any role and billed students in
+  one line. Pure logic goes in `test/unit/*.spec.ts`.
+- **Frontend** (`frontend/src/**/*.test.js`): Vitest for logic such as the
+  guide/tour content and the API client.
+
+---
+
 ## Production deployment guide
 
 For production deployment instructions, see `docs/PRODUCTION_DEPLOYMENT_GUIDE.md`.

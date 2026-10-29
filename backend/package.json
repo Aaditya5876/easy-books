@@ -11,7 +11,7 @@
     "prebuild": "npm run build --prefix ../shared",
     "build": "prisma generate && nest build",
     "start": "node dist/backend/src/main",
-    "test": "jest",
+    "test": "jest --config test/jest-e2e.json --runInBand",
     "test:watch": "jest --watch",
     "migrate": "prisma migrate deploy",
     "migrate:dev": "prisma migrate dev",
