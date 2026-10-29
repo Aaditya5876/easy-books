@@ -168,7 +168,7 @@ export const GUIDE_SECTIONS = [
       { table: [
         ['Admin', 'Everything: settings, users, payroll, deleting records.'],
         ['Accountant', 'Fees, ledger, transactions, payroll and reports. Cannot change settings or users.'],
-        ['Staff', 'Front-desk work: students, fees, attendance, notices. Can be given extra duties with tags (HR, Library, Hostel, Transport).'],
+        ['Staff', 'Front-desk work: students, fees, attendance, notices. Can be given extra duties with tags: HR, Library, Hostel, Transport, or Front Office (gives parents and students their portal login).'],
         ['Teacher', 'Their classes, students, attendance, homework, exams marks, routine, notices and their own attendance and leave.'],
         ['Super Admin', 'The platform owner (GeoInfosys). Creates clients and can step into any of them.'],
       ] },
@@ -233,6 +233,7 @@ export const GUIDE_SECTIONS = [
         'Search and filter by class at the top of the list.',
       ] },
       { p: 'At the end of the year, use "Promote Students" to move a whole class up in one step.' },
+      { p: 'Removing a student marks them Inactive: they are no longer billed, but their records, invoices and results are kept. Use the Reactivate button on their row to bring them back.' },
       { p: 'Portal access: open a student and set their portal login. Students and parents can then log in at the portal to see attendance, fees, results, homework and notices, and pay fees online with eSewa or Khalti.' },
     ],
   },
@@ -309,7 +310,7 @@ export const GUIDE_SECTIONS = [
         ['Packages', 'Ready-made bundles of fees you can give to a student.'],
         ['Fee Profile', 'One student\'s fees, including scholarships. Bus and hostel fees are detected automatically.'],
         ['Fee Invoices', 'The bills. "Run Billing" creates this month\'s invoice for every student at once.'],
-        ['Pending Proofs', 'Online payment screenshots from parents, waiting for you to check.'],
+        ['Pending Proofs', 'Payment screenshots from parents, waiting for you to check. (Payments made with the eSewa/Khalti buttons in the portal are confirmed automatically.)'],
       ] },
       { steps: [
         'Create your Fee Heads.',
@@ -394,7 +395,7 @@ export const GUIDE_SECTIONS = [
         'To let someone log in, go to Settings → Users → "Invite User" and choose their role.',
       ] },
       { tip: 'Not every employee needs a login: drivers, guards and cleaners can exist as employees only, for attendance and payroll.' },
-      { p: 'Staff tags give a Staff login extra duties: HR (employees and staff attendance), Library, Hostel or Transport.' },
+      { p: 'Staff tags give a Staff login extra duties: HR (employees and staff attendance), Library, Hostel, Transport, or Front Office (setting up student and parent portal access).' },
     ],
   },
   {
@@ -404,7 +405,8 @@ export const GUIDE_SECTIONS = [
     blocks: [
       { list: [
         'My Attendance: tap "Check In" when you arrive and "Check Out" when you leave.',
-        'My Leave: request leave. An admin or accountant approves it.',
+        'My Leave: request leave. An admin or accountant approves it. Approved days show as Leave in staff attendance; unpaid leave is deducted from salary.',
+        "Leave balances: each leave type's days per year is everyone's allowance. Admins can change one person's allowance in My Leave → Leave Balances.",
         'Staff Attendance (HR): see and correct everyone\'s attendance, or mark it for staff without a login.',
         'You can also mark attendance from the login screen ("Quick Attendance") without signing in fully.',
       ] },
@@ -421,7 +423,8 @@ export const GUIDE_SECTIONS = [
         'HR → Payroll → choose the month → "Generate Payroll".',
         'Review each payslip. SSF and income tax are calculated for you, and absences are deducted using your working-day settings.',
       ] },
-      { p: 'Salaries are posted to the ledger automatically. Payroll can also run by itself every month (see Automation).' },
+      { p: 'Salaries are posted to the ledger automatically. Payroll can also run by itself every month (see Automation); re-running it never changes a payslip that is paid, on hold, or adjusted.' },
+      { tip: 'Hold a salary to stop it being paid until you release it. A paid payslip is locked and can no longer be adjusted.' },
     ],
   },
 
@@ -510,7 +513,7 @@ export const GUIDE_SECTIONS = [
         ['Why is a menu item missing?', 'Either your role cannot use it, or your package does not include it. Ask your admin, or GeoInfosys to upgrade the package.'],
         ['Why does everything show zero?', 'Nothing has been added yet. Follow "First steps" and the numbers fill in.'],
         ['Which dates does the app use?', 'Bikram Sambat (BS) for fee months and fiscal years. English (AD) dates are shown next to them.'],
-        ['I deleted something by mistake.', 'Admins can restore it from Settings → Recycle Bin.'],
+        ['I deleted something by mistake.', 'Most records can be restored from Settings → Recycle Bin. A removed student is just marked Inactive — use Reactivate on their row.'],
         ['How do I switch to Nepali?', 'Click EN in the top bar.'],
         ['How do parents pay online?', 'In the student portal, with eSewa or Khalti. You confirm screenshot payments under Fees → Pending Proofs.'],
         ['Can I see the tour again?', 'Yes: Help & Guide → "Replay the tour".'],

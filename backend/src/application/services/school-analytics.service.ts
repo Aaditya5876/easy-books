@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { nepalToday, nepalDateKey, addDays } from '../../../core/utils/nepal-time';
 import { PrismaService } from '../../../core/db/psql/prisma.client';
 import { AttendanceServiceImpl } from './attendance.service.impl';
 import { PayrollServiceImpl } from './payroll.service.impl';
@@ -32,12 +33,9 @@ export class SchoolAnalyticsService {
   // ── Dashboard extras — merged into GET school/dashboard ─────────────────────
 
   async dashboardExtras(companyId: string) {
-    const now = new Date();
-    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const trendStart = new Date(todayStart);
-    trendStart.setDate(trendStart.getDate() - 29);
-    const weekEnd = new Date(todayStart);
-    weekEnd.setDate(weekEnd.getDate() + 7);
+    const todayStart = nepalToday();
+    const trendStart = addDays(todayStart, -29);
+    const weekEnd = addDays(todayStart, 7);
 
     const [trendRaw, classes, todayRaw, feeMonthsRaw, upcomingExams, upcomingEvents, homeworkDue] = await Promise.all([
       this.prisma.studentAttendance.groupBy({
@@ -378,7 +376,7 @@ export class SchoolAnalyticsService {
 
   async operationsReport(companyId: string, startDate?: string, endDate?: string) {
     const now = new Date();
-    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const monthStart = new Date(`${nepalDateKey().slice(0, 7)}-01T00:00:00.000Z`);
     let createdAtRange: { gte?: Date; lte?: Date } | undefined;
     if (startDate || endDate) {
       createdAtRange = {};

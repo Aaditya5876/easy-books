@@ -78,6 +78,7 @@ export async function createCompany(prisma: PrismaService, opts: { name?: string
 }
 
 let hashed: string | undefined;
+let userSeq = 0;
 export async function createUser(
   prisma: PrismaService,
   companyId: string,
@@ -86,7 +87,7 @@ export async function createUser(
 ) {
   hashed ??= await bcrypt.hash(PASSWORD, 4);
   const tagPart = opts.tags?.length ? `-${opts.tags.join('-').toLowerCase()}` : '';
-  const email = opts.email ?? `${role.toLowerCase()}${tagPart}-${companyId.slice(0, 6)}@test.local`;
+  const email = opts.email ?? `${role.toLowerCase()}${tagPart}-${companyId.slice(0, 6)}-${++userSeq}@test.local`;
   return prisma.user.create({
     data: {
       email, name: opts.name ?? `${role} user`, password: hashed, role, staffTags: opts.tags ?? [],

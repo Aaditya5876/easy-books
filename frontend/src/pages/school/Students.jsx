@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Search, Pencil, Trash2, GraduationCap, X, ArrowRight, KeyRound, Upload, ChevronLeft, ChevronRight, Copy, Check } from 'lucide-react';
+import { Plus, Search, Pencil, Trash2, GraduationCap, X, ArrowRight, KeyRound, Upload, ChevronLeft, ChevronRight, Copy, Check, RotateCcw } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import BulkImportDialog from '@/components/shared/BulkImportDialog';
 import { STUDENT_FIELDS } from '@/components/shared/bulkImportFields';
@@ -45,9 +45,12 @@ function StudentDialog({ open, onClose, initial, classes, companyId }) {
 
   function handleSubmit(e) {
     e.preventDefault();
-    if (!form.name.trim()) {
-      setErrors({ name: t('students.nameRequired', { defaultValue: 'Student name is required' }) });
-      toast.error(t('students.nameRequired', { defaultValue: 'Student name is required' }));
+    const errs = {};
+    if (!form.name.trim()) errs.name = t('students.nameRequired', { defaultValue: 'Student name is required' });
+    if (!form.classId) errs.classId = t('students.classRequired', { defaultValue: 'Class is required' });
+    if (Object.keys(errs).length) {
+      setErrors(errs);
+      toast.error(Object.values(errs)[0]);
       return;
     }
     setErrors({});
@@ -78,11 +81,11 @@ function StudentDialog({ open, onClose, initial, classes, companyId }) {
             </div>
 
             <div className="space-y-1.5">
-              <Label>{t('students.class', { defaultValue: 'Class' })}</Label>
+              <Label>{t('students.classRequiredLabel', { defaultValue: 'Class *' })}</Label>
               <select
                 className="w-full border rounded-md px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring"
                 value={form.classId}
-                onChange={e => set('classId', e.target.value)}
+                onChange={e => { set('classId', e.target.value); if (errors.classId) setErrors(er => ({ ...er, classId: undefined })); }}
               >
                 <option value="">{t('students.selectClass', { defaultValue: 'Select class…' })}</option>
                 {classes.map(c => (
@@ -91,6 +94,7 @@ function StudentDialog({ open, onClose, initial, classes, companyId }) {
                   </option>
                 ))}
               </select>
+              {errors.classId && <p className="text-xs text-red-600">{errors.classId}</p>}
             </div>
 
             <div className="space-y-1.5">
@@ -364,9 +368,21 @@ export default function Students() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['students'] });
       qc.invalidateQueries({ queryKey: ['school-dashboard'] });
-      toast.success(t('students.studentRemoved', { defaultValue: 'Student removed' }));
+      toast.success(t('students.studentMarkedInactive', { defaultValue: 'Student marked inactive' }));
     },
     onError: (err) => toast.error(err?.response?.data?.message || t('students.failedToRemoveStudent', { defaultValue: 'Failed to remove student' })),
+  });
+
+  // "Remove" only marks a student INACTIVE (history, invoices and results are
+  // kept), so it must be reversible from here too.
+  const reactivate = useMutation({
+    mutationFn: (id) => studentsApi.update(id, { status: 'ACTIVE' }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['students'] });
+      qc.invalidateQueries({ queryKey: ['school-dashboard'] });
+      toast.success(t('students.studentReactivated', { defaultValue: 'Student reactivated' }));
+    },
+    onError: (e) => toast.error(e?.response?.data?.message || t('students.reactivateFailed', { defaultValue: 'Could not reactivate the student' })),
   });
 
   const classLabel = (classId) => {
@@ -544,10 +560,19 @@ export default function Students() {
                             <Pencil className="w-3.5 h-3.5" />
                           </button>
                         )}
-                        {canDeleteRecords && (
+                        {canEditRecords && student.status === 'INACTIVE' && (
+                          <button
+                            onClick={() => reactivate.mutate(student.id)}
+                            title={t('students.reactivate', { defaultValue: 'Reactivate' })}
+                            className="p-1.5 rounded hover:bg-emerald-50 text-muted-foreground hover:text-emerald-600 transition-colors"
+                          >
+                            <RotateCcw className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                        {canDeleteRecords && student.status !== 'INACTIVE' && (
                           <button
                             onClick={async () => {
-                              const ok = await confirm({ description: t('students.confirmRemove', { defaultValue: 'Remove {{name}}?', name: student.name }), variant: 'destructive' });
+                              const ok = await confirm({ description: t('students.confirmMarkInactive', { defaultValue: 'Mark {{name}} as inactive? Their records are kept and you can reactivate them anytime.', name: student.name }), variant: 'destructive' });
                               if (!ok) return;
                               remove.mutate(student.id);
                             }}

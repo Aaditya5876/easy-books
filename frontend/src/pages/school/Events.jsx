@@ -78,9 +78,10 @@ function EventDialog({ open, onClose, event, mode = 'AD' }) {
     const errs = {};
     if (!form.title.trim()) errs.title = t('events.titleRequired', { defaultValue: 'Event title is required' });
     if (!form.startDate) errs.startDate = t('events.startDateRequired', { defaultValue: 'Start date is required' });
+    if (form.startDate && form.endDate && form.endDate < form.startDate) errs.endDate = t('events.endBeforeStart', { defaultValue: 'End date cannot be before the start date' });
     if (Object.keys(errs).length) {
       setErrors(errs);
-      return toast.error(t('events.titleStartDateRequired', { defaultValue: 'Title and start date are required' }));
+      return toast.error(Object.values(errs)[0]);
     }
     setErrors({});
     save.mutate({ ...form, endDate: form.endDate || undefined });
@@ -184,7 +185,7 @@ function EventDialog({ open, onClose, event, mode = 'AD' }) {
 
 export default function Events({ mode: propMode = 'AD' }) {
   const { t } = useTranslation();
-  const { canEdit, canDeleteRecords } = useRole();
+  const { canEditRecords: canEdit, canDeleteRecords } = useRole();
   const qc = useQueryClient();
   const [dialog, setDialog] = useState({ open: false, event: null });
   const [mode, setMode] = useState(propMode);
