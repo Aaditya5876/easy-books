@@ -54,8 +54,6 @@ export default function PaymentReturn() {
   const [status, setStatus] = useState('verifying');
 
   const gateway   = searchParams.get('gateway');
-  const invoiceId = searchParams.get('invoiceId');
-  const companyId = JSON.parse(localStorage.getItem('portal_student') || '{}').companyId || '';
 
   useEffect(() => {
     async function verify() {
@@ -64,12 +62,12 @@ export default function PaymentReturn() {
           const data   = searchParams.get('data');
           const failed = searchParams.get('status') === 'failed';
           if (failed || !data) { setStatus('failed'); return; }
-          await portalApi.verifyEsewa({ data, invoiceId, companyId });
+          await portalApi.verifyEsewa({ data });
           setStatus('success');
         } else if (gateway === 'khalti') {
           const pidx = searchParams.get('pidx');
           if (!pidx) { setStatus('failed'); return; }
-          await portalApi.verifyKhalti({ pidx, invoiceId, companyId });
+          await portalApi.verifyKhalti({ pidx });
           setStatus('success');
         } else {
           setStatus('failed');

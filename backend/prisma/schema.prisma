@@ -1328,6 +1328,7 @@ model FeeInvoice {
   updatedAt   DateTime         @updatedAt
 
   items    FeeInvoiceItem[]
+  paymentIntents PaymentIntent[]
   payments FeePayment[]
 
   @@unique([companyId, invoiceNo])
@@ -1812,4 +1813,25 @@ model AuditLog {
   @@index([module, entityId])
   @@index([userId])
   @@map("audit_logs")
+}
+
+// An online (eSewa/Khalti) payment the portal started. Verification looks the
+// intent up by the gateway's reference instead of trusting the browser, so a
+// payment can only settle its own invoice, for its own amount, exactly once.
+model PaymentIntent {
+  id          String     @id @default(uuid())
+  companyId   String
+  invoiceId   String
+  invoice     FeeInvoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  studentId   String
+  gateway     String // ESEWA | KHALTI
+  reference   String     @unique // eSewa transaction_uuid / Khalti pidx
+  amount      Decimal    @db.Decimal(12, 2)
+  status      String     @default("PENDING") // PENDING | COMPLETED | FAILED
+  paymentId   String?
+  completedAt DateTime?
+  createdAt   DateTime   @default(now())
+
+  @@index([invoiceId])
+  @@map("payment_intents")
 }

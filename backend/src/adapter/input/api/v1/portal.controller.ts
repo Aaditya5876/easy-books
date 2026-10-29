@@ -206,42 +206,43 @@ export class PortalController {
     return this.portalNotifications.markAllRead(req.portalUser.studentId, req.portalUser.companyId);
   }
 
-  // ── Payment — eSewa ────────────────────────────────────────────────────────
+  // ── Payment — eSewa / Khalti ──────────────────────────────────────────────
+  // The verify routes are declared before the :invoiceId routes — Express
+  // matches in order, and "verify" would otherwise be taken as an invoice id.
 
   @Public()
   @UseGuards(PortalGuard)
-  @Post('pay/esewa/:invoiceId')
-  initiateEsewa(
-    @Param('invoiceId') invoiceId: string,
-    @Req() req: any,
-    @Body() body: { frontendBaseUrl: string },
-  ) {
-    return this.paymentService.initiateEsewa(invoiceId, req.portalUser.companyId, body.frontendBaseUrl);
+  @Get('payment-gateways')
+  paymentGateways() {
+    return this.paymentService.enabledGateways();
   }
 
-  // Called by frontend after eSewa redirects back (public — no portal token at this point)
+  // Called after the gateway redirects back. Public (no portal token needed):
+  // the signed callback / pidx is checked against our own PaymentIntent and the
+  // gateway itself, never against ids the browser sends.
   @Public()
   @Post('pay/esewa/verify')
-  verifyEsewa(@Body() body: { data: string; invoiceId: string; companyId: string }) {
-    return this.paymentService.verifyEsewa(body.data, body.invoiceId, body.companyId);
-  }
-
-  // ── Payment — Khalti ───────────────────────────────────────────────────────
-
-  @Public()
-  @UseGuards(PortalGuard)
-  @Post('pay/khalti/:invoiceId')
-  initiateKhalti(
-    @Param('invoiceId') invoiceId: string,
-    @Req() req: any,
-    @Body() body: { frontendBaseUrl: string },
-  ) {
-    return this.paymentService.initiateKhalti(invoiceId, req.portalUser.companyId, body.frontendBaseUrl);
+  verifyEsewa(@Body() body: { data: string }) {
+    return this.paymentService.verifyEsewa(body.data);
   }
 
   @Public()
   @Post('pay/khalti/verify')
-  verifyKhalti(@Body() body: { pidx: string; invoiceId: string; companyId: string }) {
-    return this.paymentService.verifyKhalti(body.pidx, body.invoiceId, body.companyId);
+  verifyKhalti(@Body() body: { pidx: string }) {
+    return this.paymentService.verifyKhalti(body.pidx);
+  }
+
+  @Public()
+  @UseGuards(PortalGuard)
+  @Post('pay/esewa/:invoiceId')
+  initiateEsewa(@Param('invoiceId') invoiceId: string, @Req() req: any) {
+    return this.paymentService.initiateEsewa(invoiceId, req.portalUser, req.headers.origin);
+  }
+
+  @Public()
+  @UseGuards(PortalGuard)
+  @Post('pay/khalti/:invoiceId')
+  initiateKhalti(@Param('invoiceId') invoiceId: string, @Req() req: any) {
+    return this.paymentService.initiateKhalti(invoiceId, req.portalUser, req.headers.origin);
   }
 }
