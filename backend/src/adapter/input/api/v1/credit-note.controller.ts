@@ -1,3 +1,5 @@
+import { ZodValidationPipe } from '../../../../modules/pipes/zod-validation.pipe';
+import { CreateCreditNoteSchema } from '@easy-books/shared';
 import { Controller, Get, Post, Patch, Body, Param, Query } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { CreditNoteServiceImpl } from '../../../../application/services/credit-note.service.impl';
@@ -27,7 +29,7 @@ export class CreditNoteController {
   @Post()
   @ApiOperation({ summary: 'Create a credit note' })
   @ApiQuery({ name: 'companyId', required: true })
-  create(@Query('companyId') companyId: string, @Body() body: any) {
+  create(@Query('companyId') companyId: string, @Body(new ZodValidationPipe(CreateCreditNoteSchema)) body: any) {
     return this.service.create(companyId, body);
   }
 

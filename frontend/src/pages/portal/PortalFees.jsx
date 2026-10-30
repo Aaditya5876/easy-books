@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
 import { portalApi } from '@/api';
-import { DollarSign, Loader2, Printer, Receipt, QrCode, FileText, Upload, X, Clock, AlertCircle } from 'lucide-react';
+import { DollarSign, Loader2, Printer, Receipt, QrCode, FileText, Upload, X, Clock, AlertCircle, Wallet } from 'lucide-react';
 import { toast } from 'sonner';
 import apiClient from '@/api/client';
 import { printFeeReceipt } from '@/lib/printFeeReceipt';
@@ -201,6 +201,41 @@ export default function PortalFees() {
     queryKey: ['portal-fees'],
     queryFn: () => portalApi.fees().then(r => r.data),
   });
+
+  const { data: gateways = {} } = useQuery({
+    queryKey: ['portal-payment-gateways'],
+    queryFn: () => portalApi.paymentGateways().then(r => r.data),
+  });
+  const [startingGateway, setStartingGateway] = useState(null); // `${invoiceId}:${gateway}` while redirecting
+
+  // eSewa takes a signed form POST; Khalti returns a hosted payment page URL.
+  // Both come back to /portal/payment/return, which verifies with the server.
+  async function payOnline(invoice, gateway) {
+    setStartingGateway(`${invoice.id}:${gateway}`);
+    try {
+      if (gateway === 'esewa') {
+        const { data } = await portalApi.initiateEsewa(invoice.id);
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = data.paymentUrl;
+        Object.entries(data.formFields).forEach(([name, value]) => {
+          const input = document.createElement('input');
+          input.type = 'hidden';
+          input.name = name;
+          input.value = value;
+          form.appendChild(input);
+        });
+        document.body.appendChild(form);
+        form.submit();
+      } else {
+        const { data } = await portalApi.initiateKhalti(invoice.id);
+        window.location.href = data.paymentUrl;
+      }
+    } catch (err) {
+      setStartingGateway(null);
+      toast.error(err?.response?.data?.message || t('portal.onlinePaymentFailed', { defaultValue: 'Could not start the online payment. Please try again.' }));
+    }
+  }
 
   const totalDue = fees.reduce((s, f) => s + Math.max(0, Number(f.totalAmount) - Number(f.paidAmount)), 0);
   const fmtAmt = (n) => `Rs. ${Number(n).toLocaleString('en-NP', { minimumFractionDigits: 2 })}`;
@@ -412,6 +447,24 @@ export default function PortalFees() {
                               </div>
                             );
                           })}
+                        </div>
+                      )}
+
+                      {due > 0 && (gateways.esewa || gateways.khalti) && (
+                        <div className="grid grid-cols-2 gap-2">
+                          {[['esewa', 'eSewa', 'bg-green-600 hover:bg-green-700'], ['khalti', 'Khalti', 'bg-purple-700 hover:bg-purple-800']]
+                            .filter(([key]) => gateways[key])
+                            .map(([key, label, color]) => (
+                              <button
+                                key={key}
+                                onClick={() => payOnline(f, key)}
+                                disabled={!!startingGateway}
+                                className={`h-9 rounded-xl text-xs font-semibold text-white ${color} transition-colors flex items-center justify-center gap-1.5 disabled:opacity-60`}
+                              >
+                                {startingGateway === `${f.id}:${key}` ? <Loader2 className="w-3 h-3 animate-spin" /> : <Wallet className="w-3 h-3" />}
+                                {t('portal.payWith', { defaultValue: 'Pay with {{gateway}}', gateway: label })}
+                              </button>
+                            ))}
                         </div>
                       )}
 

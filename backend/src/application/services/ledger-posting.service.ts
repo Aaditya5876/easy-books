@@ -20,6 +20,7 @@ const SYSTEM_ACCOUNTS = {
   SSF_PAYABLE: 'SSF Payable',
   TAX_PAYABLE: 'Tax Payable',
   SALARY_PAYABLE: 'Salary Payable',
+  PAYROLL_DEDUCTIONS: 'Other Payroll Deductions',
   CASH_IN_HAND: 'Cash in Hand',
   BANK: 'Bank Account',
   BANK_GUARANTEE_ASSET: 'Bank Guarantee — Contingent Asset',
@@ -563,9 +564,13 @@ export class LedgerPostingService {
     const date = new Date();
     const dateBs = adToBs(date);
 
-    // Effective gross = gross - absent deductions + overtime + dashain bonus
+    // Effective gross = gross - absent/short-hours deductions + overtime + dashain bonus
     const dashainBonus = payroll.isDashainBonus ? Number(payroll.basicSalary) : 0;
-    const effectiveGross = Number(payroll.grossSalary) - Number(payroll.absentDeduction) + Number(payroll.overtimeAmount) + dashainBonus;
+    const effectiveGross = Number(payroll.grossSalary) - Number(payroll.absentDeduction) - Number(payroll.hoursShortfallDeduction)
+      + Number(payroll.overtimeAmount) + dashainBonus;
+    // Withheld from the employee (advance recovery, fines...) — owed elsewhere,
+    // not to the employee, so it gets its own credit line and the entry balances.
+    const otherDeductions = Number(payroll.otherDeductions ?? 0);
 
     const [salaryExpense, ssfExpense, ssfPayable, taxPayable, salaryPayable] = await Promise.all([
       this.getOrCreateSystemAccount(companyId, SYSTEM_ACCOUNTS.SALARY_EXPENSE, 'EXPENSE'),
@@ -634,6 +639,20 @@ export class LedgerPostingService {
     await tx.ledgerAccount.update({ where: { id: ssfPayable.id }, data: { currentBalance: { increment: totalSsf } } });
     await tx.ledgerAccount.update({ where: { id: taxPayable.id }, data: { currentBalance: { increment: Number(payroll.pit) } } });
     await tx.ledgerAccount.update({ where: { id: salaryPayable.id }, data: { currentBalance: { increment: Number(payroll.netSalary) } } });
+
+    if (otherDeductions > 0) {
+      const deductions = await this.getOrCreateSystemAccount(companyId, SYSTEM_ACCOUNTS.PAYROLL_DEDUCTIONS, 'LIABILITY');
+      await tx.ledgerEntry.create({
+        data: {
+          companyId, accountId: deductions.id, dateAd: date, dateBs,
+          description: `Other Deductions ${payroll.month} — ${payroll.employee.name}`,
+          debit: 0, credit: otherDeductions,
+          balance: Number(deductions.currentBalance) + otherDeductions,
+          referenceType: 'PAYROLL_ACCRUAL', referenceId: payrollId, isAutoPosted: true,
+        },
+      });
+      await tx.ledgerAccount.update({ where: { id: deductions.id }, data: { currentBalance: { increment: otherDeductions } } });
+    }
   }
 
   // Reverses the accrual for a payroll row (used when recalculating a not-yet-paid

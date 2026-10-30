@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
-import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
+import { APP_GUARD, APP_INTERCEPTOR, APP_FILTER } from '@nestjs/core';
+import { PrismaExceptionFilter } from '../../core/filters/prisma-exception.filter';
 import { ConfigModule } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
@@ -51,7 +52,11 @@ import { PrismaService } from '../../core/db/psql/prisma.client';
   imports: [
     ConfigModule.forRoot({ isGlobal: true, validate: validateEnv }),
     ...(QUEUES_ENABLED ? [ScheduleModule.forRoot(), BullRootModule] : []),
-    ThrottlerModule.forRoot([{ ttl: 60000, limit: 200 }]),
+    ThrottlerModule.forRoot({
+      throttlers: [{ ttl: 60000, limit: 200 }],
+      // The e2e suite logs in dozens of users per minute from one IP.
+      skipIf: () => process.env.NODE_ENV === 'test',
+    }),
     PinoLoggerModule,
     AuthModule,
     CompanyModule,
@@ -93,6 +98,7 @@ import { PrismaService } from '../../core/db/psql/prisma.client';
     // Global guards — run on every request in order: Throttler, JWT, Roles,
     // then company-membership scoping, then per-company module licensing
     // (only bites routes tagged @RequiresModule()).
+    { provide: APP_FILTER, useClass: PrismaExceptionFilter },
     { provide: APP_GUARD, useClass: ThrottlerGuard },
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_GUARD, useClass: RolesGuard },

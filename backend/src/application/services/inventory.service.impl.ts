@@ -81,6 +81,18 @@ export class InventoryServiceImpl {
     const item = await this.prisma.inventoryItem.findFirst({ where: { id, companyId } });
     if (!item) throw new NotFoundException('Inventory item not found');
 
+    // Unknown types used to fall through to the subtraction branch and
+    // silently remove stock.
+    if (!['ADDITION', 'SUBTRACTION', 'RECOUNT'].includes(dto.adjustmentType)) {
+      throw new BadRequestException('Adjustment type must be ADDITION, SUBTRACTION or RECOUNT');
+    }
+    if (typeof dto.quantityChange !== 'number' || !Number.isFinite(dto.quantityChange)) {
+      throw new BadRequestException('Quantity must be a number');
+    }
+    if (dto.adjustmentType !== 'RECOUNT' && dto.quantityChange <= 0) {
+      throw new BadRequestException('Quantity to add or remove must be greater than 0');
+    }
+
     const quantityBefore = Number(item.quantity);
     let quantityAfter: number;
 

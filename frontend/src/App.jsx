@@ -28,6 +28,7 @@ import Calculator from './pages/Calculator';
 import CalendarPage from './pages/CalendarPage';
 import CurrencyConverter from './pages/CurrencyConverter';
 import Settings from './pages/Settings';
+import HelpGuide from './pages/HelpGuide';
 import AuditLog from './pages/AuditLog';
 import Employees from './pages/Employees';
 import Attendance from './pages/Attendance';
@@ -101,6 +102,7 @@ const schoolRoutes = [
   { path: '/transactions', page: Transactions },
   { path: '/reports', page: SchoolReports, roles: ['TEACHER'] },
   { path: '/settings', page: Settings },
+  { path: '/help', page: HelpGuide, roles: ['TEACHER'] },
   { path: '/audit-log', page: AuditLog },
 ];
 
@@ -133,6 +135,7 @@ const AuthenticatedApp = () => {
       <Routes>
         <Route element={<Layout />}>
           <Route path="/settings" element={<Settings />} />
+          <Route path="/help" element={<HelpGuide />} />
           <Route path="*" element={<Navigate to="/settings" replace state={{ tab: 'clients' }} />} />
         </Route>
       </Routes>
@@ -183,6 +186,7 @@ const AuthenticatedApp = () => {
             <Route path="/payroll" element={<Payroll />} />
             <Route path="/reports" element={<Reports />} />
             <Route path="/workflow" element={<Workflow />} />
+            <Route path="/help" element={<HelpGuide />} />
           </>
         )}
         <Route path="*" element={<PageNotFound />} />

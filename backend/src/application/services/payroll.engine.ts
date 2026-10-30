@@ -1,4 +1,4 @@
-import { Injectable, Optional } from '@nestjs/common';
+import { Injectable, Optional, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../../core/db/psql/prisma.client';
 import { InjectQueue } from '@nestjs/bull';
 import { Queue } from 'bull';
@@ -167,7 +167,7 @@ export class PayrollEngineService {
       this.prisma.companyPayrollSettings.findUnique({ where: { companyId } }),
     ]);
 
-    if (!employee) throw new Error(`Employee ${employeeId} not found`);
+    if (!employee) throw new NotFoundException(`Employee ${employeeId} not found`);
 
     const workingDaysPerMonth = settings?.workingDaysPerMonth ?? 26;
     const ssfApplicable = settings?.ssfApplicable ?? true;
@@ -190,7 +190,20 @@ export class PayrollEngineService {
       },
     });
 
-    const absentDays = attendance.filter((a) => a.status === 'ABSENT').length;
+    // Approved unpaid leave counts as absence; paid leave doesn't. Read from the
+    // requests (attendance only says LEAVE) and clipped to this month.
+    const unpaidLeave = await this.prisma.leaveRequest.findMany({
+      where: { employeeId, companyId, status: 'APPROVED', leaveType: { isPaid: false }, startDate: { lt: endAd }, endDate: { gte: startAd } },
+    });
+    const unpaidLeaveDays = unpaidLeave.reduce((sum, r) => {
+      let days = 0;
+      const cur = new Date(Math.max(r.startDate.getTime(), startAd.getTime()));
+      const last = new Date(Math.min(r.endDate.getTime(), endAd.getTime() - 1));
+      for (; cur <= last; cur.setUTCDate(cur.getUTCDate() + 1)) if (cur.getUTCDay() !== 6) days++;
+      return sum + days;
+    }, 0);
+
+    const absentDays = attendance.filter((a) => a.status === 'ABSENT').length + unpaidLeaveDays;
     const halfDays = attendance.filter((a) => a.status === 'HALF_DAY').length;
 
     const basicSalary = Number(employee.basicSalary);
@@ -243,16 +256,19 @@ export class PayrollEngineService {
     const isDashainBonus = !!(settings?.dashainBonusApplicable && dashainMonthNum && bsMonth === dashainMonthNum);
     const dashainBonus = isDashainBonus ? basicSalary : 0;
 
-    const netSalary = Number((grossSalary - absentDeduction - hoursShortfallDeduction - ssf.employee - pit + overtimeAmount + dashainBonus).toFixed(2));
+    const existing = await this.prisma.payroll.findUnique({ where: { employeeId_month: { employeeId, month } } });
+    // A manual adjustment and a hold are decisions, not derived numbers — a
+    // recalculation (re-run or the nightly automation) must keep both.
+    const otherDeductions = Number(existing?.otherDeductions ?? 0);
+
+    const netSalary = Number((grossSalary - absentDeduction - hoursShortfallDeduction - ssf.employee - pit + overtimeAmount + dashainBonus - otherDeductions).toFixed(2));
 
     const data = {
       basicSalary, allowances, grossSalary, absentDays, halfDays, absentDeduction,
       hoursShortfallDeduction, incompleteAttendanceDays,
       overtimeAmount, ssfEmployee: ssf.employee, ssfEmployer: ssf.employer, pit,
-      netSalary, isDashainBonus, status: 'PROCESSED' as const,
+      netSalary, isDashainBonus, status: existing?.isOnHold ? ('ON_HOLD' as const) : ('PROCESSED' as const),
     };
-
-    const existing = await this.prisma.payroll.findUnique({ where: { employeeId_month: { employeeId, month } } });
 
     // A paid payroll is final — the accrual is already settled, so silently
     // recalculating it (e.g. a stale re-trigger) would corrupt closed books.
@@ -329,10 +345,21 @@ export class PayrollEngineService {
     return { month, payrolls, summary };
   }
 
-  // Recomputes netSalary after adjusting otherDeductions (the only manually-editable line item)
-  async adjustPayroll(companyId: string, payrollId: string, otherDeductions: number) {
+  private async findPayrollOrThrow(companyId: string, payrollId: string) {
     const payroll = await this.prisma.payroll.findFirst({ where: { id: payrollId, companyId } });
-    if (!payroll) throw new Error('Payroll record not found');
+    if (!payroll) throw new NotFoundException('Payroll record not found');
+    if (payroll.status === 'PAID') throw new BadRequestException('This payslip is already paid and can no longer be changed');
+    return payroll;
+  }
+
+  // otherDeductions is the only manually-editable line item. Net pay changes,
+  // so the accrual is reposted in the same transaction to keep Salary Payable
+  // equal to what the payslip says is owed.
+  async adjustPayroll(companyId: string, payrollId: string, otherDeductions: number) {
+    if (typeof otherDeductions !== 'number' || !Number.isFinite(otherDeductions) || otherDeductions < 0) {
+      throw new BadRequestException('Other deductions must be zero or a positive amount');
+    }
+    const payroll = await this.findPayrollOrThrow(companyId, payrollId);
 
     const dashainBonus = payroll.isDashainBonus ? Number(payroll.basicSalary) : 0;
     const netSalary = Number(
@@ -347,16 +374,18 @@ export class PayrollEngineService {
         otherDeductions
       ).toFixed(2),
     );
+    if (netSalary < 0) throw new BadRequestException('Deductions cannot exceed the net salary');
 
-    return this.prisma.payroll.update({
-      where: { id: payrollId },
-      data: { otherDeductions, netSalary },
+    return this.prisma.$transaction(async (tx) => {
+      const updated = await tx.payroll.update({ where: { id: payrollId }, data: { otherDeductions, netSalary } });
+      await this.ledgerPosting.reversePayrollAccrualTx(tx, companyId, payrollId);
+      await this.ledgerPosting.postPayrollAccrualTx(tx, companyId, payrollId);
+      return updated;
     });
   }
 
   async setHold(companyId: string, payrollId: string, isOnHold: boolean, holdReason?: string) {
-    const existing = await this.prisma.payroll.findFirst({ where: { id: payrollId, companyId } });
-    if (!existing) throw new Error('Payroll record not found');
+    await this.findPayrollOrThrow(companyId, payrollId);
     return this.prisma.payroll.update({
       where: { id: payrollId },
       data: { isOnHold, holdReason: isOnHold ? holdReason : null, status: isOnHold ? 'ON_HOLD' : 'PROCESSED' },
@@ -364,16 +393,20 @@ export class PayrollEngineService {
   }
 
   async markAsPaid(companyId: string, payrollId: string) {
-    const existing = await this.prisma.payroll.findFirst({ where: { id: payrollId, companyId } });
-    if (!existing) throw new Error('Payroll record not found');
-    const payroll = await this.prisma.payroll.update({
-      where: { id: payrollId },
-      data: { status: 'PAID', paidAt: new Date() },
-    });
+    const existing = await this.findPayrollOrThrow(companyId, payrollId);
+    if (existing.isOnHold) throw new BadRequestException('This salary is on hold — release the hold before paying');
 
-    // Post the settlement (clears Salary Payable via Cash) — the accrual itself
-    // was already posted back when this payroll row was first computed.
-    await this.ledgerPosting.postPayrollSettlement(companyId, payrollId);
+    // The status flip is conditional so two clicks (or two tabs) can't both
+    // pass the check above and post the settlement twice.
+    const payroll = await this.prisma.$transaction(async (tx) => {
+      const claimed = await tx.payroll.updateMany({
+        where: { id: payrollId, companyId, status: 'PROCESSED', isOnHold: false },
+        data: { status: 'PAID', paidAt: new Date() },
+      });
+      if (claimed.count === 0) throw new BadRequestException('This payslip is already paid or on hold');
+      await this.ledgerPosting.postPayrollSettlementTx(tx, companyId, payrollId);
+      return tx.payroll.findUniqueOrThrow({ where: { id: payrollId } });
+    });
 
     try {
       const employee = await this.prisma.employee.findUnique({ where: { id: payroll.employeeId }, select: { name: true } });
@@ -397,7 +430,7 @@ export class PayrollEngineService {
     const employee = await this.prisma.employee.findFirst({
       where: { id: employeeId, companyId },
     });
-    if (!employee) throw new Error('Employee not found');
+    if (!employee) throw new NotFoundException('Employee not found');
     if (!employee.dateOfJoining) {
       return { eligible: false, reason: 'Date of joining not set', gratuityAmount: 0 };
     }

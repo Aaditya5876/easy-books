@@ -5,6 +5,7 @@ import { AiService } from './ai.service';
 import { InventoryServiceImpl } from './inventory.service.impl';
 import { PortalNotificationService } from './portal-notification.service';
 import { adToBs, isValidBsYearMonth } from '@easy-books/shared';
+import { nepalToday, nepalMonthStart, nepalYearStart, addDays } from '../../../core/utils/nepal-time';
 
 // Forms send whole entity objects (with id/relations/_count) and bare "YYYY-MM-DD"
 // strings; Prisma rejects unknown keys and date-only strings. Whitelist + coerce here
@@ -25,6 +26,19 @@ function clean(data: any, allowed: string[], intKeys: string[] = []) {
   return out;
 }
 
+// Marks must be a number between 0 and the paper's total.
+function assertMarks(marksObtained: unknown, totalMarks: unknown) {
+  const got = Number(marksObtained);
+  const total = Number(totalMarks);
+  if (!Number.isFinite(total) || total <= 0) throw new BadRequestException('Total marks must be greater than 0');
+  if (!Number.isFinite(got) || got < 0) throw new BadRequestException('Marks cannot be negative');
+  if (got > total) throw new BadRequestException(`Marks (${got}) cannot be more than the total (${total})`);
+}
+
+function assertDateOrder(start: Date | null | undefined, end: Date | null | undefined) {
+  if (start && end && end.getTime() < start.getTime()) throw new BadRequestException('End date cannot be before the start date');
+}
+
 @Injectable()
 export class SchoolService {
   constructor(
@@ -38,13 +52,11 @@ export class SchoolService {
   // ── Dashboard ────────────────────────────────────────────────────────────────
 
   async getDashboardSummary(companyId: string) {
-    const now = new Date();
-    const firstOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-    const firstOfYear = new Date(now.getFullYear(), 0, 1);
-
-    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const todayEnd = new Date(todayStart);
-    todayEnd.setDate(todayEnd.getDate() + 1);
+    // Nepal's today/month/year, whatever the server clock's time zone.
+    const firstOfMonth = nepalMonthStart();
+    const firstOfYear = nepalYearStart();
+    const todayStart = nepalToday();
+    const todayEnd = addDays(todayStart, 1);
 
     const [
       totalStudents,
@@ -77,7 +89,7 @@ export class SchoolService {
         orderBy: { createdAt: 'desc' },
         take: 20,
       }),
-      this.prisma.studentAttendance.count({ where: { companyId, date: { gte: todayStart, lt: todayEnd }, status: 'PRESENT' } }),
+      this.prisma.studentAttendance.count({ where: { companyId, date: { gte: todayStart, lt: todayEnd }, status: { in: ['PRESENT', 'LATE'] } } }),
       this.prisma.studentAttendance.count({ where: { companyId, date: { gte: todayStart, lt: todayEnd }, status: 'ABSENT' } }),
       this.prisma.academicYear.count({ where: { companyId } }),
       this.prisma.subject.count({ where: { companyId } }),
@@ -300,9 +312,12 @@ export class SchoolService {
   ];
 
   async createStudent(body: any) {
-    return this.prisma.student.create({
-      data: clean(body, ['companyId', ...SchoolService.STUDENT_FIELDS]),
-    });
+    const data = clean(body, ['companyId', ...SchoolService.STUDENT_FIELDS]);
+    if (!data.name) throw new BadRequestException('Student name is required');
+    if (!data.classId) throw new BadRequestException('Class is required');
+    const cls = await this.prisma.schoolClass.findFirst({ where: { id: data.classId, companyId: data.companyId } });
+    if (!cls) throw new NotFoundException('Class not found');
+    return this.prisma.student.create({ data });
   }
 
   async updateStudent(id: string, companyId: string, body: any) {
@@ -356,6 +371,7 @@ export class SchoolService {
   async createSubject(body: any) {
     const { classIds } = body;
     const data = clean(body, ['companyId', 'name', 'code', 'bookReference', 'chapters'], ['chapters']);
+    if (!data.name) throw new BadRequestException('Subject name is required');
     await this.assertSubjectNameFree(data.companyId, data.name);
     if (classIds?.length) {
       const owned = await this.prisma.schoolClass.count({ where: { id: { in: classIds }, companyId: data.companyId } });
@@ -821,6 +837,7 @@ export class SchoolService {
 
   async createExamResult(body: any) {
     const data = clean(body, ['companyId', ...SchoolService.EXAM_RESULT_FIELDS]);
+    assertMarks(data.marksObtained, data.totalMarks ?? 100);
     if (data.examId) {
       const exam = await this.prisma.exam.findFirst({ where: { id: data.examId, companyId: data.companyId } });
       if (!exam) throw new NotFoundException('Exam not found');
@@ -847,6 +864,7 @@ export class SchoolService {
     const existing = await this.prisma.examResult.findFirst({ where: { id, companyId } });
     if (!existing) throw new NotFoundException('Exam result not found');
     const data = clean(body, SchoolService.EXAM_RESULT_FIELDS);
+    assertMarks(data.marksObtained ?? existing.marksObtained, data.totalMarks ?? existing.totalMarks);
     if (data.examId) {
       const exam = await this.prisma.exam.findFirst({ where: { id: data.examId, companyId } });
       if (!exam) throw new NotFoundException('Exam not found');
@@ -891,6 +909,8 @@ export class SchoolService {
   ) {
     const exam = await this.prisma.exam.findFirst({ where: { id: data.examId, companyId } });
     if (!exam) throw new NotFoundException('Exam not found');
+    // Validate every row before saving any, so a typo doesn't leave half a class entered.
+    for (const entry of data.entries ?? []) assertMarks(entry.marksObtained, data.totalMarks);
 
     let created = 0;
     let updated = 0;
@@ -1080,6 +1100,16 @@ export class SchoolService {
     );
     const cls = await this.prisma.schoolClass.findFirst({ where: { id: data.classId, companyId: data.companyId } });
     if (!cls) throw new NotFoundException('Class not found');
+    if (data.teacherId) {
+      const clash = await this.prisma.timetableEntry.findFirst({
+        where: { companyId: data.companyId, teacherId: data.teacherId, dayOfWeek: data.dayOfWeek, periodNumber: data.periodNumber, classId: { not: data.classId } },
+        include: { class: { select: { name: true, section: true } } },
+      });
+      if (clash) {
+        const where = [clash.class?.name, clash.class?.section].filter(Boolean).join(' ');
+        throw new ConflictException(`This teacher already teaches ${where || 'another class'} in this period`);
+      }
+    }
     const entry = await this.prisma.timetableEntry.upsert({
       where: { classId_dayOfWeek_periodNumber: { classId: data.classId, dayOfWeek: data.dayOfWeek, periodNumber: data.periodNumber } },
       create: data,
@@ -1189,18 +1219,17 @@ export class SchoolService {
   }
 
   async createEvent(body: any) {
-    return this.prisma.schoolEvent.create({
-      data: clean(body, ['companyId', 'title', 'description', 'startDate', 'endDate', 'eventType']),
-    });
+    const data = clean(body, ['companyId', 'title', 'description', 'startDate', 'endDate', 'eventType']);
+    assertDateOrder(data.startDate, data.endDate);
+    return this.prisma.schoolEvent.create({ data });
   }
 
   async updateEvent(id: string, companyId: string, body: any) {
     const event = await this.prisma.schoolEvent.findFirst({ where: { id, companyId } });
     if (!event) throw new NotFoundException('Event not found');
-    return this.prisma.schoolEvent.update({
-      where: { id },
-      data: clean(body, ['title', 'description', 'startDate', 'endDate', 'eventType']),
-    });
+    const data = clean(body, ['title', 'description', 'startDate', 'endDate', 'eventType']);
+    assertDateOrder(data.startDate === undefined ? event.startDate : data.startDate, data.endDate === undefined ? event.endDate : data.endDate);
+    return this.prisma.schoolEvent.update({ where: { id }, data });
   }
 
   async deleteEvent(id: string, companyId: string) {

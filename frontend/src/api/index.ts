@@ -110,6 +110,10 @@ export const leaveApi = {
   listRequests: (params?: { employeeId?: string; status?: string }) =>
     apiClient.get('/api/v1/leave/requests', { params: { companyId: companyId(), ...params } }),
   approve: (id: string) => apiClient.patch(`/api/v1/leave/requests/${id}/approve`, {}, { params: { companyId: companyId() } }),
+  // Balances — ACCOUNTANT/ADMIN override one employee's yearly allowance.
+  balances: (employeeId: string) => apiClient.get(`/api/v1/leave/balances/${employeeId}`, { params: { companyId: companyId() } }),
+  allocate: (data: { employeeId: string; leaveTypeId: string; fiscalYear: string; totalDays: number }) =>
+    apiClient.post('/api/v1/leave/balances/allocate', data, { params: { companyId: companyId() } }),
   reject: (id: string) => apiClient.patch(`/api/v1/leave/requests/${id}/reject`, {}, { params: { companyId: companyId() } }),
 };
 
@@ -560,6 +564,7 @@ export const portalApi = {
   fees: () => apiClient.get('/api/v1/portal/fees', { headers: portalHeaders() }),
   feeReceipt: (invoiceId: string) => apiClient.get(`/api/v1/portal/fees/${invoiceId}/receipt`, { headers: portalHeaders() }),
   paymentQrCodes: () => apiClient.get('/api/v1/portal/payment-qr-codes', { headers: portalHeaders() }),
+  paymentGateways: () => apiClient.get('/api/v1/portal/payment-gateways', { headers: portalHeaders() }),
   notifications: () => apiClient.get('/api/v1/portal/notifications', { headers: portalHeaders() }),
   notificationsUnreadCount: () => apiClient.get('/api/v1/portal/notifications/unread-count', { headers: portalHeaders() }),
   markNotificationRead: (id: string) => apiClient.patch(`/api/v1/portal/notifications/${id}/read`, {}, { headers: portalHeaders() }),
@@ -575,11 +580,11 @@ export const portalApi = {
   events: () => apiClient.get('/api/v1/portal/events', { headers: portalHeaders() }),
   initiateEsewa: (invoiceId: string) =>
     apiClient.post(`/api/v1/portal/pay/esewa/${invoiceId}`, {}, { headers: portalHeaders() }),
-  verifyEsewa: (data: { data: string; invoiceId: string; companyId: string }) =>
+  verifyEsewa: (data: { data: string }) =>
     apiClient.post('/api/v1/portal/pay/esewa/verify', data),
   initiateKhalti: (invoiceId: string) =>
     apiClient.post(`/api/v1/portal/pay/khalti/${invoiceId}`, {}, { headers: portalHeaders() }),
-  verifyKhalti: (data: { pidx: string; invoiceId: string; companyId: string }) =>
+  verifyKhalti: (data: { pidx: string }) =>
     apiClient.post('/api/v1/portal/pay/khalti/verify', data),
   uploadProof: (file: File) => {
     const formData = new FormData();

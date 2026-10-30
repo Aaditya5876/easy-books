@@ -1,4 +1,5 @@
-import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ForbiddenException, ConflictException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../core/db/psql/prisma.client';
 import { NotificationServiceImpl } from './notification.service.impl';
 import { resolveLinkedEmployee } from './self-service-employee.util';
@@ -18,8 +19,23 @@ function countWorkingDays(start: Date, end: Date): number {
   return count;
 }
 
+// The individual working days (UTC-midnight dates, like attendance rows use)
+// a leave covers — Saturdays are Nepal's weekly holiday.
+function workingDates(start: Date, end: Date): Date[] {
+  const days: Date[] = [];
+  const cur = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate()));
+  const last = new Date(Date.UTC(end.getUTCFullYear(), end.getUTCMonth(), end.getUTCDate()));
+  while (cur <= last) {
+    if (cur.getUTCDay() !== 6) days.push(new Date(cur));
+    cur.setUTCDate(cur.getUTCDate() + 1);
+  }
+  return days;
+}
+
+type Tx = Prisma.TransactionClient;
+
 // Nepal fiscal year: Shrawan (month 4) to Ashadh (month 3 of next year)
-function getFiscalYear(adDate: Date): string {
+export function getFiscalYear(adDate: Date): string {
   const bsDateStr = adToBs(adDate);
   const bsYear = parseInt(bsDateStr.split('-')[0]);
   const bsMonth = parseInt(bsDateStr.split('-')[1]);
@@ -82,16 +98,42 @@ export class LeaveServiceImpl {
     return this.prisma.leaveType.findMany({ where: { companyId }, orderBy: { name: 'asc' } });
   }
 
+  private typeData(data: { name?: unknown; daysPerYear?: unknown; isPaid?: unknown }, partial: boolean) {
+    const out: { name?: string; daysPerYear?: number; isPaid?: boolean } = {};
+    if (data.name !== undefined || !partial) {
+      const name = typeof data.name === 'string' ? data.name.trim() : '';
+      if (!name) throw new BadRequestException('Leave type name is required');
+      out.name = name;
+    }
+    if (data.daysPerYear !== undefined || !partial) {
+      const days = Number(data.daysPerYear ?? 0);
+      if (!Number.isFinite(days) || days < 0 || days > 366) throw new BadRequestException('Days per year must be between 0 and 366');
+      out.daysPerYear = days;
+    }
+    if (data.isPaid !== undefined) out.isPaid = !!data.isPaid;
+    return out;
+  }
+
+  private async saveType(op: () => Promise<unknown>) {
+    try {
+      return await op();
+    } catch (e) {
+      if ((e as { code?: string }).code === 'P2002') throw new ConflictException('A leave type with this name already exists');
+      throw e;
+    }
+  }
+
   async createType(companyId: string, data: { name: string; daysPerYear: number; isPaid?: boolean }) {
-    return this.prisma.leaveType.create({
-      data: { companyId, name: data.name, daysPerYear: data.daysPerYear, isPaid: data.isPaid ?? true },
-    });
+    const clean = this.typeData(data, false);
+    return this.saveType(() => this.prisma.leaveType.create({
+      data: { companyId, name: clean.name!, daysPerYear: clean.daysPerYear!, isPaid: clean.isPaid ?? true },
+    }));
   }
 
   async updateType(id: string, companyId: string, data: any) {
     const type = await this.prisma.leaveType.findFirst({ where: { id, companyId } });
     if (!type) throw new NotFoundException('Leave type not found');
-    return this.prisma.leaveType.update({ where: { id }, data });
+    return this.saveType(() => this.prisma.leaveType.update({ where: { id }, data: this.typeData(data, true) }));
   }
 
   async removeType(id: string, companyId: string) {
@@ -102,13 +144,34 @@ export class LeaveServiceImpl {
 
   // ─── Leave Balances ──────────────────────────────────────────────────────────
 
-  async getBalances(employeeId: string, companyId: string, fiscalYear: string) {
+  // A leave type's days per year is every employee's default allowance; the
+  // balance row is created the first time it's needed. Types with 0 days per
+  // year (e.g. unpaid leave) have no allowance and no limit.
+  private async ensureBalance(db: Tx | PrismaService, companyId: string, employeeId: string, leaveTypeId: string, fiscalYear: string) {
+    const key = { employeeId_leaveTypeId_fiscalYear: { employeeId, leaveTypeId, fiscalYear } };
+    const existing = await db.leaveBalance.findUnique({ where: key });
+    if (existing) return existing;
+    const type = await db.leaveType.findFirst({ where: { id: leaveTypeId, companyId } });
+    if (!type || Number(type.daysPerYear) <= 0) return null;
+    return db.leaveBalance.upsert({
+      where: key,
+      create: { companyId, employeeId, leaveTypeId, fiscalYear, totalDays: type.daysPerYear, usedDays: 0, remainingDays: type.daysPerYear },
+      update: {},
+    });
+  }
+
+  async getBalances(employeeId: string, companyId: string, fiscalYear?: string) {
     const employee = await this.prisma.employee.findFirst({ where: { id: employeeId, companyId } });
     if (!employee) throw new NotFoundException('Employee not found');
+    const fy = fiscalYear || getFiscalYear(new Date());
+
+    const types = await this.prisma.leaveType.findMany({ where: { companyId } });
+    for (const t of types) await this.ensureBalance(this.prisma, companyId, employeeId, t.id, fy);
 
     return this.prisma.leaveBalance.findMany({
-      where: { employeeId, fiscalYear },
+      where: { employeeId, fiscalYear: fy },
       include: { leaveType: true },
+      orderBy: { leaveType: { name: 'asc' } },
     });
   }
 
@@ -225,6 +288,21 @@ export class LeaveServiceImpl {
 
     if (totalDays <= 0) throw new BadRequestException('End date must be after start date');
 
+    const type = await this.prisma.leaveType.findFirst({ where: { id: data.leaveTypeId, companyId } });
+    if (!type) throw new NotFoundException('Leave type not found');
+    const fiscalYear = getFiscalYear(start);
+    const balance = await this.ensureBalance(this.prisma, companyId, data.employeeId, data.leaveTypeId, fiscalYear);
+    if (balance) {
+      const pending = await this.prisma.leaveRequest.aggregate({
+        where: { employeeId: data.employeeId, leaveTypeId: data.leaveTypeId, status: 'PENDING' },
+        _sum: { totalDays: true },
+      });
+      const available = Number(balance.remainingDays) - Number(pending._sum.totalDays ?? 0);
+      if (totalDays > available) {
+        throw new BadRequestException(`Not enough ${type.name} left: ${Math.max(0, available)} day(s) available, ${totalDays} requested`);
+      }
+    }
+
     const overlap = await this.prisma.leaveRequest.findFirst({
       where: {
         employeeId: data.employeeId,
@@ -265,22 +343,21 @@ export class LeaveServiceImpl {
   }
 
   async approveRequest(id: string, companyId: string, approvedBy: string) {
-    const req = await this.prisma.leaveRequest.findFirst({ where: { id, companyId } });
+    const req = await this.prisma.leaveRequest.findFirst({ where: { id, companyId }, include: { leaveType: true } });
     if (!req) throw new NotFoundException('Leave request not found');
     if (req.status !== 'PENDING') throw new BadRequestException('Only pending requests can be approved');
 
     const fiscalYear = getFiscalYear(req.startDate);
 
     await this.prisma.$transaction(async (tx) => {
-      await tx.leaveRequest.update({
-        where: { id },
+      // Conditional flip: two approvers clicking at once can't both deduct.
+      const claimed = await tx.leaveRequest.updateMany({
+        where: { id, status: 'PENDING' },
         data: { status: 'APPROVED', approvedBy, approvedAt: new Date() },
       });
+      if (claimed.count === 0) throw new BadRequestException('Only pending requests can be approved');
 
-      const balance = await tx.leaveBalance.findUnique({
-        where: { employeeId_leaveTypeId_fiscalYear: { employeeId: req.employeeId, leaveTypeId: req.leaveTypeId, fiscalYear } },
-      });
-
+      const balance = await this.ensureBalance(tx, companyId, req.employeeId, req.leaveTypeId, fiscalYear);
       if (balance) {
         if (Number(balance.remainingDays) < Number(req.totalDays)) {
           throw new BadRequestException(
@@ -288,10 +365,20 @@ export class LeaveServiceImpl {
           );
         }
         const newUsed = Number(balance.usedDays) + Number(req.totalDays);
-        const newRemaining = Number(balance.totalDays) - newUsed;
         await tx.leaveBalance.update({
           where: { id: balance.id },
-          data: { usedDays: newUsed, remainingDays: newRemaining },
+          data: { usedDays: newUsed, remainingDays: Number(balance.totalDays) - newUsed },
+        });
+      }
+
+      // Approved days appear in staff attendance as LEAVE (and block self
+      // check-in); unpaid leave is deducted in payroll from the request itself.
+      const note = `${req.leaveType.name}${req.leaveType.isPaid ? '' : ' (unpaid)'}`;
+      for (const date of workingDates(req.startDate, req.endDate)) {
+        await tx.attendance.upsert({
+          where: { employeeId_date: { employeeId: req.employeeId, date } },
+          create: { companyId, employeeId: req.employeeId, date, status: 'LEAVE', notes: note },
+          update: { status: 'LEAVE', notes: note, checkInTime: null, checkOutTime: null },
         });
       }
     });
@@ -321,6 +408,9 @@ export class LeaveServiceImpl {
       await tx.leaveRequest.update({ where: { id }, data: { status: 'CANCELLED' } });
 
       if (req.status === 'APPROVED') {
+        await tx.attendance.deleteMany({
+          where: { employeeId: req.employeeId, status: 'LEAVE', date: { gte: req.startDate, lte: req.endDate } },
+        });
         const fiscalYear = getFiscalYear(req.startDate);
         const balance = await tx.leaveBalance.findUnique({
           where: { employeeId_leaveTypeId_fiscalYear: { employeeId: req.employeeId, leaveTypeId: req.leaveTypeId, fiscalYear } },

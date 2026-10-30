@@ -8,14 +8,14 @@
     "shared"
   ],
   "scripts": {
-"dev:frontend": "npm run dev --workspace=frontend",
+    "dev:frontend": "npm run dev --workspace=frontend",
     "dev:backend": "npm run build --workspace=shared && npm run dev --workspace=backend",
     "dev": "npm run build --workspace=shared && concurrently \"npm run dev --workspace=backend\" \"npm run dev:frontend\"",
     "build:shared": "npm run build --workspace=shared",
     "build:frontend": "npm run build --workspace=frontend",
     "build:backend": "npm run build --workspace=shared && npm run build --workspace=backend",
     "build": "npm run build:backend",
-    "test": "npm run test --workspaces",
+    "test": "npm run test --workspaces --if-present",
     "migrate": "npm run migrate --workspace=backend",
     "migrate:dev": "npm run migrate:dev --workspace=backend"
   },

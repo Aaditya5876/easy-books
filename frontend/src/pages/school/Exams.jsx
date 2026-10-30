@@ -129,6 +129,9 @@ function ReportCardEntryDialog({ open, onClose, initial, exams, companyId }) {
     if (!form.subjectId) errs.subjectId = t('exams.selectASubject', { defaultValue: 'Select a subject' });
     if (!form.marksObtained) errs.marksObtained = t('exams.enterMarks', { defaultValue: 'Enter marks' });
     if (!form.totalMarks) errs.totalMarks = t('exams.enterMarks', { defaultValue: 'Enter marks' });
+    if (form.marksObtained && form.totalMarks && (parseFloat(form.marksObtained) < 0 || parseFloat(form.marksObtained) > parseFloat(form.totalMarks))) {
+      errs.marksObtained = t('exams.marksOutOfRange', { defaultValue: 'Marks must be between 0 and the total marks' });
+    }
     if (Object.keys(errs).length) {
       setErrors(errs);
       toast.error(Object.values(errs)[0]);

@@ -95,37 +95,23 @@ export class CompanyServiceImpl {
     return company;
   }
 
+  private static readonly EDITABLE_FIELDS = [
+    'name', 'abbreviation', 'address', 'phone', 'email', 'panVat', 'registrationNumber', 'logoUrl',
+    'currency', 'fiscalYearStart', 'businessType', 'defaultUnitType', 'isVatRegistered', 'vatSubmissionFreq',
+    'autoFeeBilling', 'autoInvoiceRelease', 'autoPayroll', 'autoReconciliation', 'autoLibraryReminders', 'autoPaymentProofReminders',
+  ];
+
   async update(id: string, data: any, userId: string, role: string) {
     await this.assertMembership(id, userId, role);
     const company = await this.prisma.company.findFirst({ where: { id } });
     if (!company) throw new NotFoundException('Company not found');
-    const {
-      id: _id, isDefault, createdAt, updatedAt,
-      userCompanies, employees, attendance, payrolls,
-      bankAccounts, transactions, ledgerAccounts, ledgerEntries,
-      inventoryItems, salesOrders, purchaseOrders, payments,
-      payrollSettings,
-      // enabledModules controls which package a company is on — never
-      // settable through this general-purpose endpoint (any company ADMIN
-      // could otherwise grant themselves every module for free). Only
-      // updatePackage() below, which is SUPER_ADMIN-gated at the controller,
-      // may change it.
-      enabledModules,
-      // isActive is GeoInfosys's own suspend switch, not the client's — a
-      // company ADMIN must not be able to reactivate (or deactivate) their
-      // own company through this general-purpose endpoint. Only setActive()
-      // below, SUPER_ADMIN-gated at the controller, may change it.
-      isActive,
-      // Same reasoning — an ADMIN must not be able to extend their own
-      // subscription. Only setSubscriptionExpiry() below, SUPER_ADMIN-gated
-      // at the controller, may change it.
-      subscriptionExpiresAt,
-      // Internal bookkeeping only setActive/setSubscriptionExpiry/requestRenewal
-      // above are meant to touch — never settable directly.
-      accessBlockedNotifiedAt, lastRenewalRequestedAt,
-      subscriptionExtensionUsedAt, subscriptionExtensionExpiresAt,
-      ...updateData
-    } = data;
+    // Whitelist: only what a company's own ADMIN may edit. Package
+    // (enabledModules), suspension/subscription fields and document sequences
+    // are GeoInfosys- or system-owned and set elsewhere; anything else the
+    // edit dialog sends (relations, counts, ids) is ignored.
+    const updateData = Object.fromEntries(
+      Object.entries(data ?? {}).filter(([k, v]) => CompanyServiceImpl.EDITABLE_FIELDS.includes(k) && v !== undefined),
+    );
     return this.prisma.company.update({ where: { id }, data: updateData });
   }
 
@@ -302,8 +288,8 @@ export class CompanyServiceImpl {
     workingDaysPerMonth?: number;
     overtimeRatePerHour?: number;
     attendanceDeductionEnabled?: boolean;
-    standardStartTime?: string;
-    standardEndTime?: string;
+    standardStartTime?: string | null;
+    standardEndTime?: string | null;
   }) {
     await this.assertMembership(companyId, userId, role);
     return this.prisma.companyPayrollSettings.upsert({

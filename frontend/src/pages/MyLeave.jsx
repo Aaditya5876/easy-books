@@ -6,6 +6,7 @@ import { leaveApi } from '@/api';
 import { useRole } from '@/lib/useRole';
 import { confirm } from '@/lib/confirm';
 import PageHeader from '../components/shared/PageHeader';
+import LeaveBalancesPanel from '@/components/leave/LeaveBalancesPanel';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -271,6 +272,8 @@ export default function MyLeave() {
           )}
         </div>
       )}
+
+      {canApprove && <LeaveBalancesPanel />}
 
       {/* Leave Types — ADMIN only */}
       {isAdmin && (

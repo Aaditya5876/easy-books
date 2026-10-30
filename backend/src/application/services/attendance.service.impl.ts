@@ -16,10 +16,14 @@ export class AttendanceServiceImpl {
   }
 
   async findAll(companyId: string, employeeId?: string) {
-    return this.prisma.attendance.findMany({
+    const rows = await this.prisma.attendance.findMany({
       where: { companyId, ...(employeeId ? { employeeId } : {}) },
       orderBy: { createdAt: 'desc' },
+      include: { employee: { select: { name: true } } },
     });
+    // The Staff Attendance table shows employeeName — it was never sent, so
+    // the column always rendered blank.
+    return rows.map(({ employee, ...row }) => ({ ...row, employeeName: employee?.name ?? null }));
   }
 
   async findOne(id: string, companyId: string) {

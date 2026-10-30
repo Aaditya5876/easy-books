@@ -53,7 +53,8 @@ export class LeaveController {
   // ─── Leave Types ─────────────────────────────────────────────────────────────
 
   @Get('types')
-  @Roles('STAFF', 'ACCOUNTANT', 'ADMIN')
+  // TEACHER too — the My Leave apply form lists these for every role.
+  @Roles('STAFF', 'ACCOUNTANT', 'ADMIN', 'TEACHER')
   @ApiOperation({ summary: 'Get all leave types' })
   @ApiQuery({ name: 'companyId', required: true })
   findAllTypes(@Query('companyId') companyId: string) {
@@ -90,7 +91,7 @@ export class LeaveController {
   @Roles('STAFF', 'ACCOUNTANT', 'ADMIN')
   @ApiOperation({ summary: 'Get leave balances for an employee' })
   @ApiQuery({ name: 'companyId', required: true })
-  @ApiQuery({ name: 'fiscalYear', required: true, example: '2081-82' })
+  @ApiQuery({ name: 'fiscalYear', required: false, example: '2081-82' })
   getBalances(
     @Param('employeeId') employeeId: string,
     @Query('companyId') companyId: string,

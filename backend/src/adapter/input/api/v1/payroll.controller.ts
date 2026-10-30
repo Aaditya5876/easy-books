@@ -3,6 +3,8 @@ import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger'
 import { PayrollEngineService } from '../../../../application/services/payroll.engine';
 import { Roles } from '../../../../modules/decorators/roles.decorator';
 import { RequiresModule } from '../../../../modules/decorators/requires-module.decorator';
+import { ZodValidationPipe } from '../../../../modules/pipes/zod-validation.pipe';
+import { ProcessPayrollSchema, CalculateOnePayrollSchema } from '@easy-books/shared';
 
 @ApiTags('Payroll')
 @ApiBearerAuth()
@@ -23,14 +25,14 @@ export class PayrollController {
   @Post('process')
   @Roles('ADMIN')
   @ApiOperation({ summary: 'Batch-process payroll for all active employees (queues BullMQ jobs)' })
-  process(@Body() body: { companyId: string; month: string }) {
+  process(@Body(new ZodValidationPipe(ProcessPayrollSchema)) body: { companyId: string; month: string }) {
     return this.engine.processMonthlyPayroll(body.companyId, body.month);
   }
 
   @Post('calculate')
   @Roles('ACCOUNTANT', 'ADMIN')
   @ApiOperation({ summary: 'Calculate payroll for a single employee (sync)' })
-  calculateOne(@Body() body: { companyId: string; employeeId: string; month: string }) {
+  calculateOne(@Body(new ZodValidationPipe(CalculateOnePayrollSchema)) body: { companyId: string; employeeId: string; month: string }) {
     return this.engine.calculateEmployeePayroll(body.companyId, body.employeeId, body.month);
   }
 

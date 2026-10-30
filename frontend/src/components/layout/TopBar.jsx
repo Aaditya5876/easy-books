@@ -7,7 +7,7 @@ import {
   Search, Bell, Settings, LogOut, Building2, ChevronDown, Plus, Menu,
   Wrench, Calculator, RefreshCw, CalendarDays, UserCircle, CalendarCheck,
   UsersRound, Banknote, Sun, Moon, X, Package, Users, UserCheck, Globe,
-  Sparkles, AlertTriangle, ShieldCheck, Send,
+  Sparkles, AlertTriangle, ShieldCheck, Send, HelpCircle,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
@@ -433,7 +433,7 @@ export default function TopBar({ onMobileMenuToggle, onToolOpen }) {
         {/* Company Selector */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="gap-2 font-medium">
+            <Button variant="ghost" className="gap-2 font-medium" data-tour="company-switcher">
               {activeCompany?.logo_url ? (
                 <img src={activeCompany.logo_url} alt={activeCompany.name} className="w-6 h-6 rounded-md object-cover" />
               ) : (
@@ -539,6 +539,18 @@ export default function TopBar({ onMobileMenuToggle, onToolOpen }) {
             </DropdownMenuContent>
           </DropdownMenu>
         )}
+
+        {/* Help & Guide — every role; also the tour's last stop */}
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => navigate('/help')}
+          className="text-muted-foreground hover:text-foreground"
+          title={t('guide.ui.helpBadge', { defaultValue: 'Help & Guide' })}
+          data-tour="help"
+        >
+          <HelpCircle className="w-4 h-4" />
+        </Button>
 
         {/* Settings shortcut — /settings is reachable by ADMIN/ACCOUNTANT (bank accounts,
             fiscal year, automation); unreachable for restricted roles (see schoolRoutes in App.jsx) */}

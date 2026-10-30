@@ -1174,7 +1174,7 @@ export default function Settings() {
                 <div className="w-6 h-6 border-4 border-primary/20 border-t-primary rounded-full animate-spin" />
               </div>
             ) : (
-              <div className="space-y-3">
+              <div className="space-y-3" data-tour="clients-panel">
                 {allClients.length > 5 && (
                   <div className="relative max-w-sm">
                     <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
@@ -1565,7 +1565,7 @@ export default function Settings() {
 
             {/* Create Client — sales-led onboarding: creates the company + its
                 first ADMIN login, instead of self-registration. */}
-            <div className="bg-card rounded-xl border p-6 space-y-4 max-w-lg">
+            <div className="bg-card rounded-xl border p-6 space-y-4 max-w-lg" data-tour="create-client">
               <div>
                 <h3 className="font-semibold flex items-center gap-1.5"><UserPlus className="w-4 h-4 text-primary" />{t('settings.createClientHeading', { defaultValue: 'Create Client' })}</h3>
                 <p className="text-sm text-muted-foreground mt-0.5">{t('settings.createClientSubtitle', { defaultValue: "Sets up a new client's company and their first admin login — for after they've paid, instead of self-registration." })}</p>

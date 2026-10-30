@@ -152,6 +152,9 @@ export class AuthServiceImpl implements IAuthService {
     }
 
     this.assertNotSuspended(user);
+    if (user.role === 'SUPER_ADMIN') {
+      throw new BadRequestException('The platform owner account does not record attendance — use a staff login.');
+    }
     await this.assertHasActiveCompany(user.id, user.role);
 
     const userCompany = await this.prisma.userCompany.findFirst({
@@ -159,6 +162,16 @@ export class AuthServiceImpl implements IAuthService {
       orderBy: { isDefault: 'desc' },
     });
     if (!userCompany) throw new BadRequestException('No company found for this account');
+
+    // Same entitlement My Attendance enforces via @RequiresModule — this
+    // public endpoint isn't behind ModuleAccessGuard, so check it here.
+    const company = await this.prisma.company.findUnique({
+      where: { id: userCompany.companyId },
+      select: { enabledModules: true },
+    });
+    if (company && company.enabledModules.length > 0 && !company.enabledModules.includes('HRMS_ATTENDANCE')) {
+      throw new ForbiddenException("Staff attendance isn't included in your organization's plan.");
+    }
 
     const record = await markSelfAttendance(this.prisma, userCompany.companyId, user.email, action);
     return { success: true, record };

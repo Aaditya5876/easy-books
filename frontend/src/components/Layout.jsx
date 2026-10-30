@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import SidebarNav from './layout/SidebarNav';
 import TopBar from './layout/TopBar';
 import FloatingToolWindow from './layout/FloatingToolWindow';
+import OnboardingTour from './guide/OnboardingTour';
 import { cn } from "@/lib/utils";
 
 export default function Layout() {
@@ -58,6 +59,7 @@ export default function Layout() {
         </main>
       </div>
       <FloatingToolWindow activeTool={activeTool} onClose={() => setActiveTool(null)} />
+      <OnboardingTour />
     </div>
   );
 }

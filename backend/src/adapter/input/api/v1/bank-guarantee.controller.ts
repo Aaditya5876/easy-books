@@ -7,7 +7,7 @@ import { RequiresModule } from '../../../../modules/decorators/requires-module.d
 @ApiTags('Bank Guarantees')
 @ApiBearerAuth()
 @Roles('ACCOUNTANT', 'ADMIN')
-@RequiresModule('FINANCE')
+@RequiresModule('FINANCE_TRANSACTIONS')
 @Controller('api/v1/bank-guarantees')
 export class BankGuaranteeController {
   constructor(private readonly service: BankGuaranteeServiceImpl) {}

@@ -91,6 +91,7 @@ import { Logger } from 'nestjs-pino';
 import * as cookieParserModule from 'cookie-parser';
 import helmet from 'helmet';
 import { NestExpressApplication } from '@nestjs/platform-express';
+import { allowedOrigins } from '../core/utils/allowed-origins';
 
 // Local tsc (no esModuleInterop) yields the function itself; Vercel's
 // compiler wraps it as { default }. Accept either.
@@ -106,20 +107,11 @@ async function createApp() {
   // Security headers (CSP disabled so Swagger UI can load inline assets)
   app.use(helmet({ contentSecurityPolicy: false }));
 
-  // Dynamic CORS setup with explicit fallbacks for production & local development
-  const defaultOrigins = [
-    'https://onebooknp.com',
-    'https://www.onebooknp.com',
-    'http://localhost:5173',
-    'http://localhost:3000',
-  ];
-
-  const allowedOrigins = process.env.CORS_ORIGIN
-    ? process.env.CORS_ORIGIN.split(',').map((o) => o.trim())
-    : defaultOrigins;
+  // Explicit allowlist (CORS_ORIGIN, else production + local dev origins)
+  const corsOrigins = allowedOrigins();
 
   app.enableCors({
-    origin: allowedOrigins,
+    origin: corsOrigins,
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
