@@ -3,6 +3,7 @@ import { PrismaService } from '../../../core/db/psql/prisma.client';
 import { LedgerPostingService } from './ledger-posting.service';
 import { adToBs } from '@easy-books/shared';
 import { VAT_RATE } from '../../domain/vo';
+import { billAttachmentUrls } from '../../../core/utils/bill-attachments';
 
 interface OrderItem {
   inventoryItemId?: string;
@@ -26,6 +27,7 @@ interface CreatePurchaseOrderInput {
   paymentMethod?: string;
   notes?: string;
   items: OrderItem[];
+  attachments?: unknown; // [{ url }] from /api/v1/upload — see core/utils/bill-attachments.ts
 }
 
 interface RecordPaymentInput {
@@ -71,6 +73,7 @@ export class PurchaseServiceImpl {
     const { companyId, items, isVat, laborCharges = 0, ...rest } = dto;
 
     if (!items || items.length === 0) throw new BadRequestException('Order must have at least one item');
+    const attachmentUrls = billAttachmentUrls(companyId, dto.attachments);
 
     const orderNumber = await this.generateOrderNumber(companyId);
 
@@ -129,6 +132,17 @@ export class PurchaseServiceImpl {
             },
           });
         }
+      }
+
+      if (attachmentUrls.length) {
+        await tx.memoDocument.create({
+          data: {
+            companyId, category: 'purchase_bill', referenceId: created.id, dateAd, dateBs,
+            title: `Purchase Bill - ${created.vendorName} - ${orderNumber}`,
+            vendorName: created.vendorName, vendorContact: created.vendorContact,
+            documentUrl: attachmentUrls[0], attachments: attachmentUrls,
+          },
+        });
       }
 
       return created;

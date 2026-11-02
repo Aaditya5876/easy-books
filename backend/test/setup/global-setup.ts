@@ -3,6 +3,7 @@
 import { execSync } from 'child_process';
 import * as path from 'path';
 import { PrismaClient } from '@prisma/client';
+import { prismaPgAdapter } from '../../core/db/psql/prisma.client';
 import { TEST_DATABASE_URL } from './env';
 
 export default async function globalSetup() {
@@ -12,7 +13,7 @@ export default async function globalSetup() {
 
   const admin = new URL(TEST_DATABASE_URL);
   admin.pathname = '/postgres';
-  const prisma = new PrismaClient({ datasources: { db: { url: admin.toString() } } });
+  const prisma = new PrismaClient({ adapter: prismaPgAdapter(admin.toString()) });
   const exists = await prisma.$queryRawUnsafe<unknown[]>(`SELECT 1 FROM pg_database WHERE datname = '${dbName}'`);
   if (exists.length === 0) await prisma.$executeRawUnsafe(`CREATE DATABASE "${dbName}"`);
   await prisma.$disconnect();

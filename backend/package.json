@@ -5,9 +5,6 @@
   "engines": {
     "node": ">=24.9"
   },
-  "prisma": {
-    "seed": "ts-node prisma/seed.ts"
-  },
   "scripts": {
     "postinstall": "prisma generate",
     "backfill:uploads": "ts-node scripts/backfill-upload-owners.ts",
@@ -15,14 +12,14 @@
     "prebuild": "npm run build --prefix ../shared",
     "build": "prisma generate && nest build",
     "start": "node dist/backend/src/main",
-    "test": "node --experimental-vm-modules ../node_modules/jest/bin/jest.js --config test/jest-e2e.json --runInBand",
+    "test": "node --experimental-vm-modules ../node_modules/jest/bin/jest.js --config test/jest-e2e.json",
     "test:watch": "jest --watch",
     "migrate": "prisma migrate deploy",
     "migrate:dev": "prisma migrate dev",
     "migrate:reset": "prisma migrate reset",
     "db:generate": "prisma generate",
     "db:studio": "prisma studio",
-    "test:e2e": "node --experimental-vm-modules ../node_modules/jest/bin/jest.js --config test/jest-e2e.json --runInBand"
+    "test:e2e": "node --experimental-vm-modules ../node_modules/jest/bin/jest.js --config test/jest-e2e.json"
   },
   "dependencies": {
     "@easy-books/shared": "*",
@@ -37,7 +34,9 @@
     "@nestjs/schedule": "^12.0.2",
     "@nestjs/swagger": "^12.1.0",
     "@nestjs/throttler": "^6.7.1",
-    "@prisma/client": "^6.2.1",
+    "@prisma/adapter-pg": "^7.10.1",
+    "@prisma/client": "^7.10.1",
+    "@vercel/blob": "^2.8.2",
     "bcrypt": "^6.0.0",
     "bull": "^4.16.5",
     "class-transformer": "^0.5.1",
@@ -67,7 +66,7 @@
     "@types/passport-jwt": "^4.0.1",
     "@types/supertest": "^6.0.2",
     "jest": "^30.0.0",
-    "prisma": "^6.2.1",
+    "prisma": "^7.10.1",
     "supertest": "^7.0.0",
     "ts-jest": "^29.4.0",
     "ts-node": "^10.9.2",

@@ -1,29 +1,28 @@
 import { BadRequestException } from '@nestjs/common';
-import { diskStorage } from 'multer';
-import { extname, join } from 'path';
-import { existsSync, mkdirSync } from 'fs';
+import { extname } from 'path';
 import { randomUUID } from 'crypto';
+import { FileStorage, mimeFor } from '../../../../../core/storage/file-storage';
 
 // Shared by the staff-facing generic uploader and the portal's own
-// payment-proof uploader — both files land in the same local `uploads/` dir
-// and get served from the same `/uploads` static prefix (see main.ts).
-export function makeUploadStorage() {
-  return diskStorage({
-    destination: (_req, _file, cb) => {
-      const uploadDir = join(process.cwd(), 'uploads');
-      if (!existsSync(uploadDir)) mkdirSync(uploadDir, { recursive: true });
-      cb(null, uploadDir);
-    },
-    // A random UUID, not Date.now()+Math.random(), so links can't be guessed;
-    // prefixed with the owning company so UploadAccessGuard can refuse other
-    // schools' staff and parents. The guards run before this interceptor, so
-    // the company is already verified (staff: ?companyId, portal: its token).
-    filename: (req: any, file, cb) => {
-      const companyId = req.query?.companyId || req.portalUser?.companyId;
-      const prefix = typeof companyId === 'string' && UUID.test(companyId) ? `${companyId}_` : '';
-      cb(null, `${prefix}${randomUUID()}${extname(file.originalname)}`);
-    },
-  });
+// payment-proof uploader. Multer keeps the upload in memory (its default when
+// no storage is given); saveUpload() names it and hands it to FileStorage
+// (local uploads/ in dev, private Vercel Blob in production). Both are served
+// from the same /uploads/<name> route behind UploadAccessGuard.
+//
+// A random UUID, not Date.now()+Math.random(), so links can't be guessed;
+// prefixed with the owning company so UploadAccessGuard can refuse other
+// schools' staff and parents. Callers pass a company the guards have already
+// verified (staff: ?companyId, portal: its token).
+export async function saveUpload(storage: FileStorage, file: any, companyId?: string) {
+  const prefix = typeof companyId === 'string' && UUID.test(companyId) ? `${companyId}_` : '';
+  const filename = `${prefix}${randomUUID()}${extname(file.originalname).toLowerCase()}`;
+  await storage.save(filename, file.buffer, mimeFor(filename));
+  return {
+    url: `/uploads/${filename}`,
+    originalName: file.originalname,
+    size: file.size,
+    mimeType: file.mimetype,
+  };
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

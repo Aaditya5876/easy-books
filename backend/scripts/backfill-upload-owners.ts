@@ -4,10 +4,11 @@
 import 'dotenv/config';
 import * as path from 'path';
 import { PrismaClient } from '@prisma/client';
+import { prismaPgAdapter } from '../core/db/psql/prisma.client';
 import { backfillUploadOwners } from '../core/maintenance/backfill-upload-owners';
 
 async function main() {
-  const prisma = new PrismaClient();
+  const prisma = new PrismaClient({ adapter: prismaPgAdapter() });
   try {
     const { renamed, orphaned } = await backfillUploadOwners(prisma, path.join(process.cwd(), 'uploads'));
     console.log(`Moved ${renamed} file(s) under their school.`);

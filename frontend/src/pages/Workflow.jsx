@@ -826,13 +826,24 @@ function NewTaskDialog({ open, onOpenChange, onCreated }) {
       const res = await taskApi.create({ ...taskData, companyId });
       const created = res.data;
       if (attachments.length > 0 && created?.id) {
+        // Kept as a Supporting Document linked to the task. The memo API needs
+        // a date and plain file URLs; this call used to omit both and swallow
+        // the error, so task attachments were silently lost.
+        const urls = attachments.map(f => f.url).filter(Boolean);
         await memoApi.create({
           companyId,
+          category: 'supporting_doc',
           title: `Task: ${form.title}`,
           content: `Attachments for task #${created.id}`,
-          tags: ['task', 'attachment'],
-          attachments,
-        }).catch(() => null);
+          dateAd: new Date().toISOString().split('T')[0],
+          referenceId: created.id,
+          documentUrl: urls[0],
+          attachments: urls,
+        }).catch(() => toast({
+          title: t('workflow.attachmentsNotSaved', { defaultValue: 'Attachments not saved' }),
+          description: t('workflow.attachmentsNotSavedDesc', { defaultValue: 'The task was created, but its files could not be saved. Add them again from Memo.' }),
+          variant: 'destructive',
+        }));
       }
       onCreated(created);
       setForm(EMPTY_FORM);

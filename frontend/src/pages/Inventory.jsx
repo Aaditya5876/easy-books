@@ -3,7 +3,8 @@ import { useTranslation } from 'react-i18next';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
 import { api, apiAuth } from '@/api/adapter';
-import { inventoryApi } from '@/api';
+import { inventoryApi, uploadApi } from '@/api';
+import { fileUrl } from '@/lib/fileUrl';
 import { getActiveCompanyId } from '@/lib/companyContext';
 import { adToBs } from '@/lib/nepaliDate';
 import PageHeader from '../components/shared/PageHeader';
@@ -179,8 +180,15 @@ export default function Inventory() {
     const file = e.target.files?.[0];
     if (!file) return;
     setUploadingImage(true);
-    setForm(prev => ({ ...prev, image_url: URL.createObjectURL(file) }));
-    setUploadingImage(false);
+    try {
+      const res = await uploadApi.upload(file);
+      setForm(prev => ({ ...prev, image_url: res.data.url }));
+    } catch (err) {
+      e.target.value = '';
+      toast.error(err?.response?.data?.message || t('inventory.imageUploadFailed', { defaultValue: 'Could not upload the image. Please try again.' }));
+    } finally {
+      setUploadingImage(false);
+    }
   }
 
   useEffect(() => {
@@ -242,8 +250,15 @@ export default function Inventory() {
     const file = e.target.files?.[0];
     if (!file) return;
     setUploadingUpdateImage(true);
-    setUpdateForm(prev => ({ ...prev, image_url: URL.createObjectURL(file) }));
-    setUploadingUpdateImage(false);
+    try {
+      const res = await uploadApi.upload(file);
+      setUpdateForm(prev => ({ ...prev, image_url: res.data.url }));
+    } catch (err) {
+      e.target.value = '';
+      toast.error(err?.response?.data?.message || t('inventory.imageUploadFailed', { defaultValue: 'Could not upload the image. Please try again.' }));
+    } finally {
+      setUploadingUpdateImage(false);
+    }
   }
 
   async function handleUpdateSubmit() {
@@ -488,7 +503,7 @@ export default function Inventory() {
               <Label className="text-sm font-medium mb-2 block">{t('inventory.productImage', { defaultValue: 'Product Image' })}</Label>
               {updateForm.image_url ? (
                 <div className="relative w-24 h-24">
-                  <img src={updateForm.image_url} alt={t('inventory.imagePreviewAlt', { defaultValue: 'preview' })} className="w-24 h-24 rounded-lg object-cover border shadow-sm" />
+                  <img src={fileUrl(updateForm.image_url)} alt={t('inventory.imagePreviewAlt', { defaultValue: 'preview' })} className="w-24 h-24 rounded-lg object-cover border shadow-sm" />
                   <button type="button" onClick={() => setUpdateForm(f => ({ ...f, image_url: '' }))}
                     className="absolute -top-2 -right-2 bg-destructive text-destructive-foreground rounded-full w-6 h-6 flex items-center justify-center shadow-md">
                     <X className="w-3 h-3" />
@@ -763,7 +778,7 @@ export default function Inventory() {
                 <Label className="text-sm font-medium mb-2 block">{t('inventory.image', { defaultValue: 'Image' })}</Label>
                 {form.image_url ? (
                   <div className="relative w-32 h-32">
-                    <img src={form.image_url} alt={t('inventory.imagePreviewAlt', { defaultValue: 'preview' })} className="w-32 h-32 rounded-lg object-cover border shadow-sm" />
+                    <img src={fileUrl(form.image_url)} alt={t('inventory.imagePreviewAlt', { defaultValue: 'preview' })} className="w-32 h-32 rounded-lg object-cover border shadow-sm" />
                     <button type="button" onClick={() => setForm(f => ({ ...f, image_url: '' }))}
                       className="absolute -top-2 -right-2 bg-destructive text-destructive-foreground rounded-full w-6 h-6 flex items-center justify-center shadow-md">
                       <X className="w-3 h-3" />

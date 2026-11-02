@@ -131,6 +131,43 @@ describe('Business product', () => {
     });
   });
 
+  describe('bill attachments', () => {
+    const file = (owner: string) => ({ url: `/uploads/${owner}_${'1'.repeat(8)}-1111-4111-8111-${'1'.repeat(12)}.pdf`, originalName: 'bill.pdf' });
+
+    it('a sale saves its attachments as a linked Sales Bill document', async () => {
+      const attachment = file(companyId);
+      const res = await admin.post('/api/v1/sales', {
+        clientName: 'Walk-in', dateAd: today, paymentMethod: 'CASH', attachments: [attachment],
+        items: [{ description: 'Service', quantity: 1, unitPrice: 100 }],
+      });
+      expect(res.status).toBe(201);
+      const memo = await ctx.prisma.memoDocument.findFirst({ where: { companyId, referenceId: res.body.id } });
+      expect(memo).toMatchObject({ category: 'sales_bill', clientName: 'Walk-in', documentUrl: attachment.url, attachments: [attachment.url] });
+      expect((await admin.get('/api/v1/memos')).body.some((m: any) => m.id === memo!.id)).toBe(true);
+    });
+
+    it('a purchase saves its attachments as a linked Purchase Bill document', async () => {
+      const attachment = file(companyId);
+      const res = await admin.post('/api/v1/purchases', {
+        vendorName: 'Ktm Suppliers', dateAd: today, paymentMethod: 'CASH', attachments: [attachment],
+        items: [{ description: 'Paper', quantity: 1, unitPrice: 50 }],
+      });
+      expect(res.status).toBe(201);
+      const memo = await ctx.prisma.memoDocument.findFirst({ where: { companyId, referenceId: res.body.id } });
+      expect(memo).toMatchObject({ category: 'purchase_bill', vendorName: 'Ktm Suppliers', attachments: [attachment.url] });
+    });
+
+    it("refuses another school's file and saves nothing", async () => {
+      const before = await ctx.prisma.salesOrder.count({ where: { companyId } });
+      const res = await admin.post('/api/v1/sales', {
+        clientName: 'X', dateAd: today, attachments: [file('2'.repeat(8) + '-2222-4222-8222-' + '2'.repeat(12))],
+        items: [{ description: 'Service', quantity: 1, unitPrice: 100 }],
+      });
+      expect(res.status).toBe(400);
+      expect(await ctx.prisma.salesOrder.count({ where: { companyId } })).toBe(before);
+    });
+  });
+
   describe('quotations', () => {
     it('quote, then convert once into a sale', async () => {
       const q = await admin.post('/api/v1/quotations', {

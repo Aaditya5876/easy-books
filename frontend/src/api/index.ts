@@ -250,12 +250,14 @@ export const companyApi = {
 
 // File Upload
 export const uploadApi = {
-  upload: (file: File) => {
+  // forCompanyId: the company the file belongs to when it isn't the active one
+  // (e.g. an admin editing another company's logo in Settings).
+  upload: (file: File, forCompanyId?: string) => {
     const formData = new FormData();
     formData.append('file', file);
     return apiClient.post('/api/v1/upload', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
-      params: { companyId: companyId() }, // files are stored under, and readable only by, this company
+      params: { companyId: forCompanyId || companyId() }, // files are stored under, and readable only by, this company
     });
   },
 };

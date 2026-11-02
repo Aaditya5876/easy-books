@@ -1,6 +1,6 @@
 import {
   Controller, Post, Get, Patch, Body, Req, UseGuards, Query, Param,
-  UploadedFile, UseInterceptors, BadRequestException, Res,
+  UploadedFile, UseInterceptors, BadRequestException, Res, Inject,
 } from '@nestjs/common';
 import { Response } from 'express';
 import { PORTAL_COOKIE } from '../../../../modules/guards/portal.guard';
@@ -15,7 +15,8 @@ import { PortalNotificationService } from '../../../../application/services/port
 import { PortalGuard } from '../../../../modules/guards/portal.guard';
 import { Roles } from '../../../../modules/decorators/roles.decorator';
 import { RequiresStaffTag } from '../../../../modules/decorators/requires-staff-tag.decorator';
-import { makeUploadStorage, extensionFilter } from './upload.util';
+import { saveUpload, extensionFilter } from './upload.util';
+import { FILE_STORAGE, FileStorage } from '../../../../../core/storage/file-storage';
 
 // The portal session lives in an HttpOnly cookie so page scripts (and any
 // injected script) can never read the token; the browser also sends it on
@@ -41,6 +42,7 @@ export class PortalController {
     private readonly portalService: PortalService,
     private readonly paymentService: PaymentService,
     private readonly portalNotifications: PortalNotificationService,
+    @Inject(FILE_STORAGE) private readonly storage: FileStorage,
   ) {}
 
   @Public()
@@ -132,19 +134,18 @@ export class PortalController {
 
   // Screenshot upload for payment proof — portal users can't call the
   // staff-only /api/v1/upload endpoint, so this is a scoped equivalent:
-  // images only, smaller size limit, same local-disk storage/URL shape.
+  // images only, smaller size limit, same storage/URL shape.
   @Public()
   @UseGuards(PortalGuard)
   @Post('upload')
   @ApiConsumes('multipart/form-data')
   @UseInterceptors(FileInterceptor('file', {
-    storage: makeUploadStorage(),
     limits: { fileSize: MAX_PROOF_FILE_SIZE },
     fileFilter: extensionFilter(PROOF_IMAGE_EXTENSIONS),
   }))
-  uploadProof(@UploadedFile() file: any) {
+  uploadProof(@UploadedFile() file: any, @Req() req: any) {
     if (!file) throw new BadRequestException('No file provided');
-    return { url: `/uploads/${file.filename}`, originalName: file.originalname, size: file.size, mimeType: file.mimetype };
+    return saveUpload(this.storage, file, req.portalUser.companyId);
   }
 
   @Public()
