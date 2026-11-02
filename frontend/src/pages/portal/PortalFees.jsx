@@ -22,14 +22,10 @@ const STATUS_CONFIG = {
 };
 const PAGE_SIZE = 8;
 
-// Uploaded files now require an authenticated request; a portal session has
-// no cookie (Bearer-only, in localStorage), and a plain <img src> can't send
-// an Authorization header, so the token rides along as a query param instead.
+// Uploaded files require a session; the browser sends the portal's HttpOnly
+// cookie on plain <img src>/<a href> requests, so only the API origin is added.
 function resolveFileUrl(url = '') {
-  const full = url.startsWith('http') ? url : `${apiClient.defaults.baseURL}${url}`;
-  const token = localStorage.getItem('portal_token');
-  if (!token) return full;
-  return `${full}${full.includes('?') ? '&' : '?'}token=${encodeURIComponent(token)}`;
+  return url.startsWith('http') ? url : `${apiClient.defaults.baseURL}${url}`;
 }
 
 const PAYMENT_STATUS_BADGE = {
@@ -252,7 +248,7 @@ export default function PortalFees() {
     setViewingId(invoiceId);
     try {
       const res = await portalApi.feeReceipt(invoiceId);
-      printFeeInvoice(res.data, localStorage.getItem('portal_token'));
+      printFeeInvoice(res.data);
     } catch (e) {
       toast.error(e?.response?.data?.message || t('portal.couldNotLoadInvoice', { defaultValue: 'Could not load invoice' }));
     } finally {

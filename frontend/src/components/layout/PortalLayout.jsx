@@ -10,7 +10,7 @@ import {
 import { cn } from '@/lib/utils';
 import { useTranslation } from 'react-i18next';
 import { portalApi } from '@/api';
-import { decodePortalToken } from '@/lib/portalToken';
+import { getPortalSession, clearPortalSession } from '@/lib/portalSession';
 
 const NAV = [
   { icon: LayoutDashboard, label: 'Home',           labelKey: 'portal.home',          path: '/portal',                 color: '#3B82F6' },
@@ -143,9 +143,9 @@ export default function PortalLayout() {
   const [hasToken, setHasToken] = useState(false);
 
   useEffect(() => {
-    const token = localStorage.getItem('portal_token');
-    if (!token) { navigate('/portal/login', { replace: true }); return; }
-    if (decodePortalToken(token)?.mustChangePassword) {
+    const session = getPortalSession();
+    if (!session) { navigate('/portal/login', { replace: true }); return; }
+    if (session.mustChangePassword) {
       navigate('/portal/change-password', { replace: true });
       return;
     }
@@ -160,8 +160,8 @@ export default function PortalLayout() {
   });
 
   function logout() {
-    localStorage.removeItem('portal_token');
-    localStorage.removeItem('portal_student');
+    portalApi.logout().catch(() => {}); // revokes the session and clears its cookie
+    clearPortalSession();
     navigate('/portal/login', { replace: true });
   }
 

@@ -7,7 +7,7 @@ import {
   NotFoundException,
   ForbiddenException,
 } from '@nestjs/common';
-import { JwtService } from '@nestjs/jwt';
+import { JwtService, JwtSignOptions } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
@@ -18,6 +18,7 @@ import { PrismaService } from '../../../core/db/psql/prisma.client';
 import { MailService } from './mail.service';
 import { markSelfAttendance } from './self-attendance.util';
 import { isCompanyAccessible } from '../../../core/modules/company-access';
+import { assertNotLocked, recordFailedLogin, clearedLockout } from '../../../core/utils/login-lockout';
 
 @Injectable()
 export class AuthServiceImpl implements IAuthService {
@@ -115,12 +116,22 @@ export class AuthServiceImpl implements IAuthService {
     await this.mailService.sendOtpVerification(user.email, user.name, otp);
   }
 
+  // Lockout is checked before the password so a locked account gives the same
+  // answer whether or not the guess is right.
+  private async verifyPassword(user: { id: string; password: string }, password: string) {
+    const lock = await this.prisma.user.findUnique({ where: { id: user.id }, select: { lockedUntil: true } });
+    assertNotLocked(lock);
+    if (!(await bcrypt.compare(password, user.password))) {
+      await recordFailedLogin(this.prisma.user, { id: user.id });
+      throw new UnauthorizedException('Invalid credentials');
+    }
+  }
+
   async login(dto: LoginDTO): Promise<AuthTokens & { mustChangePassword: boolean }> {
     const user = await this.userRepo.findByEmail(dto.email);
     if (!user) throw new UnauthorizedException('Invalid credentials');
 
-    const valid = await bcrypt.compare(dto.password, user.password);
-    if (!valid) throw new UnauthorizedException('Invalid credentials');
+    await this.verifyPassword(user, dto.password);
 
     if (!user.emailVerified) {
       throw new UnauthorizedException('Please verify your email before logging in');
@@ -129,7 +140,7 @@ export class AuthServiceImpl implements IAuthService {
     this.assertNotSuspended(user);
     await this.assertHasActiveCompany(user.id, user.role);
 
-    await this.prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
+    await this.prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date(), ...clearedLockout } });
 
     const tokens = await this.issueTokens(user.id, user.email, user.role, user.staffTags);
     return { ...tokens, mustChangePassword: user.mustChangePassword };
@@ -144,8 +155,8 @@ export class AuthServiceImpl implements IAuthService {
     const user = await this.userRepo.findByEmail(email);
     if (!user) throw new UnauthorizedException('Invalid credentials');
 
-    const valid = await bcrypt.compare(password, user.password);
-    if (!valid) throw new UnauthorizedException('Invalid credentials');
+    await this.verifyPassword(user, password);
+    await this.prisma.user.update({ where: { id: user.id }, data: clearedLockout });
 
     if (!user.emailVerified) {
       throw new UnauthorizedException('Please verify your email before logging in');
@@ -269,7 +280,7 @@ export class AuthServiceImpl implements IAuthService {
   }
 
   private generateOtp(): string {
-    return Math.floor(100000 + Math.random() * 900000).toString();
+    return crypto.randomInt(100000, 1000000).toString(); // CSPRNG: Math.random() is predictable
   }
 
   private async issueTokens(userId: string, email: string, role: string, staffTags: string[] = []): Promise<AuthTokens> {
@@ -277,12 +288,12 @@ export class AuthServiceImpl implements IAuthService {
 
     const accessToken = this.jwtService.sign(payload, {
       secret: this.config.get<string>('JWT_ACCESS_SECRET'),
-      expiresIn: this.config.get<string>('JWT_ACCESS_EXPIRES_IN', '15m'),
+      expiresIn: this.config.get<string>('JWT_ACCESS_EXPIRES_IN', '15m') as JwtSignOptions['expiresIn'],
     });
 
     const refreshToken = this.jwtService.sign(payload, {
       secret: this.config.get<string>('JWT_REFRESH_SECRET'),
-      expiresIn: this.config.get<string>('JWT_REFRESH_EXPIRES_IN', '7d'),
+      expiresIn: this.config.get<string>('JWT_REFRESH_EXPIRES_IN', '7d') as JwtSignOptions['expiresIn'],
     });
 
     const hashedRefresh = await bcrypt.hash(refreshToken, 10);

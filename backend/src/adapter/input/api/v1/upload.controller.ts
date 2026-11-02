@@ -1,4 +1,3 @@
-import { NoCompanyScope } from '../../../../modules/decorators/no-company-scope.decorator';
 import {
   Controller, Post, UploadedFile, UseInterceptors, BadRequestException,
 } from '@nestjs/common';
@@ -12,7 +11,6 @@ const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
 
 @ApiTags('Upload')
 @ApiBearerAuth()
-@NoCompanyScope()
 @Controller('api/v1/upload')
 export class UploadController {
   @Post()

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { portalApi } from '@/api';
+import { getPortalSession, setPortalSession, clearPortalSession } from '@/lib/portalSession';
 import { toast } from 'sonner';
 import { ShieldCheck, Eye, EyeOff, Loader2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -15,18 +16,18 @@ export default function PortalChangePassword() {
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   useEffect(() => {
-    if (!localStorage.getItem('portal_token')) navigate('/portal/login', { replace: true });
+    if (!getPortalSession()) navigate('/portal/login', { replace: true });
   }, [navigate]);
 
   async function handleSubmit(e) {
     e.preventDefault();
     if (!form.currentPassword) { toast.error(t('portal.currentPasswordRequired', { defaultValue: 'Current password is required' })); return; }
-    if (form.newPassword.length < 6) { toast.error(t('portal.passwordMinLength', { defaultValue: 'New password must be at least 6 characters' })); return; }
+    if (form.newPassword.length < 8) { toast.error(t('portal.passwordMinLength', { defaultValue: 'New password must be at least 8 characters' })); return; }
     if (form.newPassword !== form.confirmPassword) { toast.error(t('portal.passwordsDontMatch', { defaultValue: 'Passwords do not match' })); return; }
     setLoading(true);
     try {
       const res = await portalApi.changePassword(form);
-      localStorage.setItem('portal_token', res.data.token);
+      setPortalSession({ mustChangePassword: false });
       toast.success(t('portal.passwordChanged', { defaultValue: 'Password changed successfully' }));
       navigate('/portal', { replace: true });
     } catch (err) {
@@ -37,8 +38,8 @@ export default function PortalChangePassword() {
   }
 
   function logout() {
-    localStorage.removeItem('portal_token');
-    localStorage.removeItem('portal_student');
+    portalApi.logout().catch(() => {}); // revokes the session and clears its cookie
+    clearPortalSession();
     navigate('/portal/login', { replace: true });
   }
 
@@ -111,7 +112,7 @@ export default function PortalChangePassword() {
               <div className="relative">
                 <input
                   type={showPw ? 'text' : 'password'}
-                  placeholder={t('portal.passwordPlaceholder', { defaultValue: 'Min 6 characters' })}
+                  placeholder={t('portal.passwordPlaceholder', { defaultValue: 'Min 8 characters' })}
                   value={form.newPassword}
                   onChange={e => set('newPassword', e.target.value)}
                   autoComplete="new-password"

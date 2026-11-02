@@ -255,6 +255,7 @@ export const uploadApi = {
     formData.append('file', file);
     return apiClient.post('/api/v1/upload', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
+      params: { companyId: companyId() }, // files are stored under, and readable only by, this company
     });
   },
 };
@@ -550,51 +551,51 @@ export const usersApi = {
 
 // ── Portal API (parent/student token-based auth) ─────────────────────────────
 
-const portalToken = () => localStorage.getItem('portal_token') || '';
-const portalHeaders = () => ({ Authorization: `Bearer ${portalToken()}` });
+// The portal session rides in an HttpOnly cookie (sent via withCredentials).
 
 export const portalApi = {
   login: (data: object) => apiClient.post('/api/v1/portal/login', data),
   setPassword: (data: object) => apiClient.post('/api/v1/portal/set-password', data),
   bulkSetAccess: (data: object) => apiClient.post('/api/v1/portal/bulk-set-access', data),
   changePassword: (data: { currentPassword: string; newPassword: string }) =>
-    apiClient.patch('/api/v1/portal/change-password', data, { headers: portalHeaders() }),
-  me: () => apiClient.get('/api/v1/portal/me', { headers: portalHeaders() }),
-  attendance: () => apiClient.get('/api/v1/portal/attendance', { headers: portalHeaders() }),
-  fees: () => apiClient.get('/api/v1/portal/fees', { headers: portalHeaders() }),
-  feeReceipt: (invoiceId: string) => apiClient.get(`/api/v1/portal/fees/${invoiceId}/receipt`, { headers: portalHeaders() }),
-  paymentQrCodes: () => apiClient.get('/api/v1/portal/payment-qr-codes', { headers: portalHeaders() }),
-  paymentGateways: () => apiClient.get('/api/v1/portal/payment-gateways', { headers: portalHeaders() }),
-  notifications: () => apiClient.get('/api/v1/portal/notifications', { headers: portalHeaders() }),
-  notificationsUnreadCount: () => apiClient.get('/api/v1/portal/notifications/unread-count', { headers: portalHeaders() }),
-  markNotificationRead: (id: string) => apiClient.patch(`/api/v1/portal/notifications/${id}/read`, {}, { headers: portalHeaders() }),
-  markAllNotificationsRead: () => apiClient.patch('/api/v1/portal/notifications/mark-all-read', {}, { headers: portalHeaders() }),
-  results: () => apiClient.get('/api/v1/portal/results', { headers: portalHeaders() }),
-  homework: (classId?: string) => apiClient.get('/api/v1/portal/homework', { headers: portalHeaders(), params: { classId } }),
-  notices: () => apiClient.get('/api/v1/portal/notices', { headers: portalHeaders() }),
-  timetable: (classId?: string) => apiClient.get('/api/v1/portal/timetable', { headers: portalHeaders(), params: { classId } }),
+    apiClient.patch('/api/v1/portal/change-password', data),
+  me: () => apiClient.get('/api/v1/portal/me'),
+  logout: () => apiClient.post('/api/v1/portal/logout', {}),
+  attendance: () => apiClient.get('/api/v1/portal/attendance'),
+  fees: () => apiClient.get('/api/v1/portal/fees'),
+  feeReceipt: (invoiceId: string) => apiClient.get(`/api/v1/portal/fees/${invoiceId}/receipt`),
+  paymentQrCodes: () => apiClient.get('/api/v1/portal/payment-qr-codes'),
+  paymentGateways: () => apiClient.get('/api/v1/portal/payment-gateways'),
+  notifications: () => apiClient.get('/api/v1/portal/notifications'),
+  notificationsUnreadCount: () => apiClient.get('/api/v1/portal/notifications/unread-count'),
+  markNotificationRead: (id: string) => apiClient.patch(`/api/v1/portal/notifications/${id}/read`, {}),
+  markAllNotificationsRead: () => apiClient.patch('/api/v1/portal/notifications/mark-all-read', {}),
+  results: () => apiClient.get('/api/v1/portal/results'),
+  homework: (classId?: string) => apiClient.get('/api/v1/portal/homework', { params: { classId } }),
+  notices: () => apiClient.get('/api/v1/portal/notices'),
+  timetable: (classId?: string) => apiClient.get('/api/v1/portal/timetable', { params: { classId } }),
   studyMaterials: (classId?: string, subjectId?: string) =>
-    apiClient.get('/api/v1/portal/study-materials', { headers: portalHeaders(), params: { classId, subjectId } }),
+    apiClient.get('/api/v1/portal/study-materials', { params: { classId, subjectId } }),
   examSchedule: (classId?: string) =>
-    apiClient.get('/api/v1/portal/exam-schedule', { headers: portalHeaders(), params: { classId } }),
-  events: () => apiClient.get('/api/v1/portal/events', { headers: portalHeaders() }),
+    apiClient.get('/api/v1/portal/exam-schedule', { params: { classId } }),
+  events: () => apiClient.get('/api/v1/portal/events'),
   initiateEsewa: (invoiceId: string) =>
-    apiClient.post(`/api/v1/portal/pay/esewa/${invoiceId}`, {}, { headers: portalHeaders() }),
+    apiClient.post(`/api/v1/portal/pay/esewa/${invoiceId}`, {}),
   verifyEsewa: (data: { data: string }) =>
     apiClient.post('/api/v1/portal/pay/esewa/verify', data),
   initiateKhalti: (invoiceId: string) =>
-    apiClient.post(`/api/v1/portal/pay/khalti/${invoiceId}`, {}, { headers: portalHeaders() }),
+    apiClient.post(`/api/v1/portal/pay/khalti/${invoiceId}`, {}),
   verifyKhalti: (data: { pidx: string }) =>
     apiClient.post('/api/v1/portal/pay/khalti/verify', data),
   uploadProof: (file: File) => {
     const formData = new FormData();
     formData.append('file', file);
     return apiClient.post('/api/v1/portal/upload', formData, {
-      headers: { ...portalHeaders(), 'Content-Type': 'multipart/form-data' },
+      headers: { 'Content-Type': 'multipart/form-data' },
     });
   },
   submitPaymentProof: (invoiceId: string, data: object) =>
-    apiClient.post(`/api/v1/portal/fees/${invoiceId}/payment-proof`, data, { headers: portalHeaders() }),
+    apiClient.post(`/api/v1/portal/fees/${invoiceId}/payment-proof`, data),
 };
 
 // ── AI API (admin only, requires GEMINI_API_KEY on server) ───────────────────

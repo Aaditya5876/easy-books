@@ -182,7 +182,17 @@ export class SalesServiceImpl {
     if (!order) throw new NotFoundException('Sales order not found');
     if (order.status === 'COMPLETED') throw new BadRequestException('Cannot edit a completed order');
 
-    return this.prisma.salesOrder.update({ where: { id }, data });
+    // Only descriptive fields are editable: totals, paidAmount and status are
+    // derived from items and recorded payments, never taken from the request.
+    const edit: any = {};
+    for (const k of ['clientId', 'clientName', 'clientContact', 'clientAddress', 'clientPanVat', 'paymentMethod', 'notes']) {
+      if (data?.[k] !== undefined) edit[k] = data[k];
+    }
+    if (data?.dateAd) {
+      edit.dateAd = new Date(data.dateAd);
+      edit.dateBs = adToBs(edit.dateAd);
+    }
+    return this.prisma.salesOrder.update({ where: { id }, data: edit });
   }
 
   async remove(id: string, companyId: string) {

@@ -5,14 +5,10 @@ import apiClient from '@/api/client';
 // Same pattern as PortalFees.jsx's local resolveFileUrl — qrCodeUrl comes back
 // as a relative /uploads/... path from the backend, and this print template
 // opens a bare popup window outside the app's routing/proxy, so it needs the
-// API origin prefixed to actually load. Uploaded files now also require an
-// authenticated request — a staff session sends its cookie automatically,
-// but a portal session is Bearer-only, so the caller passes its token through
-// (see printFeeInvoice's portalToken param) and it rides along as a query param.
-function resolveFileUrl(url = '', portalToken) {
-  const full = url.startsWith('http') ? url : `${apiClient.defaults.baseURL}${url}`;
-  if (!portalToken) return full;
-  return `${full}${full.includes('?') ? '&' : '?'}token=${encodeURIComponent(portalToken)}`;
+// API origin prefixed to actually load. Uploaded files also require a session —
+// staff and portal sessions are both cookies, which the browser sends itself.
+function resolveFileUrl(url = '') {
+  return url.startsWith('http') ? url : `${apiClient.defaults.baseURL}${url}`;
 }
 
 // This document is built with document.write() into a same-origin popup —
@@ -30,7 +26,7 @@ function esc(value) {
 // The bill presented before payment — itemized charges, invoice/due dates,
 // balance owed. Distinct from printFeeReceipt.js, which is proof of payment
 // already made. See printFeeReceipt.js for the sibling document.
-export function printFeeInvoice(inv, portalToken) {
+export function printFeeInvoice(inv) {
   const w = window.open('', '_blank');
   const fmt = (n) => Number(n).toLocaleString('en-NP', { minimumFractionDigits: 2 });
   const className = inv.student?.class
@@ -67,7 +63,7 @@ export function printFeeInvoice(inv, portalToken) {
     <div class="qr-grid">
       ${qrAccounts.map(b => `
         <div class="qr-card">
-          <img src="${esc(resolveFileUrl(b.qrCodeUrl, portalToken))}" alt="${esc(b.bankName)} QR" />
+          <img src="${esc(resolveFileUrl(b.qrCodeUrl))}" alt="${esc(b.bankName)} QR" />
           <p style="margin:4px 0 0">${esc(b.bankName)}</p>
         </div>
       `).join('')}

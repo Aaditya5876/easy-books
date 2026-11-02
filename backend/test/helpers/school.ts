@@ -44,13 +44,19 @@ export async function billAndRelease(school: School, amount = 3000) {
 export async function portalLogin(ctx: TestContext, school: School, student: { id: string; phone: string }) {
   await school.admin.raw().post('/api/v1/portal/set-password')
     .send({ companyId: school.companyId, studentId: student.id, phone: student.phone, password: 'Kid@1234' });
+  // The session rides in an HttpOnly cookie, which the agent keeps like a browser.
   const portal = new Api(ctx.app);
-  let res = await portal.agent.post('/api/v1/portal/login').send({ phone: student.phone, password: 'Kid@1234' });
-  portal.bearer = res.body.token;
+  await portal.agent.post('/api/v1/portal/login').send({ phone: student.phone, password: 'Kid@1234' });
   await portal.patch('/api/v1/portal/change-password', { currentPassword: 'Kid@1234', newPassword: 'Kid@12345' });
-  res = await portal.agent.post('/api/v1/portal/login').send({ phone: student.phone, password: 'Kid@12345' });
-  portal.bearer = res.body.token;
+  await portal.agent.post('/api/v1/portal/login').send({ phone: student.phone, password: 'Kid@12345' });
   return portal;
+}
+
+// The raw portal token from a login/change-password response's Set-Cookie —
+// for tests that simulate a copied (stolen) session.
+export function portalCookieToken(res: { headers: Record<string, any> }) {
+  const cookie = ([] as string[]).concat(res.headers['set-cookie'] ?? []).find((c) => c.startsWith('portalToken='));
+  return cookie ? decodeURIComponent(cookie.split(';')[0].slice('portalToken='.length)) : undefined;
 }
 
 export const ledgerTotals = async (admin: Api) => {

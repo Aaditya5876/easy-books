@@ -1,7 +1,9 @@
 import {
   Controller, Post, Get, Patch, Body, Req, UseGuards, Query, Param,
-  UploadedFile, UseInterceptors, BadRequestException,
+  UploadedFile, UseInterceptors, BadRequestException, Res,
 } from '@nestjs/common';
+import { Response } from 'express';
+import { PORTAL_COOKIE } from '../../../../modules/guards/portal.guard';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Throttle } from '@nestjs/throttler';
 import { ApiTags, ApiConsumes } from '@nestjs/swagger';
@@ -14,6 +16,20 @@ import { PortalGuard } from '../../../../modules/guards/portal.guard';
 import { Roles } from '../../../../modules/decorators/roles.decorator';
 import { RequiresStaffTag } from '../../../../modules/decorators/requires-staff-tag.decorator';
 import { makeUploadStorage, extensionFilter } from './upload.util';
+
+// The portal session lives in an HttpOnly cookie so page scripts (and any
+// injected script) can never read the token; the browser also sends it on
+// plain <img>/<a> file links. Flags match the staff cookies in auth.controller.ts.
+const portalCookieOptions = () => ({
+  httpOnly: true,
+  // Vercel doesn't set NODE_ENV=production at runtime, but is always HTTPS.
+  secure: process.env.NODE_ENV === 'production' || !!process.env.VERCEL,
+  sameSite: 'strict' as const,
+  path: '/',
+});
+function setPortalCookie(res: Response, token: string) {
+  res.cookie(PORTAL_COOKIE, token, { ...portalCookieOptions(), maxAge: 7 * 24 * 60 * 60 * 1000 });
+}
 
 const PROOF_IMAGE_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.webp'];
 const MAX_PROOF_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
@@ -30,8 +46,10 @@ export class PortalController {
   @Public()
   @Post('login')
   @Throttle({ default: { limit: 5, ttl: 60000 } })
-  login(@Body() body: { phone: string; password: string }) {
-    return this.portalService.login(body.phone, body.password);
+  async login(@Body() body: { phone: string; password: string }, @Res({ passthrough: true }) res: Response) {
+    const { token, ...session } = await this.portalService.login(body.phone, body.password);
+    setPortalCookie(res, token);
+    return session;
   }
 
   // Not @Public() — requires a staff login. Explicitly role-gated: setting a
@@ -63,14 +81,25 @@ export class PortalController {
     return this.portalService.getMyStudent(req.portalUser.studentId, req.portalUser.companyId);
   }
 
+  @Public()
+  @UseGuards(PortalGuard)
+  @SkipPasswordCheck()
+  @Post('logout')
+  logout(@Req() req: any, @Res({ passthrough: true }) res: Response) {
+    res.clearCookie(PORTAL_COOKIE, portalCookieOptions());
+    return this.portalService.logout(req.portalUser.studentId);
+  }
+
   // Self-service password change — exempted from the mustChangePassword gate
   // since it's the one thing a pending account is allowed to do.
   @Public()
   @UseGuards(PortalGuard)
   @SkipPasswordCheck()
   @Patch('change-password')
-  changePassword(@Req() req: any, @Body() body: { currentPassword: string; newPassword: string }) {
-    return this.portalService.changePassword(req.portalUser, body.currentPassword, body.newPassword);
+  async changePassword(@Req() req: any, @Body() body: { currentPassword: string; newPassword: string }, @Res({ passthrough: true }) res: Response) {
+    const { token } = await this.portalService.changePassword(req.portalUser, body.currentPassword, body.newPassword);
+    setPortalCookie(res, token);
+    return { success: true };
   }
 
   @Public()

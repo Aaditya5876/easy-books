@@ -102,6 +102,9 @@ async function createApp() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, { bufferLogs: true });
 
   app.useLogger(app.get(Logger));
+  // Express 5 parses query strings "simple" by default (no a[b]=c or ids[]=1
+  // nesting); keep the qs behaviour every endpoint was written against.
+  app.set('query parser', 'extended');
   app.use(cookieParser());
   
   // Security headers (CSP disabled so Swagger UI can load inline assets)
@@ -160,11 +163,17 @@ async function createApp() {
     .addTag('Upload')
     .build();
 
-  // Factory form: the document is built on the first /docs request instead of
-  // at boot, which keeps serverless cold starts fast.
-  SwaggerModule.setup('docs', app, () => SwaggerModule.createDocument(app, swaggerConfig), {
-    swaggerOptions: { persistAuthorization: true },
-  });
+  // A public map of every endpoint helps attackers more than anyone else, so
+  // deployed APIs (Vercel never sets NODE_ENV=production) hide it unless
+  // ENABLE_API_DOCS=true. Local dev keeps it.
+  const docsEnabled = process.env.ENABLE_API_DOCS === 'true' || (!isProduction && !process.env.VERCEL);
+  if (docsEnabled) {
+    // Factory form: the document is built on the first /docs request instead of
+    // at boot, which keeps serverless cold starts fast.
+    SwaggerModule.setup('docs', app, () => SwaggerModule.createDocument(app, swaggerConfig), {
+      swaggerOptions: { persistAuthorization: true },
+    });
+  }
 
   return { app, envLabel };
 }

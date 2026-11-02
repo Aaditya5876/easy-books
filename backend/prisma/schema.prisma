@@ -211,6 +211,9 @@ model User {
   // account is actually being used. Not touched by quickAttendance (that's a
   // one-off check-in, not a real session).
   lastLoginAt        DateTime?
+  // Wrong-password lockout (see core/utils/login-lockout.ts).
+  failedLoginCount   Int       @default(0)
+  lockedUntil        DateTime?
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
 
@@ -1761,6 +1764,12 @@ model PortalUser {
   // Admin/bulk-provisioned passwords are known to staff, so the portal blocks
   // access to everything except /me and /change-password until this is cleared.
   mustChangePassword Boolean  @default(true)
+  // Stamped into every portal token; bumping it (logout, password change,
+  // admin reset) revokes all tokens issued before.
+  tokenVersion       Int      @default(0)
+  // Wrong-password lockout (see core/utils/login-lockout.ts).
+  failedLoginCount   Int       @default(0)
+  lockedUntil        DateTime?
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 

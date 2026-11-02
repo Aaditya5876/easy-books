@@ -141,10 +141,10 @@ describe('School fees, end to end', () => {
     });
 
     it('uploads an image (not other files) as proof', async () => {
-      const ok = await parent.agent.post('/api/v1/portal/upload').set('Authorization', `Bearer ${parent.bearer}`).attach('file', PNG, 'proof.png');
+      const ok = await parent.agent.post('/api/v1/portal/upload').attach('file', PNG, 'proof.png');
       expect(ok.status).toBe(201);
       proofUrl = ok.body.url;
-      const bad = await parent.agent.post('/api/v1/portal/upload').set('Authorization', `Bearer ${parent.bearer}`).attach('file', Buffer.from('MZ'), 'virus.exe');
+      const bad = await parent.agent.post('/api/v1/portal/upload').attach('file', Buffer.from('MZ'), 'virus.exe');
       expect(bad.status).toBeGreaterThanOrEqual(400);
     });
 
