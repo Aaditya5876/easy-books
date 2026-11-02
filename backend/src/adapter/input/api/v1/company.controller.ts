@@ -1,3 +1,4 @@
+import { NoCompanyScope } from '../../../../modules/decorators/no-company-scope.decorator';
 import { UpdatePayrollSettingsSchema, UpdatePayrollSettingsDTO } from '@easy-books/shared';
 import { ZodValidationPipe } from '../../../../modules/pipes/zod-validation.pipe';
 import { Controller, Get, Post, Put, Patch, Delete, Body, Param, Req } from '@nestjs/common';
@@ -7,6 +8,7 @@ import { Roles } from '../../../../modules/decorators/roles.decorator';
 
 @ApiTags('Companies')
 @ApiBearerAuth()
+@NoCompanyScope()
 @Controller('api/v1/companies')
 export class CompanyController {
   constructor(private readonly service: CompanyServiceImpl) {}

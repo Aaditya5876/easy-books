@@ -1,6 +1,7 @@
-import { Injectable, CanActivate, ExecutionContext, ForbiddenException } from '@nestjs/common';
+import { Injectable, CanActivate, ExecutionContext, ForbiddenException, BadRequestException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
+import { NO_COMPANY_SCOPE_KEY } from '../decorators/no-company-scope.decorator';
 import { PrismaService } from '../../../core/db/psql/prisma.client';
 import { isCompanyAccessible } from '../../../core/modules/company-access';
 import { NotificationServiceImpl } from '../../application/services/notification.service.impl';
@@ -46,9 +47,19 @@ export class CompanyAccessGuard implements CanActivate {
       [req.query?.companyId, req.params?.companyId, req.body?.companyId]
         .filter((v): v is string => typeof v === 'string' && v.length > 0),
     )];
-    if (companyIds.length === 0) return true; // route doesn't touch a specific company — nothing to verify
-
     if (user.role === 'SUPER_ADMIN') return true;
+
+    if (companyIds.length === 0) {
+      const noCompanyScope = this.reflector.getAllAndOverride<boolean>(NO_COMPANY_SCOPE_KEY, [
+        context.getHandler(),
+        context.getClass(),
+      ]);
+      if (noCompanyScope) return true;
+      // Deny by default: services filter with `where: { id, companyId }`, and
+      // Prisma drops an undefined filter — a missing companyId would match
+      // the record in any company.
+      throw new BadRequestException('companyId is required');
+    }
 
     for (const companyId of companyIds) {
       const [membership, company] = await Promise.all([
