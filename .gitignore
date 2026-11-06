@@ -36,3 +36,6 @@ frontend/dist/
 backend/uploads/*
 !backend/uploads/.gitkeep
 .vercel
+
+# Local notes that may hold secrets
+docs/env.txt
