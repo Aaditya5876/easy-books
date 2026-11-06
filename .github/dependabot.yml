@@ -1,0 +1,14 @@
+version: 2
+updates:
+  # One lockfile at the root covers the frontend, backend and shared workspaces.
+  - package-ecosystem: npm
+    directory: /
+    target-branch: develop
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 10
+    groups:
+      # Patch/minor bumps arrive as one PR; majors (NestJS, zod, react-router)
+      # stay separate so each migration can be reviewed on its own.
+      minor-and-patch:
+        update-types: [minor, patch]

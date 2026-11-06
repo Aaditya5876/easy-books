@@ -1,3 +1,4 @@
+import { NoCompanyScope } from '../../../../modules/decorators/no-company-scope.decorator';
 import { Controller, Get, Patch, Put, Body, Param, Query, Request, Res, Sse } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { NotificationType } from '@prisma/client';
@@ -12,6 +13,7 @@ import { NotificationServiceImpl } from '../../../../application/services/notifi
 // feature on its own. Only Memo and future broadcast/notice features are.
 @ApiTags('Notifications')
 @ApiBearerAuth()
+@NoCompanyScope()
 @Controller('api/v1/notifications')
 export class NotificationController {
   constructor(private readonly service: NotificationServiceImpl) {}

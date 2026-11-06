@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { api } from '@/api/adapter';
+import { uploadApi } from '@/api';
+import { fileUrl } from '@/lib/fileUrl';
 import { getActiveCompanyId } from '@/lib/companyContext';
 import { adToBs } from '@/lib/nepaliDate';
 import { formatDate } from '@/lib/utils';
@@ -258,7 +260,7 @@ export default function Memo() {
       )},
     { key: 'document_url', label: t('memo.colDoc', { defaultValue: 'Doc' }),
       render: (row) => row.document_url ? (
-        <a href={row.document_url} target="_blank" rel="noopener noreferrer"
+        <a href={fileUrl(row.document_url)} target="_blank" rel="noopener noreferrer"
            className="text-primary hover:underline flex items-center gap-1">
           <ExternalLink className="w-3 h-3" />{t('memo.view', { defaultValue: 'View' })}
         </a>
@@ -283,7 +285,7 @@ export default function Memo() {
       render: (row) => <span className="font-mono">{row.amount ? `NPR ${row.amount.toLocaleString()}` : '-'}</span> },
     { key: 'document_url', label: t('memo.colDocument', { defaultValue: 'Document' }),
       render: (row) => row.document_url ? (
-        <a href={row.document_url} target="_blank" rel="noopener noreferrer"
+        <a href={fileUrl(row.document_url)} target="_blank" rel="noopener noreferrer"
            className="text-primary hover:underline flex items-center gap-1">
           <ExternalLink className="w-3 h-3" />{t('memo.view', { defaultValue: 'View' })}
         </a>
@@ -305,7 +307,7 @@ export default function Memo() {
       render: (row) => <span className="font-mono">{row.amount ? `NPR ${row.amount.toLocaleString()}` : '-'}</span> },
     { key: 'document_url', label: t('memo.colDocument', { defaultValue: 'Document' }),
       render: (row) => row.document_url ? (
-        <a href={row.document_url} target="_blank" rel="noopener noreferrer"
+        <a href={fileUrl(row.document_url)} target="_blank" rel="noopener noreferrer"
            className="text-primary hover:underline flex items-center gap-1">
           <ExternalLink className="w-3 h-3" />{t('memo.view', { defaultValue: 'View' })}
         </a>
@@ -370,7 +372,7 @@ export default function Memo() {
       render: (row) => <span className="text-sm truncate max-w-[200px] block">{row.description || '-'}</span> },
     { key: 'document_url', label: t('memo.colFile', { defaultValue: 'File' }),
       render: (row) => row.document_url ? (
-        <a href={row.document_url} target="_blank" rel="noopener noreferrer"
+        <a href={fileUrl(row.document_url)} target="_blank" rel="noopener noreferrer"
            className="text-primary hover:underline flex items-center gap-1">
           <ExternalLink className="w-3 h-3" />{t('memo.view', { defaultValue: 'View' })}
         </a>
@@ -744,13 +746,22 @@ export default function Memo() {
                     type="file"
                     accept="image/*,.pdf"
                     className="h-9 text-sm"
-                    onChange={e => {
+                    onChange={async e => {
                       const file = e.target.files?.[0];
-                      if (file) setForm(prev => ({ ...prev, document_url: URL.createObjectURL(file) }));
+                      if (!file) return;
+                      // Upload it for real — this used to keep a browser-only blob: URL,
+                      // which was saved to the record and never opened again.
+                      try {
+                        const res = await uploadApi.upload(file);
+                        setForm(prev => ({ ...prev, document_url: res.data.url }));
+                      } catch (err) {
+                        e.target.value = '';
+                        toast.error(err?.response?.data?.message || t('memo.uploadFailed', { defaultValue: 'Could not upload the file. Please try again.' }));
+                      }
                     }}
                   />
                   {form.document_url && (
-                    <a href={form.document_url} target="_blank" rel="noopener noreferrer"
+                    <a href={fileUrl(form.document_url)} target="_blank" rel="noopener noreferrer"
                        className="text-xs text-primary underline flex items-center gap-1">
                       <ExternalLink className="w-3 h-3" />{t('memo.viewAttachedFile', { defaultValue: 'View attached file' })}
                     </a>

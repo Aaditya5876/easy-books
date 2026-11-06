@@ -5,7 +5,7 @@ import { portalApi } from '@/api';
 import { toast } from 'sonner';
 import { BookOpen, Eye, EyeOff, Loader2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { decodePortalToken } from '@/lib/portalToken';
+import { getPortalSession, setPortalSession } from '@/lib/portalSession';
 
 export default function PortalLogin() {
   const { t } = useTranslation();
@@ -16,10 +16,9 @@ export default function PortalLogin() {
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   useEffect(() => {
-    const token = localStorage.getItem('portal_token');
-    if (!token) return;
-    const claims = decodePortalToken(token);
-    navigate(claims?.mustChangePassword ? '/portal/change-password' : '/portal', { replace: true });
+    const session = getPortalSession();
+    if (!session) return;
+    navigate(session.mustChangePassword ? '/portal/change-password' : '/portal', { replace: true });
   }, [navigate]);
 
   async function handleSubmit(e) {
@@ -29,7 +28,7 @@ export default function PortalLogin() {
     setLoading(true);
     try {
       const res = await portalApi.login(form);
-      localStorage.setItem('portal_token',   res.data.token);
+      setPortalSession(res.data);
       localStorage.setItem('portal_student', JSON.stringify(res.data.student));
       navigate(res.data.mustChangePassword ? '/portal/change-password' : '/portal', { replace: true });
     } catch (err) {

@@ -3,6 +3,7 @@ import { PrismaService } from '../../../core/db/psql/prisma.client';
 import { LedgerPostingService } from './ledger-posting.service';
 import { adToBs } from '@easy-books/shared';
 import { VAT_RATE } from '../../domain/vo';
+import { billAttachmentUrls } from '../../../core/utils/bill-attachments';
 
 interface OrderItem {
   inventoryItemId?: string;
@@ -26,6 +27,7 @@ interface CreateSalesOrderInput {
   paymentMethod?: string;
   issuedBy?: string;
   notes?: string;
+  attachments?: unknown; // [{ url }] from /api/v1/upload — see core/utils/bill-attachments.ts
   items: OrderItem[];
 }
 
@@ -75,6 +77,7 @@ export class SalesServiceImpl {
 
     // ── Validate stock availability ────────────────────────────────────────────
     await this.validateStock(companyId, items);
+    const attachmentUrls = billAttachmentUrls(companyId, dto.attachments);
 
     // ── Generate invoice number ────────────────────────────────────────────────
     const invoiceNumber = await this.generateInvoiceNumber(companyId);
@@ -126,6 +129,17 @@ export class SalesServiceImpl {
             data: { quantity: { decrement: item.quantity } },
           });
         }
+      }
+
+      if (attachmentUrls.length) {
+        await tx.memoDocument.create({
+          data: {
+            companyId, category: 'sales_bill', referenceId: created.id, dateAd, dateBs,
+            title: `Sales Bill - ${created.clientName} - ${invoiceNumber}`,
+            clientName: created.clientName, clientContact: created.clientContact, clientAddress: created.clientAddress,
+            documentUrl: attachmentUrls[0], attachments: attachmentUrls,
+          },
+        });
       }
 
       return created;
@@ -182,7 +196,17 @@ export class SalesServiceImpl {
     if (!order) throw new NotFoundException('Sales order not found');
     if (order.status === 'COMPLETED') throw new BadRequestException('Cannot edit a completed order');
 
-    return this.prisma.salesOrder.update({ where: { id }, data });
+    // Only descriptive fields are editable: totals, paidAmount and status are
+    // derived from items and recorded payments, never taken from the request.
+    const edit: any = {};
+    for (const k of ['clientId', 'clientName', 'clientContact', 'clientAddress', 'clientPanVat', 'paymentMethod', 'notes']) {
+      if (data?.[k] !== undefined) edit[k] = data[k];
+    }
+    if (data?.dateAd) {
+      edit.dateAd = new Date(data.dateAd);
+      edit.dateBs = adToBs(edit.dateAd);
+    }
+    return this.prisma.salesOrder.update({ where: { id }, data: edit });
   }
 
   async remove(id: string, companyId: string) {

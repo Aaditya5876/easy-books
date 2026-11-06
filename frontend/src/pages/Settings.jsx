@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { api } from '@/api/adapter';
 import { toast } from 'sonner';
 import { usersApi, companyApi, recycleBinApi, bankAccountApi, uploadApi, notificationsApi, fiscalYearApi } from '@/api';
+import { fileUrl } from '@/lib/fileUrl';
 import apiClient from '@/api/client';
 import { useAuth } from '@/lib/AuthContext';
 import { useRole } from "@/lib/useRole";
@@ -574,10 +575,17 @@ export default function Settings() {
     const file = e.target.files?.[0];
     if (!file) return;
     setUploadingLogo(true);
-    const file_url = URL.createObjectURL(file);
-    if (isEditing && editingCompany) setEditingCompany({ ...editingCompany, logo_url: file_url });
-    else setCompanyForm({ ...companyForm, logo_url: file_url });
-    setUploadingLogo(false);
+    try {
+      const res = await uploadApi.upload(file, isEditing && editingCompany ? editingCompany.id : undefined);
+      const file_url = res.data.url;
+      if (isEditing && editingCompany) setEditingCompany({ ...editingCompany, logo_url: file_url });
+      else setCompanyForm({ ...companyForm, logo_url: file_url });
+    } catch (err) {
+      e.target.value = '';
+      toast.error(err?.response?.data?.message || t('settings.logoUploadFailed', { defaultValue: 'Could not upload the logo. Please try again.' }));
+    } finally {
+      setUploadingLogo(false);
+    }
   }
 
   // ── User Management ───────────────────────────────────────────────────────
@@ -1646,7 +1654,7 @@ export default function Settings() {
                 <div className="flex items-start gap-4">
                   <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center overflow-hidden">
                     {c.logo_url ? (
-                      <img src={c.logo_url} alt={c.name} className="w-full h-full object-cover" />
+                      <img src={fileUrl(c.logo_url)} alt={c.name} className="w-full h-full object-cover" />
                     ) : (
                       <Building2 className="w-6 h-6 text-primary" />
                     )}

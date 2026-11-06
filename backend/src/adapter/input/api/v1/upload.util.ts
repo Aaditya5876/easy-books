@@ -1,27 +1,37 @@
 import { BadRequestException } from '@nestjs/common';
-import { diskStorage } from 'multer';
-import { extname, join } from 'path';
-import { existsSync, mkdirSync } from 'fs';
+import { extname } from 'path';
 import { randomUUID } from 'crypto';
+import { FileStorage, mimeFor } from '../../../../../core/storage/file-storage';
 
 // Shared by the staff-facing generic uploader and the portal's own
-// payment-proof uploader — both files land in the same local `uploads/` dir
-// and get served from the same `/uploads` static prefix (see main.ts).
-export function makeUploadStorage() {
-  return diskStorage({
-    destination: (_req, _file, cb) => {
-      const uploadDir = join(process.cwd(), 'uploads');
-      if (!existsSync(uploadDir)) mkdirSync(uploadDir, { recursive: true });
-      cb(null, uploadDir);
-    },
-    // A random UUID, not Date.now()+Math.random() — these files are served
-    // unauthenticated from a public static path (payment-proof screenshots,
-    // bank QR codes, etc.), so the filename itself is the only thing standing
-    // between "I have the link" and "I can guess/enumerate someone else's".
-    filename: (_req, file, cb) => {
-      cb(null, `${randomUUID()}${extname(file.originalname)}`);
-    },
-  });
+// payment-proof uploader. Multer keeps the upload in memory (its default when
+// no storage is given); saveUpload() names it and hands it to FileStorage
+// (local uploads/ in dev, private Vercel Blob in production). Both are served
+// from the same /uploads/<name> route behind UploadAccessGuard.
+//
+// A random UUID, not Date.now()+Math.random(), so links can't be guessed;
+// prefixed with the owning company so UploadAccessGuard can refuse other
+// schools' staff and parents. Callers pass a company the guards have already
+// verified (staff: ?companyId, portal: its token).
+export async function saveUpload(storage: FileStorage, file: any, companyId?: string) {
+  const prefix = typeof companyId === 'string' && UUID.test(companyId) ? `${companyId}_` : '';
+  const filename = `${prefix}${randomUUID()}${extname(file.originalname).toLowerCase()}`;
+  await storage.save(filename, file.buffer, mimeFor(filename));
+  return {
+    url: `/uploads/${filename}`,
+    originalName: file.originalname,
+    size: file.size,
+    mimeType: file.mimetype,
+  };
+}
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// The company a stored file belongs to, or null for files uploaded before
+// filenames carried it.
+export function uploadOwner(filename: string): string | null {
+  const [head] = filename.split('_');
+  return filename.includes('_') && UUID.test(head) ? head : null;
 }
 
 export function extensionFilter(allowed: string[]) {

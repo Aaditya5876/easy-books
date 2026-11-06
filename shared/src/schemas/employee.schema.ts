@@ -15,7 +15,7 @@ const employeeBaseFields = {
   panNumber: z.string().optional(),
   dateOfJoining: z.string().optional(),
   basicSalary: z.number().nonnegative().default(0),
-  allowances: z.record(z.number()).optional(),
+  allowances: z.record(z.string(), z.number()).optional(),
   bankName: z.string().optional(),
   bankAccount: z.string().optional(),
   status: EmployeeStatusEnum.default('ACTIVE'),

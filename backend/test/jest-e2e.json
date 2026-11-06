@@ -20,5 +20,6 @@
     "<rootDir>/test/setup/env.ts"
   ],
   "testTimeout": 60000,
-  "maxWorkers": 1
+  "maxWorkers": 1,
+  "workerIdleMemoryLimit": "1GB"
 }

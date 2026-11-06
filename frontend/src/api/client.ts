@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { clearPortalSession } from '@/lib/portalSession';
 
 const apiClient = axios.create({
   baseURL: import.meta.env.VITE_API_URL || 'http://localhost:3000',
@@ -28,6 +29,15 @@ apiClient.interceptors.response.use(
     if (error.response?.status !== 401) return Promise.reject(error);
 
     const url: string = original?.url || '';
+
+    // Parent/student portal: its session can't be refreshed with the staff
+    // refresh token — send the parent back to the portal login. (set-password
+    // and bulk-set-access are staff routes and fall through.)
+    if (url.includes('/portal/') && !/\/portal\/(login|set-password|bulk-set-access)/.test(url)) {
+      clearPortalSession();
+      window.location.href = '/portal/login';
+      return Promise.reject(error);
+    }
 
     // Auth endpoints: never try to refresh, just propagate the error.
     // AuthContext handles /auth/me failures by setting isAuthenticated=false.

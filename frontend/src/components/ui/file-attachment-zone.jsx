@@ -2,10 +2,12 @@ import { useState, useRef } from 'react';
 import { uploadApi } from '@/api';
 import { Paperclip, X, FileText, Image, Upload, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
+import { fileUrl } from '@/lib/fileUrl';
 
 // FileAttachmentZone: Drag-and-drop or click-to-upload zone
 // Props:
-//   files: array of { name, url, size, mimeType } — controlled
+//   files: array of upload results { url, originalName, size, mimeType } — controlled
 //   onChange: (files) => void — called with updated files array
 //   maxFiles?: number (default 5)
 //   label?: string (default "Attach Files")
@@ -22,14 +24,9 @@ export function FileAttachmentZone({ files = [], onChange, maxFiles = 5, label =
       const results = await Promise.all(toUpload.map(f => uploadApi.upload(f).then(r => r.data)));
       onChange([...files, ...results]);
     } catch (e) {
-      // If backend not available (dev), use blob URLs as fallback
-      const fallback = toUpload.map(f => ({
-        name: f.name,
-        url: URL.createObjectURL(f),
-        size: f.size,
-        mimeType: f.type,
-      }));
-      onChange([...files, ...fallback]);
+      // Say so instead of attaching a browser-only blob: URL — that looked like
+      // success but was never stored, so the attachment was silently lost.
+      toast.error(e?.response?.data?.message || 'Could not upload the file. Please try again.');
     } finally {
       setUploading(false);
     }
@@ -39,7 +36,7 @@ export function FileAttachmentZone({ files = [], onChange, maxFiles = 5, label =
     onChange(files.filter((_, i) => i !== idx));
   }
 
-  const isImage = (f) => f.mimeType?.startsWith('image/') || /\.(jpg|jpeg|png|gif|webp)$/i.test(f.name);
+  const isImage = (f) => f.mimeType?.startsWith('image/') || /\.(jpg|jpeg|png|gif|webp)$/i.test(f.name || f.originalName || '');
 
   return (
     <div className={cn("space-y-2", className)}>
@@ -74,7 +71,7 @@ export function FileAttachmentZone({ files = [], onChange, maxFiles = 5, label =
           {files.map((f, i) => (
             <div key={i} className="flex items-center gap-1.5 bg-muted rounded-md px-2 py-1 text-xs max-w-[200px]">
               {isImage(f) ? <Image className="w-3 h-3 text-blue-500 shrink-0" /> : <FileText className="w-3 h-3 text-orange-500 shrink-0" />}
-              <a href={f.url} target="_blank" rel="noopener noreferrer" className="truncate hover:underline text-foreground" title={f.name}>{f.name}</a>
+              <a href={fileUrl(f.url)} target="_blank" rel="noopener noreferrer" className="truncate hover:underline text-foreground" title={f.name || f.originalName}>{f.name || f.originalName}</a>
               <button onClick={(e) => { e.stopPropagation(); removeFile(i); }} className="text-muted-foreground hover:text-destructive shrink-0">
                 <X className="w-3 h-3" />
               </button>

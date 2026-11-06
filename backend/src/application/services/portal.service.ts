@@ -5,6 +5,7 @@ import { SchoolFinanceService } from './school-finance.service';
 import { SmsService } from './sms.service';
 import * as bcrypt from 'bcrypt';
 import { randomInt } from 'crypto';
+import { assertNotLocked, isLocked, recordFailedLogin, clearedLockout } from '../../../core/utils/login-lockout';
 
 @Injectable()
 export class PortalService {
@@ -15,7 +16,7 @@ export class PortalService {
     private readonly sms: SmsService,
   ) {}
 
-  private signPortalToken(portalUser: { studentId: string; companyId: string; mustChangePassword: boolean }, classId?: string | null) {
+  private signPortalToken(portalUser: { studentId: string; companyId: string; mustChangePassword: boolean; tokenVersion: number }, classId?: string | null) {
     return this.jwtService.sign(
       {
         studentId: portalUser.studentId,
@@ -23,9 +24,16 @@ export class PortalService {
         classId,
         type: 'portal',
         mustChangePassword: portalUser.mustChangePassword,
+        tv: portalUser.tokenVersion, // PortalGuard rejects the token once this falls behind
       },
-      { secret: process.env.JWT_SECRET, expiresIn: '30d' },
+      { secret: process.env.JWT_SECRET, expiresIn: '7d' },
     );
+  }
+
+  // Revokes every token issued to this account so far.
+  async logout(studentId: string) {
+    await this.prisma.portalUser.update({ where: { studentId }, data: { tokenVersion: { increment: 1 } } });
+    return { success: true };
   }
 
   // No school ID needed from the user: phone numbers aren't guaranteed unique
@@ -38,12 +46,20 @@ export class PortalService {
       where: { phone, isActive: true },
       include: { student: { include: { class: true } } },
     });
-    for (const portalUser of candidates) {
+    // Locked accounts are skipped before comparing, so the answer doesn't
+    // reveal whether a guess against them was right.
+    const unlocked = candidates.filter(c => !isLocked(c));
+    if (candidates.length && !unlocked.length) assertNotLocked(candidates[0]);
+    for (const portalUser of unlocked) {
       if (await bcrypt.compare(password, portalUser.passwordHash)) {
+        if (portalUser.failedLoginCount) {
+          await this.prisma.portalUser.update({ where: { id: portalUser.id }, data: clearedLockout });
+        }
         const token = this.signPortalToken(portalUser, portalUser.student?.classId);
         return { token, student: portalUser.student, mustChangePassword: portalUser.mustChangePassword };
       }
     }
+    for (const portalUser of unlocked) await recordFailedLogin(this.prisma.portalUser, { id: portalUser.id });
     throw new UnauthorizedException('Invalid phone number or password');
   }
 
@@ -53,12 +69,12 @@ export class PortalService {
     const student = await this.prisma.student.findFirst({ where: { id: studentId, companyId } });
     if (!student) throw new NotFoundException('Student not found');
     if (!phone || !password) throw new BadRequestException('Phone and password are required');
-    if (password.length < 6) throw new BadRequestException('Password must be at least 6 characters');
+    if (password.length < 8) throw new BadRequestException('Password must be at least 8 characters');
     const passwordHash = await bcrypt.hash(password, 10);
     const portalUser = await this.prisma.portalUser.upsert({
       where: { studentId },
       create: { companyId, studentId, phone, passwordHash, mustChangePassword: true },
-      update: { phone, passwordHash, isActive: true, mustChangePassword: true },
+      update: { phone, passwordHash, isActive: true, mustChangePassword: true, tokenVersion: { increment: 1 } },
     });
     const company = await this.prisma.company.findUnique({ where: { id: companyId }, select: { name: true } });
     this.sms.sendPortalCredentials(phone, student.name, password, company?.name).catch(() => {});
@@ -67,7 +83,7 @@ export class PortalService {
 
   // Bulk-provisions portal accounts for every active student in the school
   // that doesn't already have one, using the guardian's phone and a random
-  // 6-digit password sent by SMS — doing this one student at a time via the
+  // 8-digit password sent by SMS — doing this one student at a time via the
   // individual dialog doesn't scale past a handful of students.
   async bulkSetPortalAccess(companyId: string, classId?: string) {
     const [students, existing, company] = await Promise.all([
@@ -87,7 +103,7 @@ export class PortalService {
       const phone = student.guardianPhone;
       if (!phone) { skippedNoPhone++; continue; }
 
-      const password = String(randomInt(100000, 1000000)); // 6-digit, easy to read from an SMS
+      const password = String(randomInt(10000000, 100000000)); // 8-digit, easy to read from an SMS
       const passwordHash = await bcrypt.hash(password, 10);
       await this.prisma.portalUser.create({
         data: { companyId, studentId: student.id, phone, passwordHash, mustChangePassword: true },
@@ -105,13 +121,15 @@ export class PortalService {
     if (!portalUser || portalUser.companyId !== req.companyId) throw new NotFoundException('Portal account not found');
     const valid = await bcrypt.compare(currentPassword, portalUser.passwordHash);
     if (!valid) throw new UnauthorizedException('Current password is incorrect');
-    if (!newPassword || newPassword.length < 6) throw new BadRequestException('New password must be at least 6 characters');
+    if (!newPassword || newPassword.length < 8) throw new BadRequestException('New password must be at least 8 characters');
 
     const passwordHash = await bcrypt.hash(newPassword, 10);
     const updated = await this.prisma.portalUser.update({
       where: { studentId: req.studentId },
-      data: { passwordHash, mustChangePassword: false },
+      data: { passwordHash, mustChangePassword: false, tokenVersion: { increment: 1 } },
     });
+    // Signed with the bumped version: this device stays logged in, every other
+    // session (including a stolen token) is cut off.
     const token = this.signPortalToken(updated, req.classId);
     return { token };
   }

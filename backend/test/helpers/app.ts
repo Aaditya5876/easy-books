@@ -1,4 +1,5 @@
 import { INestApplication } from '@nestjs/common';
+import { NestExpressApplication } from '@nestjs/platform-express';
 import { Test } from '@nestjs/testing';
 import * as bcrypt from 'bcrypt';
 import request = require('supertest');
@@ -46,7 +47,8 @@ export async function createTestApp(): Promise<TestContext> {
     .overrideProvider(SmsService).useValue(smsStub)
     .overrideProvider(AiService).useValue(aiStub)
     .compile();
-  const app = moduleRef.createNestApplication({ logger: false });
+  const app = moduleRef.createNestApplication<NestExpressApplication>({ logger: false });
+  app.set('query parser', 'extended'); // same as main.ts
   app.use(cookieParser());
   await app.init();
   return { app, prisma: app.get(PrismaService) };

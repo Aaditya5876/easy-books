@@ -170,7 +170,7 @@ function PortalPasswordDialog({ open, onClose, student, companyId }) {
     e.preventDefault();
     const errs = {};
     if (!form.phone.trim()) errs.phone = t('students.phoneRequired', { defaultValue: 'Phone number is required' });
-    if (form.password.length < 6) errs.password = t('students.passwordMinLength', { defaultValue: 'Password must be at least 6 characters' });
+    if (form.password.length < 8) errs.password = t('students.passwordMinLength', { defaultValue: 'Password must be at least 8 characters' });
     if (Object.keys(errs).length) {
       setErrors(errs);
       toast.error(errs.phone || errs.password);
@@ -219,7 +219,7 @@ function PortalPasswordDialog({ open, onClose, student, companyId }) {
           </div>
           <div className="space-y-1.5">
             <Label>{t('students.password', { defaultValue: 'Password *' })}</Label>
-            <Input type="password" placeholder={t('students.passwordPlaceholder', { defaultValue: 'Min 6 characters' })} value={form.password} onChange={e => { set('password', e.target.value); if (errors.password) setErrors(er => ({ ...er, password: undefined })); }} />
+            <Input type="password" placeholder={t('students.passwordPlaceholder', { defaultValue: 'Min 8 characters' })} value={form.password} onChange={e => { set('password', e.target.value); if (errors.password) setErrors(er => ({ ...er, password: undefined })); }} />
             {errors.password && <p className="text-xs text-red-600">{errors.password}</p>}
           </div>
           <DialogFooter>

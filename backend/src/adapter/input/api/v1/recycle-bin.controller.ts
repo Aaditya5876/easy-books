@@ -1,3 +1,4 @@
+import { NoCompanyScope } from '../../../../modules/decorators/no-company-scope.decorator';
 import { Controller, Get, Post, Delete, Body, Query, Param, Req } from '@nestjs/common';
 import { Roles } from '../../../../modules/decorators/roles.decorator';
 import { RecycleBinServiceImpl, RecycleBinItemType } from '../../../../application/services/recycle-bin.service.impl';
@@ -7,6 +8,7 @@ import { RecycleBinServiceImpl, RecycleBinItemType } from '../../../../applicati
 export class RecycleBinController {
   constructor(private readonly svc: RecycleBinServiceImpl) {}
 
+  @NoCompanyScope()
   @Post('verify')
   async verify(@Req() req: any, @Body('password') password: string) {
     const valid = await this.svc.verifyPassword(req.user.sub, password);

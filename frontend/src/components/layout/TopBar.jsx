@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useTheme } from 'next-themes';
 import { api, apiAuth } from '@/api/adapter';
 import { notificationsApi, companyApi } from '@/api';
+import { fileUrl } from '@/lib/fileUrl';
 import {
   Search, Bell, Settings, LogOut, Building2, ChevronDown, Plus, Menu,
   Wrench, Calculator, RefreshCw, CalendarDays, UserCircle, CalendarCheck,
@@ -435,7 +436,7 @@ export default function TopBar({ onMobileMenuToggle, onToolOpen }) {
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" className="gap-2 font-medium" data-tour="company-switcher">
               {activeCompany?.logo_url ? (
-                <img src={activeCompany.logo_url} alt={activeCompany.name} className="w-6 h-6 rounded-md object-cover" />
+                <img src={fileUrl(activeCompany.logo_url)} alt={activeCompany.name} className="w-6 h-6 rounded-md object-cover" />
               ) : (
                 <Building2 className="w-4 h-4 text-primary" />
               )}

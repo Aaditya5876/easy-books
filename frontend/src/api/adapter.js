@@ -52,20 +52,28 @@ const ENDPOINTS = {
   AuditLog:      '/api/v1/audit-logs',
 };
 
-function makeEntity(endpoint) {
+// The backend rejects record-level calls that don't name a company, so every
+// entity call carries the active one unless the caller passed its own.
+// Company routes are scoped to the logged-in user and take none.
+function makeEntity(endpoint, companyScoped) {
+  const scope = (params = {}) => {
+    const p = toCamel(params);
+    if (!companyScoped || p.companyId) return p;
+    return { ...p, companyId: localStorage.getItem('easybooks_active_company') || undefined };
+  };
   return {
     async filter(where = {}) {
-      const res = await apiClient.get(endpoint, { params: toCamel(where) });
+      const res = await apiClient.get(endpoint, { params: scope(where) });
       const data = unwrap(res);
       return toSnake(Array.isArray(data) ? data : data ? [data] : []);
     },
     async list(params = {}) {
-      const res = await apiClient.get(endpoint, { params: toCamel(params) });
+      const res = await apiClient.get(endpoint, { params: scope(params) });
       const data = unwrap(res);
       return toSnake(Array.isArray(data) ? data : data ? [data] : []);
     },
     async get(id) {
-      const res = await apiClient.get(`${endpoint}/${id}`);
+      const res = await apiClient.get(`${endpoint}/${id}`, { params: scope() });
       return toSnake(unwrap(res));
     },
     async create(data) {
@@ -73,17 +81,17 @@ function makeEntity(endpoint) {
       return toSnake(unwrap(res));
     },
     async update(id, data, params = {}) {
-      const res = await apiClient.put(`${endpoint}/${id}`, toCamel(data), { params: toCamel(params) });
+      const res = await apiClient.put(`${endpoint}/${id}`, toCamel(data), { params: scope(params) });
       return toSnake(unwrap(res));
     },
     async delete(id) {
-      await apiClient.delete(`${endpoint}/${id}`);
+      await apiClient.delete(`${endpoint}/${id}`, { params: scope() });
     },
   };
 }
 
 export const api = Object.fromEntries(
-  Object.entries(ENDPOINTS).map(([name, ep]) => [name, makeEntity(ep)])
+  Object.entries(ENDPOINTS).map(([name, ep]) => [name, makeEntity(ep, name !== 'Company')])
 );
 
 export const apiAuth = {

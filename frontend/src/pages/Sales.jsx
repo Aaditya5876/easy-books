@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { api } from '@/api/adapter';
-import { memoApi } from '@/api';
 import { getActiveCompanyId } from '@/lib/companyContext';
 import { adToBs, getCurrentFiscalYear } from '@/lib/nepaliDate';
 import { formatDate } from '@/lib/utils';
@@ -182,6 +181,8 @@ export default function Sales() {
       labor_charges: totalLabor,
       is_vat: form.is_vat,
       notes: form.notes,
+      // Saved by the backend as a linked Sales Bill (Memo → Sales Bills).
+      attachments: form.attachments,
       subtotal,
       vat_amount: vatAmount,
       total_amount: subtotal + vatAmount,
@@ -210,16 +211,6 @@ export default function Sales() {
           });
         }
       }
-    }
-
-    if (form.attachments?.length > 0) {
-      await memoApi.create({
-        companyId,
-        title: `Sales Bill - ${form.client_name || t('sales.unknownClient', { defaultValue: 'Unknown Client' })} - ${form.invoice_number || new Date().toLocaleDateString()}`,
-        type: 'sales_bill',
-        content: t('sales.autoSavedMemoContent', { defaultValue: `Auto-saved from Sales entry. Order: ${form.invoice_number}`, invoiceNumber: form.invoice_number }),
-        files: form.attachments,
-      }).catch(() => {});
     }
 
     setForm({

@@ -1,7 +1,9 @@
+import 'dotenv/config';
 import { PrismaClient } from '@prisma/client';
+import { prismaPgAdapter } from '../core/db/psql/prisma.client';
 import * as bcrypt from 'bcrypt';
 
-const prisma = new PrismaClient();
+const prisma = new PrismaClient({ adapter: prismaPgAdapter() });
 
 async function main() {
   const email = process.env.SUPER_ADMIN_EMAIL;

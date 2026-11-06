@@ -1,3 +1,4 @@
+import { NoCompanyScope } from '../../../../modules/decorators/no-company-scope.decorator';
 import {
   Controller,
   Post,
@@ -21,6 +22,7 @@ import { Public } from '../../../../modules/decorators/public.decorator';
 
 @ApiTags('Auth')
 @SkipThrottle()
+@NoCompanyScope()
 @Controller('api/v1/auth')
 export class AuthController {
   constructor(@Inject(AUTH_SERVICE) private readonly authService: IAuthService) {}

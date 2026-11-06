@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { FILE_STORAGE, createFileStorage } from '../../../core/storage/file-storage';
 import { JwtModule } from '@nestjs/jwt';
 import { PrismaService } from '../../../core/db/psql/prisma.client';
 import { PortalController } from '../../adapter/input/api/v1/portal.controller';
@@ -17,6 +18,7 @@ import { NotificationModule } from '../communication/notification.module';
   providers: [
     PrismaService, PortalService, PaymentService, SchoolFinanceService, LedgerPostingService,
     PortalNotificationService, SmsService, PortalGuard,
+    { provide: FILE_STORAGE, useFactory: () => createFileStorage() },
   ],
 })
 export class PortalModule {}

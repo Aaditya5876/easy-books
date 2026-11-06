@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { api } from '@/api/adapter';
-import { memoApi } from '@/api';
 import { getActiveCompanyId } from '@/lib/companyContext';
 import { adToBs } from '@/lib/nepaliDate';
 import { formatDate } from '@/lib/utils';
@@ -146,6 +145,8 @@ export default function Purchase() {
       payment_type: form.payment_type,
       is_vat: form.is_vat,
       notes: form.notes,
+      // Saved by the backend as a linked Purchase Bill (Memo → Purchase Bills).
+      attachments: form.attachments,
       subtotal,
       vat_amount: vatAmount,
       total_amount: subtotal + vatAmount,
@@ -177,16 +178,6 @@ export default function Purchase() {
           supplier_name: form.vendor_name,
         });
       }
-    }
-
-    if (form.attachments?.length > 0) {
-      await memoApi.create({
-        companyId,
-        title: `Purchase Bill - ${form.vendor_name || 'Unknown Vendor'} - ${form.order_number || new Date().toLocaleDateString()}`,
-        type: 'purchase_bill',
-        content: `Auto-saved from Purchase entry. Order: ${form.order_number}`,
-        files: form.attachments,
-      }).catch(() => {}); // silent fail if memo fails
     }
 
     setForm({ ...EMPTY_FORM, date_ad: new Date().toISOString().split('T')[0] });
