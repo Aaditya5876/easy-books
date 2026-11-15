@@ -2,7 +2,7 @@
 // .env on its own, and the connection URL moved here from schema.prisma.
 // An already-set DATABASE_URL wins over .env (the test setup relies on that).
 import 'dotenv/config';
-import { defineConfig, env } from 'prisma/config';
+import { defineConfig } from 'prisma/config';
 
 export default defineConfig({
   schema: 'prisma/schema.prisma',
@@ -11,6 +11,9 @@ export default defineConfig({
     seed: 'ts-node prisma/seed.ts',
   },
   datasource: {
-    url: env('DATABASE_URL'),
+    // Not env('DATABASE_URL'): that throws when the variable is missing, which
+    // breaks `prisma generate` (run on every install) in builds that have no
+    // database, like Vercel previews. Commands that connect still fail clearly.
+    url: process.env.DATABASE_URL ?? '',
   },
 });
