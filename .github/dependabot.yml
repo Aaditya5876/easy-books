@@ -7,7 +7,16 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 10
+    ignore:
+      # Node's type definitions must match the Node we run (24.x on Vercel and
+      # locally), not the newest Node release.
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
     groups:
+      # React and react-dom (and their types) only work at the same major —
+      # upgrading one without the other breaks the app.
+      react:
+        patterns: ["react", "react-dom", "@types/react", "@types/react-dom"]
       # Patch/minor bumps arrive as one PR; majors (NestJS, zod, react-router)
       # stay separate so each migration can be reviewed on its own.
       minor-and-patch:
