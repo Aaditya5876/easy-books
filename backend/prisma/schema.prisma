@@ -123,6 +123,7 @@ enum TaskPriority {
   LOW
   MEDIUM
   HIGH
+  URGENT
 }
 
 enum TaskStatus {
@@ -239,68 +240,71 @@ model NotificationPreference {
 }
 
 model Company {
-  id                        String   @id @default(uuid())
-  name                      String
-  abbreviation              String?
-  address                   String?
-  phone                     String?
-  email                     String?
-  panVat                    String?
-  registrationNumber        String?
-  logoUrl                   String?
-  currency                  String   @default("NPR")
-  fiscalYearStart           String?
-  businessType              String? // "pharmacy", "tea-shop", "clothes", "bakery", etc.
-  defaultUnitType           String? // "pcs", "meter", "tablet", "strip", "bottle", etc.
-  isVatRegistered           Boolean  @default(false)
-  vatSubmissionFreq         String? // "MONTHLY" | "TRIMESTERLY"
-  isActive                  Boolean  @default(true)
+  id                             String    @id @default(uuid())
+  name                           String
+  abbreviation                   String?
+  address                        String?
+  phone                          String?
+  email                          String?
+  panVat                         String?
+  registrationNumber             String?
+  logoUrl                        String?
+  currency                       String    @default("NPR")
+  fiscalYearStart                String?
+  businessType                   String? // "pharmacy", "tea-shop", "clothes", "bakery", etc.
+  defaultUnitType                String? // "pcs", "meter", "tablet", "strip", "bottle", etc.
+  isVatRegistered                Boolean   @default(false)
+  vatSubmissionFreq              String? // "MONTHLY" | "TRIMESTERLY"
+  isActive                       Boolean   @default(true)
   // Automatic, time-based access gate — distinct from isActive (the manual
   // suspend switch). Null = no expiry (legacy/unrestricted). Once past, this
   // company is locked out exactly like a deactivated one (see
   // isCompanyAccessible in core/modules/company-access.ts), checked live on
   // every request rather than flipped by a nightly job, so it takes effect
   // to the second. Set/cleared only via SUPER_ADMIN's CompanyServiceImpl.setSubscriptionExpiry.
-  subscriptionExpiresAt     DateTime?
+  subscriptionExpiresAt          DateTime?
   // Set the first time CompanyAccessGuard actually blocks a request because
   // this company is inaccessible (deactivated or expired) — dedupes the
   // ACCESS_SUSPENDED notification so a flood of blocked requests doesn't
   // flood the admin's inbox. Cleared back to null whenever SUPER_ADMIN
   // restores access (setActive(true) or a cleared/future subscription
   // expiry), so the next time it lapses, they're notified again.
-  accessBlockedNotifiedAt   DateTime?
+  accessBlockedNotifiedAt        DateTime?
   // Cooldown for the ADMIN-facing "Request Renewal" button — prevents
   // spamming SUPER_ADMIN with repeat notifications for the same lapse.
-  lastRenewalRequestedAt    DateTime?
+  lastRenewalRequestedAt         DateTime?
   // One-time grace period that an ADMIN may claim after subscription expiry.
-  subscriptionExtensionUsedAt DateTime?
+  subscriptionExtensionUsedAt    DateTime?
   subscriptionExtensionExpiresAt DateTime?
   // Auto-increment counters for invoice numbering (reset each fiscal year)
-  invoiceSequence           Int      @default(0)
-  purchaseSequence          Int      @default(0)
-  quotationSequence         Int      @default(0)
-  creditNoteSequence        Int      @default(0)
-  debitNoteSequence         Int      @default(0)
-  sequenceFiscalYear        String? // tracks fiscal year for sequence reset, e.g. "2081-82"
-  feeReceiptSequence        Int      @default(0)
-  feeReceiptYear            String? // BS year the receipt sequence belongs to, e.g. "2083"
-  feeInvoiceSequence        Int      @default(0)
-  feeInvoiceYear            String? // BS year the fee invoice sequence belongs to, e.g. "2083"
+  invoiceSequence                Int       @default(0)
+  purchaseSequence               Int       @default(0)
+  quotationSequence              Int       @default(0)
+  creditNoteSequence             Int       @default(0)
+  debitNoteSequence              Int       @default(0)
+  sequenceFiscalYear             String? // tracks fiscal year for sequence reset, e.g. "2081-82"
+  feeReceiptSequence             Int       @default(0)
+  feeReceiptYear                 String? // BS year the receipt sequence belongs to, e.g. "2083"
+  feeInvoiceSequence             Int       @default(0)
+  feeInvoiceYear                 String? // BS year the fee invoice sequence belongs to, e.g. "2083"
   // Nightly 1AM automation checklist (ScheduledTasksService.runMonthlyAutomation) —
   // default true so existing companies see no behavior change until they opt out.
-  autoFeeBilling            Boolean  @default(true) // schools: auto-generate monthly fee invoices
-  autoInvoiceRelease        Boolean  @default(true) // schools: auto-release those invoices to the student portal
-  autoPayroll               Boolean  @default(true) // auto-process monthly payroll
-  autoReconciliation        Boolean  @default(true) // daily reconciliation summary notification
-  autoLibraryReminders      Boolean  @default(true) // schools: "book due in 3 days" student portal reminder
-  autoPaymentProofReminders Boolean  @default(true) // schools: nudge ADMIN/ACCOUNTANT about payment proofs still awaiting review — never auto-approves, a human always has to look at the screenshot
+  autoFeeBilling                 Boolean   @default(true) // schools: auto-generate monthly fee invoices
+  autoInvoiceRelease             Boolean   @default(true) // schools: auto-release those invoices to the student portal
+  autoPayroll                    Boolean   @default(true) // auto-process monthly payroll
+  autoReconciliation             Boolean   @default(true) // daily reconciliation summary notification
+  autoLibraryReminders           Boolean   @default(true) // schools: "book due in 3 days" student portal reminder
+  // Recycle bin auto-delete: items deleted longer ago than this are purged by
+  // the nightly job. null = keep forever.
+  recycleBinRetentionDays        Int?
+  autoPaymentProofReminders      Boolean   @default(true) // schools: nudge ADMIN/ACCOUNTANT about payment proofs still awaiting review — never auto-approves, a human always has to look at the screenshot
   // Which optional shared modules this company's plan includes, e.g.
   // ["FINANCE", "HRMS", "COMMUNICATION", "INVENTORY", "AI", "BULK_IMPORT"].
   // Empty = unrestricted (legacy/full-access) — enforced by ModuleAccessGuard,
   // only once a company has actually been scoped to a specific module set.
-  enabledModules            String[] @default([])
-  createdAt                 DateTime @default(now())
-  updatedAt                 DateTime @updatedAt
+  enabledModules                 String[]  @default([])
+  createdAt                      DateTime  @default(now())
+  updatedAt                      DateTime  @updatedAt
 
   userCompanies        UserCompany[]
   employees            Employee[]
@@ -430,6 +434,10 @@ model Employee {
   id                    String         @id @default(uuid())
   companyId             String
   company               Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  // Workflow job this record was created for (or linked to).
+  taskId                String?
+  task                  Task?          @relation("TaskCreatedEmployees", fields: [taskId], references: [id], onDelete: SetNull)
+  assignedTasks         Task[]         @relation("TaskAssignee")
   name                  String
   employeeId            String
   department            String?
@@ -751,6 +759,9 @@ model LedgerAccount {
   isSystem         Boolean           @default(false)
   isHidden         Boolean           @default(false)
   cashFlowActivity CashFlowActivity?
+  // EXPENSE accounts only: FIXED (rent, salary…) or VARIABLE (moves with
+  // sales volume). Drives the dashboard's fixed vs variable expense split.
+  costBehavior     String?
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt
 
@@ -822,6 +833,9 @@ model Client {
   id            String       @id @default(uuid())
   companyId     String
   company       Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  // Workflow job this record was created for (or linked to).
+  taskId        String?
+  task          Task?        @relation(fields: [taskId], references: [id], onDelete: SetNull)
   name          String
   abbreviation  String? // for invoice numbering
   contactPerson String?
@@ -846,6 +860,9 @@ model Vendor {
   id            String    @id @default(uuid())
   companyId     String
   company       Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  // Workflow job this record was created for (or linked to).
+  taskId        String?
+  task          Task?     @relation(fields: [taskId], references: [id], onDelete: SetNull)
   name          String
   abbreviation  String?
   contactPerson String?
@@ -870,6 +887,9 @@ model SalesOrder {
   id            String        @id @default(uuid())
   companyId     String
   company       Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  // Workflow job this record was created for (or linked to).
+  taskId        String?
+  task          Task?         @relation(fields: [taskId], references: [id], onDelete: SetNull)
   clientId      String?
   client        Client?       @relation(fields: [clientId], references: [id])
   clientName    String
@@ -898,6 +918,7 @@ model SalesOrder {
   payments Payment[]
 
   @@unique([companyId, invoiceNumber])
+  @@index([taskId])
   @@map("sales_orders")
 }
 
@@ -922,6 +943,9 @@ model PurchaseOrder {
   id            String        @id @default(uuid())
   companyId     String
   company       Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  // Workflow job this record was created for (or linked to).
+  taskId        String?
+  task          Task?         @relation(fields: [taskId], references: [id], onDelete: SetNull)
   vendorId      String?
   vendor        Vendor?       @relation(fields: [vendorId], references: [id])
   vendorName    String
@@ -949,6 +973,7 @@ model PurchaseOrder {
   payments Payment[]
 
   @@unique([companyId, orderNumber])
+  @@index([taskId])
   @@map("purchase_orders")
 }
 
@@ -1035,14 +1060,25 @@ model Quotation {
   id              String          @id @default(uuid())
   companyId       String
   company         Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  // Workflow job this record was created for (or linked to).
+  taskId          String?
+  task            Task?           @relation(fields: [taskId], references: [id], onDelete: SetNull)
   clientId        String?
   client          Client?         @relation(fields: [clientId], references: [id])
   clientName      String
+  clientContact   String?
+  clientAddress   String?
+  clientPanVat    String?
   dateAd          DateTime
   dateBs          String?
+  validUntil      DateTime?
   quotationNumber String
   items           Json
   description     String?
+  // Payment terms offered; carried onto the sales bill on conversion.
+  paymentMethod   PaymentMethod?
+  // Labour lines as entered ([{ description, amount }]); laborCharges is their sum.
+  laborItems      Json?
   laborCharges    Decimal         @default(0) @db.Decimal(12, 2)
   discountTotal   Decimal         @default(0) @db.Decimal(12, 2)
   isVat           Boolean         @default(false)
@@ -1055,6 +1091,7 @@ model Quotation {
   updatedAt       DateTime        @updatedAt
 
   @@unique([companyId, quotationNumber])
+  @@index([taskId])
   @@map("quotations")
 }
 
@@ -1096,20 +1133,49 @@ model MemoDocument {
 }
 
 model Task {
-  id          String       @id @default(uuid())
-  companyId   String
-  company     Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  title       String
-  description String?
-  assignedTo  String?
-  dueDate     DateTime?
-  priority    TaskPriority @default(MEDIUM)
-  status      TaskStatus   @default(PENDING)
-  notes       String?
-  deletedAt   DateTime?
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
+  id                 String       @id @default(uuid())
+  companyId          String
+  company            Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  // Per-company running number shown on the job card ("#12"); set by
+  // TaskServiceImpl.create, never editable.
+  taskNumber         Int?
+  // JOB_CARD | ORDER_SLIP | GENERAL_ASSESSMENT | APPOINTMENT | GENERAL
+  workflowType       String       @default("GENERAL")
+  category           String?
+  title              String
+  description        String?
+  assignedTo         String? // email
+  assignedName       String?
+  assignedContact    String?
+  // The employee doing the job, when picked from Employees.
+  assignedEmployeeId String?
+  assignedEmployee   Employee?    @relation("TaskAssignee", fields: [assignedEmployeeId], references: [id], onDelete: SetNull)
+  department         String?
+  // Who the job is for: CLIENT | VENDOR | EMPLOYEE | OTHER
+  partyType          String?
+  // Id of the existing Client / Vendor / Employee the job is for (partyType says which).
+  partyId            String?
+  partyName          String?
+  partyContact       String?
+  dueDate            DateTime?
+  dueTime            String? // "HH:mm"
+  priority           TaskPriority @default(MEDIUM)
+  status             TaskStatus   @default(PENDING)
+  notes              String?
+  assignedBy         String?
+  deletedAt          DateTime?
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
 
+  // Everything created for (or linked to) this job — see TaskServiceImpl.links().
+  quotations     Quotation[]
+  salesOrders    SalesOrder[]
+  purchaseOrders PurchaseOrder[]
+  clients        Client[]
+  vendors        Vendor[]
+  employees      Employee[]      @relation("TaskCreatedEmployees")
+
+  @@unique([companyId, taskNumber])
   @@map("tasks")
 }
 
@@ -1329,9 +1395,9 @@ model FeeInvoice {
   createdAt   DateTime         @default(now())
   updatedAt   DateTime         @updatedAt
 
-  items    FeeInvoiceItem[]
+  items          FeeInvoiceItem[]
   paymentIntents PaymentIntent[]
-  payments FeePayment[]
+  payments       FeePayment[]
 
   @@unique([companyId, invoiceNo])
   @@map("fee_invoices")
@@ -1752,25 +1818,25 @@ model StudentTransport {
 }
 
 model PortalUser {
-  id                 String   @id @default(uuid())
+  id                 String    @id @default(uuid())
   companyId          String
-  company            Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  studentId          String   @unique
-  student            Student  @relation(fields: [studentId], references: [id])
+  company            Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  studentId          String    @unique
+  student            Student   @relation(fields: [studentId], references: [id])
   phone              String
   passwordHash       String
-  isActive           Boolean  @default(true)
+  isActive           Boolean   @default(true)
   // Admin/bulk-provisioned passwords are known to staff, so the portal blocks
   // access to everything except /me and /change-password until this is cleared.
-  mustChangePassword Boolean  @default(true)
+  mustChangePassword Boolean   @default(true)
   // Stamped into every portal token; bumping it (logout, password change,
   // admin reset) revokes all tokens issued before.
-  tokenVersion       Int      @default(0)
+  tokenVersion       Int       @default(0)
   // Wrong-password lockout (see core/utils/login-lockout.ts).
   failedLoginCount   Int       @default(0)
   lockedUntil        DateTime?
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
 
   @@map("portal_users")
 }
@@ -1842,4 +1908,24 @@ model PaymentIntent {
 
   @@index([invoiceId])
   @@map("payment_intents")
+}
+
+// One row per Idempotency-Key a user sends with a write request. A retry with
+// the same key gets the stored response instead of doing the work twice
+// (double-clicks, network retries). Purged after 24 h by the nightly job.
+model IdempotencyKey {
+  id          String    @id @default(uuid())
+  userId      String
+  key         String
+  method      String
+  path        String
+  requestHash String
+  statusCode  Int?
+  response    Json?
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@unique([userId, key])
+  @@index([createdAt])
+  @@map("idempotency_keys")
 }

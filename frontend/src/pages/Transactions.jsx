@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { api } from '@/api/adapter';
+import { useIdempotencyKey } from '@/lib/useIdempotencyKey';
 import { uploadApi } from '@/api';
 import { getActiveCompanyId } from '@/lib/companyContext';
 import { adToBs } from '@/lib/nepaliDate';
@@ -83,6 +84,7 @@ export default function Transactions() {
   });
   const [showPassword, setShowPassword] = useState(false);
   const [uploadingQr, setUploadingQr] = useState(false);
+  const saveKey = useIdempotencyKey(); // one key per entry; reused if the save is retried
   const [form, setForm] = useState({
     account_type: 'purchase', category: 'expense', status: defaultStatusForMethod('cash'), amount: '', description: '',
     bank_name: '', bank_account_number: '', cheque_number: '', cheque_date: '',
@@ -211,7 +213,9 @@ export default function Transactions() {
     delete payload.cash_bank_note;
     delete payload.reference_number;
 
-    await api.Transaction.create(payload);
+    // Same key on a retry of this entry → the server returns the first one.
+    await api.Transaction.create(payload, { idempotencyKey: saveKey.key });
+    saveKey.renew();
 
     setForm({
       account_type: 'purchase',

@@ -6,6 +6,7 @@ import TopBar from './layout/TopBar';
 import FloatingToolWindow from './layout/FloatingToolWindow';
 import OnboardingTour from './guide/OnboardingTour';
 import { cn } from "@/lib/utils";
+import { usePreferences } from '@/lib/PreferencesContext';
 
 export default function Layout() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -13,6 +14,7 @@ export default function Layout() {
   const [activeTool, setActiveTool] = useState(null);
   const location = useLocation();
   const currentOutlet = useOutlet();
+  const { prefs } = usePreferences();
 
   return (
     <div className="min-h-screen bg-background">
@@ -60,6 +62,14 @@ export default function Layout() {
       </div>
       <FloatingToolWindow activeTool={activeTool} onClose={() => setActiveTool(null)} />
       <OnboardingTour />
+      {/* Once a company uploads its own logo (top-left), the OneBook logo
+          moves here with the GeoInfosys credit. */}
+      {prefs.companyLogoUrl && (
+        <div className="pointer-events-none fixed bottom-3 right-4 z-30 flex items-center gap-1.5 rounded-full border border-border bg-background/80 px-2.5 py-1 shadow-sm backdrop-blur">
+          <img src="/logo-icon.png" alt="OneBook" className="h-5 w-5 object-contain" />
+          <span className="text-[10px] font-medium text-muted-foreground">Powered by GeoInfosys</span>
+        </div>
+      )}
     </div>
   );
 }

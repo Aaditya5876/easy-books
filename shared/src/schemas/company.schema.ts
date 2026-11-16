@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { withoutDefaults } from './update-schema';
 
 export const CreateCompanySchema = z.object({
   name: z.string().min(1),
@@ -10,7 +11,7 @@ export const CreateCompanySchema = z.object({
   fiscalYearStart: z.string().optional(),
 });
 
-export const UpdateCompanySchema = CreateCompanySchema.partial();
+export const UpdateCompanySchema = z.object(withoutDefaults(CreateCompanySchema.shape)).partial();
 
 export type CreateCompanyDTO = z.infer<typeof CreateCompanySchema>;
 export type UpdateCompanyDTO = z.infer<typeof UpdateCompanySchema>;

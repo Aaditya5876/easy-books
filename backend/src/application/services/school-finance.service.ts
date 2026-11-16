@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { randomBytes } from 'crypto';
 import { PrismaService } from '../../../core/db/psql/prisma.client';
@@ -544,17 +545,18 @@ export class SchoolFinanceService {
 
   // ── Payments & Receipts ──────────────────────────────────────────────────────
 
-  private async nextReceiptNo(companyId: string): Promise<string> {
+  // One atomic UPDATE … RETURNING inside the payment's transaction: two
+  // payments at once get different numbers (no duplicate-receipt failure),
+  // and a rolled-back payment doesn't use up a number.
+  private async nextReceiptNo(companyId: string, tx: Prisma.TransactionClient): Promise<string> {
     const bsYear = (adToBs(new Date()) || '').split('-')[0] || String(new Date().getFullYear());
-    const company = await this.prisma.company.findUnique({
-      where: { id: companyId },
-      select: { feeReceiptSequence: true, feeReceiptYear: true },
-    });
-    const seq = company?.feeReceiptYear === bsYear ? (company.feeReceiptSequence ?? 0) + 1 : 1;
-    await this.prisma.company.update({
-      where: { id: companyId },
-      data: { feeReceiptSequence: seq, feeReceiptYear: bsYear },
-    });
+    const rows = await tx.$queryRaw<{ seq: number }[]>`
+      UPDATE "companies"
+      SET "feeReceiptSequence" = CASE WHEN "feeReceiptYear" = ${bsYear} THEN COALESCE("feeReceiptSequence", 0) + 1 ELSE 1 END,
+          "feeReceiptYear" = ${bsYear}
+      WHERE "id" = ${companyId}
+      RETURNING "feeReceiptSequence" AS seq`;
+    const seq = Number(rows[0]?.seq ?? 1);
     return `R-${bsYear}-${String(seq).padStart(4, '0')}`;
   }
 
@@ -579,14 +581,7 @@ export class SchoolFinanceService {
       bankAccountId: bankAccount?.id,
       notes: body.notes || null,
     });
-
-    // Ledger posting is best-effort — a posting failure must never lose a receipt
-    try {
-      await this.postFeePayment(companyId, payment.id, invoice.student?.name ?? 'Student');
-    } catch (err) {
-      // eslint-disable-next-line no-console
-      console.error('Fee payment ledger posting failed:', (err as Error).message);
-    }
+
 
     try {
       await this.notifications.notifyRole(companyId, ['ADMIN', 'ACCOUNTANT'], {
@@ -650,10 +645,7 @@ export class SchoolFinanceService {
     invoice: { id: string; studentId: string; totalAmount: any; paidAmount: any; month: string; student?: { name: string } | null },
     input: { amount: number; method: string; bankAccountId?: string; notes?: string | null; existingPaymentId?: string; reviewedByUserId?: string },
   ) {
-    const receiptNo = await this.nextReceiptNo(companyId);
     const verificationCode = randomVerificationCode();
-    const newPaid = round2(Number(invoice.paidAmount) + input.amount);
-    const status = newPaid >= Number(invoice.totalAmount) ? 'PAID' : 'PARTIAL';
 
     // The linked account's own paymentType decides the Transaction type — not
     // the payment method — since an ESEWA/KHALTI-method payment now always
@@ -663,35 +655,54 @@ export class SchoolFinanceService {
       : null;
     const transactionType = input.method === 'CASH' ? 'CASH' : linkedAccount?.paymentType === 'BANK' ? 'BANK' : 'WALLET';
 
-    const payment = await this.prisma.$transaction(async (tx) => {
-      const created = input.existingPaymentId
-        ? await tx.feePayment.update({
-            where: { id: input.existingPaymentId },
-            data: {
-              receiptNo,
-              verificationCode,
-              status: 'CONFIRMED',
-              reviewedByUserId: input.reviewedByUserId,
-              reviewedAt: new Date(),
-            },
-          })
-        : await tx.feePayment.create({
-            data: {
-              companyId,
-              invoiceId: invoice.id,
-              receiptNo,
-              verificationCode,
-              amount: input.amount,
-              method: input.method,
-              bankAccountId: input.bankAccountId,
-              notes: input.notes || null,
-              status: 'CONFIRMED',
-            },
-          });
+    // Everything below is one transaction: receipt number, payment, invoice,
+    // bank balance, Transaction row and ledger entries are saved together or
+    // not at all, and racing payments are serialised on the invoice row.
+    return this.prisma.$transaction(async (tx) => {
+      const receiptNo = await this.nextReceiptNo(companyId, tx);
+
+      let created;
+      if (input.existingPaymentId) {
+        // Claim the proof: if two staff confirm at once, only one gets it.
+        const claimed = await tx.feePayment.updateMany({
+          where: { id: input.existingPaymentId, companyId, status: 'PENDING_REVIEW' },
+          data: { receiptNo, verificationCode, status: 'CONFIRMED', reviewedByUserId: input.reviewedByUserId, reviewedAt: new Date() },
+        });
+        if (claimed.count === 0) throw new BadRequestException('This payment proof has already been reviewed');
+        created = await tx.feePayment.findUniqueOrThrow({ where: { id: input.existingPaymentId } });
+      } else {
+        created = await tx.feePayment.create({
+          data: {
+            companyId,
+            invoiceId: invoice.id,
+            receiptNo,
+            verificationCode,
+            amount: input.amount,
+            method: input.method,
+            bankAccountId: input.bankAccountId,
+            notes: input.notes || null,
+            status: 'CONFIRMED',
+          },
+        });
+      }
+
+      // Increment under the row lock, then check against the total.
+      const after = await tx.feeInvoice.update({
+        where: { id: invoice.id },
+        data: { paidAmount: { increment: input.amount } },
+        select: { paidAmount: true, totalAmount: true },
+      });
+      const paid = round2(Number(after.paidAmount));
+      const total = round2(Number(after.totalAmount));
+      if (paid > total + 0.005) {
+        throw new BadRequestException(`Payment exceeds remaining amount: Rs. ${round2(total - (paid - input.amount))}`);
+      }
+      const status = paid >= total - 0.005 ? 'PAID' : 'PARTIAL';
       await tx.feeInvoice.update({
         where: { id: invoice.id },
-        data: { paidAmount: newPaid, status, paidDate: status === 'PAID' ? new Date() : undefined },
+        data: { status, paidDate: status === 'PAID' ? new Date() : undefined },
       });
+
       if (input.bankAccountId) {
         await tx.bankAccount.update({ where: { id: input.bankAccountId }, data: { currentBalance: { increment: input.amount } } });
       }
@@ -709,10 +720,10 @@ export class SchoolFinanceService {
           status: 'COMPLETED' as any,
         },
       });
-      return created;
-    });
 
-    return { payment, status };
+      await this.postFeePayment(companyId, created.id, invoice.student?.name ?? 'Student', tx);
+      return { payment: created, status };
+    }, { timeout: 15000 });
   }
 
   listPayments(companyId: string, invoiceId: string) {
@@ -810,11 +821,6 @@ export class SchoolFinanceService {
       reviewedByUserId: reviewerUserId,
     });
 
-    try {
-      await this.postFeePayment(companyId, payment.id, invoice.student?.name ?? 'Student');
-    } catch (err) {
-      console.error('Fee payment ledger posting failed:', (err as Error).message);
-    }
 
     try {
       await this.portalNotifications.notifyStudent(companyId, invoice.studentId, {
@@ -897,8 +903,8 @@ export class SchoolFinanceService {
   //
   // A single balanced DR/CR pair, so this maps directly onto the shared
   // LedgerPostingService entry point instead of hand-writing ledger rows.
-  private async postFeePayment(companyId: string, paymentId: string, studentName: string) {
-    const payment = await this.prisma.feePayment.findUnique({
+  private async postFeePayment(companyId: string, paymentId: string, studentName: string, tx: Prisma.TransactionClient) {
+    const payment = await tx.feePayment.findUnique({
       where: { id: paymentId },
       include: { invoice: true, bankAccount: { select: { paymentType: true } } },
     });
@@ -919,11 +925,11 @@ export class SchoolFinanceService {
     const desc = `Fee receipt ${payment.receiptNo} — ${studentName} (${payment.invoice.month})`;
 
     const [drAccount, receivable] = await Promise.all([
-      this.posting.getOrCreateSystemAccount(companyId, drAccountName, 'ASSET'),
-      this.posting.getOrCreateSystemAccount(companyId, 'Fee Receivable', 'ASSET'),
+      this.posting.getOrCreateSystemAccount(companyId, drAccountName, 'ASSET', tx),
+      this.posting.getOrCreateSystemAccount(companyId, 'Fee Receivable', 'ASSET', tx),
     ]);
 
-    await this.posting.postManualJournalEntry(companyId, {
+    await this.posting.postManualJournalEntryTx(tx, companyId, {
       debitAccountId: drAccount.id,
       creditAccountId: receivable.id,
       amount: Number(payment.amount),

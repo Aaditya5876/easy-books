@@ -369,18 +369,7 @@ export default function SidebarNav({ collapsed, onToggle }) {
         ))}
       </nav>
 
-      {/* GeoInfosys badge */}
-      {prefs.companyLogoUrl && !collapsed && (
-        <div className={cn(
-          "shrink-0 px-4 pb-1.5 text-center border-b",
-          hasBgColor ? "border-white/10" : "border-sidebar-border"
-        )}>
-          <p className={cn(
-            "text-[10px]",
-            hasBgColor ? (bgIsDark ? "text-white/30" : "text-gray-400") : "text-sidebar-muted/50"
-          )}>Powered by GeoInfosys</p>
-        </div>
-      )}
+      {/* "Powered by GeoInfosys" moved to the bottom-right corner (Layout.jsx). */}
 
       {/* Collapse toggle */}
       <div className={cn(

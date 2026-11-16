@@ -34,8 +34,11 @@ export class LedgerPostingService {
 
   // ─── Sales Order ─────────────────────────────────────────────────────────────
 
-  async postSalesOrder(companyId: string, salesOrderId: string): Promise<void> {
-    const order = await this.prisma.salesOrder.findFirst({
+  // Pass `tx` to post inside the caller's transaction (all-or-nothing with the
+  // document/payment itself); without it the posting is its own transaction.
+  async postSalesOrder(companyId: string, salesOrderId: string, tx?: Tx): Promise<void> {
+    const db = tx ?? this.prisma;
+    const order = await db.salesOrder.findFirst({
       where: { id: salesOrderId, companyId },
     });
     if (!order) return;
@@ -47,8 +50,8 @@ export class LedgerPostingService {
     const netTaxable = Number(order.subtotal) - Number(order.discountTotal) + Number(order.laborCharges);
 
     const [salesAccount, arAccount] = await Promise.all([
-      this.getOrCreateSystemAccount(companyId, SYSTEM_ACCOUNTS.SALES_REVENUE, 'INCOME'),
-      this.getOrCreateSystemAccount(companyId, SYSTEM_ACCOUNTS.ACCOUNTS_RECEIVABLE, 'ASSET'),
+      this.getOrCreateSystemAccount(companyId, SYSTEM_ACCOUNTS.SALES_REVENUE, 'INCOME', tx),
+      this.getOrCreateSystemAccount(companyId, SYSTEM_ACCOUNTS.ACCOUNTS_RECEIVABLE, 'ASSET', tx),
     ]);
 
     const entries: any[] = [
@@ -85,7 +88,7 @@ export class LedgerPostingService {
     let vatAccount: any = null;
     const vatEntries: any[] = [];
     if (order.isVat && Number(order.vatAmount) > 0) {
-      vatAccount = await this.getOrCreateSystemAccount(companyId, SYSTEM_ACCOUNTS.VAT_PAYABLE, 'LIABILITY');
+      vatAccount = await this.getOrCreateSystemAccount(companyId, SYSTEM_ACCOUNTS.VAT_PAYABLE, 'LIABILITY', tx);
       vatEntries.push({
         companyId,
         accountId: vatAccount.id,
@@ -101,20 +104,20 @@ export class LedgerPostingService {
       });
     }
 
-    await this.prisma.$transaction([
-      ...entries.map((e) => this.prisma.ledgerEntry.create({ data: e })),
-      ...vatEntries.map((e) => this.prisma.ledgerEntry.create({ data: e })),
-      this.prisma.ledgerAccount.update({
+    await this.runAll(tx, (d) => [
+      ...entries.map((e) => d.ledgerEntry.create({ data: e })),
+      ...vatEntries.map((e) => d.ledgerEntry.create({ data: e })),
+      d.ledgerAccount.update({
         where: { id: arAccount.id },
         data: { currentBalance: { increment: Number(order.totalAmount) } },
       }),
-      this.prisma.ledgerAccount.update({
+      d.ledgerAccount.update({
         where: { id: salesAccount.id },
         data: { currentBalance: { increment: netTaxable } },
       }),
       ...(vatAccount
         ? [
-            this.prisma.ledgerAccount.update({
+            d.ledgerAccount.update({
               where: { id: vatAccount.id },
               data: { currentBalance: { increment: Number(order.vatAmount) } },
             }),
@@ -125,8 +128,11 @@ export class LedgerPostingService {
 
   // ─── Purchase Order ──────────────────────────────────────────────────────────
 
-  async postPurchaseOrder(companyId: string, purchaseOrderId: string): Promise<void> {
-    const order = await this.prisma.purchaseOrder.findFirst({
+  // Pass `tx` to post inside the caller's transaction (all-or-nothing with the
+  // document/payment itself); without it the posting is its own transaction.
+  async postPurchaseOrder(companyId: string, purchaseOrderId: string, tx?: Tx): Promise<void> {
+    const db = tx ?? this.prisma;
+    const order = await db.purchaseOrder.findFirst({
       where: { id: purchaseOrderId, companyId },
     });
     if (!order) return;
@@ -138,8 +144,8 @@ export class LedgerPostingService {
     const netTaxable = Number(order.subtotal) - Number(order.discountTotal) + Number(order.laborCharges);
 
     const [purchaseAccount, apAccount] = await Promise.all([
-      this.getOrCreateSystemAccount(companyId, SYSTEM_ACCOUNTS.PURCHASE_EXPENSE, 'EXPENSE'),
-      this.getOrCreateSystemAccount(companyId, SYSTEM_ACCOUNTS.ACCOUNTS_PAYABLE, 'LIABILITY'),
+      this.getOrCreateSystemAccount(companyId, SYSTEM_ACCOUNTS.PURCHASE_EXPENSE, 'EXPENSE', tx),
+      this.getOrCreateSystemAccount(companyId, SYSTEM_ACCOUNTS.ACCOUNTS_PAYABLE, 'LIABILITY', tx),
     ]);
 
     const entries: any[] = [
@@ -176,7 +182,7 @@ export class LedgerPostingService {
     let vatRcvbl: any = null;
     const vatEntries: any[] = [];
     if (order.isVat && Number(order.vatAmount) > 0) {
-      vatRcvbl = await this.getOrCreateSystemAccount(companyId, SYSTEM_ACCOUNTS.VAT_RECEIVABLE, 'ASSET');
+      vatRcvbl = await this.getOrCreateSystemAccount(companyId, SYSTEM_ACCOUNTS.VAT_RECEIVABLE, 'ASSET', tx);
       vatEntries.push({
         companyId,
         accountId: vatRcvbl.id,
@@ -192,20 +198,20 @@ export class LedgerPostingService {
       });
     }
 
-    await this.prisma.$transaction([
-      ...entries.map((e) => this.prisma.ledgerEntry.create({ data: e })),
-      ...vatEntries.map((e) => this.prisma.ledgerEntry.create({ data: e })),
-      this.prisma.ledgerAccount.update({
+    await this.runAll(tx, (d) => [
+      ...entries.map((e) => d.ledgerEntry.create({ data: e })),
+      ...vatEntries.map((e) => d.ledgerEntry.create({ data: e })),
+      d.ledgerAccount.update({
         where: { id: purchaseAccount.id },
         data: { currentBalance: { increment: netTaxable } },
       }),
-      this.prisma.ledgerAccount.update({
+      d.ledgerAccount.update({
         where: { id: apAccount.id },
         data: { currentBalance: { increment: Number(order.totalAmount) } },
       }),
       ...(vatRcvbl
         ? [
-            this.prisma.ledgerAccount.update({
+            d.ledgerAccount.update({
               where: { id: vatRcvbl.id },
               data: { currentBalance: { increment: Number(order.vatAmount) } },
             }),
@@ -216,8 +222,11 @@ export class LedgerPostingService {
 
   // ─── Payment Received (Sales) ─────────────────────────────────────────────────
 
-  async postPaymentReceived(companyId: string, paymentId: string): Promise<void> {
-    const payment = await this.prisma.payment.findFirst({
+  // Pass `tx` to post inside the caller's transaction (all-or-nothing with the
+  // document/payment itself); without it the posting is its own transaction.
+  async postPaymentReceived(companyId: string, paymentId: string, tx?: Tx): Promise<void> {
+    const db = tx ?? this.prisma;
+    const payment = await db.payment.findFirst({
       where: { id: paymentId, companyId },
       include: { salesOrder: true },
     });
@@ -228,18 +237,18 @@ export class LedgerPostingService {
     const cashOrBankAccountName = payment.paymentMethod === 'CASH' ? SYSTEM_ACCOUNTS.CASH_IN_HAND : SYSTEM_ACCOUNTS.BANK;
 
     const [cashAccount, arAccount] = await Promise.all([
-      this.getOrCreateSystemAccount(companyId, cashOrBankAccountName, 'ASSET'),
-      this.getOrCreateSystemAccount(companyId, SYSTEM_ACCOUNTS.ACCOUNTS_RECEIVABLE, 'ASSET'),
+      this.getOrCreateSystemAccount(companyId, cashOrBankAccountName, 'ASSET', tx),
+      this.getOrCreateSystemAccount(companyId, SYSTEM_ACCOUNTS.ACCOUNTS_RECEIVABLE, 'ASSET', tx),
     ]);
 
-    await this.prisma.$transaction([
-      this.prisma.ledgerEntry.create({
+    await this.runAll(tx, (d) => [
+      d.ledgerEntry.create({
         data: {
           companyId,
           accountId: cashAccount.id,
           dateAd: date,
           dateBs,
-          description: `Payment received for Invoice #${payment.salesOrder.invoiceNumber}`,
+          description: `Payment received for Invoice #${payment.salesOrder!.invoiceNumber}`,
           debit: Number(payment.amount),
           credit: 0,
           balance: Number(cashAccount.currentBalance) + Number(payment.amount),
@@ -248,13 +257,13 @@ export class LedgerPostingService {
           isAutoPosted: true,
         },
       }),
-      this.prisma.ledgerEntry.create({
+      d.ledgerEntry.create({
         data: {
           companyId,
           accountId: arAccount.id,
           dateAd: date,
           dateBs,
-          description: `Payment received for Invoice #${payment.salesOrder.invoiceNumber}`,
+          description: `Payment received for Invoice #${payment.salesOrder!.invoiceNumber}`,
           debit: 0,
           credit: Number(payment.amount),
           balance: Number(arAccount.currentBalance) - Number(payment.amount),
@@ -263,11 +272,11 @@ export class LedgerPostingService {
           isAutoPosted: true,
         },
       }),
-      this.prisma.ledgerAccount.update({
+      d.ledgerAccount.update({
         where: { id: cashAccount.id },
         data: { currentBalance: { increment: Number(payment.amount) } },
       }),
-      this.prisma.ledgerAccount.update({
+      d.ledgerAccount.update({
         where: { id: arAccount.id },
         data: { currentBalance: { decrement: Number(payment.amount) } },
       }),
@@ -276,8 +285,11 @@ export class LedgerPostingService {
 
   // ─── Payment Made (Purchase) ──────────────────────────────────────────────────
 
-  async postPaymentMade(companyId: string, paymentId: string): Promise<void> {
-    const payment = await this.prisma.payment.findFirst({
+  // Pass `tx` to post inside the caller's transaction (all-or-nothing with the
+  // document/payment itself); without it the posting is its own transaction.
+  async postPaymentMade(companyId: string, paymentId: string, tx?: Tx): Promise<void> {
+    const db = tx ?? this.prisma;
+    const payment = await db.payment.findFirst({
       where: { id: paymentId, companyId },
       include: { purchaseOrder: true },
     });
@@ -288,19 +300,19 @@ export class LedgerPostingService {
     const cashOrBankAccountName = payment.paymentMethod === 'CASH' ? SYSTEM_ACCOUNTS.CASH_IN_HAND : SYSTEM_ACCOUNTS.BANK;
 
     const [apAccount, cashAccount] = await Promise.all([
-      this.getOrCreateSystemAccount(companyId, SYSTEM_ACCOUNTS.ACCOUNTS_PAYABLE, 'LIABILITY'),
-      this.getOrCreateSystemAccount(companyId, cashOrBankAccountName, 'ASSET'),
+      this.getOrCreateSystemAccount(companyId, SYSTEM_ACCOUNTS.ACCOUNTS_PAYABLE, 'LIABILITY', tx),
+      this.getOrCreateSystemAccount(companyId, cashOrBankAccountName, 'ASSET', tx),
     ]);
 
-    await this.prisma.$transaction([
+    await this.runAll(tx, (d) => [
       // DR Accounts Payable — liability reduces
-      this.prisma.ledgerEntry.create({
+      d.ledgerEntry.create({
         data: {
           companyId,
           accountId: apAccount.id,
           dateAd: date,
           dateBs,
-          description: `Payment to vendor for PO #${payment.purchaseOrder.orderNumber}`,
+          description: `Payment to vendor for PO #${payment.purchaseOrder!.orderNumber}`,
           debit: Number(payment.amount),
           credit: 0,
           balance: Number(apAccount.currentBalance) - Number(payment.amount),
@@ -310,13 +322,13 @@ export class LedgerPostingService {
         },
       }),
       // CR Cash / Bank — cash goes out
-      this.prisma.ledgerEntry.create({
+      d.ledgerEntry.create({
         data: {
           companyId,
           accountId: cashAccount.id,
           dateAd: date,
           dateBs,
-          description: `Payment to vendor for PO #${payment.purchaseOrder.orderNumber}`,
+          description: `Payment to vendor for PO #${payment.purchaseOrder!.orderNumber}`,
           debit: 0,
           credit: Number(payment.amount),
           balance: Number(cashAccount.currentBalance) - Number(payment.amount),
@@ -325,11 +337,11 @@ export class LedgerPostingService {
           isAutoPosted: true,
         },
       }),
-      this.prisma.ledgerAccount.update({
+      d.ledgerAccount.update({
         where: { id: apAccount.id },
         data: { currentBalance: { decrement: Number(payment.amount) } },
       }),
-      this.prisma.ledgerAccount.update({
+      d.ledgerAccount.update({
         where: { id: cashAccount.id },
         data: { currentBalance: { decrement: Number(payment.amount) } },
       }),
@@ -338,8 +350,11 @@ export class LedgerPostingService {
 
   // ─── Credit Note ──────────────────────────────────────────────────────────────
 
-  async postCreditNote(companyId: string, creditNoteId: string): Promise<void> {
-    const cn = await this.prisma.creditNote.findFirst({ where: { id: creditNoteId, companyId } });
+  // Pass `tx` to post inside the caller's transaction (all-or-nothing with the
+  // document/payment itself); without it the posting is its own transaction.
+  async postCreditNote(companyId: string, creditNoteId: string, tx?: Tx): Promise<void> {
+    const db = tx ?? this.prisma;
+    const cn = await db.creditNote.findFirst({ where: { id: creditNoteId, companyId } });
     if (!cn) return;
 
     const date = new Date(cn.dateAd);
@@ -347,13 +362,13 @@ export class LedgerPostingService {
     const amount = Number(cn.amount);
 
     const [salesReturnsAccount, arAccount] = await Promise.all([
-      this.getOrCreateSystemAccount(companyId, SYSTEM_ACCOUNTS.SALES_RETURNS, 'EXPENSE'),
-      this.getOrCreateSystemAccount(companyId, SYSTEM_ACCOUNTS.ACCOUNTS_RECEIVABLE, 'ASSET'),
+      this.getOrCreateSystemAccount(companyId, SYSTEM_ACCOUNTS.SALES_RETURNS, 'EXPENSE', tx),
+      this.getOrCreateSystemAccount(companyId, SYSTEM_ACCOUNTS.ACCOUNTS_RECEIVABLE, 'ASSET', tx),
     ]);
 
-    await this.prisma.$transaction([
+    await this.runAll(tx, (d) => [
       // DR Sales Returns — reversal of revenue
-      this.prisma.ledgerEntry.create({
+      d.ledgerEntry.create({
         data: {
           companyId, accountId: salesReturnsAccount.id, dateAd: date, dateBs,
           description: `Credit Note #${cn.creditNoteNumber} — ${cn.reason}`,
@@ -363,7 +378,7 @@ export class LedgerPostingService {
         },
       }),
       // CR Accounts Receivable — client owes us less
-      this.prisma.ledgerEntry.create({
+      d.ledgerEntry.create({
         data: {
           companyId, accountId: arAccount.id, dateAd: date, dateBs,
           description: `Credit Note #${cn.creditNoteNumber} — ${cn.reason}`,
@@ -372,15 +387,18 @@ export class LedgerPostingService {
           referenceType: 'CREDIT_NOTE', referenceId: creditNoteId, isAutoPosted: true,
         },
       }),
-      this.prisma.ledgerAccount.update({ where: { id: salesReturnsAccount.id }, data: { currentBalance: { increment: amount } } }),
-      this.prisma.ledgerAccount.update({ where: { id: arAccount.id }, data: { currentBalance: { decrement: amount } } }),
+      d.ledgerAccount.update({ where: { id: salesReturnsAccount.id }, data: { currentBalance: { increment: amount } } }),
+      d.ledgerAccount.update({ where: { id: arAccount.id }, data: { currentBalance: { decrement: amount } } }),
     ]);
   }
 
   // ─── Debit Note ───────────────────────────────────────────────────────────────
 
-  async postDebitNote(companyId: string, debitNoteId: string): Promise<void> {
-    const dn = await this.prisma.debitNote.findFirst({ where: { id: debitNoteId, companyId } });
+  // Pass `tx` to post inside the caller's transaction (all-or-nothing with the
+  // document/payment itself); without it the posting is its own transaction.
+  async postDebitNote(companyId: string, debitNoteId: string, tx?: Tx): Promise<void> {
+    const db = tx ?? this.prisma;
+    const dn = await db.debitNote.findFirst({ where: { id: debitNoteId, companyId } });
     if (!dn) return;
 
     const date = new Date(dn.dateAd);
@@ -388,13 +406,13 @@ export class LedgerPostingService {
     const amount = Number(dn.amount);
 
     const [apAccount, purchaseReturnsAccount] = await Promise.all([
-      this.getOrCreateSystemAccount(companyId, SYSTEM_ACCOUNTS.ACCOUNTS_PAYABLE, 'LIABILITY'),
-      this.getOrCreateSystemAccount(companyId, SYSTEM_ACCOUNTS.PURCHASE_RETURNS, 'INCOME'),
+      this.getOrCreateSystemAccount(companyId, SYSTEM_ACCOUNTS.ACCOUNTS_PAYABLE, 'LIABILITY', tx),
+      this.getOrCreateSystemAccount(companyId, SYSTEM_ACCOUNTS.PURCHASE_RETURNS, 'INCOME', tx),
     ]);
 
-    await this.prisma.$transaction([
+    await this.runAll(tx, (d) => [
       // DR Accounts Payable — we owe vendor less
-      this.prisma.ledgerEntry.create({
+      d.ledgerEntry.create({
         data: {
           companyId, accountId: apAccount.id, dateAd: date, dateBs,
           description: `Debit Note #${dn.debitNoteNumber} — ${dn.reason}`,
@@ -404,7 +422,7 @@ export class LedgerPostingService {
         },
       }),
       // CR Purchase Returns — expense reduces
-      this.prisma.ledgerEntry.create({
+      d.ledgerEntry.create({
         data: {
           companyId, accountId: purchaseReturnsAccount.id, dateAd: date, dateBs,
           description: `Debit Note #${dn.debitNoteNumber} — ${dn.reason}`,
@@ -413,8 +431,8 @@ export class LedgerPostingService {
           referenceType: 'DEBIT_NOTE', referenceId: debitNoteId, isAutoPosted: true,
         },
       }),
-      this.prisma.ledgerAccount.update({ where: { id: apAccount.id }, data: { currentBalance: { decrement: amount } } }),
-      this.prisma.ledgerAccount.update({ where: { id: purchaseReturnsAccount.id }, data: { currentBalance: { increment: amount } } }),
+      d.ledgerAccount.update({ where: { id: apAccount.id }, data: { currentBalance: { decrement: amount } } }),
+      d.ledgerAccount.update({ where: { id: purchaseReturnsAccount.id }, data: { currentBalance: { increment: amount } } }),
     ]);
   }
 
@@ -955,15 +973,27 @@ export class LedgerPostingService {
     return this.debitNormal(accountType) ? net : -net;
   }
 
+  // Runs a batch of ledger writes atomically: inside the caller's interactive
+  // transaction when one is given (one by one — it is already atomic), else as
+  // its own batch transaction.
+  private async runAll(tx: Tx | undefined, build: (d: Tx | PrismaService) => Prisma.PrismaPromise<unknown>[]) {
+    if (tx) {
+      for (const op of build(tx)) await op;
+      return;
+    }
+    await this.prisma.$transaction(build(this.prisma));
+  }
+
   // ─── Internal ────────────────────────────────────────────────────────────────
 
-  async getOrCreateSystemAccount(companyId: string, accountName: string, accountType: string) {
-    const existing = await this.prisma.ledgerAccount.findFirst({
+  async getOrCreateSystemAccount(companyId: string, accountName: string, accountType: string, tx?: Tx) {
+    const db = tx ?? this.prisma;
+    const existing = await db.ledgerAccount.findFirst({
       where: { companyId, accountName },
     });
     if (existing) return existing;
 
-    return this.prisma.ledgerAccount.create({
+    return db.ledgerAccount.create({
       data: {
         companyId,
         accountName,

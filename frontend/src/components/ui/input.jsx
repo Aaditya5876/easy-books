@@ -2,7 +2,17 @@ import * as React from "react"
 
 import { cn } from "@/lib/utils"
 
-const Input = React.forwardRef(({ className, type, ...props }, ref) => {
+const Input = React.forwardRef(({ className, type, onFocus, ...props }, ref) => {
+  // Number fields that still hold the default 0: select it on focus so the
+  // first keystroke replaces it — nobody has to delete the 0 by hand.
+  // (Deferred: a mouse click would otherwise drop the selection on mouseup.)
+  const handleFocus = (e) => {
+    if (type === "number" && e.target.value === "0") {
+      const el = e.target;
+      setTimeout(() => { try { el.select(); } catch { /* not selectable */ } }, 0);
+    }
+    onFocus?.(e);
+  };
   return (
     (<input
       type={type}
@@ -11,6 +21,7 @@ const Input = React.forwardRef(({ className, type, ...props }, ref) => {
         className
       )}
       ref={ref}
+      onFocus={handleFocus}
       {...props} />)
   );
 })

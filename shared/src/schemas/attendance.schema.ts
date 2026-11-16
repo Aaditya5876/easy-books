@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { withoutDefaults } from './update-schema';
 
 export const AttendanceStatusEnum = z.enum(['PRESENT', 'ABSENT', 'HALF_DAY', 'LEAVE', 'HOLIDAY']);
 
@@ -26,7 +27,7 @@ export const BulkAttendanceSchema = z.object({
   })).min(1),
 });
 
-export const UpdateAttendanceSchema = CreateAttendanceSchema.omit({ companyId: true }).partial();
+export const UpdateAttendanceSchema = z.object(withoutDefaults(CreateAttendanceSchema.shape)).omit({ companyId: true }).partial();
 
 export type CreateAttendanceDTO = z.infer<typeof CreateAttendanceSchema>;
 export type UpdateAttendanceDTO = z.infer<typeof UpdateAttendanceSchema>;

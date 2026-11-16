@@ -23,10 +23,13 @@ import {
 import { SmartNumberInput } from "@/components/ui/smart-number-input";
 import { FileAttachmentZone } from "@/components/ui/file-attachment-zone";
 import { useRole } from "@/lib/useRole";
+import { TaskLinkSelect, TaskBadge, useWorkflowTasks } from '../components/shared/TaskLinkSelect';
+import { useIdempotencyKey } from '@/lib/useIdempotencyKey';
 
 const UNITS = ['Piece', 'Set', 'Liter', 'ml', 'Kg', 'gm', 'NOS'];
 
 const EMPTY_FORM = {
+  task_id: '', // Workflow job this record is for (optional)
   vendor_name: '', vendor_contact: '', vendor_address: '', vendor_pan: '',
   order_number: '', ordered_by: '',
   date_ad: new Date().toISOString().split('T')[0],
@@ -51,6 +54,8 @@ export default function Purchase() {
   const [showNew, setShowNew] = useState(false);
   const [vendors, setVendors] = useState([]);
   const [form, setForm] = useState({ ...EMPTY_FORM });
+  const workflowTasks = useWorkflowTasks();
+  const saveKey = useIdempotencyKey(); // one key per purchase; reused if the save is retried
 
   const UNIT_LABELS = {
     Piece: t('purchase.unitPiece', { defaultValue: 'Piece' }),
@@ -122,27 +127,60 @@ export default function Purchase() {
     setForm({ ...form, labor_items: form.labor_items.filter((_, i) => i !== index) });
   }
 
+  // Each purchase line is linked to its stock item (matched by name; a new item
+  // is created only when none exists) so the server adds the stock inside the
+  // purchase's own transaction. This page used to create a brand-new inventory
+  // item for every line of every purchase — duplicates on each re-order.
+  async function linkLinesToStock() {
+    const stock = await api.InventoryItem.filter({ company_id: companyId });
+    const byName = new Map(stock.map(i => [String(i.item_name || i.description || '').trim().toLowerCase(), i]));
+    const linked = [];
+    for (const item of form.items) {
+      const name = String(item.description || '').trim();
+      if (!name) continue;
+      if (item.inventory_item_id) { linked.push(item); continue; }
+      let match = byName.get(name.toLowerCase());
+      if (!match) {
+        match = await api.InventoryItem.create({
+          company_id: companyId,
+          item_name: name,
+          description: name,
+          quantity: 0, // the purchase itself adds the stock
+          unit: item.unit || 'Piece',
+          unit_purchase_price: Number(item.unit_price) || 0,
+        });
+        byName.set(name.toLowerCase(), match);
+      }
+      linked.push({ ...item, inventory_item_id: match.id });
+    }
+    return linked;
+  }
+
   async function createOrder() {
     const entryDate = form.date_ad || new Date().toISOString().split('T')[0];
     const bsDate = adToBs(new Date(entryDate));
-    const laborTotal = form.labor_items.reduce((s, li) => s + (li.amount || 0), 0);
+    const laborTotal = form.labor_items.reduce((s, li) => s + (Number(li.amount) || 0), 0);
     const subtotal = form.items.reduce((sum, i) => sum + (i.total || 0), 0) + laborTotal;
     const vatAmount = form.is_vat ? subtotal * 0.13 : 0;
+    const items = await linkLinesToStock();
 
     await api.PurchaseOrder.create({
       company_id: companyId,
+      ...(form.task_id ? { task_id: form.task_id } : {}),
       vendor_name: form.vendor_name,
       vendor_contact: form.vendor_contact,
       vendor_address: form.vendor_address,
-      vendor_pan: form.vendor_pan,
+      // API field names (vendor_pan / payment_type were silently dropped).
+      vendor_pan_vat: form.vendor_pan || undefined,
+      payment_method: String(form.payment_type || 'cash').toUpperCase(),
+      labor_charges: laborTotal,
       date_ad: entryDate,
       date_bs: bsDate.formatted,
       due_date: form.due_date || null,
       order_number: form.order_number,
       ordered_by: form.ordered_by,
-      items: form.items,
+      items,
       work_description: form.labor_items.map(li => li.description).filter(Boolean).join(', '),
-      payment_type: form.payment_type,
       is_vat: form.is_vat,
       notes: form.notes,
       // Saved by the backend as a linked Purchase Bill (Memo → Purchase Bills).
@@ -150,8 +188,8 @@ export default function Purchase() {
       subtotal,
       vat_amount: vatAmount,
       total_amount: subtotal + vatAmount,
-      status: 'confirmed',
-    });
+    }, { idempotencyKey: saveKey.key });
+    saveKey.renew();
 
     // Auto-create vendor if not exists
     const existingVendors = await api.Vendor.filter({ company_id: companyId, name: form.vendor_name });
@@ -162,22 +200,6 @@ export default function Purchase() {
         phone: form.vendor_contact,
         address: form.vendor_address,
       });
-    }
-
-    // Update inventory for purchased items
-    for (const item of form.items) {
-      if (item.description) {
-        await api.InventoryItem.create({
-          company_id: companyId,
-          description: item.description,
-          quantity: item.quantity || 0,
-          unit: item.unit || 'Piece',
-          unit_purchase_price: item.unit_price || 0,
-          date_of_purchase: entryDate,
-          date_of_purchase_bs: bsDate.formatted,
-          supplier_name: form.vendor_name,
-        });
-      }
     }
 
     setForm({ ...EMPTY_FORM, date_ad: new Date().toISOString().split('T')[0] });
@@ -199,6 +221,7 @@ export default function Purchase() {
   const vatAmount = form.is_vat ? subtotal * 0.13 : 0;
 
   const columns = [
+    { key: 'task_id', label: t('workflow.jobColumn', { defaultValue: 'Job' }), render: (row) => <TaskBadge tasks={workflowTasks} taskId={row.task_id} /> },
     { key: 'date_ad', label: t('purchase.date', { defaultValue: 'Date' }), render: (row) => (
       <div className="text-xs">
         <div>{formatDate(row.date_ad)}</div>
@@ -295,6 +318,7 @@ export default function Purchase() {
                 </div>
               )}
 
+              <TaskLinkSelect tasks={workflowTasks} value={form.task_id} onChange={v => setForm(f => ({ ...f, task_id: v }))} />
               <div>
                 <Label className="text-xs">{t('purchase.vendorName', { defaultValue: 'Vendor Name *' })}</Label>
                 <Input

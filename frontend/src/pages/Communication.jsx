@@ -1,7 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { motion } from 'framer-motion';
-import { api, apiAuth } from '@/api/adapter';
+import { api } from '@/api/adapter';
+import { taskApi } from '@/api';
+import { toTaskPayload, normalizeStatus } from '@/lib/tasks';
+import { toast } from 'sonner';
 import { getActiveCompanyId } from '@/lib/companyContext';
 import { formatDate } from '@/lib/utils';
 import PageHeader from '../components/shared/PageHeader';
@@ -31,6 +34,10 @@ const PRIORITY_CONFIG = [
   { v: 'urgent', prefix: '🔴',   cls: 'border-red-400 text-red-600', act: 'border-red-500 bg-red-50 text-red-700' },
 ];
 
+const EMPTY_FORM = {
+  title: '', description: '', assigned_to: '', due_date: '', priority: 'medium', department: '', party_type: '', party_name: '', party_contact: '', assigned_name: '', assigned_contact: '', due_time: ''
+};
+
 export default function Communication() {
   const { t } = useTranslation();
   const companyId = getActiveCompanyId();
@@ -42,9 +49,7 @@ export default function Communication() {
   const [colFilters, setColFilters] = useState({ title: '', assigned_to: '', department: '', created_date: '', due_date: '', priority: '', status: '' });
   const [partyOptions, setPartyOptions] = useState([]);
   const setCol = (key, val) => setColFilters(f => ({ ...f, [key]: val }));
-  const [form, setForm] = useState({
-    title: '', description: '', assigned_to: '', due_date: '', priority: 'medium', department: '', party_type: '', party_name: '', party_contact: '', assigned_name: '', assigned_contact: '', due_time: ''
-  });
+  const [form, setForm] = useState(EMPTY_FORM);
 
   useEffect(() => {
     if (companyId) loadData();
@@ -52,26 +57,36 @@ export default function Communication() {
 
   async function loadData() {
     setLoading(true);
-    const data = await api.Task.filter({ company_id: companyId }, '-created_date', 50);
-    setTasks(data);
-    setLoading(false);
+    try {
+      const data = await api.Task.filter({ company_id: companyId });
+      // The API uses PENDING/HIGH/CLIENT; this page keys its labels and colours
+      // by the lower-case form, and shows created_at as the assigned date.
+      setTasks(data.map(r => ({
+        ...r,
+        status: (r.status || 'PENDING').toLowerCase(),
+        priority: (r.priority || 'MEDIUM').toLowerCase(),
+        party_type: r.party_type ? r.party_type.toLowerCase() : '',
+        created_date: r.created_at,
+      })));
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function createTask() {
-    const user = await apiAuth.me();
-    await api.Task.create({
-      ...form,
-      company_id: companyId,
-      assigned_by: user.email,
-      status: 'pending',
-    });
-    setForm({ title: '', description: '', assigned_to: '', due_date: '', priority: 'medium' });
-    setShowNew(false);
-    loadData();
+    try {
+      await taskApi.create(toTaskPayload({ ...form, status: 'pending' }));
+      setForm(EMPTY_FORM);
+      setShowNew(false);
+      loadData();
+    } catch (e) {
+      const m = e?.response?.data?.message;
+      toast.error(typeof m === 'string' ? m : t('communication.couldNotCreateTask', { defaultValue: 'Could not create task.' }));
+    }
   }
 
   async function updateTaskStatus(taskId, status) {
-    await api.Task.update(taskId, { status });
+    await api.Task.update(taskId, { status: normalizeStatus(status) });
     loadData();
   }
 

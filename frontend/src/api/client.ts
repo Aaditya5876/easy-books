@@ -89,4 +89,50 @@ apiClient.get = ((url: string, config?: any) => {
   return request;
 }) as typeof apiClient.get;
 
+// ── Writes: Idempotency-Key + double-submit merging ─────────────────────────
+// Every POST/PUT/PATCH/DELETE carries an Idempotency-Key. The backend keeps
+// the first response per key, so a retry of the same action can't create a
+// second bill or payment. Forms that handle money pass their own key
+// (`{ idempotencyKey }`, see useIdempotencyKey) so a retry after a network
+// error reuses it; everything else gets a fresh key per request.
+export function newIdempotencyKey() {
+  return globalThis.crypto?.randomUUID?.() ?? `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`;
+}
+
+apiClient.interceptors.request.use((config: any) => {
+  const method = String(config.method || 'get').toUpperCase();
+  if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
+    config.headers = config.headers || {};
+    if (!config.headers['Idempotency-Key']) {
+      config.headers['Idempotency-Key'] = config.idempotencyKey || newIdempotencyKey();
+    }
+  }
+  return config;
+});
+
+// A double-click fires the same write twice before the first answers: share
+// the first request instead of sending a second one. (Uploads are left alone.)
+const inflightWrites = new Map<string, Promise<any>>();
+for (const method of ['post', 'put', 'patch'] as const) {
+  const raw = (apiClient as any)[method].bind(apiClient);
+  (apiClient as any)[method] = (url: string, data?: any, config?: any) => {
+    if (typeof FormData !== 'undefined' && data instanceof FormData) return raw(url, data, config);
+    const sig = `${method}|${url}|${JSON.stringify(config?.params ?? null)}|${JSON.stringify(data ?? null)}`;
+    const pending = inflightWrites.get(sig);
+    if (pending) return pending;
+    const request = raw(url, data, config).finally(() => inflightWrites.delete(sig));
+    inflightWrites.set(sig, request);
+    return request;
+  };
+}
+const rawDelete = apiClient.delete.bind(apiClient);
+apiClient.delete = ((url: string, config?: any) => {
+  const sig = `delete|${url}|${JSON.stringify(config?.params ?? null)}|${JSON.stringify(config?.data ?? null)}`;
+  const pending = inflightWrites.get(sig);
+  if (pending) return pending;
+  const request = rawDelete(url, config).finally(() => inflightWrites.delete(sig));
+  inflightWrites.set(sig, request);
+  return request;
+}) as typeof apiClient.delete;
+
 export default apiClient;

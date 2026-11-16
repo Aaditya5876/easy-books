@@ -2,6 +2,8 @@ import { z } from 'zod';
 
 export const CreateVendorSchema = z.object({
   companyId: z.string().uuid(),
+  // Workflow job this record belongs to (must be the same company's task).
+  taskId: z.string().uuid().optional().nullable(),
   name: z.string().min(1),
   abbreviation: z.string().optional(),
   contactPerson: z.string().optional(),

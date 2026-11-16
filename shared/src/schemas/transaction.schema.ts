@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { withoutDefaults } from './update-schema';
 
 export const TransactionTypeEnum = z.enum(['CASH', 'BANK', 'WALLET', 'CHEQUE', 'CREDIT']);
 export const TransactionCategoryEnum = z.enum(['INCOME', 'EXPENSE', 'TRANSFER', 'INVESTMENT', 'HAND_OUTS']);
@@ -26,7 +27,9 @@ export const CreateTransactionSchema = z.object({
   partyAccountId: z.string().uuid().optional(),
 });
 
-export const UpdateTransactionSchema = CreateTransactionSchema.omit({ companyId: true }).partial();
+// Without defaults: editing a pending cheque's note used to mark it COMPLETED
+// and post real money to the ledger.
+export const UpdateTransactionSchema = z.object(withoutDefaults(CreateTransactionSchema.shape)).omit({ companyId: true }).partial();
 
 export type CreateTransactionDTO = z.infer<typeof CreateTransactionSchema>;
 export type UpdateTransactionDTO = z.infer<typeof UpdateTransactionSchema>;

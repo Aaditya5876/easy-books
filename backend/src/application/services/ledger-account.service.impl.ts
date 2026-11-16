@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException, ForbiddenException, UnauthorizedException } from '@nestjs/common';
 import { PrismaService } from '../../../core/db/psql/prisma.client';
-import { CreateLedgerAccountDTO, UpdateLedgerAccountDTO } from '@easy-books/shared';
+import { CreateLedgerAccountDTO, UpdateLedgerAccountDTO, defaultCostBehavior } from '@easy-books/shared';
 import * as bcrypt from 'bcrypt';
 
 @Injectable()
@@ -20,14 +20,27 @@ export class LedgerAccountServiceImpl {
   }
 
   async create(dto: CreateLedgerAccountDTO) {
-    return this.prisma.ledgerAccount.create({ data: dto as any });
+    // Only expense accounts are fixed/variable; new ones get a sensible start.
+    const costBehavior = dto.accountType === 'EXPENSE'
+      ? (dto.costBehavior ?? defaultCostBehavior(dto.accountName))
+      : null;
+    return this.prisma.ledgerAccount.create({ data: { ...dto, costBehavior } as any });
   }
 
   async update(id: string, companyId: string, dto: UpdateLedgerAccountDTO) {
     const account = await this.prisma.ledgerAccount.findFirst({ where: { id, companyId } });
     if (!account) throw new NotFoundException('Ledger account not found');
-    if (account.isSystem) throw new BadRequestException('System accounts cannot be modified');
-    return this.prisma.ledgerAccount.update({ where: { id }, data: dto as any });
+    const onlyCostBehavior = Object.keys(dto).every((k) => k === 'costBehavior');
+    // System accounts (Salary Expense, Purchase Expenses…) stay locked, except
+    // for the fixed/variable tag, which is a reporting choice, not bookkeeping.
+    if (account.isSystem && !onlyCostBehavior) throw new BadRequestException('System accounts cannot be modified');
+    const type = dto.accountType ?? account.accountType;
+    const data: any = { ...dto };
+    if (type !== 'EXPENSE') data.costBehavior = null;
+    else if (dto.accountType === 'EXPENSE' && !account.costBehavior && !dto.costBehavior) {
+      data.costBehavior = defaultCostBehavior(dto.accountName ?? account.accountName);
+    }
+    return this.prisma.ledgerAccount.update({ where: { id }, data });
   }
 
   async remove(id: string, companyId: string) {

@@ -117,7 +117,9 @@ async function createApp() {
     origin: corsOrigins,
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
+    // Idempotency-Key: the browser sends one per money action (see IdempotencyInterceptor).
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Idempotency-Key'],
+    exposedHeaders: ['Idempotent-Replayed'],
   });
 
   const isProduction = process.env.NODE_ENV === 'production';

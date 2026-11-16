@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../../core/db/psql/prisma.client';
+import { assertTaskLink } from '../../../core/utils/task-link';
 import { CreateVendorDTO, UpdateVendorDTO } from '@easy-books/shared';
 
 @Injectable()
@@ -20,12 +21,14 @@ export class VendorServiceImpl {
   }
 
   async create(dto: CreateVendorDTO) {
+    await assertTaskLink(this.prisma, dto.companyId, dto.taskId);
     return this.prisma.vendor.create({ data: dto as any });
   }
 
   async update(id: string, companyId: string, dto: UpdateVendorDTO) {
     const vendor = await this.prisma.vendor.findFirst({ where: { id, companyId, deletedAt: null } });
     if (!vendor) throw new NotFoundException('Vendor not found');
+    await assertTaskLink(this.prisma, companyId, dto.taskId);
     return this.prisma.vendor.update({ where: { id }, data: dto as any });
   }
 

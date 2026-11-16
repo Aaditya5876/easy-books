@@ -20,6 +20,7 @@ import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { printFeeReceipt } from '@/lib/printFeeReceipt';
 import { printFeeInvoice } from '@/lib/printFeeInvoice';
+import { useIdempotencyKey } from '@/lib/useIdempotencyKey';
 import { getTodayBS, NEPALI_MONTHS, formatBsYearMonth } from '@/lib/nepaliDate';
 
 // ── Fee Structure Dialog ──────────────────────────────────────────────────────
@@ -165,9 +166,13 @@ function PaymentDialog({ open, onClose, invoice }) {
 
   const remaining = invoice ? Number(invoice.totalAmount) - Number(invoice.paidAmount) : 0;
 
+  // One key per payment: if the save is retried (network blip, second click),
+  // the server returns the first receipt instead of recording it twice.
+  const payKey = useIdempotencyKey();
   const pay = useMutation({
-    mutationFn: (data) => feesApi.recordPayment(invoice.id, data),
+    mutationFn: (data) => feesApi.recordPayment(invoice.id, data, { idempotencyKey: payKey.key }),
     onSuccess: (res) => {
+      payKey.renew();
       qc.invalidateQueries({ queryKey: ['fee-invoices'] });
       qc.invalidateQueries({ queryKey: ['school-dashboard'] });
       qc.invalidateQueries({ queryKey: ['bank-accounts'] });

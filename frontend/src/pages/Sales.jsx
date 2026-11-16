@@ -23,8 +23,11 @@ import EmptyState from '../components/EmptyState';
 import { SmartNumberInput } from "@/components/ui/smart-number-input";
 import { FileAttachmentZone } from "@/components/ui/file-attachment-zone";
 import { useRole } from "@/lib/useRole";
+import { TaskLinkSelect, TaskBadge, useWorkflowTasks } from '../components/shared/TaskLinkSelect';
+import { useIdempotencyKey } from '@/lib/useIdempotencyKey';
 
 const EMPTY_FORM = {
+  task_id: '', // Workflow job this record is for (optional)
   client_name: '', client_contact: '', client_address: '', client_pan: '',
   invoice_number: '', is_vat: false, payment_type: 'cash',
   date_ad: new Date().toISOString().split('T')[0],
@@ -48,6 +51,8 @@ export default function Sales() {
   const setCol = (key, val) => setColFilters(f => ({ ...f, [key]: val }));
   const [showNew, setShowNew] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
+  const workflowTasks = useWorkflowTasks();
+  const saveKey = useIdempotencyKey(); // one key per bill; reused if the save is retried
 
   useEffect(() => {
     if (companyId) loadData();
@@ -167,10 +172,14 @@ export default function Sales() {
 
     await api.SalesOrder.create({
       company_id: companyId,
+      ...(form.task_id ? { task_id: form.task_id } : {}),
       client_name: form.client_name,
       client_contact: form.client_contact,
       client_address: form.client_address,
-      client_pan: form.client_pan,
+      // API field names (client_pan / payment_type were silently dropped, so
+      // every bill was saved as a CASH sale with no PAN).
+      client_pan_vat: form.client_pan || undefined,
+      payment_method: String(form.payment_type || 'cash').toUpperCase(),
       date_ad: entryDate,
       date_bs: bsDate.formatted,
       due_date: form.due_date || null,
@@ -186,8 +195,8 @@ export default function Sales() {
       subtotal,
       vat_amount: vatAmount,
       total_amount: subtotal + vatAmount,
-      status: 'confirmed',
-    });
+    }, { idempotencyKey: saveKey.key });
+    saveKey.renew();
 
     // Auto-create client if not exists
     const existingClients = await api.Client.filter({ company_id: companyId, name: form.client_name });
@@ -201,17 +210,8 @@ export default function Sales() {
       });
     }
 
-    // Deduct inventory
-    for (const item of form.items) {
-      if (item.inventory_item_id) {
-        const invItem = inventory.find(i => i.id === item.inventory_item_id);
-        if (invItem) {
-          await api.InventoryItem.update(item.inventory_item_id, {
-            quantity: Math.max(0, (invItem.quantity || 0) - (item.quantity || 0)),
-          });
-        }
-      }
-    }
+    // Stock is deducted by the server in the same transaction as the bill.
+    // (This page used to deduct it a second time from the browser.)
 
     setForm({
       ...EMPTY_FORM,
@@ -290,6 +290,7 @@ export default function Sales() {
   };
 
   const columns = [
+    { key: 'task_id', label: t('workflow.jobColumn', { defaultValue: 'Job' }), render: (row) => <TaskBadge tasks={workflowTasks} taskId={row.task_id} /> },
     {
       key: 'date_ad', label: t('sales.colDate', { defaultValue: 'Date' }), render: (row) => (
         <div className="text-xs">
@@ -363,6 +364,7 @@ export default function Sales() {
                       </SelectContent>
                     </Select>
                   </div>
+                  <TaskLinkSelect tasks={workflowTasks} value={form.task_id} onChange={v => setForm(f => ({ ...f, task_id: v }))} />
                   <div>
                     <Label className="text-xs">{t('sales.clientNameRequired', { defaultValue: 'Client Name *' })}</Label>
                     <Input value={form.client_name} onChange={e => setForm({ ...form, client_name: e.target.value })} placeholder={t('sales.clientNamePlaceholder', { defaultValue: 'Full name or business name' })} />

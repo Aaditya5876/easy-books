@@ -16,7 +16,7 @@ function getCurrentBsMonthRange(): { startAd: Date; endAd: Date; bsMonth: string
   return { startAd, endAd, bsMonth: `${bsYear}-${String(bsMonth).padStart(2, '0')}` };
 }
 
-function getCurrentFiscalYearRange(): { startAd: Date; endAd: Date; fiscalYear: string } {
+export function getCurrentFiscalYearRange(): { startAd: Date; endAd: Date; fiscalYear: string } {
   const now = new Date();
   const bsStr = adToBs(now);
   const [bsYear, bsMonth] = bsStr.split('-').map(Number);

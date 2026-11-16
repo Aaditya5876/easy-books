@@ -46,6 +46,7 @@ import { RolesGuard } from './guards/roles.guard';
 import { CompanyAccessGuard } from './guards/company-access.guard';
 import { ModuleAccessGuard } from './guards/module-access.guard';
 import { AuditLogInterceptor } from './interceptors/audit-log.interceptor';
+import { IdempotencyInterceptor } from './interceptors/idempotency.interceptor';
 import { PrismaService } from '../../core/db/psql/prisma.client';
 
 @Module({
@@ -106,6 +107,9 @@ import { PrismaService } from '../../core/db/psql/prisma.client';
     { provide: APP_GUARD, useClass: ModuleAccessGuard },
     // Runs after the guards above (so req.user is already populated) — logs
     // every non-GET request as an audit trail entry. See AuditLogInterceptor.
+    // Registered first = outermost: a replayed Idempotency-Key response returns
+    // before anything else runs (no second audit entry, no second write).
+    { provide: APP_INTERCEPTOR, useClass: IdempotencyInterceptor },
     { provide: APP_INTERCEPTOR, useClass: AuditLogInterceptor },
   ],
 })

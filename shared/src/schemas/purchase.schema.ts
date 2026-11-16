@@ -3,6 +3,8 @@ import { SalesOrderItemSchema, OrderStatusEnum, PaymentMethodEnum } from './sale
 
 export const CreatePurchaseOrderSchema = z.object({
   companyId: z.string().uuid(),
+  // Workflow job this record belongs to (must be the same company's task).
+  taskId: z.string().uuid().optional().nullable(),
   vendorId: z.string().uuid().optional(),
   vendorName: z.string().min(1),
   vendorContact: z.string().optional(),

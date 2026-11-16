@@ -23,7 +23,7 @@ export const authApi = {
 export const inventoryApi = {
   list: () => apiClient.get('/api/v1/inventory', { params: { companyId: companyId() } }),
   get: (id: string) => apiClient.get(`/api/v1/inventory/${id}`, { params: { companyId: companyId() } }),
-  create: (data: object) => apiClient.post('/api/v1/inventory', data),
+  create: (data: object, config?: object) => apiClient.post('/api/v1/inventory', data, config),
   update: (id: string, data: object) => apiClient.put(`/api/v1/inventory/${id}`, data, { params: { companyId: companyId() } }),
   remove: (id: string) => apiClient.delete(`/api/v1/inventory/${id}`, { params: { companyId: companyId() } }),
   adjust: (id: string, data: { adjustmentType: string; quantityChange: number; reason: string }) =>
@@ -36,7 +36,7 @@ export const inventoryApi = {
 export const salesApi = {
   list: () => apiClient.get('/api/v1/sales', { params: { companyId: companyId() } }),
   get: (id: string) => apiClient.get(`/api/v1/sales/${id}`, { params: { companyId: companyId() } }),
-  create: (data: object) => apiClient.post('/api/v1/sales', data),
+  create: (data: object, config?: object) => apiClient.post('/api/v1/sales', data, config),
   update: (id: string, data: object) => apiClient.put(`/api/v1/sales/${id}`, data, { params: { companyId: companyId() } }),
   remove: (id: string) => apiClient.delete(`/api/v1/sales/${id}`, { params: { companyId: companyId() } }),
 };
@@ -45,7 +45,7 @@ export const salesApi = {
 export const purchaseApi = {
   list: () => apiClient.get('/api/v1/purchases', { params: { companyId: companyId() } }),
   get: (id: string) => apiClient.get(`/api/v1/purchases/${id}`, { params: { companyId: companyId() } }),
-  create: (data: object) => apiClient.post('/api/v1/purchases', data),
+  create: (data: object, config?: object) => apiClient.post('/api/v1/purchases', data, config),
   update: (id: string, data: object) => apiClient.put(`/api/v1/purchases/${id}`, data, { params: { companyId: companyId() } }),
   remove: (id: string) => apiClient.delete(`/api/v1/purchases/${id}`, { params: { companyId: companyId() } }),
 };
@@ -54,7 +54,7 @@ export const purchaseApi = {
 export const clientApi = {
   list: () => apiClient.get('/api/v1/clients', { params: { companyId: companyId() } }),
   get: (id: string) => apiClient.get(`/api/v1/clients/${id}`, { params: { companyId: companyId() } }),
-  create: (data: object) => apiClient.post('/api/v1/clients', data),
+  create: (data: object, config?: object) => apiClient.post('/api/v1/clients', data, config),
   update: (id: string, data: object) => apiClient.put(`/api/v1/clients/${id}`, data, { params: { companyId: companyId() } }),
   remove: (id: string) => apiClient.delete(`/api/v1/clients/${id}`, { params: { companyId: companyId() } }),
 };
@@ -63,7 +63,7 @@ export const clientApi = {
 export const vendorApi = {
   list: () => apiClient.get('/api/v1/vendors', { params: { companyId: companyId() } }),
   get: (id: string) => apiClient.get(`/api/v1/vendors/${id}`, { params: { companyId: companyId() } }),
-  create: (data: object) => apiClient.post('/api/v1/vendors', data),
+  create: (data: object, config?: object) => apiClient.post('/api/v1/vendors', data, config),
   update: (id: string, data: object) => apiClient.put(`/api/v1/vendors/${id}`, data, { params: { companyId: companyId() } }),
   remove: (id: string) => apiClient.delete(`/api/v1/vendors/${id}`, { params: { companyId: companyId() } }),
 };
@@ -75,7 +75,7 @@ export const employeeApi = {
   // see salary/PAN/bank data but still need to resolve/pick an employee by name.
   directory: () => apiClient.get('/api/v1/employees/directory', { params: { companyId: companyId() } }),
   get: (id: string) => apiClient.get(`/api/v1/employees/${id}`, { params: { companyId: companyId() } }),
-  create: (data: object) => apiClient.post('/api/v1/employees', data),
+  create: (data: object, config?: object) => apiClient.post('/api/v1/employees', data, config),
   update: (id: string, data: object) => apiClient.put(`/api/v1/employees/${id}`, data, { params: { companyId: companyId() } }),
   remove: (id: string) => apiClient.delete(`/api/v1/employees/${id}`, { params: { companyId: companyId() } }),
 };
@@ -84,7 +84,7 @@ export const employeeApi = {
 export const attendanceApi = {
   list: (employeeId?: string) => apiClient.get('/api/v1/attendance', { params: { companyId: companyId(), employeeId } }),
   get: (id: string) => apiClient.get(`/api/v1/attendance/${id}`, { params: { companyId: companyId() } }),
-  create: (data: object) => apiClient.post('/api/v1/attendance', data),
+  create: (data: object, config?: object) => apiClient.post('/api/v1/attendance', data, config),
   update: (id: string, data: object) => apiClient.put(`/api/v1/attendance/${id}`, data, { params: { companyId: companyId() } }),
   remove: (id: string) => apiClient.delete(`/api/v1/attendance/${id}`, { params: { companyId: companyId() } }),
   // Self-service — open to every role, unlike the HR endpoints above.
@@ -136,7 +136,7 @@ export const ledgerApi = {
   accounts: {
     list: () => apiClient.get('/api/v1/ledger/accounts', { params: { companyId: companyId() } }),
     get: (id: string) => apiClient.get(`/api/v1/ledger/accounts/${id}`, { params: { companyId: companyId() } }),
-    create: (data: object) => apiClient.post('/api/v1/ledger/accounts', data),
+    create: (data: object, config?: object) => apiClient.post('/api/v1/ledger/accounts', data, config),
     update: (id: string, data: object) => apiClient.put(`/api/v1/ledger/accounts/${id}`, data, { params: { companyId: companyId() } }),
     remove: (id: string) => apiClient.delete(`/api/v1/ledger/accounts/${id}`, { params: { companyId: companyId() } }),
     toggleHidden: (id: string, password: string) =>
@@ -160,7 +160,7 @@ export const ledgerApi = {
 export const transactionApi = {
   list: () => apiClient.get('/api/v1/transactions', { params: { companyId: companyId() } }),
   get: (id: string) => apiClient.get(`/api/v1/transactions/${id}`, { params: { companyId: companyId() } }),
-  create: (data: object) => apiClient.post('/api/v1/transactions', data),
+  create: (data: object, config?: object) => apiClient.post('/api/v1/transactions', data, config),
   update: (id: string, data: object) => apiClient.put(`/api/v1/transactions/${id}`, data, { params: { companyId: companyId() } }),
   remove: (id: string) => apiClient.delete(`/api/v1/transactions/${id}`, { params: { companyId: companyId() } }),
 };
@@ -169,7 +169,7 @@ export const transactionApi = {
 export const quotationApi = {
   list: () => apiClient.get('/api/v1/quotations', { params: { companyId: companyId() } }),
   get: (id: string) => apiClient.get(`/api/v1/quotations/${id}`, { params: { companyId: companyId() } }),
-  create: (data: object) => apiClient.post('/api/v1/quotations', data),
+  create: (data: object, config?: object) => apiClient.post('/api/v1/quotations', data, config),
   update: (id: string, data: object) => apiClient.put(`/api/v1/quotations/${id}`, data, { params: { companyId: companyId() } }),
   remove: (id: string) => apiClient.delete(`/api/v1/quotations/${id}`, { params: { companyId: companyId() } }),
   convert: (id: string) => apiClient.post(`/api/v1/quotations/${id}/convert`, {}, { params: { companyId: companyId() } }),
@@ -179,7 +179,7 @@ export const quotationApi = {
 export const memoApi = {
   list: () => apiClient.get('/api/v1/memos', { params: { companyId: companyId() } }),
   get: (id: string) => apiClient.get(`/api/v1/memos/${id}`, { params: { companyId: companyId() } }),
-  create: (data: object) => apiClient.post('/api/v1/memos', data),
+  create: (data: object, config?: object) => apiClient.post('/api/v1/memos', data, config),
   update: (id: string, data: object) => apiClient.put(`/api/v1/memos/${id}`, data, { params: { companyId: companyId() } }),
   remove: (id: string) => apiClient.delete(`/api/v1/memos/${id}`, { params: { companyId: companyId() } }),
 };
@@ -188,7 +188,7 @@ export const memoApi = {
 export const bankAccountApi = {
   list: () => apiClient.get('/api/v1/bank-accounts', { params: { companyId: companyId() } }),
   get: (id: string) => apiClient.get(`/api/v1/bank-accounts/${id}`, { params: { companyId: companyId() } }),
-  create: (data: object) => apiClient.post('/api/v1/bank-accounts', data),
+  create: (data: object, config?: object) => apiClient.post('/api/v1/bank-accounts', data, config),
   update: (id: string, data: object) => apiClient.put(`/api/v1/bank-accounts/${id}`, data, { params: { companyId: companyId() } }),
   remove: (id: string) => apiClient.delete(`/api/v1/bank-accounts/${id}`, { params: { companyId: companyId() } }),
 };
@@ -197,13 +197,17 @@ export const bankAccountApi = {
 export const taskApi = {
   list: () => apiClient.get('/api/v1/tasks', { params: { companyId: companyId() } }),
   get: (id: string) => apiClient.get(`/api/v1/tasks/${id}`, { params: { companyId: companyId() } }),
-  create: (data: object) => apiClient.post('/api/v1/tasks', data),
+  create: (data: object, config?: object) => apiClient.post('/api/v1/tasks', { companyId: companyId(), ...data }, config),
   update: (id: string, data: object) => apiClient.put(`/api/v1/tasks/${id}`, data, { params: { companyId: companyId() } }),
   remove: (id: string) => apiClient.delete(`/api/v1/tasks/${id}`, { params: { companyId: companyId() } }),
+  // Everything connected to the job: quotations, purchases, bills, payments, people, documents.
+  links: (id: string) => apiClient.get(`/api/v1/tasks/${id}/links`, { params: { companyId: companyId() } }),
 };
 
 // Dashboard
 export const dashboardApi = {
+  // Everything the home dashboard shows, for business and school companies.
+  overview: () => apiClient.get('/api/v1/dashboard/overview', { params: { companyId: companyId() } }),
   salesTrend: (cid: string) => apiClient.get('/api/v1/dashboard/sales-trend', { params: { companyId: cid } }),
   alerts: (cid: string) => apiClient.get('/api/v1/dashboard/alerts', { params: { companyId: cid } }),
   hrSummary: (cid: string) => apiClient.get('/api/v1/dashboard/hr-summary', { params: { companyId: cid } }),
@@ -230,7 +234,7 @@ export const companyApi = {
   userCompanies: () => apiClient.get('/api/v1/companies/user-companies'),
   getDefault: () => apiClient.get('/api/v1/companies/default'),
   get: (id: string) => apiClient.get(`/api/v1/companies/${id}`),
-  create: (data: object) => apiClient.post('/api/v1/companies', data),
+  create: (data: object, config?: object) => apiClient.post('/api/v1/companies', data, config),
   update: (id: string, data: object) => apiClient.put(`/api/v1/companies/${id}`, data),
   getPayrollSettings: (id: string) => apiClient.get(`/api/v1/companies/${id}/payroll-settings`),
   upsertPayrollSettings: (id: string, data: object) => apiClient.patch(`/api/v1/companies/${id}/payroll-settings`, data),
@@ -273,6 +277,15 @@ export const recycleBinApi = {
   emptyBin: (cid: string) => apiClient.delete('/api/v1/recycle-bin/empty', { params: { companyId: cid } }),
   cleanup: (cid: string, days: number) =>
     apiClient.post('/api/v1/recycle-bin/cleanup', { companyId: cid, days }),
+  restoreMany: (cid: string, items: { id: string; type: string }[]) =>
+    apiClient.post('/api/v1/recycle-bin/restore-many', { companyId: cid, items }),
+  deleteMany: (cid: string, items: { id: string; type: string }[]) =>
+    apiClient.post('/api/v1/recycle-bin/delete-many', { companyId: cid, items }),
+  restoreAll: (cid: string) => apiClient.post('/api/v1/recycle-bin/restore-all', { companyId: cid }),
+  // Auto-delete period, stored on the company and applied by the nightly job.
+  getSettings: (cid: string) => apiClient.get('/api/v1/recycle-bin/settings', { params: { companyId: cid } }),
+  updateSettings: (cid: string, retentionDays: number) =>
+    apiClient.put('/api/v1/recycle-bin/settings', { companyId: cid, retentionDays }, { params: { companyId: cid } }),
 };
 
 // ── School APIs ──────────────────────────────────────────────────────────────
@@ -283,7 +296,7 @@ export const schoolDashboardApi = {
 
 export const academicYearsApi = {
   list: () => apiClient.get('/api/v1/school/academic-years', { params: { companyId: companyId() } }),
-  create: (data: object) => apiClient.post('/api/v1/school/academic-years', data),
+  create: (data: object, config?: object) => apiClient.post('/api/v1/school/academic-years', data, config),
   update: (id: string, data: object) =>
     apiClient.put(`/api/v1/school/academic-years/${id}`, data, { params: { companyId: companyId() } }),
   remove: (id: string) =>
@@ -297,7 +310,7 @@ export const studentsApi = {
     return apiClient.get('/api/v1/school/students', { params: { companyId: companyId(), ...p } });
   },
   get: (id: string) => apiClient.get(`/api/v1/school/students/${id}`, { params: { companyId: companyId() } }),
-  create: (data: object) => apiClient.post('/api/v1/school/students', data),
+  create: (data: object, config?: object) => apiClient.post('/api/v1/school/students', data, config),
   update: (id: string, data: object) => apiClient.put(`/api/v1/school/students/${id}`, data, { params: { companyId: companyId() } }),
   remove: (id: string) => apiClient.delete(`/api/v1/school/students/${id}`, { params: { companyId: companyId() } }),
   promote: (data: object) => apiClient.post('/api/v1/school/students/promote', data),
@@ -305,14 +318,14 @@ export const studentsApi = {
 
 export const classesApi = {
   list: () => apiClient.get('/api/v1/school/classes', { params: { companyId: companyId() } }),
-  create: (data: object) => apiClient.post('/api/v1/school/classes', data),
+  create: (data: object, config?: object) => apiClient.post('/api/v1/school/classes', data, config),
   update: (id: string, data: object) => apiClient.put(`/api/v1/school/classes/${id}`, data, { params: { companyId: companyId() } }),
   remove: (id: string) => apiClient.delete(`/api/v1/school/classes/${id}`, { params: { companyId: companyId() } }),
 };
 
 export const subjectsApi = {
   list: (classId?: string) => apiClient.get('/api/v1/school/subjects', { params: { companyId: companyId(), classId: classId || undefined } }),
-  create: (data: object) => apiClient.post('/api/v1/school/subjects', data),
+  create: (data: object, config?: object) => apiClient.post('/api/v1/school/subjects', data, config),
   update: (id: string, data: object) => apiClient.put(`/api/v1/school/subjects/${id}`, data, { params: { companyId: companyId() } }),
   remove: (id: string) => apiClient.delete(`/api/v1/school/subjects/${id}`, { params: { companyId: companyId() } }),
 };
@@ -337,8 +350,9 @@ export const feesApi = {
   listInvoices: (params?: object) =>
     apiClient.get('/api/v1/school/fee-invoices', { params: { companyId: companyId(), ...params } }),
   createInvoice: (data: object) => apiClient.post('/api/v1/school/fee-invoices', data),
-  recordPayment: (id: string, data: object) =>
-    apiClient.patch(`/api/v1/school/fee-invoices/${id}/payment`, data, { params: { companyId: companyId() } }),
+  // config: { idempotencyKey } — reuse it when retrying the same payment.
+  recordPayment: (id: string, data: object, config: object = {}) =>
+    apiClient.patch(`/api/v1/school/fee-invoices/${id}/payment`, data, { ...config, params: { companyId: companyId() } }),
   generateBulk: (data: object) => apiClient.post('/api/v1/school/fee-invoices/bulk', data),
   receipt: (id: string) =>
     apiClient.get(`/api/v1/school/fee-invoices/${id}/receipt`, { params: { companyId: companyId() } }),
@@ -431,7 +445,7 @@ export const bulkImportApi = {
 export const examSchedulesApi = {
   list: (params?: object) =>
     apiClient.get('/api/v1/school/exam-schedules', { params: { companyId: companyId(), ...params } }),
-  create: (data: object) => apiClient.post('/api/v1/school/exam-schedules', data),
+  create: (data: object, config?: object) => apiClient.post('/api/v1/school/exam-schedules', data, config),
   createBulk: (data: { classId: string; examName: string; rows: object[] }) =>
     apiClient.post('/api/v1/school/exam-schedules/bulk', { ...data, companyId: companyId() }),
   update: (id: string, data: object) =>
@@ -450,7 +464,7 @@ export const timetableApi = {
 
 export const noticesApi = {
   list: () => apiClient.get('/api/v1/school/notices', { params: { companyId: companyId() } }),
-  create: (data: object) => apiClient.post('/api/v1/school/notices', data),
+  create: (data: object, config?: object) => apiClient.post('/api/v1/school/notices', data, config),
   update: (id: string, data: object) =>
     apiClient.put(`/api/v1/school/notices/${id}`, data, { params: { companyId: companyId() } }),
   remove: (id: string) =>
@@ -462,7 +476,7 @@ export const noticesApi = {
 export const schoolEventsApi = {
   list: (month?: string) =>
     apiClient.get('/api/v1/school/events', { params: { companyId: companyId(), month } }),
-  create: (data: object) => apiClient.post('/api/v1/school/events', data),
+  create: (data: object, config?: object) => apiClient.post('/api/v1/school/events', data, config),
   update: (id: string, data: object) =>
     apiClient.put(`/api/v1/school/events/${id}`, data, { params: { companyId: companyId() } }),
   remove: (id: string) =>
@@ -472,7 +486,7 @@ export const schoolEventsApi = {
 export const studyMaterialsApi = {
   list: (classId?: string, subjectId?: string) =>
     apiClient.get('/api/v1/school/study-materials', { params: { companyId: companyId(), classId, subjectId } }),
-  create: (data: object) => apiClient.post('/api/v1/school/study-materials', data),
+  create: (data: object, config?: object) => apiClient.post('/api/v1/school/study-materials', data, config),
   remove: (id: string) =>
     apiClient.delete(`/api/v1/school/study-materials/${id}`, { params: { companyId: companyId() } }),
 };
@@ -480,7 +494,7 @@ export const studyMaterialsApi = {
 export const homeworkApi = {
   list: (classId?: string, subjectId?: string) =>
     apiClient.get('/api/v1/school/homework', { params: { companyId: companyId(), classId, subjectId } }),
-  create: (data: object) => apiClient.post('/api/v1/school/homework', data),
+  create: (data: object, config?: object) => apiClient.post('/api/v1/school/homework', data, config),
   update: (id: string, data: object) =>
     apiClient.put(`/api/v1/school/homework/${id}`, data, { params: { companyId: companyId() } }),
   remove: (id: string) =>
