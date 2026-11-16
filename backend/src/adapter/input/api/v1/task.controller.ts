@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, Query } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param, Query, Req } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { TaskServiceImpl } from '../../../../application/services/task.service.impl';
 import { Roles } from '../../../../modules/decorators/roles.decorator';
@@ -26,11 +26,18 @@ export class TaskController {
     return this.service.findOne(id, companyId);
   }
 
+  @Get(':id/links')
+  @ApiOperation({ summary: 'Everything connected to a job: quotations, purchases, bills, payments, people, documents, totals, timeline' })
+  @ApiQuery({ name: 'companyId', required: true })
+  links(@Param('id') id: string, @Query('companyId') companyId: string) {
+    return this.service.links(id, companyId);
+  }
+
   @Post()
   @Roles('ACCOUNTANT', 'ADMIN')
   @ApiOperation({ summary: 'Create a task' })
-  create(@Body(new ZodValidationPipe(CreateTaskSchema)) dto: CreateTaskDTO) {
-    return this.service.create(dto);
+  create(@Body(new ZodValidationPipe(CreateTaskSchema)) dto: CreateTaskDTO, @Req() req: any) {
+    return this.service.create(dto, req.user?.email);
   }
 
   // No per-method @Roles override — STAFF actively uses this to change task

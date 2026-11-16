@@ -14,6 +14,8 @@ export const SalesOrderItemSchema = z.object({
 
 export const CreateSalesOrderSchema = z.object({
   companyId: z.string().uuid(),
+  // Workflow job this record belongs to (must be the same company's task).
+  taskId: z.string().uuid().optional().nullable(),
   clientId: z.string().uuid().optional(),
   clientName: z.string().min(1),
   clientContact: z.string().optional(),

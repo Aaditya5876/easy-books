@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../../core/db/psql/prisma.client';
+import { assertTaskLink } from '../../../core/utils/task-link';
 import { LedgerPostingService } from './ledger-posting.service';
 import { adToBs } from '@easy-books/shared';
 import { VAT_RATE } from '../../domain/vo';
@@ -15,6 +16,7 @@ interface OrderItem {
 }
 
 interface CreateSalesOrderInput {
+  taskId?: string | null;
   companyId: string;
   clientId?: string;
   clientName: string;
@@ -74,6 +76,7 @@ export class SalesServiceImpl {
     const { companyId, items, isVat, laborCharges = 0, ...rest } = dto;
 
     if (!items || items.length === 0) throw new BadRequestException('Order must have at least one item');
+    await assertTaskLink(this.prisma, companyId, rest.taskId);
 
     // ── Validate stock availability ────────────────────────────────────────────
     await this.validateStock(companyId, items);
@@ -106,6 +109,7 @@ export class SalesServiceImpl {
           totalAmount,
           paidAmount: 0,
           status: 'PENDING',
+          taskId: rest.taskId,
           clientId: rest.clientId,
           clientName: rest.clientName,
           clientContact: rest.clientContact,
@@ -122,12 +126,15 @@ export class SalesServiceImpl {
       });
 
       // ── Deduct stock ───────────────────────────────────────────────────────
+      // Conditional decrement: two sales racing for the last units can't both
+      // pass the earlier check and drive stock negative.
       for (const item of computedItems) {
         if (item.inventoryItemId) {
-          await tx.inventoryItem.update({
-            where: { id: item.inventoryItemId },
+          const taken = await tx.inventoryItem.updateMany({
+            where: { id: item.inventoryItemId, companyId, quantity: { gte: item.quantity } },
             data: { quantity: { decrement: item.quantity } },
           });
+          if (taken.count === 0) throw new BadRequestException(`Not enough stock for "${item.description}"`);
         }
       }
 
@@ -142,11 +149,12 @@ export class SalesServiceImpl {
         });
       }
 
+      // Ledger in the same transaction: a bill without its ledger entries (or
+      // entries without a bill) can never be left behind.
+      await this.ledgerPosting.postSalesOrder(companyId, created.id, tx);
+
       return created;
     });
-
-    // ── Auto-post to ledger (outside transaction so ledger errors don't roll back order) ──
-    await this.ledgerPosting.postSalesOrder(companyId, order.id);
 
     return order;
   }
@@ -156,15 +164,27 @@ export class SalesServiceImpl {
       where: { id: dto.salesOrderId, companyId: dto.companyId },
     });
     if (!order) throw new NotFoundException('Sales order not found');
-
-    const newPaid = Number(order.paidAmount) + dto.amount;
-    if (newPaid > Number(order.totalAmount)) {
+    // Early, friendly check; the authoritative one is inside the transaction.
+    if (Number(order.paidAmount) + dto.amount > Number(order.totalAmount) + 0.005) {
       throw new BadRequestException('Payment exceeds order total');
     }
 
-    const newStatus = newPaid >= Number(order.totalAmount) ? 'COMPLETED' : 'PARTIALLY_PAID';
+    return this.prisma.$transaction(async (tx) => {
+      // Increment (not "set to what I read"): the row stays locked until this
+      // transaction ends, so a racing payment waits and then sees this one.
+      const after = await tx.salesOrder.update({
+        where: { id: dto.salesOrderId },
+        data: { paidAmount: { increment: dto.amount } },
+        select: { paidAmount: true, totalAmount: true },
+      });
+      const paid = Number(after.paidAmount);
+      const total = Number(after.totalAmount);
+      if (paid > total + 0.005) throw new BadRequestException('Payment exceeds order total');
+      await tx.salesOrder.update({
+        where: { id: dto.salesOrderId },
+        data: { status: (paid >= total - 0.005 ? 'COMPLETED' : 'PARTIALLY_PAID') as any },
+      });
 
-    const payment = await this.prisma.$transaction(async (tx) => {
       const p = await tx.payment.create({
         data: {
           companyId: dto.companyId,
@@ -178,17 +198,9 @@ export class SalesServiceImpl {
         },
       });
 
-      await tx.salesOrder.update({
-        where: { id: dto.salesOrderId },
-        data: { paidAmount: newPaid, status: newStatus as any },
-      });
-
+      await this.ledgerPosting.postPaymentReceived(dto.companyId, p.id, tx);
       return p;
     });
-
-    await this.ledgerPosting.postPaymentReceived(dto.companyId, payment.id);
-
-    return payment;
   }
 
   async update(id: string, companyId: string, data: any) {

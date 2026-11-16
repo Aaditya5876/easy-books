@@ -35,7 +35,9 @@ export class CreditNoteServiceImpl {
     const creditNoteNumber = await this.generateNumber(companyId);
     const dateAd = new Date(data.dateAd);
 
-    const cn = await this.prisma.creditNote.create({
+    // Note + ledger entries saved together (all or nothing).
+    return this.prisma.$transaction(async (tx) => {
+    const cn = await tx.creditNote.create({
       data: {
         companyId,
         clientId: data.clientId,
@@ -50,8 +52,9 @@ export class CreditNoteServiceImpl {
       },
     });
 
-    await this.ledgerPosting.postCreditNote(companyId, cn.id);
+    await this.ledgerPosting.postCreditNote(companyId, cn.id, tx);
     return cn;
+    });
   }
 
   async apply(id: string, companyId: string) {

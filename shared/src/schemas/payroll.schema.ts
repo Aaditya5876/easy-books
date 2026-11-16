@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { withoutDefaults } from './update-schema';
 
 export const PayrollStatusEnum = z.enum(['PENDING', 'PROCESSED', 'PAID', 'ON_HOLD']);
 
@@ -37,7 +38,7 @@ export type PayrollSettingsDTO = z.infer<typeof PayrollSettingsSchema>;
 // PATCH body for Settings → Preferences payroll fields: every field optional,
 // no defaults (a partial save must not reset untouched settings).
 const optionalTime = z.string().regex(/^(\d{2}:\d{2})?$/, 'Use HH:MM').nullable().optional();
-export const UpdatePayrollSettingsSchema = PayrollSettingsSchema.partial().extend({
+export const UpdatePayrollSettingsSchema = z.object(withoutDefaults(PayrollSettingsSchema.shape)).partial().extend({
   attendanceDeductionEnabled: z.boolean().optional(),
   standardStartTime: optionalTime,
   standardEndTime: optionalTime,

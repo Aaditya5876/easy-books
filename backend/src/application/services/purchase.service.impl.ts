@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../../core/db/psql/prisma.client';
+import { assertTaskLink } from '../../../core/utils/task-link';
 import { LedgerPostingService } from './ledger-posting.service';
 import { adToBs } from '@easy-books/shared';
 import { VAT_RATE } from '../../domain/vo';
@@ -15,6 +16,7 @@ interface OrderItem {
 }
 
 interface CreatePurchaseOrderInput {
+  taskId?: string | null;
   companyId: string;
   vendorId?: string;
   vendorName: string;
@@ -73,6 +75,7 @@ export class PurchaseServiceImpl {
     const { companyId, items, isVat, laborCharges = 0, ...rest } = dto;
 
     if (!items || items.length === 0) throw new BadRequestException('Order must have at least one item');
+    await assertTaskLink(this.prisma, companyId, rest.taskId);
     const attachmentUrls = billAttachmentUrls(companyId, dto.attachments);
 
     const orderNumber = await this.generateOrderNumber(companyId);
@@ -109,6 +112,7 @@ export class PurchaseServiceImpl {
           totalAmount,
           paidAmount: 0,
           status: 'PENDING',
+          taskId: rest.taskId,
           vendorId: rest.vendorId,
           vendorName: rest.vendorName,
           vendorContact: rest.vendorContact,
@@ -145,10 +149,11 @@ export class PurchaseServiceImpl {
         });
       }
 
+      // Ledger in the same transaction — all or nothing with the purchase.
+      await this.ledgerPosting.postPurchaseOrder(companyId, created.id, tx);
+
       return created;
     });
-
-    await this.ledgerPosting.postPurchaseOrder(companyId, order.id);
 
     return order;
   }
@@ -158,15 +163,27 @@ export class PurchaseServiceImpl {
       where: { id: dto.purchaseOrderId, companyId: dto.companyId },
     });
     if (!order) throw new NotFoundException('Purchase order not found');
-
-    const newPaid = Number(order.paidAmount) + dto.amount;
-    if (newPaid > Number(order.totalAmount)) {
+    // Early, friendly check; the authoritative one is inside the transaction.
+    if (Number(order.paidAmount) + dto.amount > Number(order.totalAmount) + 0.005) {
       throw new BadRequestException('Payment exceeds order total');
     }
 
-    const newStatus = newPaid >= Number(order.totalAmount) ? 'COMPLETED' : 'PARTIALLY_PAID';
+    return this.prisma.$transaction(async (tx) => {
+      // Increment under the row lock, then check — racing payments can't
+      // both slip under the total (see SalesServiceImpl.recordPayment).
+      const after = await tx.purchaseOrder.update({
+        where: { id: dto.purchaseOrderId },
+        data: { paidAmount: { increment: dto.amount } },
+        select: { paidAmount: true, totalAmount: true },
+      });
+      const paid = Number(after.paidAmount);
+      const total = Number(after.totalAmount);
+      if (paid > total + 0.005) throw new BadRequestException('Payment exceeds order total');
+      await tx.purchaseOrder.update({
+        where: { id: dto.purchaseOrderId },
+        data: { status: (paid >= total - 0.005 ? 'COMPLETED' : 'PARTIALLY_PAID') as any },
+      });
 
-    const payment = await this.prisma.$transaction(async (tx) => {
       const p = await tx.payment.create({
         data: {
           companyId: dto.companyId,
@@ -180,17 +197,9 @@ export class PurchaseServiceImpl {
         },
       });
 
-      await tx.purchaseOrder.update({
-        where: { id: dto.purchaseOrderId },
-        data: { paidAmount: newPaid, status: newStatus as any },
-      });
-
+      await this.ledgerPosting.postPaymentMade(dto.companyId, p.id, tx);
       return p;
     });
-
-    await this.ledgerPosting.postPaymentMade(dto.companyId, payment.id);
-
-    return payment;
   }
 
   async update(id: string, companyId: string, data: any) {

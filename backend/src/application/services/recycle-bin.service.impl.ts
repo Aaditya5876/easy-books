@@ -106,18 +106,68 @@ export class RecycleBinServiceImpl {
   }
 
   async cleanupOlderThan(companyId: string, days: number) {
-    const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
-    const where = { companyId, deletedAt: { not: null, lte: cutoff } } as any;
-    await Promise.all([
-      this.prisma.client.deleteMany({ where }),
-      this.prisma.vendor.deleteMany({ where }),
-      this.prisma.employee.deleteMany({ where }),
-      this.prisma.inventoryItem.deleteMany({ where }),
-      this.prisma.salesOrder.deleteMany({ where }),
-      this.prisma.purchaseOrder.deleteMany({ where }),
-      this.prisma.task.deleteMany({ where }),
-      this.prisma.memoDocument.deleteMany({ where }),
-    ]);
+    await purgeRecycleBin(this.prisma, companyId, days);
     return { success: true };
   }
+
+  async restoreMany(companyId: string, items: RecycleBinRef[]) {
+    for (const { id, type } of items) await this.restore(id, type, companyId);
+    return { count: items.length };
+  }
+
+  async deleteMany(companyId: string, items: RecycleBinRef[]) {
+    for (const { id, type } of items) await this.permanentDelete(id, type, companyId);
+    return { count: items.length };
+  }
+
+  async restoreAll(companyId: string) {
+    const where = { companyId, deletedAt: { not: null } } as any;
+    const data = { deletedAt: null };
+    const counts = await this.prisma.$transaction([
+      this.prisma.client.updateMany({ where, data }),
+      this.prisma.vendor.updateMany({ where, data }),
+      this.prisma.employee.updateMany({ where, data }),
+      this.prisma.inventoryItem.updateMany({ where, data }),
+      this.prisma.salesOrder.updateMany({ where, data }),
+      this.prisma.purchaseOrder.updateMany({ where, data }),
+      this.prisma.task.updateMany({ where, data }),
+      this.prisma.memoDocument.updateMany({ where, data }),
+    ]);
+    return { count: counts.reduce((s, c) => s + c.count, 0) };
+  }
+
+  async getSettings(companyId: string) {
+    const company = await this.prisma.company.findUnique({ where: { id: companyId }, select: { recycleBinRetentionDays: true } });
+    return { retentionDays: company?.recycleBinRetentionDays ?? 0 };
+  }
+
+  async updateSettings(companyId: string, retentionDays: number) {
+    if (!RETENTION_CHOICES.includes(retentionDays)) {
+      throw new BadRequestException(`retentionDays must be one of ${RETENTION_CHOICES.join(', ')} (0 = never)`);
+    }
+    await this.prisma.company.update({ where: { id: companyId }, data: { recycleBinRetentionDays: retentionDays || null } });
+    return { retentionDays };
+  }
+}
+
+export type RecycleBinRef = { id: string; type: RecycleBinItemType };
+
+export const RETENTION_CHOICES = [0, 7, 15, 30, 60, 90, 180, 365];
+
+// Permanently removes bin items deleted more than `days` ago. Shared by the
+// manual cleanup endpoint and the nightly job (ScheduledTasksService).
+export async function purgeRecycleBin(prisma: PrismaService, companyId: string, days: number) {
+  const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+  const where = { companyId, deletedAt: { not: null, lte: cutoff } } as any;
+  const counts = await Promise.all([
+    prisma.client.deleteMany({ where }),
+    prisma.vendor.deleteMany({ where }),
+    prisma.employee.deleteMany({ where }),
+    prisma.inventoryItem.deleteMany({ where }),
+    prisma.salesOrder.deleteMany({ where }),
+    prisma.purchaseOrder.deleteMany({ where }),
+    prisma.task.deleteMany({ where }),
+    prisma.memoDocument.deleteMany({ where }),
+  ]);
+  return counts.reduce((s, c) => s + c.count, 0);
 }

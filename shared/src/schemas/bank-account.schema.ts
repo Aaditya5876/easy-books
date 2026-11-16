@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { withoutDefaults } from './update-schema';
 
 export const CreateBankAccountSchema = z.object({
   companyId: z.string().uuid(),
@@ -12,7 +13,8 @@ export const CreateBankAccountSchema = z.object({
   paymentType: z.enum(['BANK', 'ESEWA', 'KHALTI']).default('BANK'),
 });
 
-export const UpdateBankAccountSchema = CreateBankAccountSchema.omit({ companyId: true }).partial();
+// Without defaults: renaming an account used to reset its balance to 0.
+export const UpdateBankAccountSchema = z.object(withoutDefaults(CreateBankAccountSchema.shape)).omit({ companyId: true }).partial();
 
 export type CreateBankAccountDTO = z.infer<typeof CreateBankAccountSchema>;
 export type UpdateBankAccountDTO = z.infer<typeof UpdateBankAccountSchema>;

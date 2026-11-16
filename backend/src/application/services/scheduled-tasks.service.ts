@@ -6,6 +6,8 @@ import { PayrollEngineService } from './payroll.engine';
 import { NotificationServiceImpl } from './notification.service.impl';
 import { PortalNotificationService } from './portal-notification.service';
 import { bsYearMonth } from '@easy-books/shared';
+import { purgeRecycleBin } from './recycle-bin.service.impl';
+import { IDEMPOTENCY_TTL_MS } from '../../modules/interceptors/idempotency.interceptor';
 
 // Fully automatic monthly fee billing + payroll — no button click required.
 // Deliberately runs DAILY rather than "on the 1st of the month": fee/payroll
@@ -74,18 +76,36 @@ export class ScheduledTasksService {
   @Cron(CronExpression.EVERY_DAY_AT_1AM)
   async runMonthlyAutomation() {
     const currentBsMonth = bsYearMonth(new Date());
+
+    // Idempotency keys only need to outlive a retry — keep a day.
+    try {
+      await this.prisma.idempotencyKey.deleteMany({ where: { createdAt: { lt: new Date(Date.now() - IDEMPOTENCY_TTL_MS) } } });
+    } catch (err) {
+      this.logger.error(`Idempotency key cleanup failed: ${(err as Error).message}`);
+    }
     const companies = await this.prisma.company.findMany({
       where: { isActive: true },
       select: {
         id: true, name: true, businessType: true,
         autoFeeBilling: true, autoInvoiceRelease: true, autoPayroll: true, autoReconciliation: true,
-        autoLibraryReminders: true, autoPaymentProofReminders: true,
+        autoLibraryReminders: true, autoPaymentProofReminders: true, recycleBinRetentionDays: true,
       },
     });
 
     for (const company of companies) {
       const updates: Array<{ label: string; items: { name: string; amount?: number }[] }> = [];
       let link: string | undefined;
+
+      // Recycle bin auto-delete (Settings → Recycle Bin). Silent housekeeping —
+      // not worth a notification on its own.
+      if (company.recycleBinRetentionDays && company.recycleBinRetentionDays > 0) {
+        try {
+          const purged = await purgeRecycleBin(this.prisma, company.id, company.recycleBinRetentionDays);
+          if (purged > 0) this.logger.log(`Recycle bin: purged ${purged} item(s) for "${company.name}"`);
+        } catch (err) {
+          this.logger.error(`Recycle bin cleanup failed for "${company.name}": ${(err as Error).message}`);
+        }
+      }
 
       if (company.businessType === 'SCHOOL' && company.autoFeeBilling) {
         try {

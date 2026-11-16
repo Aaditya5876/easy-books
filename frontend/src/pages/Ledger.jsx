@@ -61,6 +61,10 @@ export default function Ledger() {
   const keysHeld = useRef(new Set());
   const handleKeyDown = useCallback((e) => {
     keysHeld.current.add(e.code);
+    // Space is half of the hide gesture — stop it scrolling the page, but
+    // never swallow it while the user is typing in a field.
+    const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(e.target?.tagName) || e.target?.isContentEditable;
+    if (e.code === 'Space' && !typing) e.preventDefault();
     if (
       keysHeld.current.has('Space') &&
       keysHeld.current.has('AltLeft') &&
@@ -73,6 +77,42 @@ export default function Ledger() {
     }
   }, [showAccountDetail]);
   const handleKeyUp = useCallback((e) => { keysHeld.current.delete(e.code); }, []);
+  // Window losing focus (alt-tab) never fires keyup — forget held keys.
+  useEffect(() => {
+    const clear = () => keysHeld.current.clear();
+    window.addEventListener('blur', clear);
+    return () => window.removeEventListener('blur', clear);
+  }, []);
+
+  // Hidden-account gesture (ADMIN): select an account, hold Space and
+  // right-click it twice. Deliberately not in any menu, so it stays secret.
+  // A plain right-click only offers "Open Account".
+  const lastSpaceRightClick = useRef(null); // { id, at }
+  function handleRowContextMenu(row, e) {
+    if (isAdmin && keysHeld.current.has('Space')) {
+      const prev = lastSpaceRightClick.current;
+      const now = Date.now();
+      if (prev && prev.id === row.id && now - prev.at < 800) {
+        lastSpaceRightClick.current = null;
+        setSelectedAccount(row);
+        setPwDialog({ mode: 'hide', account: row });
+        setPwInput('');
+      } else {
+        lastSpaceRightClick.current = { id: row.id, at: now };
+      }
+      return;
+    }
+    setContextMenu({ x: e.clientX, y: e.clientY, account: row });
+  }
+
+  async function setCostBehavior(row, costBehavior) {
+    try {
+      await ledgerApi.accounts.update(row.id, { costBehavior });
+      setAccounts(prev => prev.map(a => (a.id === row.id ? { ...a, cost_behavior: costBehavior } : a)));
+    } catch (e) {
+      toast({ title: t('ledger.error', { defaultValue: 'Error' }), description: e?.response?.data?.message || '', variant: 'destructive' });
+    }
+  }
 
   useEffect(() => {
     window.addEventListener('keydown', handleKeyDown);
@@ -92,7 +132,7 @@ export default function Ledger() {
   }, [contextMenu]);
   const [newAccount, setNewAccount] = useState({
     account_name: '', contact_name: '', contact_phone: '',
-    address: '', pan_vat: '', account_type: 'purchase', notes: '',
+    address: '', pan_vat: '', account_type: 'purchase', notes: '', cost_behavior: '',
   });
   const [newEntry, setNewEntry] = useState({ description: '', debit: 0, credit: 0, reference_id: '', contra_account_id: '', date_ad: new Date().toISOString().split('T')[0] });
   const [allAccounts, setAllAccounts] = useState([]);
@@ -164,17 +204,21 @@ export default function Ledger() {
       sales: 'INCOME',
       expense: 'EXPENSE',
     };
+    const { cost_behavior, ...rest } = newAccount;
+    const accountType = accountTypeMap[newAccount.account_type || activeTab] || 'EXPENSE';
     await api.LedgerAccount.create({
-      ...newAccount,
+      ...rest,
       company_id: companyId,
-      account_type: accountTypeMap[newAccount.account_type || activeTab] || 'EXPENSE',
+      account_type: accountType,
       opening_balance: 0,
       current_balance: 0,
       fiscal_year: '2081/2082',
+      // Blank = let the server pick from the name (rent/salary… → Fixed).
+      ...(accountType === 'EXPENSE' && cost_behavior ? { cost_behavior } : {}),
     });
     setNewAccount({
       account_name: '', contact_name: '', contact_phone: '',
-      address: '', pan_vat: '', account_type: activeTab, notes: '',
+      address: '', pan_vat: '', account_type: activeTab, notes: '', cost_behavior: '',
     });
     setShowNewAccount(false);
     loadData();
@@ -227,12 +271,31 @@ export default function Ledger() {
     ? [...entries.filter(e => e.account_id === showAccountDetail.id)].reverse()
     : [];
 
+  // Fixed / Variable for expense accounts — feeds the dashboard's expense split.
+  const costBehaviorColumn = {
+    key: 'cost_behavior',
+    label: t('ledger.costBehavior', { defaultValue: 'Fixed / Variable' }),
+    render: (row) => (row.account_type || '').toUpperCase() !== 'EXPENSE' ? null : (
+      <select
+        className="rounded-md border border-input bg-background px-2 py-1 text-xs"
+        value={row.cost_behavior || 'VARIABLE'}
+        onClick={e => e.stopPropagation()}
+        onDoubleClick={e => e.stopPropagation()}
+        onChange={e => setCostBehavior(row, e.target.value)}
+      >
+        <option value="FIXED">{t('ledger.fixed', { defaultValue: 'Fixed' })}</option>
+        <option value="VARIABLE">{t('ledger.variable', { defaultValue: 'Variable' })}</option>
+      </select>
+    ),
+  };
+
   const accountColumns = [
     { key: 'account_name', label: t('ledger.accountName', { defaultValue: 'Account Name' }), filterValue: colFilters.account_name, onFilterChange: v => setCol('account_name', v), render: (row) => (
       <span className="font-medium text-foreground">{row.account_name}</span>
     )},
     { key: 'contact_name', label: t('ledger.contact', { defaultValue: 'Contact' }), filterValue: colFilters.contact_name, onFilterChange: v => setCol('contact_name', v) },
     { key: 'contact_phone', label: t('ledger.phone', { defaultValue: 'Phone' }) },
+    ...(activeTab === 'expense' ? [costBehaviorColumn] : []),
     { key: 'current_balance', label: t('ledger.balance', { defaultValue: 'Balance' }), render: (row) => (
       <span className={row.current_balance >= 0 ? 'text-green-600 font-semibold' : 'text-red-600 font-semibold'}>
         NPR {(row.current_balance || 0).toLocaleString()}
@@ -246,6 +309,7 @@ export default function Ledger() {
     { key: 'account_name', label: t('ledger.accountName', { defaultValue: 'Account Name' }), filterValue: colFilters.account_name, onFilterChange: v => setCol('account_name', v), render: (row) => (
       <span className="font-medium text-foreground">{row.account_name}</span>
     )},
+    costBehaviorColumn,
     { key: 'current_balance', label: t('ledger.balance', { defaultValue: 'Balance' }), render: (row) => (
       <span className={row.current_balance >= 0 ? 'text-green-600 font-semibold' : 'text-red-600 font-semibold'}>
         NPR {(row.current_balance || 0).toLocaleString()}
@@ -334,7 +398,7 @@ export default function Ledger() {
                     selectedId={selectedAccount?.id}
                     onRowClick={(row) => setSelectedAccount(row)}
                     onRowDoubleClick={(row) => setShowAccountDetail(row)}
-                    onRowContextMenu={isAdmin ? (row, e) => setContextMenu({ x: e.clientX, y: e.clientY, account: row }) : undefined}
+                    onRowContextMenu={isAdmin ? handleRowContextMenu : undefined}
                   />
                 </div>
               ))}
@@ -346,7 +410,7 @@ export default function Ledger() {
               selectedId={selectedAccount?.id}
               onRowClick={(row) => setSelectedAccount(row)}
               onRowDoubleClick={(row) => setShowAccountDetail(row)}
-              onRowContextMenu={isAdmin ? (row, e) => setContextMenu({ x: e.clientX, y: e.clientY, account: row }) : undefined}
+              onRowContextMenu={isAdmin ? handleRowContextMenu : undefined}
               emptyMessage={t('ledger.noAccountsYetType', { defaultValue: `No ${activeTab} accounts yet. Click "New Account" to create one.`, type: activeTab })}
             />
           )}
@@ -476,6 +540,22 @@ export default function Ledger() {
                 </div>
               </div>
 
+              {/* Fixed / Variable — expense accounts only */}
+              {newAccount.account_type === 'expense' && (
+                <div>
+                  <Label className="text-xs font-medium">{t('ledger.costBehavior', { defaultValue: 'Fixed / Variable' })}</Label>
+                  <select
+                    className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+                    value={newAccount.cost_behavior}
+                    onChange={e => setNewAccount({ ...newAccount, cost_behavior: e.target.value })}
+                  >
+                    <option value="">{t('ledger.costBehaviorAuto', { defaultValue: 'Decide from the name' })}</option>
+                    <option value="FIXED">{t('ledger.fixedHint', { defaultValue: 'Fixed — same every month (rent, salary…)' })}</option>
+                    <option value="VARIABLE">{t('ledger.variableHint', { defaultValue: 'Variable — changes with sales (delivery, materials…)' })}</option>
+                  </select>
+                </div>
+              )}
+
               {/* Notes */}
               <div>
                 <Label className="text-xs font-medium flex items-center gap-1.5">
@@ -511,7 +591,9 @@ export default function Ledger() {
           setNewEntry={setNewEntry}
           createEntry={createEntry}
           allAccounts={allAccounts}
-          onToggleHidden={isAdmin ? () => {
+          // Only a hidden account (opened via search + password) shows a button —
+          // the "Unhide" one. Hiding is the Space + double right-click gesture.
+          onToggleHidden={isAdmin && (showAccountDetail.isHidden || showAccountDetail.is_hidden) ? () => {
             setPwDialog({ mode: 'hide', account: showAccountDetail });
             setPwInput('');
           } : undefined}
@@ -533,18 +615,6 @@ export default function Ledger() {
             }}
           >
             <Eye className="w-3.5 h-3.5 text-muted-foreground" /> {t('ledger.openAccount', { defaultValue: 'Open Account' })}
-          </button>
-          <div className="border-t border-border my-1" />
-          <button
-            className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-muted transition-colors text-left text-amber-600"
-            onClick={() => {
-              setPwDialog({ mode: 'hide', account: contextMenu.account });
-              setPwInput('');
-              setContextMenu(null);
-            }}
-          >
-            <EyeOff className="w-3.5 h-3.5" />
-            {contextMenu.account?.isHidden ? t('ledger.unhideAccount', { defaultValue: 'Unhide Account' }) : t('ledger.hideAccount', { defaultValue: 'Hide Account' })}
           </button>
         </div>
       )}

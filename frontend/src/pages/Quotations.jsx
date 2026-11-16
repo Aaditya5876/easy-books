@@ -4,7 +4,7 @@ import { toast } from 'sonner';
 import { api } from '@/api/adapter';
 import { quotationApi } from '@/api';
 import { getActiveCompanyId } from '@/lib/companyContext';
-import { adToBs, getCurrentFiscalYear } from '@/lib/nepaliDate';
+import { getCurrentFiscalYear } from '@/lib/nepaliDate';
 import { formatDate } from '@/lib/utils';
 import PageHeader from '../components/shared/PageHeader';
 import DataTable from '../components/shared/DataTable';
@@ -24,22 +24,32 @@ import {
 } from "@/components/ui/select";
 import { Plus, Trash2, ArrowRight, ClipboardList } from 'lucide-react';
 import { useRole } from "@/lib/useRole";
+import { TaskLinkSelect, TaskBadge, useWorkflowTasks } from '../components/shared/TaskLinkSelect';
+import { QUOTATION_REMARKS, toQuotationPayload, quotationToForm } from '@/lib/quotations';
 
 const UNITS = ['Piece', 'Set', 'Liter', 'ml', 'Kg', 'gm', 'NOS'];
-const STATUSES = ['pending', 'sent', 'accepted', 'rejected', 'expired'];
+// Status = ACTIVE / CONVERTED (billed) / EXPIRED; remark = where the work stands.
+// These are the backend's values — the page used to send its own
+// (pending/sent/accepted…), which the API rejected.
 const STATUS_COLORS = {
-  pending: 'bg-yellow-100 text-yellow-700',
-  sent: 'bg-blue-100 text-blue-700',
-  accepted: 'bg-green-100 text-green-700',
-  rejected: 'bg-red-100 text-red-700',
-  expired: 'bg-gray-100 text-gray-500',
+  ACTIVE: 'bg-blue-100 text-blue-700',
+  CONVERTED: 'bg-green-100 text-green-700',
+  EXPIRED: 'bg-gray-100 text-gray-500',
+};
+const REMARK_COLORS = {
+  QUOTED: 'bg-yellow-100 text-yellow-700',
+  WORK_DONE: 'bg-sky-100 text-sky-700',
+  REVISED: 'bg-violet-100 text-violet-700',
+  BILLED: 'bg-green-100 text-green-700',
+  CANCELLED: 'bg-red-100 text-red-700',
 };
 
 const EMPTY_FORM = {
+  task_id: '', // Workflow job this record is for (optional)
   client_name: '', client_contact: '', client_address: '', client_pan: '',
   quotation_number: '', is_vat: false, payment_type: 'cash',
   date_ad: new Date().toISOString().split('T')[0],
-  valid_until: '', status: 'pending', notes: '',
+  valid_until: '', remark: 'QUOTED', notes: '',
   items: [{ description: '', quantity: 1, unit: 'Piece', unit_price: 0, total: 0 }],
   labor_items: [{ description: '', amount: 0 }],
 };
@@ -57,18 +67,32 @@ export default function Quotations() {
   const [showNew, setShowNew] = useState(false);
   const [converting, setConverting] = useState(null);
   const [form, setForm] = useState(EMPTY_FORM);
+  const workflowTasks = useWorkflowTasks();
   const [editQuotation, setEditQuotation] = useState(null);
 
   const STATUS_LABEL_KEYS = {
-    pending: ['quotations.statusPending', 'Pending'],
-    sent: ['quotations.statusSent', 'Sent'],
-    accepted: ['quotations.statusAccepted', 'Accepted'],
-    rejected: ['quotations.statusRejected', 'Rejected'],
-    expired: ['quotations.statusExpired', 'Expired'],
+    ACTIVE: ['quotations.statusActive', 'Active'],
+    CONVERTED: ['quotations.statusConverted', 'Converted to bill'],
+    EXPIRED: ['quotations.statusExpired', 'Expired'],
   };
   const statusLabel = (s) => {
     const entry = STATUS_LABEL_KEYS[s];
     return entry ? t(entry[0], { defaultValue: entry[1] }) : s;
+  };
+  const REMARK_LABEL_KEYS = {
+    QUOTED: ['quotations.remarkQuoted', 'Quoted'],
+    WORK_DONE: ['quotations.remarkWorkDone', 'Work done'],
+    REVISED: ['quotations.remarkRevised', 'Revised'],
+    BILLED: ['quotations.remarkBilled', 'Billed'],
+    CANCELLED: ['quotations.remarkCancelled', 'Cancelled'],
+  };
+  const remarkLabel = (r) => {
+    const entry = REMARK_LABEL_KEYS[r];
+    return entry ? t(entry[0], { defaultValue: entry[1] }) : r;
+  };
+  const apiError = (e, fallback) => {
+    const m = e?.response?.data?.message;
+    return Array.isArray(m) ? m.join(', ') : typeof m === 'string' ? m : fallback;
   };
 
   const UNIT_LABEL_KEYS = {
@@ -133,11 +157,7 @@ export default function Quotations() {
 
   function openEdit(quotation) {
     loadClients();
-    setEditQuotation({
-      ...quotation,
-      items: quotation.items?.length ? quotation.items.map(i => ({ ...i })) : [{ description: '', quantity: 1, unit: 'Piece', unit_price: 0, total: 0 }],
-      labor_items: quotation.labor_items?.length ? quotation.labor_items.map(li => ({ ...li })) : [{ description: '', amount: 0 }],
-    });
+    setEditQuotation(quotationToForm(quotation));
   }
 
   // ── Form helpers (Add dialog) ────────────────────────────────────────────────
@@ -235,54 +255,35 @@ export default function Quotations() {
   }
 
   // ── API actions ──────────────────────────────────────────────────────────────
+  // Totals are recomputed by the server; the page only previews them.
   async function createQuotation() {
-    const entryDate = form.date_ad || new Date().toISOString().split('T')[0];
-    const bsDate = adToBs(new Date(entryDate));
-    const totalLabor = form.labor_items.reduce((s, li) => s + (Number(li.amount) || 0), 0);
-    const itemsSubtotal = form.items.reduce((sum, i) => sum + (i.total || 0), 0);
-    const subtotal = itemsSubtotal + totalLabor;
-    const vatAmount = form.is_vat ? subtotal * 0.13 : 0;
-
-    await api.Quotation.create({
-      company_id: companyId,
-      client_name: form.client_name,
-      client_contact: form.client_contact,
-      client_address: form.client_address,
-      client_pan: form.client_pan,
-      date_ad: entryDate,
-      date_bs: bsDate.formatted,
-      valid_until: form.valid_until || null,
-      quotation_number: form.quotation_number,
-      payment_type: form.payment_type,
-      items: form.items,
-      labor_items: form.labor_items,
-      is_vat: form.is_vat,
-      notes: form.notes,
-      subtotal,
-      vat_amount: vatAmount,
-      total_amount: subtotal + vatAmount,
-      status: form.status,
-    });
-
-    setShowNew(false);
-    loadData();
+    try {
+      await quotationApi.create({ companyId, ...toQuotationPayload(form) });
+      setShowNew(false);
+      loadData();
+    } catch (e) {
+      toast.error(apiError(e, t('quotations.saveFailed', { defaultValue: 'Could not save the quotation.' })));
+    }
   }
 
   async function updateQuotation() {
     if (!editQuotation) return;
-    const itemsSubtotal = editQuotation.items.reduce((s, i) => s + (i.total || 0), 0);
-    const labourTotal = editQuotation.labor_items.reduce((s, i) => s + (Number(i.amount) || 0), 0);
-    const vatAmount = editQuotation.is_vat ? (itemsSubtotal + labourTotal) * 0.13 : 0;
-    await api.Quotation.update(editQuotation.id, {
-      ...editQuotation,
-      items_subtotal: itemsSubtotal,
-      labour_total: labourTotal,
-      subtotal: itemsSubtotal + labourTotal,
-      vat_amount: vatAmount,
-      total_amount: itemsSubtotal + labourTotal + vatAmount,
-    });
-    setEditQuotation(null);
-    loadData();
+    try {
+      await quotationApi.update(editQuotation.id, toQuotationPayload(editQuotation, { isEdit: true, converted: editQuotation.status === 'CONVERTED' }));
+      setEditQuotation(null);
+      loadData();
+    } catch (e) {
+      toast.error(apiError(e, t('quotations.saveFailed', { defaultValue: 'Could not save the quotation.' })));
+    }
+  }
+
+  async function setQuotationField(row, patch) {
+    try {
+      await quotationApi.update(row.id, patch);
+      loadData();
+    } catch (e) {
+      toast.error(apiError(e, t('quotations.saveFailed', { defaultValue: 'Could not save the quotation.' })));
+    }
   }
 
   async function convertToSale(quotation) {
@@ -303,7 +304,7 @@ export default function Quotations() {
      q.quotation_number?.toLowerCase().includes(search.toLowerCase())) &&
     (!colFilters.client_name || q.client_name?.toLowerCase().includes(colFilters.client_name.toLowerCase())) &&
     (!colFilters.quotation_number || (q.quotation_number || '').toLowerCase().includes(colFilters.quotation_number.toLowerCase())) &&
-    (!colFilters.status || (q.status || '').toLowerCase().includes(colFilters.status.toLowerCase()))
+    (!colFilters.status || `${statusLabel(q.status)} ${remarkLabel(q.remark)}`.toLowerCase().includes(colFilters.status.toLowerCase()))
   );
 
   const totalLabor = form.labor_items.reduce((s, li) => s + (Number(li.amount) || 0), 0);
@@ -317,6 +318,7 @@ export default function Quotations() {
   const editVatAmount = editQuotation?.is_vat ? editSubtotal * 0.13 : 0;
 
   const columns = [
+    { key: 'task_id', label: t('workflow.jobColumn', { defaultValue: 'Job' }), render: (row) => <TaskBadge tasks={workflowTasks} taskId={row.task_id} /> },
     {
       key: 'date_ad', label: t('quotations.date', { defaultValue: 'Date' }), render: (row) => (
         <div className="text-xs">
@@ -329,28 +331,43 @@ export default function Quotations() {
     { key: 'client_name', label: t('quotations.client', { defaultValue: 'Client' }), filterValue: colFilters.client_name, onFilterChange: v => setCol('client_name', v), render: (row) => <span className="font-medium">{row.client_name}</span> },
     {
       key: 'valid_until', label: t('quotations.validUntil', { defaultValue: 'Valid Until' }), render: (row) => row.valid_until
-        ? <span className="text-xs font-mono">{row.valid_until}</span>
+        ? <span className="text-xs font-mono">{String(row.valid_until).slice(0, 10)}</span>
         : <span className="text-muted-foreground text-xs">—</span>,
     },
     { key: 'is_vat', label: t('quotations.vat', { defaultValue: 'VAT' }), render: (row) => <Badge variant={row.is_vat ? 'default' : 'secondary'}>{row.is_vat ? t('quotations.vatLabel', { defaultValue: 'VAT' }) : t('quotations.nonVatLabel', { defaultValue: 'Non-VAT' })}</Badge> },
-    { key: 'total_amount', label: t('quotations.total', { defaultValue: 'Total' }), render: (row) => <span className="font-semibold font-mono">NPR {(row.total_amount || 0).toLocaleString()}</span> },
+    { key: 'total_amount', label: t('quotations.total', { defaultValue: 'Total' }), render: (row) => <span className="font-semibold font-mono">NPR {Number(row.total_amount || 0).toLocaleString()}</span> },
     {
-      key: 'status', label: t('quotations.status', { defaultValue: 'Status' }), filterValue: colFilters.status, onFilterChange: v => setCol('status', v), filterPlaceholder: t('quotations.statusFilterPlaceholder', { defaultValue: 'e.g. pending' }), render: (row) => (
+      key: 'remark', label: t('quotations.remark', { defaultValue: 'Remark' }), render: (row) => (
         <select
-          value={row.status || 'pending'}
+          value={row.remark || 'QUOTED'}
+          disabled={!canEdit}
           onClick={e => e.stopPropagation()}
-          onChange={async e => {
-            await api.Quotation.update(row.id, { status: e.target.value });
-            loadData();
-          }}
-          className={`text-xs px-2 py-0.5 rounded-full font-medium border-0 cursor-pointer outline-none ${STATUS_COLORS[row.status] || 'bg-gray-100 text-gray-600'}`}
+          onChange={e => setQuotationField(row, { remark: e.target.value })}
+          className={`text-xs px-2 py-0.5 rounded-full font-medium border-0 cursor-pointer outline-none ${REMARK_COLORS[row.remark] || 'bg-gray-100 text-gray-600'}`}
         >
-          {STATUSES.map(s => <option key={s} value={s} className="bg-background text-foreground capitalize">{statusLabel(s)}</option>)}
+          {QUOTATION_REMARKS.map(r => <option key={r} value={r} className="bg-background text-foreground">{remarkLabel(r)}</option>)}
         </select>
       ),
     },
     {
-      key: 'actions', label: '', render: (row) => canEdit && (row.status !== 'accepted' && row.status !== 'rejected') && (
+      key: 'status', label: t('quotations.status', { defaultValue: 'Status' }), filterValue: colFilters.status, onFilterChange: v => setCol('status', v), filterPlaceholder: t('quotations.statusFilterPlaceholder', { defaultValue: 'e.g. active' }), render: (row) => (
+        // Converted is set by "To Sale" only; otherwise the user can expire / reactivate.
+        row.status === 'CONVERTED' || !canEdit ? (
+          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_COLORS[row.status] || 'bg-gray-100 text-gray-600'}`}>{statusLabel(row.status)}</span>
+        ) : (
+          <select
+            value={row.status || 'ACTIVE'}
+            onClick={e => e.stopPropagation()}
+            onChange={e => setQuotationField(row, { status: e.target.value })}
+            className={`text-xs px-2 py-0.5 rounded-full font-medium border-0 cursor-pointer outline-none ${STATUS_COLORS[row.status] || 'bg-gray-100 text-gray-600'}`}
+          >
+            {['ACTIVE', 'EXPIRED'].map(s => <option key={s} value={s} className="bg-background text-foreground">{statusLabel(s)}</option>)}
+          </select>
+        )
+      ),
+    },
+    {
+      key: 'actions', label: '', render: (row) => canEdit && row.status === 'ACTIVE' && (
         <Button
           size="sm"
           variant="outline"
@@ -391,6 +408,7 @@ export default function Quotations() {
                   </SelectContent>
                 </Select>
               </div>
+              <TaskLinkSelect tasks={workflowTasks} value={data.task_id} onChange={v => setData(d => ({ ...d, task_id: v }))} />
               <div>
                 <Label className="text-xs">{t('quotations.clientNameRequired', { defaultValue: 'Client Name *' })}</Label>
                 <Input value={data.client_name} onChange={e => setData(d => ({ ...d, client_name: e.target.value }))} placeholder={t('quotations.clientNamePlaceholder', { defaultValue: 'Full name or business name' })} />
@@ -427,14 +445,19 @@ export default function Quotations() {
                 <Input type="date" value={data.valid_until || ''} onChange={e => setData(d => ({ ...d, valid_until: e.target.value }))} />
               </div>
               <div>
-                <Label className="text-xs">{t('quotations.status', { defaultValue: 'Status' })}</Label>
-                <Select value={data.status || 'pending'} onValueChange={v => setData(d => ({ ...d, status: v }))}>
+                <Label className="text-xs">{t('quotations.remark', { defaultValue: 'Remark' })}</Label>
+                <Select value={data.remark || 'QUOTED'} onValueChange={v => setData(d => ({ ...d, remark: v }))}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {STATUSES.map(s => <SelectItem key={s} value={s} className="capitalize">{statusLabel(s)}</SelectItem>)}
+                    {QUOTATION_REMARKS.map(r => <SelectItem key={r} value={r}>{remarkLabel(r)}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
+              {data.status === 'CONVERTED' && (
+                <p className="rounded-md bg-green-50 px-2 py-1.5 text-[11px] text-green-800 dark:bg-green-950/40 dark:text-green-300">
+                  {t('quotations.billedLocked', { defaultValue: 'Already converted to a bill — only remark, notes and validity can change.' })}
+                </p>
+              )}
             </div>
           </div>
 
@@ -584,12 +607,12 @@ export default function Quotations() {
         addLabel={t('quotations.newQuotation', { defaultValue: 'New Quotation' })}
       />
 
-      {/* Status summary cards */}
+      {/* Remark summary cards (Quoted, Work done, Revised, Billed, Cancelled) */}
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-        {STATUSES.map(s => (
-          <div key={s} className="glass-card rounded-xl border p-3 text-center">
-            <p className="text-xl font-bold">{quotations.filter(q => q.status === s).length}</p>
-            <p className="text-xs text-muted-foreground capitalize mt-0.5">{statusLabel(s)}</p>
+        {QUOTATION_REMARKS.map(r => (
+          <div key={r} className="glass-card rounded-xl border p-3 text-center">
+            <p className="text-xl font-bold">{quotations.filter(q => (q.remark || 'QUOTED') === r).length}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">{remarkLabel(r)}</p>
           </div>
         ))}
       </div>

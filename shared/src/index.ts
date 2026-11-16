@@ -19,3 +19,4 @@ export * from './schemas/memo.schema';
 export * from './schemas/task.schema';
 export * from './types/common';
 export * from './utils/nepali-date';
+export * from './schemas/update-schema';

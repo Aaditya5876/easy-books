@@ -1,6 +1,7 @@
 import { Controller, Get, Query } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { DashboardServiceImpl } from '../../../../application/services/dashboard.service.impl';
+import { DashboardOverviewService } from '../../../../application/services/dashboard-overview.service';
 import { Roles } from '../../../../modules/decorators/roles.decorator';
 
 @ApiTags('Dashboard')
@@ -8,7 +9,17 @@ import { Roles } from '../../../../modules/decorators/roles.decorator';
 @Roles('ACCOUNTANT', 'ADMIN')
 @Controller('api/v1/dashboard')
 export class DashboardController {
-  constructor(private readonly service: DashboardServiceImpl) {}
+  constructor(
+    private readonly service: DashboardServiceImpl,
+    private readonly overview: DashboardOverviewService,
+  ) {}
+
+  @Get('overview')
+  @ApiOperation({ summary: 'Everything on the home dashboard (business and school): FY totals, cash, bank, ledger, inventory, quotations, tasks, cheques' })
+  @ApiQuery({ name: 'companyId', required: true })
+  getOverview(@Query('companyId') companyId: string) {
+    return this.overview.getOverview(companyId);
+  }
 
   @Get()
   @ApiOperation({ summary: 'Get dashboard summary (revenue, expenses, cash, receivables, payables, payroll)' })

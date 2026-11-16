@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../../../core/db/psql/prisma.client';
+import { assertTaskLink } from '../../../core/utils/task-link';
 import { CreateEmployeeDTO, UpdateEmployeeDTO } from '@easy-books/shared';
 
 @Injectable()
@@ -37,7 +38,7 @@ export class EmployeeServiceImpl {
   async findAllDirectory(companyId: string) {
     return this.prisma.employee.findMany({
       where: { companyId, deletedAt: null },
-      select: { id: true, name: true, designation: true },
+      select: { id: true, name: true, designation: true, department: true },
       orderBy: { name: 'asc' },
     });
   }
@@ -49,6 +50,7 @@ export class EmployeeServiceImpl {
   }
 
   async create(dto: CreateEmployeeDTO) {
+    await assertTaskLink(this.prisma, dto.companyId, dto.taskId);
     const name = dto.name?.trim();
     const employeeId = dto.employeeId?.trim();
     await this.assertEmployeeIdFree(dto.companyId, employeeId);
@@ -59,6 +61,7 @@ export class EmployeeServiceImpl {
   async update(id: string, companyId: string, dto: UpdateEmployeeDTO) {
     const existing = await this.prisma.employee.findFirst({ where: { id, companyId, deletedAt: null } });
     if (!existing) throw new NotFoundException('Employee not found');
+    await assertTaskLink(this.prisma, companyId, dto.taskId);
     const employeeId = dto.employeeId?.trim();
     if (employeeId !== undefined) {
       await this.assertEmployeeIdFree(companyId, employeeId, id);

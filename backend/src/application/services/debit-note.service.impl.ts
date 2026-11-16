@@ -35,7 +35,9 @@ export class DebitNoteServiceImpl {
     const debitNoteNumber = await this.generateNumber(companyId);
     const dateAd = new Date(data.dateAd);
 
-    const dn = await this.prisma.debitNote.create({
+    // Note + ledger entries saved together (all or nothing).
+    return this.prisma.$transaction(async (tx) => {
+    const dn = await tx.debitNote.create({
       data: {
         companyId,
         vendorId: data.vendorId,
@@ -50,8 +52,9 @@ export class DebitNoteServiceImpl {
       },
     });
 
-    await this.ledgerPosting.postDebitNote(companyId, dn.id);
+    await this.ledgerPosting.postDebitNote(companyId, dn.id, tx);
     return dn;
+    });
   }
 
   async apply(id: string, companyId: string) {

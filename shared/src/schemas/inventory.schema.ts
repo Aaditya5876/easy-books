@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { withoutDefaults } from './update-schema';
 
 export const CreateInventoryItemSchema = z.object({
   companyId: z.string().uuid(),
@@ -20,7 +21,8 @@ export const CreateInventoryItemSchema = z.object({
   vendorId: z.string().uuid().optional(),
 });
 
-export const UpdateInventoryItemSchema = CreateInventoryItemSchema.omit({ companyId: true }).partial();
+// Without defaults: renaming an item used to reset stock and prices to 0.
+export const UpdateInventoryItemSchema = z.object(withoutDefaults(CreateInventoryItemSchema.shape)).omit({ companyId: true }).partial();
 
 export type CreateInventoryItemDTO = z.infer<typeof CreateInventoryItemSchema>;
 export type UpdateInventoryItemDTO = z.infer<typeof UpdateInventoryItemSchema>;

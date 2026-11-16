@@ -1,9 +1,12 @@
 import { z } from 'zod';
+import { withoutDefaults } from './update-schema';
 
 export const ClientStatusEnum = z.enum(['ACTIVE', 'INACTIVE', 'PROSPECT']);
 
 export const CreateClientSchema = z.object({
   companyId: z.string().uuid(),
+  // Workflow job this record belongs to (must be the same company's task).
+  taskId: z.string().uuid().optional().nullable(),
   name: z.string().min(1),
   abbreviation: z.string().optional(),
   contactPerson: z.string().optional(),
@@ -15,7 +18,7 @@ export const CreateClientSchema = z.object({
   notes: z.string().optional(),
 });
 
-export const UpdateClientSchema = CreateClientSchema.omit({ companyId: true }).partial();
+export const UpdateClientSchema = z.object(withoutDefaults(CreateClientSchema.shape)).omit({ companyId: true }).partial();
 
 export type CreateClientDTO = z.infer<typeof CreateClientSchema>;
 export type UpdateClientDTO = z.infer<typeof UpdateClientSchema>;

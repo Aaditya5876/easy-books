@@ -265,7 +265,8 @@ export default function Settings() {
   const [binVerifying, setBinVerifying] = useState(false);
   const [binItems, setBinItems] = useState(null);
   const [binLoading, setBinLoading] = useState(false);
-  const [binAutoDelete, setBinAutoDelete] = useState(() => parseInt(localStorage.getItem('easybooks_bin_auto_delete') || '0'));
+  const [binAutoDelete, setBinAutoDelete] = useState(0); // company setting, loaded with the bin
+  const [binSelected, setBinSelected] = useState({});
   const [binConfirmEmpty, setBinConfirmEmpty] = useState(false);
 
   // ── Company Prefs (server-side) ───────────────────────────────────────────
@@ -1092,13 +1093,15 @@ export default function Settings() {
   async function loadBinItems() {
     if (!activeCompanyId) return;
     setBinLoading(true);
+    setBinSelected({});
     try {
-      // Auto-cleanup old items if auto-delete is set
-      if (binAutoDelete > 0) {
-        await recycleBinApi.cleanup(activeCompanyId, binAutoDelete).catch(() => {});
-      }
-      const res = await recycleBinApi.list(activeCompanyId);
+      // Auto-delete runs nightly on the server; this only reads the setting.
+      const [res, settings] = await Promise.all([
+        recycleBinApi.list(activeCompanyId),
+        recycleBinApi.getSettings(activeCompanyId).catch(() => null),
+      ]);
       setBinItems(res.data);
+      if (settings) setBinAutoDelete(settings.data?.retentionDays ?? 0);
     } catch {
       setBinItems(null);
     } finally {
@@ -1123,9 +1126,45 @@ export default function Settings() {
     loadBinItems();
   }
 
-  function setBinAutoDeletePref(days) {
+  async function setBinAutoDeletePref(days) {
+    const previous = binAutoDelete;
     setBinAutoDelete(days);
-    localStorage.setItem('easybooks_bin_auto_delete', String(days));
+    try {
+      await recycleBinApi.updateSettings(activeCompanyId, days);
+      toast.success(days
+        ? t('settings.autoDeleteSaved', { defaultValue: 'Items older than {{days}} days will be deleted automatically every night.', days })
+        : t('settings.autoDeleteOff', { defaultValue: 'Auto-delete turned off.' }));
+    } catch {
+      setBinAutoDelete(previous);
+      toast.error(t('settings.autoDeleteFailed', { defaultValue: 'Could not save the auto-delete setting.' }));
+    }
+  }
+
+  // Multi-select: keys are `${type}:${id}`.
+  const binSelectedItems = Object.keys(binSelected).filter(k => binSelected[k]).map(k => {
+    const [type, id] = k.split(':');
+    return { type, id };
+  });
+  function toggleBinItem(type, id) {
+    setBinSelected(s => ({ ...s, [`${type}:${id}`]: !s[`${type}:${id}`] }));
+  }
+  function toggleBinSection(type, items) {
+    const allOn = items.every(i => binSelected[`${type}:${i.id}`]);
+    setBinSelected(s => ({ ...s, ...Object.fromEntries(items.map(i => [`${type}:${i.id}`, !allOn])) }));
+  }
+  async function restoreSelected() {
+    await recycleBinApi.restoreMany(activeCompanyId, binSelectedItems);
+    loadBinItems();
+  }
+  async function deleteSelected() {
+    if (!confirm(t('settings.confirmDeleteSelected', { defaultValue: 'Permanently delete {{n}} selected item(s)? This cannot be undone.', n: binSelectedItems.length }))) return;
+    await recycleBinApi.deleteMany(activeCompanyId, binSelectedItems);
+    loadBinItems();
+  }
+  async function restoreAllBin() {
+    if (!confirm(t('settings.confirmRestoreAll', { defaultValue: 'Restore every item in the recycle bin?' }))) return;
+    await recycleBinApi.restoreAll(activeCompanyId);
+    loadBinItems();
   }
 
   function handleUiLogoUpload(e) {
@@ -2372,6 +2411,7 @@ export default function Settings() {
                       { v: 7, l: t('settings.autoDelete7Days', { defaultValue: '7 days' }) },
                       { v: 30, l: t('settings.autoDelete30Days', { defaultValue: '30 days' }) },
                       { v: 90, l: t('settings.autoDelete90Days', { defaultValue: '90 days' }) },
+                      { v: 180, l: t('settings.autoDelete180Days', { defaultValue: '180 days' }) },
                     ].map(opt => (
                       <button
                         key={opt.v}
@@ -2388,6 +2428,14 @@ export default function Settings() {
                 <div className="flex gap-2">
                   <Button variant="outline" size="sm" onClick={loadBinItems}>
                     <RotateCw className="w-3.5 h-3.5 mr-1" />{t('settings.refresh', { defaultValue: 'Refresh' })}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={restoreAllBin}
+                    disabled={!binItems || Object.values(binItems).every(arr => arr.length === 0)}
+                  >
+                    <RotateCcw className="w-3.5 h-3.5 mr-1" />{t('settings.restoreAll', { defaultValue: 'Restore All' })}
                   </Button>
                   <Button
                     variant="destructive"
@@ -2410,6 +2458,21 @@ export default function Settings() {
                   <div className="flex gap-2">
                     <Button variant="outline" size="sm" onClick={() => setBinConfirmEmpty(false)}>{t('settings.cancel', { defaultValue: 'Cancel' })}</Button>
                     <Button variant="destructive" size="sm" onClick={emptyBin}>{t('settings.yesEmptyBin', { defaultValue: 'Yes, empty bin' })}</Button>
+                  </div>
+                </div>
+              )}
+
+              {binSelectedItems.length > 0 && (
+                <div className="bg-primary/5 border border-primary/30 rounded-xl px-4 py-3 flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-sm font-medium">{t('settings.nSelected', { defaultValue: '{{n}} selected', n: binSelectedItems.length })}</span>
+                  <div className="flex gap-2">
+                    <Button variant="ghost" size="sm" onClick={() => setBinSelected({})}>{t('settings.clearSelection', { defaultValue: 'Clear' })}</Button>
+                    <Button variant="outline" size="sm" onClick={restoreSelected}>
+                      <RotateCcw className="w-3.5 h-3.5 mr-1" />{t('settings.restoreSelected', { defaultValue: 'Restore selected' })}
+                    </Button>
+                    <Button variant="destructive" size="sm" onClick={deleteSelected}>
+                      <Trash2 className="w-3.5 h-3.5 mr-1" />{t('settings.deleteSelected', { defaultValue: 'Delete selected' })}
+                    </Button>
                   </div>
                 </div>
               )}
@@ -2437,6 +2500,13 @@ export default function Settings() {
                   ].filter(s => binItems[s.key]?.length > 0).map(section => (
                     <div key={section.key} className="bg-card rounded-xl border overflow-hidden">
                       <div className="px-4 py-3 bg-secondary/50 border-b flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4 accent-primary"
+                          aria-label={t('settings.selectAllInSection', { defaultValue: 'Select all {{section}}', section: section.label })}
+                          checked={binItems[section.key].every(i => binSelected[`${section.type}:${i.id}`])}
+                          onChange={() => toggleBinSection(section.type, binItems[section.key])}
+                        />
                         <span>{section.icon}</span>
                         <span className="font-medium text-sm">{section.label}</span>
                         <span className="ml-auto text-xs bg-secondary text-muted-foreground px-2 py-0.5 rounded-full">
@@ -2446,6 +2516,13 @@ export default function Settings() {
                       <div className="divide-y divide-border">
                         {binItems[section.key].map(item => (
                           <div key={item.id} className="flex items-center justify-between px-4 py-3 hover:bg-secondary/30 transition-colors">
+                            <input
+                              type="checkbox"
+                              className="mr-3 h-4 w-4 shrink-0 accent-primary"
+                              aria-label={item[section.nameKey] || ''}
+                              checked={!!binSelected[`${section.type}:${item.id}`]}
+                              onChange={() => toggleBinItem(section.type, item.id)}
+                            />
                             <div className="flex-1 min-w-0">
                               <p className="text-sm font-medium truncate">{item[section.nameKey] || '—'}</p>
                               <p className="text-xs text-muted-foreground truncate">

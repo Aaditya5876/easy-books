@@ -76,12 +76,14 @@ function makeEntity(endpoint, companyScoped) {
       const res = await apiClient.get(`${endpoint}/${id}`, { params: scope() });
       return toSnake(unwrap(res));
     },
-    async create(data) {
-      const res = await apiClient.post(endpoint, toCamel(data));
+    // opts.idempotencyKey: reuse the same key when retrying the same save
+    // (see useIdempotencyKey) so money is never recorded twice.
+    async create(data, opts = {}) {
+      const res = await apiClient.post(endpoint, toCamel(data), opts.idempotencyKey ? { idempotencyKey: opts.idempotencyKey } : undefined);
       return toSnake(unwrap(res));
     },
-    async update(id, data, params = {}) {
-      const res = await apiClient.put(`${endpoint}/${id}`, toCamel(data), { params: scope(params) });
+    async update(id, data, params = {}, opts = {}) {
+      const res = await apiClient.put(`${endpoint}/${id}`, toCamel(data), { params: scope(params), ...(opts.idempotencyKey ? { idempotencyKey: opts.idempotencyKey } : {}) });
       return toSnake(unwrap(res));
     },
     async delete(id) {
