@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Check, ChevronsUpDown, Search, Loader2, GraduationCap, Briefcase } from 'lucide-react';
+import { ChevronsUpDown, Search, Loader2, GraduationCap, Briefcase } from 'lucide-react';
 import { studentsApi, employeeApi } from '@/api';
 import { Button } from '@/components/ui/button';
 import {
@@ -9,7 +9,6 @@ import {
 import {
   Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem,
 } from '@/components/ui/command';
-import { cn } from '@/lib/utils';
 
 // Searchable student-or-staff picker, so a "who has this?" field can only ever
 // be filled with a real person — never arbitrary typed text (unlike a plain
