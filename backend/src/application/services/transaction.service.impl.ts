@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../../core/db/psql/prisma.client';
+import { Prisma } from '@prisma/client';
 import { CreateTransactionDTO, UpdateTransactionDTO } from '@easy-books/shared';
 import { LedgerPostingService } from './ledger-posting.service';
 
@@ -62,7 +63,7 @@ export class TransactionServiceImpl {
           referenceId: transaction.id,
         });
       } else if (dto.status === 'PENDING') {
-        const pending = await this.resolvePendingAccounts(dto.companyId, dto.category);
+        const pending = await this.resolvePendingAccounts(tx, dto.companyId, dto.category, { debitAccountId, creditAccountId });
         await this.ledgerPosting.postManualJournalEntryTx(tx, dto.companyId, {
           debitAccountId: pending.debitAccountId,
           creditAccountId: pending.creditAccountId,
@@ -92,22 +93,34 @@ export class TransactionServiceImpl {
     });
   }
 
-  // Always resolves to Accounts Receivable/Payable, regardless of payment method —
-  // used only while a transaction is PENDING (see create()/update()), since no
-  // payment method's cash/bank leg is real yet.
-  private async resolvePendingAccounts(companyId: string, category: string) {
-    if (category === 'INCOME') {
-      const [accountsReceivable, salesRevenueAccount] = await Promise.all([
-        this.ledgerPosting.getOrCreateSystemAccount(companyId, 'Accounts Receivable', 'ASSET'),
-        this.ledgerPosting.getOrCreateSystemAccount(companyId, 'Sales Revenue', 'INCOME'),
-      ]);
-      return { debitAccountId: accountsReceivable.id, creditAccountId: salesRevenueAccount.id };
+  // While a transaction is PENDING no money has moved, so the cash/bank leg is
+  // replaced by Accounts Receivable/Payable. The other leg — the expense or
+  // income category the user chose (e.g. "Repairs & Maintenance") — is already
+  // known, so it is used from day one; only when none was chosen (or the chosen
+  // account isn't an expense/income account) does it fall back to the generic
+  // Purchase Expenses / Sales Revenue.
+  private async resolvePendingAccounts(
+    tx: Prisma.TransactionClient,
+    companyId: string,
+    category: string,
+    chosen: { debitAccountId?: string | null; creditAccountId?: string | null },
+  ) {
+    const isIncome = category === 'INCOME';
+    const categoryAccountId = isIncome ? chosen.creditAccountId : chosen.debitAccountId;
+    const categoryAccount = categoryAccountId
+      ? await tx.ledgerAccount.findFirst({ where: { id: categoryAccountId, companyId }, select: { id: true, accountType: true } })
+      : null;
+    const wantedType = isIncome ? 'INCOME' : 'EXPENSE';
+    const categoryId = categoryAccount?.accountType === wantedType
+      ? categoryAccount.id
+      : (await this.ledgerPosting.getOrCreateSystemAccount(companyId, isIncome ? 'Sales Revenue' : 'Purchase Expenses', wantedType)).id;
+
+    if (isIncome) {
+      const accountsReceivable = await this.ledgerPosting.getOrCreateSystemAccount(companyId, 'Accounts Receivable', 'ASSET');
+      return { debitAccountId: accountsReceivable.id, creditAccountId: categoryId };
     }
-    const [purchaseExpenseAccount, accountsPayable] = await Promise.all([
-      this.ledgerPosting.getOrCreateSystemAccount(companyId, 'Purchase Expenses', 'EXPENSE'),
-      this.ledgerPosting.getOrCreateSystemAccount(companyId, 'Accounts Payable', 'LIABILITY'),
-    ]);
-    return { debitAccountId: purchaseExpenseAccount.id, creditAccountId: accountsPayable.id };
+    const accountsPayable = await this.ledgerPosting.getOrCreateSystemAccount(companyId, 'Accounts Payable', 'LIABILITY');
+    return { debitAccountId: categoryId, creditAccountId: accountsPayable.id };
   }
 
   // dto.debitAccountId/creditAccountId are resolved independently — either side can be
@@ -225,7 +238,10 @@ export class TransactionServiceImpl {
             referenceId: record.id,
           });
         } else if (effectiveStatus === 'PENDING') {
-          const pending = await this.resolvePendingAccounts(record.companyId, updated.category);
+          const pending = await this.resolvePendingAccounts(tx, record.companyId, updated.category, {
+            debitAccountId: record.debitAccountId,
+            creditAccountId: record.creditAccountId,
+          });
           await this.ledgerPosting.postManualJournalEntryTx(tx, record.companyId, {
             debitAccountId: pending.debitAccountId,
             creditAccountId: pending.creditAccountId,
