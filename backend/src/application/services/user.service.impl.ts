@@ -5,6 +5,7 @@ import { MODULE_KEYS, ModuleKey } from '../../../core/modules/module-keys';
 import { STAFF_TAGS } from '../../../core/modules/staff-tags';
 import * as bcrypt from 'bcrypt';
 import { ensureEmployeeRecord } from './self-service-employee.util';
+import { defaultUnitsFor, normalizeUnits } from '@easy-books/shared';
 
 const ROLE_HIERARCHY = ['STAFF', 'TEACHER', 'ACCOUNTANT', 'ADMIN', 'SUPER_ADMIN'];
 // Roles an ADMIN may grant (everything below ADMIN)
@@ -107,7 +108,7 @@ export class UserServiceImpl {
   // so they can switch into it afterward to manage its package/support it.
   async provisionClient(
     requesterId: string,
-    data: { companyName: string; businessType: string; adminName: string; adminEmail: string; enabledModules?: string[] },
+    data: { companyName: string; businessType: string; adminName: string; adminEmail: string; enabledModules?: string[]; units?: string[] },
   ) {
     const existing = await this.prisma.user.findUnique({ where: { email: data.adminEmail } });
     if (existing) throw new ConflictException('A user with this email already exists');
@@ -117,7 +118,11 @@ export class UserServiceImpl {
     if (invalid.length > 0) throw new BadRequestException(`Unknown module key(s): ${invalid.join(', ')}`);
 
     const company = await this.prisma.company.create({
-      data: { name: data.companyName, businessType: data.businessType, enabledModules },
+      data: {
+        name: data.companyName, businessType: data.businessType, enabledModules,
+        // GeoInfosys picks the units at onboarding; none given = the type's defaults.
+        units: Array.isArray(data.units) && normalizeUnits(data.units).length ? normalizeUnits(data.units) : defaultUnitsFor(data.businessType),
+      },
     });
 
     const tempPassword = Math.random().toString(36).slice(-10);

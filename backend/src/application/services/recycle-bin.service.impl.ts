@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
-import * as bcrypt from 'bcrypt';
+import { confirmPassword } from '../../../core/utils/password-confirm';
 import { PrismaService } from '../../../core/db/psql/prisma.client';
 
 export type RecycleBinItemType =
@@ -10,10 +10,10 @@ export type RecycleBinItemType =
 export class RecycleBinServiceImpl {
   constructor(private readonly prisma: PrismaService) {}
 
+  // Same check + lockout as login (5 wrong → 15 min); throws 403 when wrong.
   async verifyPassword(userId: string, password: string): Promise<boolean> {
-    const user = await this.prisma.user.findUnique({ where: { id: userId } });
-    if (!user) return false;
-    return bcrypt.compare(password, user.password);
+    await confirmPassword(this.prisma, userId, password);
+    return true;
   }
 
   async list(companyId: string) {

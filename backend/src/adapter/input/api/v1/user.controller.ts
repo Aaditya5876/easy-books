@@ -25,7 +25,7 @@ export class UserController {
   @Roles('SUPER_ADMIN')
   @ApiOperation({ summary: "Create a new client company and its first ADMIN login (sales-led onboarding)" })
   provisionClient(
-    @Body() body: { companyName: string; businessType: string; adminName: string; adminEmail: string; enabledModules?: string[] },
+    @Body() body: { companyName: string; businessType: string; adminName: string; adminEmail: string; enabledModules?: string[]; units?: string[] },
     @Req() req: any,
   ) {
     return this.service.provisionClient(req.user.sub, body);

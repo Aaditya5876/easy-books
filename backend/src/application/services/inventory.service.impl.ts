@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../core/db/psql/prisma.client';
-import { CreateInventoryItemDTO, UpdateInventoryItemDTO, adToBs } from '@easy-books/shared';
+import { CreateInventoryItemDTO, UpdateInventoryItemDTO, adToBs, checkCustomFields, ItemFieldDef } from '@easy-books/shared';
 import { NotificationServiceImpl } from './notification.service.impl';
 
 type Tx = Prisma.TransactionClient;
@@ -57,14 +57,31 @@ export class InventoryServiceImpl {
     return this.prisma.inventoryItem.findFirst({ where: { id, companyId, deletedAt: null } });
   }
 
+  // Custom values are checked against the company's own item fields; an
+  // empty expiry date clears it.
+  private async prepare(companyId: string, dto: CreateInventoryItemDTO | UpdateInventoryItemDTO, isCreate: boolean) {
+    const data: Record<string, unknown> = { ...dto };
+    if ('expiryDate' in dto) data.expiryDate = dto.expiryDate ? new Date(`${dto.expiryDate}T00:00:00Z`) : null;
+    if (isCreate || dto.customFields !== undefined) {
+      const company = await this.prisma.company.findUnique({ where: { id: companyId }, select: { itemFields: true } });
+      const defs = (Array.isArray(company?.itemFields) ? company!.itemFields : []) as unknown as ItemFieldDef[];
+      const { errors, clean } = checkCustomFields(defs, dto.customFields as Record<string, unknown> | null | undefined);
+      if (errors.length) throw new BadRequestException(errors.join('; '));
+      data.customFields = Object.keys(clean).length ? clean : Prisma.JsonNull;
+    }
+    return data;
+  }
+
   async create(dto: CreateInventoryItemDTO) {
-    return this.prisma.inventoryItem.create({ data: dto as any });
+    const data = await this.prepare(dto.companyId, dto, true);
+    return this.prisma.inventoryItem.create({ data: data as any });
   }
 
   async update(id: string, companyId: string, dto: UpdateInventoryItemDTO) {
     const before = await this.prisma.inventoryItem.findFirst({ where: { id, companyId } });
     if (!before) throw new NotFoundException('Inventory item not found');
-    const updated = await this.prisma.inventoryItem.update({ where: { id }, data: dto as any });
+    const data = await this.prepare(companyId, dto, false);
+    const updated = await this.prisma.inventoryItem.update({ where: { id }, data: data as any });
     if ((dto as any).quantity !== undefined) {
       await this.maybeNotifyLowStock(companyId, updated, Number(before.quantity), Number(updated.quantity));
     }

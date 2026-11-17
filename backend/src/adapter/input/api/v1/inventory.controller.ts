@@ -1,4 +1,6 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, Query, Patch } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param, Query, Patch, Req } from '@nestjs/common';
+import { PrismaService } from '../../../../../core/db/psql/prisma.client';
+import { confirmPassword } from '../../../../../core/utils/password-confirm';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { InventoryServiceImpl } from '../../../../application/services/inventory.service.impl';
 import { Roles } from '../../../../modules/decorators/roles.decorator';
@@ -11,7 +13,10 @@ import { CreateInventoryItemSchema, UpdateInventoryItemSchema, CreateInventoryIt
 @RequiresModule('INVENTORY_STOCK')
 @Controller('api/v1/inventory')
 export class InventoryController {
-  constructor(private readonly service: InventoryServiceImpl) {}
+  constructor(
+    private readonly service: InventoryServiceImpl,
+    private readonly prisma: PrismaService,
+  ) {}
 
   @Get()
   @Roles('STAFF', 'ACCOUNTANT', 'ADMIN')
@@ -36,15 +41,20 @@ export class InventoryController {
     return this.service.create(dto);
   }
 
+  // Editing an item (prices, expiry…) needs the user's password, checked
+  // here — the Inventory page's password prompt used to check nothing.
   @Put(':id')
   @Roles('ACCOUNTANT', 'ADMIN')
-  @ApiOperation({ summary: 'Update an inventory item' })
+  @ApiOperation({ summary: 'Update an inventory item (body must include the current user\'s password)' })
   @ApiQuery({ name: 'companyId', required: true })
-  update(
+  async update(
     @Param('id') id: string,
     @Query('companyId') companyId: string,
     @Body(new ZodValidationPipe(UpdateInventoryItemSchema)) dto: UpdateInventoryItemDTO,
+    @Body('password') password: string,
+    @Req() req: any,
   ) {
+    await confirmPassword(this.prisma, req.user.sub, password);
     return this.service.update(id, companyId, dto);
   }
 

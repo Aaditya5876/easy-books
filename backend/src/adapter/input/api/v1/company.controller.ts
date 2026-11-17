@@ -1,5 +1,5 @@
 import { NoCompanyScope } from '../../../../modules/decorators/no-company-scope.decorator';
-import { UpdatePayrollSettingsSchema, UpdatePayrollSettingsDTO } from '@easy-books/shared';
+import { UpdatePayrollSettingsSchema, UpdatePayrollSettingsDTO, UnitListSchema, UNIT_PRESETS, ItemFieldListSchema } from '@easy-books/shared';
 import { ZodValidationPipe } from '../../../../modules/pipes/zod-validation.pipe';
 import { Controller, Get, Post, Put, Patch, Delete, Body, Param, Req } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
@@ -42,6 +42,42 @@ export class CompanyController {
   @ApiOperation({ summary: 'Get every company across the platform (SUPER_ADMIN client directory)' })
   findAllForSuperAdmin() {
     return this.service.findAllForSuperAdmin();
+  }
+
+  // Before ':id' so the literal segment isn't read as a company id.
+  @Get('unit-presets')
+  @Roles('SUPER_ADMIN')
+  @ApiOperation({ summary: 'Default unit list per business type (for the create-client form)' })
+  unitPresets() {
+    return UNIT_PRESETS;
+  }
+
+  @Get(':id/units')
+  @Roles('STAFF', 'ACCOUNTANT', 'ADMIN')
+  @ApiOperation({ summary: "The company's unit list (its own, or its business type's defaults)" })
+  getUnits(@Param('id') id: string, @Req() req: any) {
+    return this.service.getUnits(id, req.user.sub, req.user.role);
+  }
+
+  @Put(':id/units')
+  @Roles('ADMIN')
+  @ApiOperation({ summary: "Replace the company's unit list" })
+  setUnits(@Param('id') id: string, @Body(new ZodValidationPipe(UnitListSchema)) body: { units: string[] }, @Req() req: any) {
+    return this.service.setUnits(id, body.units, req.user.sub, req.user.role);
+  }
+
+  @Get(':id/item-fields')
+  @Roles('STAFF', 'ACCOUNTANT', 'ADMIN')
+  @ApiOperation({ summary: "The company's custom item fields (Size, Colour…)" })
+  getItemFields(@Param('id') id: string, @Req() req: any) {
+    return this.service.getItemFields(id, req.user.sub, req.user.role);
+  }
+
+  @Put(':id/item-fields')
+  @Roles('ADMIN')
+  @ApiOperation({ summary: "Replace the company's custom item fields" })
+  setItemFields(@Param('id') id: string, @Body(new ZodValidationPipe(ItemFieldListSchema)) body: { fields: any[] }, @Req() req: any) {
+    return this.service.setItemFields(id, body.fields, req.user.sub, req.user.role);
   }
 
   @Get(':id')

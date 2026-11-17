@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import * as DialogPrimitive from "@radix-ui/react-dialog"
-import { X, Maximize2, Minimize2 } from "lucide-react"
+import { X } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 
@@ -23,8 +23,15 @@ const DialogOverlay = React.forwardRef(({ className, ...props }, ref) => (
 ))
 DialogOverlay.displayName = DialogPrimitive.Overlay.displayName
 
+// Every dialog is capped to the viewport (with a 1rem gutter) and scrolls when
+// its content is taller. Callers sometimes pass `overflow-hidden` (to clip a
+// decorative top bar); that clipped tall forms with no scrollbar, so it is
+// stripped here — `overflow-y-auto` clips the bar to the rounded corners too.
+const VIEWPORT_GUTTER = 32;
+const stripOverflowHidden = (cls) =>
+  typeof cls === 'string' ? cls.replace(/(^|\s)overflow-hidden(?=\s|$)/g, ' ') : cls;
+
 const DialogContent = React.forwardRef(({ className, children, ...props }, ref) => {
-  const [maximized, setMaximized] = React.useState(false);
   const [size, setSize] = React.useState({ width: null, height: null });
   const [isResizing, setIsResizing] = React.useState(false);
   const resizeStartRef = React.useRef(null);
@@ -56,9 +63,13 @@ const DialogContent = React.forwardRef(({ className, children, ...props }, ref) 
     function onMove(e) {
       if (!resizeStartRef.current) return;
       const { startX, startY, startW, startH } = resizeStartRef.current;
+      // The dialog is centred, so it grows in both directions — clamp to the
+      // viewport so it can never slide under the sidebar or off-screen.
+      const maxW = window.innerWidth - VIEWPORT_GUTTER;
+      const maxH = window.innerHeight - VIEWPORT_GUTTER;
       setSize({
-        width: Math.max(380, startW + (e.clientX - startX)),
-        height: Math.max(280, startH + (e.clientY - startY)),
+        width: Math.min(maxW, Math.max(380, startW + (e.clientX - startX))),
+        height: Math.min(maxH, Math.max(280, startH + (e.clientY - startY))),
       });
     }
     function onUp() {
@@ -73,8 +84,13 @@ const DialogContent = React.forwardRef(({ className, children, ...props }, ref) 
     };
   }, [isResizing]);
 
-  const customStyle = !maximized && size.width
-    ? { width: size.width, height: size.height, maxWidth: 'none', maxHeight: 'none', overflow: 'auto' }
+  const customStyle = size.width
+    ? {
+        width: size.width,
+        height: size.height,
+        maxWidth: `calc(100vw - ${VIEWPORT_GUTTER}px)`,
+        maxHeight: `calc(100dvh - ${VIEWPORT_GUTTER}px)`,
+      }
     : undefined;
 
   return (
@@ -84,39 +100,26 @@ const DialogContent = React.forwardRef(({ className, children, ...props }, ref) 
         ref={combinedRef}
         style={customStyle}
         className={cn(
-          maximized
-            ? "fixed left-0 top-0 z-50 w-screen h-screen max-w-none rounded-none translate-x-0 translate-y-0 gap-4 border bg-background p-6 shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 overflow-auto"
-            : "fixed left-[50%] top-[50%] z-50 grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 border bg-background p-6 shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%] sm:rounded-lg",
-          className
+          "fixed left-[50%] top-[50%] z-50 grid w-[calc(100%-2rem)] max-w-lg max-h-[calc(100dvh-2rem)] overflow-y-auto translate-x-[-50%] translate-y-[-50%] gap-4 rounded-lg border bg-background p-6 shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%]",
+          stripOverflowHidden(className)
         )}
         {...props}
       >
         {children}
-        {/* Maximize / Restore */}
-        <button
-          onClick={() => { setMaximized(v => !v); setSize({ width: null, height: null }); }}
-          className="absolute right-10 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-        >
-          {maximized ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
-          <span className="sr-only">{maximized ? "Restore" : "Maximize"}</span>
-        </button>
-        {/* Close */}
         <DialogPrimitive.Close className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground">
           <X className="h-4 w-4" />
           <span className="sr-only">Close</span>
         </DialogPrimitive.Close>
         {/* Drag-to-resize handle */}
-        {!maximized && (
-          <div
-            onMouseDown={startResize}
-            className="absolute bottom-0 right-0 w-5 h-5 cursor-se-resize select-none opacity-0 hover:opacity-50 transition-opacity"
-            title="Drag to resize"
-          >
-            <svg viewBox="0 0 10 10" className="w-full h-full text-muted-foreground" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-              <path d="M2 8L8 2M5 8L8 5" />
-            </svg>
-          </div>
-        )}
+        <div
+          onMouseDown={startResize}
+          className="absolute bottom-0 right-0 w-5 h-5 cursor-se-resize select-none opacity-0 hover:opacity-50 transition-opacity"
+          title="Drag to resize"
+        >
+          <svg viewBox="0 0 10 10" className="w-full h-full text-muted-foreground" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+            <path d="M2 8L8 2M5 8L8 5" />
+          </svg>
+        </div>
       </DialogPrimitive.Content>
     </DialogPortal>
   );

@@ -25,6 +25,7 @@ import { FileAttachmentZone } from "@/components/ui/file-attachment-zone";
 import { useRole } from "@/lib/useRole";
 import { TaskLinkSelect, TaskBadge, useWorkflowTasks } from '../components/shared/TaskLinkSelect';
 import { useIdempotencyKey } from '@/lib/useIdempotencyKey';
+import { useCompanyUnits } from '@/lib/useCompanyUnits';
 
 const EMPTY_FORM = {
   task_id: '', // Workflow job this record is for (optional)
@@ -33,7 +34,7 @@ const EMPTY_FORM = {
   date_ad: new Date().toISOString().split('T')[0],
   due_date: '',
   notes: '',
-  items: [{ inventory_item_id: '', description: '', quantity: 1, unit: 'Piece', unit_price: 0, total: 0 }],
+  items: [{ inventory_item_id: '', description: '', quantity: 1, unit: '', unit_price: 0, total: 0 }],
   labor_items: [{ description: '', amount: 0 }],
   attachments: [],
 };
@@ -51,6 +52,7 @@ export default function Sales() {
   const setCol = (key, val) => setColFilters(f => ({ ...f, [key]: val }));
   const [showNew, setShowNew] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
+  const UNITS = useCompanyUnits(); // this company's own unit list
   const workflowTasks = useWorkflowTasks();
   const saveKey = useIdempotencyKey(); // one key per bill; reused if the save is retried
 
@@ -119,7 +121,7 @@ export default function Sales() {
       ...items[index],
       inventory_item_id: itemId,
       description: invItem.description,
-      unit: invItem.unit || 'Piece',
+      unit: invItem.unit || UNITS[0],
       unit_price: invItem.unit_selling_price || 0,
       total: (items[index].quantity || 1) * (invItem.unit_selling_price || 0),
     };
@@ -138,7 +140,7 @@ export default function Sales() {
   function addItem() {
     setForm({
       ...form,
-      items: [...form.items, { inventory_item_id: '', description: '', quantity: 1, unit: 'Piece', unit_price: 0, total: 0 }],
+      items: [...form.items, { inventory_item_id: '', description: '', quantity: 1, unit: '', unit_price: 0, total: 0 }],
     });
   }
 
@@ -185,7 +187,7 @@ export default function Sales() {
       due_date: form.due_date || null,
       invoice_number: form.invoice_number,
       payment_type: form.payment_type,
-      items: form.items,
+      items: form.items.map(i => ({ ...i, unit: i.unit || UNITS[0] })),
       work_description: form.labor_items.map(li => li.description).filter(Boolean).join('; '),
       labor_charges: totalLabor,
       is_vat: form.is_vat,

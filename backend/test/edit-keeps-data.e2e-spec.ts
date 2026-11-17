@@ -1,4 +1,4 @@
-import { createTestApp, resetDb, createCompany, loginAs, Api, TestContext, nepalToday } from './helpers/app';
+import { createTestApp, resetDb, createCompany, loginAs, Api, TestContext, nepalToday, PASSWORD } from './helpers/app';
 
 // An edit that changes one field must leave every other field alone. zod 4
 // re-applies .default()s inside .partial(), so update schemas derived from
@@ -20,7 +20,7 @@ describe('Editing one field keeps the rest', () => {
 
   it('inventory item: renaming keeps stock and prices', async () => {
     const item = (await admin.post('/api/v1/inventory', { itemName: 'Chain', quantity: 12, unit: 'SET', unitPurchasePrice: 300, unitSellingPrice: 450, lowStockThreshold: 2 })).body;
-    expect((await admin.put(`/api/v1/inventory/${item.id}`, { itemName: 'Chain 428' })).status).toBe(200);
+    expect((await admin.put(`/api/v1/inventory/${item.id}`, { itemName: 'Chain 428', password: PASSWORD })).status).toBe(200);
     const saved = await ctx.prisma.inventoryItem.findUnique({ where: { id: item.id } });
     expect([saved!.itemName, Number(saved!.quantity), saved!.unit, Number(saved!.unitPurchasePrice), Number(saved!.unitSellingPrice), Number(saved!.lowStockThreshold)])
       .toEqual(['Chain 428', 12, 'SET', 300, 450, 2]);

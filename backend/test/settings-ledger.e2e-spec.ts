@@ -107,6 +107,48 @@ describe('Settings, ledger and reports', () => {
       expect(after.debit).toBeCloseTo(after.credit, 2);
     });
 
+    describe('an unpaid (Pending) expense lands in the chosen expense account', () => {
+      const balanceOf = async (name: string) =>
+        Number(((await admin.get('/api/v1/ledger/accounts')).body as any[]).find((a) => a.accountName === name)?.currentBalance ?? 0);
+      let repairsId: string;
+      let txId: string;
+
+      beforeAll(async () => {
+        repairsId = (await admin.post('/api/v1/ledger/accounts', { accountName: 'Repairs & Maintenance', accountType: 'EXPENSE' })).body.id;
+      });
+
+      it('pending: Dr Repairs & Maintenance, Cr Accounts Payable — not Purchase Expenses', async () => {
+        const purchaseBefore = await balanceOf('Purchase Expenses');
+        const payableBefore = await balanceOf('Accounts Payable');
+        const tx = await admin.post('/api/v1/transactions', {
+          dateAd: nepalToday(), type: 'CASH', category: 'EXPENSE', status: 'PENDING', amount: 100000,
+          description: 'Bus maintenance — Ram Mechanic', debitAccountId: repairsId,
+        });
+        expect(tx.status).toBe(201);
+        txId = tx.body.id;
+        expect(await balanceOf('Repairs & Maintenance')).toBeCloseTo(100000, 2);
+        expect(await balanceOf('Purchase Expenses')).toBeCloseTo(purchaseBefore, 2);
+        expect(await balanceOf('Accounts Payable')).toBeCloseTo(payableBefore + 100000, 2);
+      });
+
+      it('paid later: stays in Repairs & Maintenance once, payable cleared, cash reduced', async () => {
+        const payableBefore = await balanceOf('Accounts Payable');
+        const cashBefore = await balanceOf('Cash in Hand');
+        expect((await admin.put(`/api/v1/transactions/${txId}`, { status: 'COMPLETED' })).status).toBe(200);
+        expect(await balanceOf('Repairs & Maintenance')).toBeCloseTo(100000, 2);
+        expect(await balanceOf('Accounts Payable')).toBeCloseTo(payableBefore - 100000, 2);
+        expect(await balanceOf('Cash in Hand')).toBeCloseTo(cashBefore - 100000, 2);
+        const t = await ledgerTotals(admin);
+        expect(t.debit).toBeCloseTo(t.credit, 2);
+      });
+
+      it('pending with no category chosen still falls back to Purchase Expenses', async () => {
+        const purchaseBefore = await balanceOf('Purchase Expenses');
+        expect((await admin.post('/api/v1/transactions', { dateAd: nepalToday(), type: 'CASH', category: 'EXPENSE', status: 'PENDING', amount: 700, description: 'Misc' })).status).toBe(201);
+        expect(await balanceOf('Purchase Expenses')).toBeCloseTo(purchaseBefore + 700, 2);
+      });
+    });
+
     it('add an account and a manual journal entry; same account on both sides is refused', async () => {
       expect((await admin.post('/api/v1/ledger/accounts', { accountType: 'EXPENSE' })).status).toBe(400);
       const util = await admin.post('/api/v1/ledger/accounts', { accountName: 'Utilities Expense', accountCode: '5999', accountType: 'EXPENSE' });

@@ -26,7 +26,7 @@ import { useRole } from "@/lib/useRole";
 import { TaskLinkSelect, TaskBadge, useWorkflowTasks } from '../components/shared/TaskLinkSelect';
 import { useIdempotencyKey } from '@/lib/useIdempotencyKey';
 
-const UNITS = ['Piece', 'Set', 'Liter', 'ml', 'Kg', 'gm', 'NOS'];
+import { useCompanyUnits } from '@/lib/useCompanyUnits';
 
 const EMPTY_FORM = {
   task_id: '', // Workflow job this record is for (optional)
@@ -37,7 +37,7 @@ const EMPTY_FORM = {
   payment_type: 'cash',
   is_vat: false,
   notes: '',
-  items: [{ description: '', quantity: 1, unit: 'Piece', unit_price: 0, total: 0 }],
+  items: [{ description: '', quantity: 1, unit: '', unit_price: 0, total: 0 }],
   labor_items: [{ description: '', amount: 0 }],
   attachments: [],
 };
@@ -54,6 +54,7 @@ export default function Purchase() {
   const [showNew, setShowNew] = useState(false);
   const [vendors, setVendors] = useState([]);
   const [form, setForm] = useState({ ...EMPTY_FORM });
+  const UNITS = useCompanyUnits(); // this company's own unit list
   const workflowTasks = useWorkflowTasks();
   const saveKey = useIdempotencyKey(); // one key per purchase; reused if the save is retried
 
@@ -103,7 +104,7 @@ export default function Purchase() {
   function addItem() {
     setForm({
       ...form,
-      items: [...form.items, { description: '', quantity: 1, unit: 'Piece', unit_price: 0, total: 0 }]
+      items: [...form.items, { description: '', quantity: 1, unit: '', unit_price: 0, total: 0 }]
     });
   }
 
@@ -146,7 +147,7 @@ export default function Purchase() {
           item_name: name,
           description: name,
           quantity: 0, // the purchase itself adds the stock
-          unit: item.unit || 'Piece',
+          unit: item.unit && item.unit !== '__custom__' ? item.unit : UNITS[0],
           unit_purchase_price: Number(item.unit_price) || 0,
         });
         byName.set(name.toLowerCase(), match);
@@ -162,7 +163,8 @@ export default function Purchase() {
     const laborTotal = form.labor_items.reduce((s, li) => s + (Number(li.amount) || 0), 0);
     const subtotal = form.items.reduce((sum, i) => sum + (i.total || 0), 0) + laborTotal;
     const vatAmount = form.is_vat ? subtotal * 0.13 : 0;
-    const items = await linkLinesToStock();
+    const items = (await linkLinesToStock())
+      .map(i => ({ ...i, unit: i.unit && i.unit !== '__custom__' ? i.unit : UNITS[0] }));
 
     await api.PurchaseOrder.create({
       company_id: companyId,
@@ -500,8 +502,8 @@ export default function Purchase() {
                       <div className="col-span-2">
                         {(!item.unit || UNITS.includes(item.unit)) ? (
                           <Select
-                            value={item.unit || 'Piece'}
-                            onValueChange={v => v === '__custom__' ? updateItem(i, 'unit', '') : updateItem(i, 'unit', v)}
+                            value={item.unit || UNITS[0]}
+                            onValueChange={v => updateItem(i, 'unit', v)}
                           >
                             <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
                             <SelectContent>
@@ -512,13 +514,13 @@ export default function Purchase() {
                         ) : (
                           <div className="flex gap-1">
                             <Input
-                              value={item.unit}
-                              onChange={e => updateItem(i, 'unit', e.target.value)}
+                              value={item.unit === '__custom__' ? '' : item.unit}
+                              onChange={e => updateItem(i, 'unit', e.target.value || '__custom__')}
                               placeholder={t('purchase.unitPlaceholder', { defaultValue: 'Unit' })}
                               className="h-8 text-xs"
                               autoFocus
                             />
-                            <Button type="button" variant="outline" size="sm" className="h-8 px-1 shrink-0 text-xs" onClick={() => updateItem(i, 'unit', 'Piece')}>↩</Button>
+                            <Button type="button" variant="outline" size="sm" className="h-8 px-1 shrink-0 text-xs" onClick={() => updateItem(i, 'unit', '')}>↩</Button>
                           </div>
                         )}
                       </div>

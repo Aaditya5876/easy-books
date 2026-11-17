@@ -8,6 +8,8 @@ export const authApi = {
   register: (data: object) => apiClient.post('/api/v1/auth/register', data),
   verifyOtp: (email: string, otp: string) => apiClient.post('/api/v1/auth/verify-otp', { email, otp }),
   resendOtp: (email: string) => apiClient.post('/api/v1/auth/resend-otp', { email }),
+  // "Enter your password to continue" prompts — 403 if wrong, 429 if locked.
+  verifyPassword: (password: string) => apiClient.post('/api/v1/auth/verify-password', { password }),
   changePassword: (currentPassword: string, newPassword: string) =>
     apiClient.post('/api/v1/auth/change-password', { currentPassword, newPassword }),
   logout: () => apiClient.post('/api/v1/auth/logout'),
@@ -204,6 +206,26 @@ export const taskApi = {
   links: (id: string) => apiClient.get(`/api/v1/tasks/${id}/links`, { params: { companyId: companyId() } }),
 };
 
+// Spaces — rooms, tables, beds, chairs… (occupy/reserve, charges, close & bill)
+export const spacesApi = {
+  list: () => apiClient.get('/api/v1/spaces', { params: { companyId: companyId() } }),
+  create: (data: object) => apiClient.post('/api/v1/spaces', { companyId: companyId(), ...data }),
+  bulk: (data: object) => apiClient.post('/api/v1/spaces/bulk', { companyId: companyId(), ...data }),
+  update: (id: string, data: object) => apiClient.put(`/api/v1/spaces/${id}`, data, { params: { companyId: companyId() } }),
+  remove: (id: string) => apiClient.delete(`/api/v1/spaces/${id}`, { params: { companyId: companyId() } }),
+  setStatus: (id: string, status: string) => apiClient.patch(`/api/v1/spaces/${id}/status`, { status }, { params: { companyId: companyId() } }),
+  start: (id: string, data: object) => apiClient.post(`/api/v1/spaces/${id}/sessions`, data, { params: { companyId: companyId() } }),
+  session: (id: string) => apiClient.get(`/api/v1/space-sessions/${id}`, { params: { companyId: companyId() } }),
+  history: (spaceId?: string) => apiClient.get('/api/v1/space-sessions', { params: { companyId: companyId(), spaceId } }),
+  checkIn: (id: string) => apiClient.post(`/api/v1/space-sessions/${id}/check-in`, {}, { params: { companyId: companyId() } }),
+  cancel: (id: string) => apiClient.post(`/api/v1/space-sessions/${id}/cancel`, {}, { params: { companyId: companyId() } }),
+  addCharge: (id: string, data: object) => apiClient.post(`/api/v1/space-sessions/${id}/charges`, data, { params: { companyId: companyId() } }),
+  removeCharge: (id: string, chargeId: string) => apiClient.delete(`/api/v1/space-sessions/${id}/charges/${chargeId}`, { params: { companyId: companyId() } }),
+  // config: { idempotencyKey } — closing makes a bill; reuse the key on retry.
+  close: (id: string, data: object, config: object = {}) =>
+    apiClient.post(`/api/v1/space-sessions/${id}/close`, data, { ...config, params: { companyId: companyId() } }),
+};
+
 // Dashboard
 export const dashboardApi = {
   // Everything the home dashboard shows, for business and school companies.
@@ -237,6 +259,14 @@ export const companyApi = {
   create: (data: object, config?: object) => apiClient.post('/api/v1/companies', data, config),
   update: (id: string, data: object) => apiClient.put(`/api/v1/companies/${id}`, data),
   getPayrollSettings: (id: string) => apiClient.get(`/api/v1/companies/${id}/payroll-settings`),
+  // Unit list (Kg, Strip, Plate…) — every member reads it; the company's ADMIN edits it.
+  getUnits: (id: string) => apiClient.get(`/api/v1/companies/${id}/units`),
+  setUnits: (id: string, units: string[]) => apiClient.put(`/api/v1/companies/${id}/units`, { units }),
+  // Custom item fields (Size, Colour…) — members read; the company's ADMIN edits.
+  getItemFields: (id: string) => apiClient.get(`/api/v1/companies/${id}/item-fields`),
+  setItemFields: (id: string, fields: object[]) => apiClient.put(`/api/v1/companies/${id}/item-fields`, { fields }),
+  // SUPER_ADMIN — default unit list per business type, for the create-client form.
+  unitPresets: () => apiClient.get('/api/v1/companies/unit-presets'),
   upsertPayrollSettings: (id: string, data: object) => apiClient.patch(`/api/v1/companies/${id}/payroll-settings`, data),
   // SUPER_ADMIN only — sets which package (Base/Standard/Premium) a company is on.
   updatePackage: (id: string, enabledModules: string[]) => apiClient.patch(`/api/v1/companies/${id}/package`, { enabledModules }),

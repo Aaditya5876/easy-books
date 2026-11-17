@@ -849,18 +849,29 @@ export default function Transactions() {
 
               {/* Party Name */}
               <div className="relative">
-                <Label className="text-xs font-medium">{t('transactions.partyName', { defaultValue: 'Party Name' })}</Label>
+                <Label className="text-xs font-medium">
+                  {form.account_type === 'expense'
+                    ? t('transactions.expenseCategory', { defaultValue: 'Expense Name (what was it for?)' })
+                    : t('transactions.partyName', { defaultValue: 'Party Name' })}
+                </Label>
                 <div className="relative mt-1">
                   <User className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
                   <Input
                     className="pl-8 h-9 text-sm"
-                    placeholder={t('transactions.partyNamePlaceholder', { defaultValue: 'Vendor, customer, or party (optional)' })}
+                    placeholder={form.account_type === 'expense'
+                      ? t('transactions.expenseCategoryPlaceholder', { defaultValue: 'e.g. Repairs & Maintenance, Electricity, Rent' })
+                      : t('transactions.partyNamePlaceholder', { defaultValue: 'Vendor, customer, or party (optional)' })}
                     value={form.party_name}
                     onChange={e => setForm({ ...form, party_name: e.target.value })}
                     onFocus={() => setShowPartySuggestions(true)}
                     onBlur={() => setTimeout(() => setShowPartySuggestions(false), 150)}
                   />
                 </div>
+                {form.account_type === 'expense' && (
+                  <p className="text-[11px] text-muted-foreground mt-1">
+                    {t('transactions.expenseCategoryHint', { defaultValue: "Write the kind of expense, not the person's name — put who you paid in the Description." })}
+                  </p>
+                )}
                 {showPartySuggestions && partySuggestions.length > 0 && (
                   <div className="absolute z-10 mt-1 w-full rounded-md border border-input bg-background shadow-md max-h-48 overflow-y-auto">
                     {partySuggestions.map(a => {
@@ -901,7 +912,7 @@ export default function Transactions() {
                     {t('transactions.pendingNotePrefix', { defaultValue: 'Recorded as' })} <strong>{statusLabels.pending}</strong>{' — '}
                     {form.category === 'income'
                       ? t('transactions.pendingNoteIncome', { defaultValue: "Cash/Bank won't move yet. Instead this posts to Accounts Receivable as money expected, until it's marked Completed (e.g. the cheque clears or payment is received)." })
-                      : t('transactions.pendingNoteExpense', { defaultValue: "Cash/Bank won't move yet. Instead this posts to Accounts Payable as money owed, until it's marked Completed (e.g. the cheque clears or payment is received)." })}
+                      : t('transactions.pendingNoteExpense', { defaultValue: "Cash/Bank won't move yet. The expense is recorded now under its name, and the amount is shown in Accounts Payable as money owed until it's marked Completed (e.g. the cheque clears or payment is made)." })}
                   </p>
                 )}
               </div>

@@ -50,7 +50,7 @@ export class DashboardOverviewService {
       this.prisma.bankAccount.findMany({ where: { companyId }, select: { id: true, bankName: true, accountNumber: true, paymentType: true, currentBalance: true }, orderBy: { bankName: 'asc' } }),
       this.prisma.inventoryItem.findMany({
         where: { companyId, deletedAt: null },
-        select: { id: true, itemName: true, partNumber: true, quantity: true, unit: true, unitPurchasePrice: true, unitSellingPrice: true, lowStockThreshold: true, createdAt: true },
+        select: { id: true, itemName: true, partNumber: true, quantity: true, unit: true, unitPurchasePrice: true, unitSellingPrice: true, lowStockThreshold: true, createdAt: true, batchNo: true, expiryDate: true, expiryAlertDays: true },
       }),
       this.prisma.salesOrderItem.findMany({
         where: { salesOrder: { companyId, deletedAt: null, dateAd: fy } },
@@ -176,6 +176,23 @@ export class DashboardOverviewService {
       aging[idx].value += n(i.quantity) * n(i.unitPurchasePrice);
     }
 
+    // Expired, or expiring within the item's own alert window (default 30
+    // days). Date-only comparison in UTC, the way expiry dates are stored.
+    const todayUtc = Date.parse(new Date().toISOString().slice(0, 10));
+    const expiring = inventory
+      .filter((i) => i.expiryDate && n(i.quantity) > 0)
+      .map((i) => {
+        const daysLeft = Math.round((Date.parse(i.expiryDate!.toISOString().slice(0, 10)) - todayUtc) / 86_400_000);
+        return { i, daysLeft, window: i.expiryAlertDays ?? 30 };
+      })
+      .filter((x) => x.daysLeft <= x.window)
+      .sort((a, b) => a.daysLeft - b.daysLeft)
+      .slice(0, 25)
+      .map(({ i, daysLeft }) => ({
+        id: i.id, name: itemName(i), batchNo: i.batchNo, expiryDate: i.expiryDate, daysLeft, expired: daysLeft < 0,
+        quantity: n(i.quantity), unit: i.unit,
+      }));
+
     // ── Quotations by remark ───────────────────────────────────────────────
     const byRemark = Object.fromEntries(QUOTATION_REMARKS.map((r) => [r, { count: 0, amount: 0 }])) as Record<string, { count: number; amount: number }>;
     for (const q of quotations) {
@@ -291,6 +308,7 @@ export class DashboardOverviewService {
           .slice(0, 10)
           .map((r) => ({ ...r, amount: round(r.amount) })),
         aging: aging.map((a) => ({ ...a, value: round(a.value) })),
+        expiring,
       },
       quotations: {
         total: quotations.length,
