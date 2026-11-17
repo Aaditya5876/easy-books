@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../../../core/db/psql/prisma.client';
 import { MODULE_KEYS, ModuleKey } from '../../../core/modules/module-keys';
+import { defaultUnitsFor, normalizeUnits, normalizeItemFields } from '@easy-books/shared';
 import { NotificationServiceImpl } from './notification.service.impl';
 
 // Every role a company can have besides SUPER_ADMIN (who never belongs to a
@@ -79,7 +80,9 @@ export class CompanyServiceImpl {
       }
     }
 
-    const company = await this.prisma.company.create({ data });
+    const company = await this.prisma.company.create({
+      data: { ...data, units: data?.units?.length ? normalizeUnits(data.units) : defaultUnitsFor(data?.businessType) },
+    });
     if (userId) {
       const existingDefault = await this.prisma.userCompany.findFirst({
         where: { userId, isDefault: true },
@@ -93,6 +96,41 @@ export class CompanyServiceImpl {
       });
     }
     return company;
+  }
+
+  // ── Units ─────────────────────────────────────────────────────────────────
+  // Stored list, or the business type's defaults for companies that never
+  // set one (everything created before units existed).
+  async getUnits(id: string, userId: string, role: string) {
+    await this.assertMembership(id, userId, role);
+    const company = await this.prisma.company.findUnique({ where: { id }, select: { units: true, businessType: true } });
+    if (!company) throw new NotFoundException('Company not found');
+    const custom = company.units.length > 0;
+    return { units: custom ? company.units : defaultUnitsFor(company.businessType), isDefault: !custom };
+  }
+
+  async setUnits(id: string, units: string[], userId: string, role: string) {
+    await this.assertMembership(id, userId, role);
+    const clean = normalizeUnits(units);
+    if (clean.length === 0) throw new BadRequestException('Keep at least one unit');
+    const company = await this.prisma.company.update({ where: { id }, data: { units: clean }, select: { units: true } });
+    return { units: company.units, isDefault: false };
+  }
+
+  // ── Custom item fields ──────────────────────────────────────────────────
+  async getItemFields(id: string, userId: string, role: string) {
+    await this.assertMembership(id, userId, role);
+    const company = await this.prisma.company.findUnique({ where: { id }, select: { itemFields: true } });
+    if (!company) throw new NotFoundException('Company not found');
+    return { fields: Array.isArray(company.itemFields) ? company.itemFields : [] };
+  }
+
+  // Removing a field hides it; values already saved on items are kept.
+  async setItemFields(id: string, fields: Parameters<typeof normalizeItemFields>[0], userId: string, role: string) {
+    await this.assertMembership(id, userId, role);
+    const clean = normalizeItemFields(fields);
+    await this.prisma.company.update({ where: { id }, data: { itemFields: clean as any } });
+    return { fields: clean };
   }
 
   private static readonly EDITABLE_FIELDS = [

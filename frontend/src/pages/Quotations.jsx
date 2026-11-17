@@ -27,7 +27,7 @@ import { useRole } from "@/lib/useRole";
 import { TaskLinkSelect, TaskBadge, useWorkflowTasks } from '../components/shared/TaskLinkSelect';
 import { QUOTATION_REMARKS, toQuotationPayload, quotationToForm } from '@/lib/quotations';
 
-const UNITS = ['Piece', 'Set', 'Liter', 'ml', 'Kg', 'gm', 'NOS'];
+import { useCompanyUnits, unitOptions } from '@/lib/useCompanyUnits';
 // Status = ACTIVE / CONVERTED (billed) / EXPIRED; remark = where the work stands.
 // These are the backend's values — the page used to send its own
 // (pending/sent/accepted…), which the API rejected.
@@ -50,7 +50,7 @@ const EMPTY_FORM = {
   quotation_number: '', is_vat: false, payment_type: 'cash',
   date_ad: new Date().toISOString().split('T')[0],
   valid_until: '', remark: 'QUOTED', notes: '',
-  items: [{ description: '', quantity: 1, unit: 'Piece', unit_price: 0, total: 0 }],
+  items: [{ description: '', quantity: 1, unit: '', unit_price: 0, total: 0 }],
   labor_items: [{ description: '', amount: 0 }],
 };
 
@@ -67,6 +67,9 @@ export default function Quotations() {
   const [showNew, setShowNew] = useState(false);
   const [converting, setConverting] = useState(null);
   const [form, setForm] = useState(EMPTY_FORM);
+  const UNITS = useCompanyUnits(); // this company's own unit list
+  // Blank unit = the company's first unit.
+  const withUnits = (f) => ({ ...f, items: f.items.map(i => ({ ...i, unit: i.unit || UNITS[0] })) });
   const workflowTasks = useWorkflowTasks();
   const [editQuotation, setEditQuotation] = useState(null);
 
@@ -184,7 +187,7 @@ export default function Quotations() {
   }
 
   function addItem() {
-    setForm({ ...form, items: [...form.items, { description: '', quantity: 1, unit: 'Piece', unit_price: 0, total: 0 }] });
+    setForm({ ...form, items: [...form.items, { description: '', quantity: 1, unit: '', unit_price: 0, total: 0 }] });
   }
 
   function removeItem(index) {
@@ -231,7 +234,7 @@ export default function Quotations() {
   }
 
   function addEditItem() {
-    setEditQuotation({ ...editQuotation, items: [...editQuotation.items, { description: '', quantity: 1, unit: 'Piece', unit_price: 0, total: 0 }] });
+    setEditQuotation({ ...editQuotation, items: [...editQuotation.items, { description: '', quantity: 1, unit: '', unit_price: 0, total: 0 }] });
   }
 
   function removeEditItem(index) {
@@ -258,7 +261,7 @@ export default function Quotations() {
   // Totals are recomputed by the server; the page only previews them.
   async function createQuotation() {
     try {
-      await quotationApi.create({ companyId, ...toQuotationPayload(form) });
+      await quotationApi.create({ companyId, ...toQuotationPayload(withUnits(form)) });
       setShowNew(false);
       loadData();
     } catch (e) {
@@ -269,7 +272,7 @@ export default function Quotations() {
   async function updateQuotation() {
     if (!editQuotation) return;
     try {
-      await quotationApi.update(editQuotation.id, toQuotationPayload(editQuotation, { isEdit: true, converted: editQuotation.status === 'CONVERTED' }));
+      await quotationApi.update(editQuotation.id, toQuotationPayload(withUnits(editQuotation), { isEdit: true, converted: editQuotation.status === 'CONVERTED' }));
       setEditQuotation(null);
       loadData();
     } catch (e) {
@@ -510,9 +513,9 @@ export default function Quotations() {
                   </div>
                   <div style={{ width: 90 }}>
                     {idx === 0 && <Label className="text-xs">{t('quotations.unit', { defaultValue: 'Unit' })}</Label>}
-                    <Select value={item.unit || 'Piece'} onValueChange={v => onUpdateItem(idx, 'unit', v)}>
+                    <Select value={item.unit || UNITS[0]} onValueChange={v => onUpdateItem(idx, 'unit', v)}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>{UNITS.map(u => <SelectItem key={u} value={u}>{unitLabel(u)}</SelectItem>)}</SelectContent>
+                      <SelectContent>{unitOptions(UNITS, item.unit).map(u => <SelectItem key={u} value={u}>{unitLabel(u)}</SelectItem>)}</SelectContent>
                     </Select>
                   </div>
                   <div style={{ width: 100 }}>

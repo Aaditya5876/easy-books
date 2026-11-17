@@ -36,6 +36,7 @@ import Payroll from './pages/Payroll';
 import Quotations from './pages/Quotations';
 import Reports from './pages/Reports';
 import Workflow from './pages/Workflow';
+import Spaces from './pages/Spaces';
 import MyAttendance from './pages/MyAttendance';
 import MyLeave from './pages/MyLeave';
 import SchoolDashboard from './pages/school/SchoolDashboard';
@@ -186,6 +187,7 @@ const AuthenticatedApp = () => {
             <Route path="/payroll" element={<Payroll />} />
             <Route path="/reports" element={<Reports />} />
             <Route path="/workflow" element={<Workflow />} />
+            <Route path="/spaces" element={<Spaces />} />
             <Route path="/help" element={<HelpGuide />} />
           </>
         )}

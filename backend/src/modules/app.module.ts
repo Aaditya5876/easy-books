@@ -36,6 +36,7 @@ import { ClientModule } from './business/client.module';
 import { VendorModule } from './business/vendor.module';
 import { QuotationModule } from './business/quotation.module';
 import { TaskModule } from './business/task.module';
+import { SpaceModule } from './business/space.module';
 import { SchoolModule } from './school/school.module';
 import { PortalModule } from './school/portal.module';
 import { DashboardModule } from './platform/dashboard.module';
@@ -80,6 +81,7 @@ import { PrismaService } from '../../core/db/psql/prisma.client';
     QuotationModule,
     MemoModule,
     TaskModule,
+    SpaceModule,
     UserModule,
     DashboardModule,
     NotificationModule,

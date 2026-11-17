@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
 import { api, apiAuth } from '@/api/adapter';
-import { inventoryApi, uploadApi } from '@/api';
+import { inventoryApi, uploadApi, authApi } from '@/api';
 import { fileUrl } from '@/lib/fileUrl';
 import { getActiveCompanyId } from '@/lib/companyContext';
 import { adToBs } from '@/lib/nepaliDate';
@@ -30,18 +30,19 @@ import PageLoader from '../components/PageLoader';
 import EmptyState from '../components/EmptyState';
 import { useRole } from "@/lib/useRole";
 
-const UNITS = ['Piece', 'Set', 'Liter', 'ml', 'Kg', 'gm', 'NOS'];
+import { useCompanyUnits } from '@/lib/useCompanyUnits';
+import ItemExtraFields, { useItemFields, extraFieldsPayload, ExpiryTag } from '@/components/inventory/ItemExtraFields';
 
 // Which optional field groups to show per business type
 const FIELDS = {
-  RETAIL:       { brand: false, modelNo: false, application: false, expiry: false, aging: false, location: true },
-  PHARMACY:     { brand: true,  modelNo: false, application: true,  expiry: true,  aging: false, location: true },
+  RETAIL:       { brand: false, modelNo: false, application: false, expiry: true,  batch: false, aging: false, location: true },
+  PHARMACY:     { brand: true,  modelNo: false, application: true,  expiry: true,  batch: true,  aging: false, location: true },
   ELECTRONICS:  { brand: true,  modelNo: true,  application: false, expiry: false, aging: true,  location: true },
-  FOOD_BEVERAGE:{ brand: false, modelNo: false, application: false, expiry: true,  aging: false, location: false },
+  FOOD_BEVERAGE:{ brand: false, modelNo: false, application: false, expiry: true,  batch: true,  aging: false, location: false },
   SERVICES:     { brand: false, modelNo: false, application: false, expiry: false, aging: false, location: false },
-  MANUFACTURING:{ brand: true,  modelNo: true,  application: true,  expiry: false, aging: true,  location: true },
+  MANUFACTURING:{ brand: true,  modelNo: true,  application: true,  expiry: false, batch: true,  aging: true,  location: true },
   SCHOOL:       { brand: false, modelNo: false, application: false, expiry: false, aging: false, location: true },
-  OTHER:        { brand: true,  modelNo: true,  application: true,  expiry: true,  aging: true,  location: true },
+  OTHER:        { brand: true,  modelNo: true,  application: true,  expiry: true,  batch: true,  aging: true,  location: true },
 };
 
 function getFields(businessType) {
@@ -134,9 +135,10 @@ function getPlaceholders(t, businessType) {
 
 const EMPTY_FORM = {
   item_name: '', brand: '', model_no: '', description: '', application: '',
-  quantity: '', unit: 'Piece', unit_purchase_price: '', unit_selling_price: '',
+  quantity: '', unit: '', // '' = the company's first unit unit_purchase_price: '', unit_selling_price: '',
   stock_location: '', low_stock_threshold: '5', aging_days: '90',
   supplier_name: '', image_url: '', expiry_date: '', expiry_alert_days: '',
+  batch_no: '', custom_fields: {},
 };
 
 export default function Inventory() {
@@ -152,6 +154,8 @@ export default function Inventory() {
   const [showAdd, setShowAdd] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
+  const UNITS = useCompanyUnits(); // this company's own unit list
+  const itemFieldDefs = useItemFields(); // the company's own extra fields (Size, Colour…)
   const [uploadingImage, setUploadingImage] = useState(false);
   const [selectedItem, setSelectedItem] = useState(null);
   const [showPasswordDialog, setShowPasswordDialog] = useState(false);
@@ -162,6 +166,7 @@ export default function Inventory() {
   const [uploadingUpdateImage, setUploadingUpdateImage] = useState(false);
   const [showUpdatePasswordDialog, setShowUpdatePasswordDialog] = useState(false);
   const [updatePassword, setUpdatePassword] = useState('');
+  const [confirmedPassword, setConfirmedPassword] = useState(''); // sent with the save; cleared when the dialog closes
   const [showAdjustDialog, setShowAdjustDialog] = useState(false);
   const [adjForm, setAdjForm] = useState({ type: 'ADDITION', quantity: '', reason: '' });
   const [adjSubmitting, setAdjSubmitting] = useState(false);
@@ -230,18 +235,28 @@ export default function Inventory() {
       unit_purchase_price: selectedItem.unit_purchase_price || 0,
       stock_location: selectedItem.stock_location || '',
       image_url: selectedItem.image_url || '',
+      batch_no: selectedItem.batch_no || '',
+      expiry_date: selectedItem.expiry_date ? String(selectedItem.expiry_date).slice(0, 10) : '',
+      expiry_alert_days: selectedItem.expiry_alert_days ?? '',
+      custom_fields: selectedItem.custom_fields || {},
     });
     setShowUpdatePasswordDialog(true);
   };
 
+  // The password is really checked by the server (it used to only check that
+  // someone was logged in), and sent again with the save, which the server
+  // also refuses without it.
   const handleUpdatePasswordSubmit = async () => {
+    if (!updatePassword) return;
     try {
-      await apiAuth.me();
+      await authApi.verifyPassword(updatePassword);
+      setConfirmedPassword(updatePassword);
       setShowUpdatePasswordDialog(false);
       setUpdatePassword('');
       setShowUpdateDialog(true);
-    } catch {
-      toast.error(t('inventory.invalidPasswordAlert', { defaultValue: 'Invalid password or authentication failed' }));
+    } catch (e) {
+      const m = e?.response?.data?.message;
+      toast.error(typeof m === 'string' ? m : t('inventory.invalidPasswordAlert', { defaultValue: 'Invalid password or authentication failed' }));
       setUpdatePassword('');
     }
   };
@@ -268,8 +283,16 @@ export default function Inventory() {
     if (updateForm.unit_purchase_price !== '') payload.unit_purchase_price = updateForm.unit_purchase_price;
     if (updateForm.stock_location) payload.stock_location = updateForm.stock_location;
     if (updateForm.image_url) payload.image_url = updateForm.image_url;
+    Object.assign(payload, extraFieldsPayload(updateForm, itemFieldDefs));
+    payload.password = confirmedPassword;
     if (Object.keys(payload).length === 0) { toast.error(t('inventory.updateAtLeastOneFieldAlert', { defaultValue: 'Update at least one field before saving.' })); return; }
-    await api.InventoryItem.update(selectedItem.id, payload);
+    try {
+      await api.InventoryItem.update(selectedItem.id, payload);
+    } catch (e) {
+      toast.error(e?.response?.data?.message || t('inventory.saveFailed', { defaultValue: 'Could not save the item.' }));
+      return;
+    }
+    setConfirmedPassword('');
     setShowUpdateDialog(false);
     setSelectedItem(null);
     loadItems();
@@ -327,6 +350,7 @@ export default function Inventory() {
     await api.InventoryItem.create({
       ...form,
       company_id: companyId,
+      unit: form.unit && form.unit !== '__custom__' ? form.unit.trim() : UNITS[0],
       date_of_purchase: today,
       date_of_purchase_bs: bsDate.formatted,
       quantity: form.quantity === '' ? 0 : parseFloat(form.quantity),
@@ -335,6 +359,7 @@ export default function Inventory() {
       low_stock_threshold: form.low_stock_threshold === '' ? 5 : parseInt(form.low_stock_threshold),
       aging_days: form.aging_days === '' ? 90 : parseInt(form.aging_days),
       expiry_alert_days: form.expiry_alert_days === '' ? null : parseInt(form.expiry_alert_days),
+      ...extraFieldsPayload(form, itemFieldDefs),
     });
     setForm(EMPTY_FORM);
     setShowAdd(false);
@@ -358,6 +383,11 @@ export default function Inventory() {
 
   const columns = [
     { key: 'item_name', label: t('inventory.colName', { defaultValue: 'Name' }), render: (row) => <span className="font-medium max-w-[200px] truncate block">{row.item_name || '—'}</span> },
+    // Expired / expiring soon (pharmacy, food…), and the company's own fields marked "show in list".
+    ...(f.expiry || f.batch ? [{ key: 'expiry_date', label: t('inventory.colExpiry', { defaultValue: 'Expiry' }), render: (row) => row.expiry_date ? (
+      <span className="whitespace-nowrap text-xs">{String(row.expiry_date).slice(0, 10)}{row.batch_no ? <span className="text-muted-foreground"> · {row.batch_no}</span> : null}<ExpiryTag expiryDate={row.expiry_date} alertDays={row.expiry_alert_days} /></span>
+    ) : <span className="text-muted-foreground">—</span> }] : []),
+    ...itemFieldDefs.filter(d => d.showInList).map(d => ({ key: `cf_${d.key}`, label: d.label, render: (row) => row.custom_fields?.[d.key] ?? <span className="text-muted-foreground">—</span> })),
     ...(f.brand ? [{ key: 'brand', label: t('inventory.colBrand', { defaultValue: 'Brand' }) }] : []),
     ...(f.modelNo ? [{ key: 'model_no', label: t('inventory.colModelNo', { defaultValue: 'Model No.' }) }] : []),
     { key: 'description', label: t('inventory.colDetails', { defaultValue: 'Details' }), render: (row) => <span className="max-w-[200px] truncate block text-sm">{row.description || '—'}</span> },
@@ -483,7 +513,7 @@ export default function Inventory() {
       </Dialog>
 
       {/* Update Price/Location/Image Dialog */}
-      <Dialog open={showUpdateDialog} onOpenChange={setShowUpdateDialog}>
+      <Dialog open={showUpdateDialog} onOpenChange={(o) => { setShowUpdateDialog(o); if (!o) setConfirmedPassword(''); }}>
         <DialogContent className="glass-dialog max-w-lg overflow-hidden">
           <div className="h-1 bg-gradient-to-r from-cyan-400 to-sky-500 -mx-6 -mt-6 mb-4" />
           <DialogHeader>
@@ -572,9 +602,10 @@ export default function Inventory() {
                 </div>
               </div>
             )}
+            <ItemExtraFields form={updateForm} setForm={setUpdateForm} showBatch={f.batch} showExpiry={f.expiry} defs={itemFieldDefs} />
           </motion.div>
           <DialogFooter className="border-t pt-4">
-            <Button variant="outline" onClick={() => setShowUpdateDialog(false)}>{t('inventory.cancel', { defaultValue: 'Cancel' })}</Button>
+            <Button variant="outline" onClick={() => { setShowUpdateDialog(false); setConfirmedPassword(''); }}>{t('inventory.cancel', { defaultValue: 'Cancel' })}</Button>
             <Button onClick={handleUpdateSubmit} className="gap-2"><Tag className="w-4 h-4" />{t('inventory.saveChanges', { defaultValue: 'Save Changes' })}</Button>
           </DialogFooter>
         </DialogContent>
@@ -923,7 +954,7 @@ export default function Inventory() {
                 <div>
                   <Label className="text-sm">{t('inventory.unit', { defaultValue: 'Unit' })}</Label>
                   {!form.unit || UNITS.includes(form.unit) ? (
-                    <Select value={form.unit} onValueChange={v => setForm({ ...form, unit: v === '__custom__' ? '__custom__' : v })}>
+                    <Select value={form.unit || UNITS[0]} onValueChange={v => setForm({ ...form, unit: v === '__custom__' ? '__custom__' : v })}>
                       <SelectTrigger className="mt-1 h-9 text-sm"><SelectValue placeholder={t('inventory.selectUnit', { defaultValue: 'Select unit' })} /></SelectTrigger>
                       <SelectContent>
                         {UNITS.map(u => <SelectItem key={u} value={u}>{t(`inventory.unit${u}`, { defaultValue: u })}</SelectItem>)}
@@ -934,7 +965,7 @@ export default function Inventory() {
                     <div className="flex gap-2 mt-1">
                       <Input value={form.unit === '__custom__' ? '' : form.unit}
                         onChange={e => setForm({ ...form, unit: e.target.value })} placeholder={t('inventory.customUnit', { defaultValue: 'Custom unit' })} autoFocus className="h-9 text-sm" />
-                      <Button type="button" variant="outline" size="sm" onClick={() => setForm({ ...form, unit: 'Piece' })}>↩</Button>
+                      <Button type="button" variant="outline" size="sm" onClick={() => setForm({ ...form, unit: '' })}>↩</Button>
                     </div>
                   )}
                 </div>
@@ -1005,6 +1036,13 @@ export default function Inventory() {
                         placeholder={t('inventory.placeholderShelfLocation', { defaultValue: 'e.g. Shelf A-3' })}
                       />
                     </div>
+                  </div>
+                )}
+
+                {/* Batch + the company's own item fields */}
+                {(f.batch || itemFieldDefs.length > 0) && (
+                  <div className="col-span-full">
+                    <ItemExtraFields form={form} setForm={setForm} showBatch={f.batch} showExpiry={false} defs={itemFieldDefs} />
                   </div>
                 )}
 

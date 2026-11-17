@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../core/db/psql/prisma.client';
 import { assertTaskLink } from '../../../core/utils/task-link';
 import { LedgerPostingService } from './ledger-posting.service';
@@ -72,7 +73,10 @@ export class SalesServiceImpl {
     return order;
   }
 
-  async create(dto: CreateSalesOrderInput) {
+  // `inTx` runs inside the bill's own transaction, after the ledger posting —
+  // callers that must change something together with the bill (closing a
+  // Space) do it there, so both happen or neither does.
+  async create(dto: CreateSalesOrderInput, inTx?: (tx: Prisma.TransactionClient, order: { id: string; totalAmount: unknown }) => Promise<void>) {
     const { companyId, items, isVat, laborCharges = 0, ...rest } = dto;
 
     if (!items || items.length === 0) throw new BadRequestException('Order must have at least one item');
@@ -152,9 +156,10 @@ export class SalesServiceImpl {
       // Ledger in the same transaction: a bill without its ledger entries (or
       // entries without a bill) can never be left behind.
       await this.ledgerPosting.postSalesOrder(companyId, created.id, tx);
+      if (inTx) await inTx(tx, created);
 
       return created;
-    });
+    }, { timeout: 15000 });
 
     return order;
   }

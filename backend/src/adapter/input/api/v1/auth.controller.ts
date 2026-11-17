@@ -19,13 +19,29 @@ import { LoginSchema, RegisterSchema, LoginDTO, RegisterDTO } from '@easy-books/
 import { IAuthService, AUTH_SERVICE } from '../../../../domain/services/auth.service';
 import { ZodValidationPipe } from '../../../../modules/pipes/zod-validation.pipe';
 import { Public } from '../../../../modules/decorators/public.decorator';
+import { PrismaService } from '../../../../../core/db/psql/prisma.client';
+import { confirmPassword } from '../../../../../core/utils/password-confirm';
 
 @ApiTags('Auth')
 @SkipThrottle()
 @NoCompanyScope()
 @Controller('api/v1/auth')
 export class AuthController {
-  constructor(@Inject(AUTH_SERVICE) private readonly authService: IAuthService) {}
+  constructor(
+    @Inject(AUTH_SERVICE) private readonly authService: IAuthService,
+    private readonly prisma: PrismaService,
+  ) {}
+
+  // "Enter your password to continue" prompts: checks the logged-in user's
+  // own password, with the login lockout (5 wrong → 15 min). 403 when wrong.
+  @Post('verify-password')
+  @HttpCode(HttpStatus.OK)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: "Re-confirm the logged-in user's password" })
+  async verifyPassword(@Req() req: any, @Body('password') password: string) {
+    await confirmPassword(this.prisma, req.user.sub, password);
+    return { valid: true };
+  }
 
   // Self-registration is switched off — every client is onboarded by
   // GeoInfosys (UserServiceImpl.provisionClient, SUPER_ADMIN-only), and every

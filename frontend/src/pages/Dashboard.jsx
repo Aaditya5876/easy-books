@@ -395,6 +395,26 @@ function Overview() {
             )}
           </div>
         </div>
+        {inventory.expiring?.length > 0 && (
+          <div className="mt-5">
+            <p className="mb-2 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+              <AlertCircle className="h-3.5 w-3.5 text-amber-500" />{t('bizDashboard.expiringItems', { defaultValue: 'Expired or expiring soon' })}
+            </p>
+            <div className="max-h-56 divide-y divide-border overflow-y-auto rounded-lg border border-border">
+              {inventory.expiring.map((e) => (
+                <div key={e.id} className={cn('flex items-center justify-between gap-2 px-3 py-2 text-xs', e.expired && 'bg-red-50 dark:bg-red-950/30')}>
+                  <span className="truncate"><span className="font-medium">{e.name}</span>{e.batchNo ? <span className="text-muted-foreground"> · {e.batchNo}</span> : null}<span className="text-muted-foreground"> · {fmt(e.quantity)} {e.unit}</span></span>
+                  <span className={cn('shrink-0 font-medium', e.expired ? 'text-red-600' : 'text-amber-700 dark:text-amber-400')}>
+                    {e.expired
+                      ? t('bizDashboard.expiredDaysAgo', { defaultValue: 'Expired {{n}}d ago', n: Math.abs(e.daysLeft) })
+                      : t('bizDashboard.expiresInDays', { defaultValue: 'Expires in {{n}}d', n: e.daysLeft })}
+                    <span className="ml-2 font-normal text-muted-foreground">{fmtDate(e.expiryDate)}</span>
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
         <div className="mt-5 grid gap-5 lg:grid-cols-3">
           <div>
             <p className="mb-2 text-xs font-medium text-muted-foreground">{t('bizDashboard.inventoryAging', { defaultValue: 'Inventory aging (days since last purchase)' })}</p>

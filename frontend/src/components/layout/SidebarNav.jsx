@@ -5,7 +5,7 @@ import {
   Package, ShoppingCart, Receipt, FileText, MessageSquare,
   FileSpreadsheet, CalendarCheck, Banknote,
   ChevronLeft, ChevronRight, ChevronDown, ClipboardList, BarChart2,
-  Kanban, UserCircle, Settings, Shield,
+  Kanban, BedDouble, UserCircle, Settings, Shield,
   GraduationCap, School, BookMarked, DollarSign, Trophy,
   Megaphone, CalendarDays, CalendarCheck2,
   FolderOpen, Library, Home, Bus, Fingerprint, LifeBuoy
@@ -52,6 +52,8 @@ const navSections = [
       { icon: ShoppingCart, label: 'Purchase', path: '/purchase' },
       { icon: Receipt, label: 'Sales', path: '/sales' },
       { icon: ClipboardList, label: 'Quotations', path: '/quotations' },
+      // Rooms / tables / beds — occupy, charges, close & bill.
+      { icon: BedDouble, label: 'Spaces', path: '/spaces' },
     ]
   },
   {

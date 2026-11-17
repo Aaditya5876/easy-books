@@ -13,6 +13,10 @@ import { usePreferences } from '@/lib/PreferencesContext';
 import { getActiveCompanyId, setActiveCompanyId } from '@/lib/companyContext';
 import { confirm, alertPopup } from '@/lib/confirm';
 import PageHeader from '../components/shared/PageHeader';
+import UnitListEditor from '../components/shared/UnitListEditor';
+import CompanyUnitsCard from '../components/settings/CompanyUnitsCard';
+import ItemFieldsCard from '../components/settings/ItemFieldsCard';
+import { defaultUnitsFor } from '@easy-books/shared';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SmartNumberInput } from "@/components/ui/smart-number-input";
@@ -1051,6 +1055,7 @@ export default function Settings() {
         adminName: provisionForm.adminName,
         adminEmail: provisionForm.adminEmail,
         enabledModules: businessType === 'SCHOOL' ? ['BASE'] : [],
+        ...(businessType !== 'SCHOOL' && provisionForm.units?.length ? { units: provisionForm.units } : {}),
       });
       if (res.data.emailSent) {
         toast.success(t('settings.clientCreatedEmailed', { defaultValue: 'Client created — login details emailed to {{email}}', email: provisionForm.adminEmail }));
@@ -1060,7 +1065,7 @@ export default function Settings() {
         toast.error(t('settings.clientCreatedEmailFailed', { defaultValue: 'Client created, but the invite email failed to send — share this password manually' }));
         setTempPassword(res.data.tempPassword);
       }
-      setProvisionForm({ companyName: '', product: 'SCHOOL', businessType: '', otherBusinessDesc: '', adminName: '', adminEmail: '' });
+      setProvisionForm({ companyName: '', product: 'SCHOOL', businessType: '', otherBusinessDesc: '', adminName: '', adminEmail: '', units: [] });
       loadCompanies();
       loadAllClients();
     } catch (err) {
@@ -1083,8 +1088,10 @@ export default function Settings() {
       } else {
         setBinPasswordError(t('settings.binIncorrectPassword', { defaultValue: 'Incorrect password.' }));
       }
-    } catch {
-      setBinPasswordError(t('settings.binIncorrectPassword', { defaultValue: 'Incorrect password.' }));
+    } catch (e) {
+      // 403 = wrong password; 429 = locked after too many tries (server's message says for how long).
+      const m = e?.response?.status === 429 ? e.response.data?.message : null;
+      setBinPasswordError(typeof m === 'string' ? m : t('settings.binIncorrectPassword', { defaultValue: 'Incorrect password.' }));
     } finally {
       setBinVerifying(false);
     }
@@ -1640,7 +1647,7 @@ export default function Settings() {
                       required
                       className="w-full border rounded-md px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring"
                       value={provisionForm.businessType}
-                      onChange={e => setProvisionForm(f => ({ ...f, businessType: e.target.value, otherBusinessDesc: '' }))}
+                      onChange={e => setProvisionForm(f => ({ ...f, businessType: e.target.value, otherBusinessDesc: '', units: e.target.value ? defaultUnitsFor(e.target.value) : [] }))}
                     >
                       <option value="">{t('auth.selectBusinessTypeEllipsis', { defaultValue: 'Select business type…' })}</option>
                       {BUSINESS_TYPES.map(bt => (
@@ -1655,6 +1662,13 @@ export default function Settings() {
                         onChange={e => setProvisionForm(f => ({ ...f, otherBusinessDesc: e.target.value }))}
                         autoFocus
                       />
+                    )}
+                    {provisionForm.businessType && (
+                      <div className="space-y-1.5 pt-2">
+                        <Label>{t('units.clientUnitsLabel', { defaultValue: 'Units for this business' })}</Label>
+                        <p className="text-xs text-muted-foreground">{t('units.clientUnitsHint', { defaultValue: 'Pre-filled for the business type — add or remove as needed. The client\'s admin can change these later.' })}</p>
+                        <UnitListEditor units={provisionForm.units || []} onChange={units => setProvisionForm(f => ({ ...f, units }))} />
+                      </div>
                     )}
                   </div>
                 )}
@@ -1902,6 +1916,14 @@ export default function Settings() {
 
         {/* ── Preferences Tab ───────────────────────────────────────────── */}
         <TabsContent value="preferences" className="mt-4 space-y-5">
+
+          {/* Units (business companies; the admin edits, everyone uses) */}
+          {isAdmin && !isSchool && activeCompanyId && (
+            <>
+              <CompanyUnitsCard companyId={activeCompanyId} businessType={user?.defaultCompany?.businessType} />
+              <ItemFieldsCard companyId={activeCompanyId} />
+            </>
+          )}
 
           {/* Company Settings */}
           <div className="bg-card rounded-xl border p-6 space-y-5 max-w-lg">
