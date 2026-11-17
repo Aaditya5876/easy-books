@@ -26,6 +26,11 @@ const STATUS_COLORS = {
 
 const companyId = () => localStorage.getItem('easybooks_active_company') || '';
 
+// Stable reference: a `= []` default on useQuery data creates a new array every
+// render while the query is disabled, which re-fires the sync effect below and
+// causes an infinite render loop ("Maximum update depth exceeded").
+const EMPTY_ROWS = [];
+
 export default function StudentAttendance() {
   const { t } = useTranslation();
   const today = format(new Date(), 'yyyy-MM-dd');
@@ -51,7 +56,7 @@ export default function StudentAttendance() {
 
   const currentYear = useMemo(() => academicYears.find(y => y.isCurrent), [academicYears]);
 
-  const { data: attendanceRows = [], isLoading, refetch } = useQuery({
+  const { data: attendanceRows = EMPTY_ROWS, isLoading, refetch } = useQuery({
     queryKey: ['student-attendance', classId, date],
     queryFn: () => studentAttendanceApi.get(classId, date).then(r => r.data),
     enabled: !!classId && !!date,
