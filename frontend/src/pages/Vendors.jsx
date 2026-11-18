@@ -24,6 +24,9 @@ import {
 import { useRole } from "@/lib/useRole";
 import BulkImportDialog from '../components/shared/BulkImportDialog';
 import { VENDOR_FIELDS } from '../components/shared/bulkImportFields';
+import PartyStatementDialog from '../components/shared/PartyStatementDialog';
+import { toast } from 'sonner';
+import { apiErrorMessage } from '@/lib/bills';
 
 const PAYMENT_TERMS = ['Immediate', 'NET-15', 'NET-30', 'NET-45', 'NET-60'];
 const PAYMENT_TERM_KEYS = { 'Immediate': 'immediate', 'NET-15': 'net15', 'NET-30': 'net30', 'NET-45': 'net45', 'NET-60': 'net60' };
@@ -42,6 +45,7 @@ export default function Vendors() {
   const [form, setForm] = useState(EMPTY_FORM);
   const [editVendor, setEditVendor] = useState(null);
   const [importOpen, setImportOpen] = useState(false);
+  const [statementFor, setStatementFor] = useState(null); // vendor whose statement is open
 
   useEffect(() => {
     if (companyId) loadData();
@@ -54,26 +58,37 @@ export default function Vendors() {
     setLoading(false);
   }
 
+  // The opening balance (already owed to this vendor) is posted to the ledger
+  // by the server: Cr Accounts Payable.
   async function addVendor() {
-    await api.Vendor.create({
-      ...form,
-      company_id: companyId,
-      opening_balance: form.opening_balance ? parseFloat(form.opening_balance) : 0,
-      credit_limit: form.credit_limit ? parseFloat(form.credit_limit) : null,
-    });
-    setForm(EMPTY_FORM);
-    setShowAdd(false);
-    loadData();
+    try {
+      await api.Vendor.create({
+        ...form,
+        company_id: companyId,
+        opening_balance: form.opening_balance ? parseFloat(form.opening_balance) : 0,
+        credit_limit: form.credit_limit ? parseFloat(form.credit_limit) : null,
+      });
+      setForm(EMPTY_FORM);
+      setShowAdd(false);
+      loadData();
+    } catch (err) {
+      toast.error(apiErrorMessage(err, t('vendors.saveFailed', { defaultValue: 'Could not save the vendor' })));
+    }
   }
 
   async function updateVendor() {
-    await api.Vendor.update(editVendor.id, {
-      ...editVendor,
-      opening_balance: parseFloat(editVendor.opening_balance) || 0,
-      credit_limit: editVendor.credit_limit ? parseFloat(editVendor.credit_limit) : null,
-    });
-    setEditVendor(null);
-    loadData();
+    try {
+      const { balance: _balance, ...vendor } = editVendor;
+      await api.Vendor.update(editVendor.id, {
+        ...vendor,
+        opening_balance: parseFloat(editVendor.opening_balance) || 0,
+        credit_limit: editVendor.credit_limit ? parseFloat(editVendor.credit_limit) : null,
+      });
+      setEditVendor(null);
+      loadData();
+    } catch (err) {
+      toast.error(apiErrorMessage(err, t('vendors.saveFailed', { defaultValue: 'Could not save the vendor' })));
+    }
   }
 
   const filtered = vendors.filter(v =>
@@ -91,8 +106,18 @@ export default function Vendors() {
     { key: 'phone', label: t('vendors.phone', { defaultValue: 'Phone' }), filterValue: colFilters.phone, onFilterChange: v => setCol('phone', v) },
     { key: 'email', label: t('vendors.email', { defaultValue: 'Email' }) },
     { key: 'address', label: t('vendors.address', { defaultValue: 'Address' }) },
-    { key: 'total_purchases', label: t('vendors.totalPurchases', { defaultValue: 'Total Purchases' }), render: (row) => (
-      <span className="font-mono">NPR {(row.total_purchases || 0).toLocaleString()}</span>
+    { key: 'billed', label: t('vendors.totalPurchases', { defaultValue: 'Total Purchases' }), render: (row) => (
+      <span className="font-mono">NPR {Number(row.balance?.billed || 0).toLocaleString()}</span>
+    )},
+    // Opening + bills − payments − debit notes: what we still owe this vendor.
+    { key: 'due', label: t('vendors.weOwe', { defaultValue: 'We owe' }), render: (row) => {
+      const due = Number(row.balance?.due || 0);
+      return <span className={`font-mono font-semibold ${due > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground'}`}>NPR {due.toLocaleString()}</span>;
+    }},
+    { key: 'statement', label: '', render: (row) => (
+      <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={(e) => { e.stopPropagation(); setStatementFor(row); }}>
+        <FileText className="w-3 h-3" /> {t('statement.button', { defaultValue: 'Statement' })}
+      </Button>
     )},
   ];
 
@@ -122,6 +147,8 @@ export default function Vendors() {
       ) : (
         <DataTable columns={columns} data={filtered} emptyMessage={t('vendors.noVendorsMatch', { defaultValue: 'No vendors match your search.' })} onRowClick={canEdit ? (row) => setEditVendor({ ...row }) : undefined} />
       )}
+
+      <PartyStatementDialog kind="vendor" party={statementFor} open={!!statementFor} onOpenChange={(open) => { if (!open) setStatementFor(null); }} />
 
       {/* Add Dialog */}
       <Dialog open={showAdd} onOpenChange={setShowAdd}>

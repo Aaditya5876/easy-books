@@ -23,14 +23,22 @@ import EmptyState from '../components/EmptyState';
 import { SmartNumberInput } from "@/components/ui/smart-number-input";
 import { FileAttachmentZone } from "@/components/ui/file-attachment-zone";
 import { useRole } from "@/lib/useRole";
-import { TaskLinkSelect, TaskBadge, useWorkflowTasks } from '../components/shared/TaskLinkSelect';
+import { WorkflowJobPicker, TaskBadge, useWorkflowTasks } from '../components/shared/TaskLinkSelect';
 import { useIdempotencyKey } from '@/lib/useIdempotencyKey';
+import { toast } from 'sonner';
+import PayNowSection, { EMPTY_PAY_NOW } from '../components/shared/PayNowSection';
+import BillStatusBadge, { billStatusLabel } from '../components/shared/BillStatusBadge';
+import BillPaymentDialog from '../components/shared/BillPaymentDialog';
+import { apiErrorMessage, billDue, billStatusKey, buildPayNow, partyPayload, round2, validatePayNow } from '@/lib/bills';
 import { useCompanyUnits } from '@/lib/useCompanyUnits';
 
 const EMPTY_FORM = {
   task_id: '', // Workflow job this record is for (optional)
+  create_job: false, // "Also create a workflow job" — made by the server with the bill
+  client_id: '', // saved client picked from the dropdown
   client_name: '', client_contact: '', client_address: '', client_pan: '',
-  invoice_number: '', is_vat: false, payment_type: 'cash',
+  invoice_number: '', is_vat: false,
+  pay_now: { ...EMPTY_PAY_NOW }, // Udharo / Received in full / Part received
   date_ad: new Date().toISOString().split('T')[0],
   due_date: '',
   notes: '',
@@ -52,6 +60,8 @@ export default function Sales() {
   const setCol = (key, val) => setColFilters(f => ({ ...f, [key]: val }));
   const [showNew, setShowNew] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
+  const [saving, setSaving] = useState(false);
+  const [paymentBillId, setPaymentBillId] = useState(null); // Receive Payment / history dialog
   const UNITS = useCompanyUnits(); // this company's own unit list
   const workflowTasks = useWorkflowTasks();
   const saveKey = useIdempotencyKey(); // one key per bill; reused if the save is retried
@@ -94,6 +104,7 @@ export default function Sales() {
     const nextInvoice = await generateInvoiceNumber(salesData, false);
     setForm({
       ...EMPTY_FORM,
+      pay_now: { ...EMPTY_PAY_NOW },
       invoice_number: nextInvoice,
       date_ad: new Date().toISOString().split('T')[0],
     });
@@ -105,6 +116,7 @@ export default function Sales() {
     if (cl) {
       setForm(f => ({
         ...f,
+        client_id: cl.id,
         client_name: cl.name || '',
         client_contact: cl.contact_person || cl.phone || '',
         client_address: cl.address || '',
@@ -171,45 +183,51 @@ export default function Sales() {
     const itemsSubtotal = form.items.reduce((sum, i) => sum + (i.total || 0), 0);
     const subtotal = itemsSubtotal + totalLabor;
     const vatAmount = form.is_vat ? subtotal * 0.13 : 0;
+    if (validatePayNow(form.pay_now, round2(subtotal + vatAmount))) {
+      toast.error(t('bills.fixPayment', { defaultValue: 'Check the payment details' }));
+      return;
+    }
 
-    await api.SalesOrder.create({
-      company_id: companyId,
-      ...(form.task_id ? { task_id: form.task_id } : {}),
-      client_name: form.client_name,
-      client_contact: form.client_contact,
-      client_address: form.client_address,
-      // API field names (client_pan / payment_type were silently dropped, so
-      // every bill was saved as a CASH sale with no PAN).
-      client_pan_vat: form.client_pan || undefined,
-      payment_method: String(form.payment_type || 'cash').toUpperCase(),
-      date_ad: entryDate,
-      date_bs: bsDate.formatted,
-      due_date: form.due_date || null,
-      invoice_number: form.invoice_number,
-      payment_type: form.payment_type,
-      items: form.items.map(i => ({ ...i, unit: i.unit || UNITS[0] })),
-      work_description: form.labor_items.map(li => li.description).filter(Boolean).join('; '),
-      labor_charges: totalLabor,
-      is_vat: form.is_vat,
-      notes: form.notes,
-      // Saved by the backend as a linked Sales Bill (Memo → Sales Bills).
-      attachments: form.attachments,
-      subtotal,
-      vat_amount: vatAmount,
-      total_amount: subtotal + vatAmount,
-    }, { idempotencyKey: saveKey.key });
-    saveKey.renew();
-
-    // Auto-create client if not exists
-    const existingClients = await api.Client.filter({ company_id: companyId, name: form.client_name });
-    if (existingClients.length === 0 && form.client_name) {
-      await api.Client.create({
+    setSaving(true);
+    try {
+      await api.SalesOrder.create({
         company_id: companyId,
-        name: form.client_name,
-        phone: form.client_contact,
-        address: form.client_address,
-        crm_status: 'active',
-      });
+        ...(form.task_id ? { task_id: form.task_id } : {}),
+        ...(form.create_job ? { create_job: true } : {}),
+        // The saved client (if still the one named) — otherwise the server links
+        // the typed name to an existing client, or creates one when money is
+        // still owed (a fully paid walk-in sale stays a plain name).
+        client_id: partyPayload(form.client_id, form.client_name, clients).id,
+        client_name: form.client_name,
+        client_contact: form.client_contact,
+        client_address: form.client_address,
+        // API field names (client_pan / payment_type were silently dropped, so
+        // every bill was saved as a CASH sale with no PAN).
+        client_pan_vat: form.client_pan || undefined,
+        // Udharo / received in full / part received — saved with the bill (status follows from it).
+        payment: buildPayNow(form.pay_now),
+        date_ad: entryDate,
+        date_bs: bsDate.formatted,
+        due_date: form.due_date || null,
+        invoice_number: form.invoice_number,
+        items: form.items.map(i => ({ ...i, unit: i.unit || UNITS[0] })),
+        work_description: form.labor_items.map(li => li.description).filter(Boolean).join('; '),
+        labor_charges: totalLabor,
+        is_vat: form.is_vat,
+        notes: form.notes,
+        // Saved by the backend as a linked Sales Bill (Memo → Sales Bills).
+        attachments: form.attachments,
+        subtotal,
+        vat_amount: vatAmount,
+        total_amount: subtotal + vatAmount,
+      }, { idempotencyKey: saveKey.key });
+      saveKey.renew();
+      toast.success(t('sales.saved', { defaultValue: 'Sale saved' }));
+    } catch (err) {
+      toast.error(apiErrorMessage(err, t('sales.saveFailed', { defaultValue: 'Could not save the sale' })));
+      return;
+    } finally {
+      setSaving(false);
     }
 
     // Stock is deducted by the server in the same transaction as the bill.
@@ -217,6 +235,7 @@ export default function Sales() {
 
     setForm({
       ...EMPTY_FORM,
+      pay_now: { ...EMPTY_PAY_NOW },
       date_ad: new Date().toISOString().split('T')[0],
     });
     setShowNew(false);
@@ -277,19 +296,13 @@ export default function Sales() {
      o.invoice_number?.toLowerCase().includes(search.toLowerCase())) &&
     (!colFilters.client_name || o.client_name?.toLowerCase().includes(colFilters.client_name.toLowerCase())) &&
     (!colFilters.invoice_number || (o.invoice_number || '').toLowerCase().includes(colFilters.invoice_number.toLowerCase())) &&
-    (!colFilters.status || (o.status || '').toLowerCase().includes(colFilters.status.toLowerCase()))
+    (!colFilters.status || billStatusLabel(t, o).toLowerCase().includes(colFilters.status.toLowerCase()))
   );
 
   const totalLabor = form.labor_items.reduce((s, li) => s + (Number(li.amount) || 0), 0);
   const itemsSubtotal = form.items.reduce((sum, i) => sum + (i.total || 0), 0);
   const subtotal = itemsSubtotal + totalLabor;
   const vatAmount = form.is_vat ? subtotal * 0.13 : 0;
-
-  const paymentTypeLabels = {
-    cash: t('sales.paymentTypeCash', { defaultValue: 'Cash' }),
-    cheque: t('sales.paymentTypeCheque', { defaultValue: 'Cheque' }),
-    credit: t('sales.paymentTypeCredit', { defaultValue: 'Credit' }),
-  };
 
   const columns = [
     { key: 'task_id', label: t('workflow.jobColumn', { defaultValue: 'Job' }), render: (row) => <TaskBadge tasks={workflowTasks} taskId={row.task_id} /> },
@@ -304,10 +317,21 @@ export default function Sales() {
     { key: 'invoice_number', label: t('sales.colInvoiceNumber', { defaultValue: 'Invoice #' }), filterValue: colFilters.invoice_number, onFilterChange: v => setCol('invoice_number', v) },
     { key: 'client_name', label: t('sales.colClient', { defaultValue: 'Client' }), filterValue: colFilters.client_name, onFilterChange: v => setCol('client_name', v), render: (row) => <span className="font-medium">{row.client_name}</span> },
     { key: 'items', label: t('sales.colItems', { defaultValue: 'Items' }), render: (row) => <span>{t('sales.itemsCount', { defaultValue: `${row.items?.length || 0} items`, count: row.items?.length || 0 })}</span> },
-    { key: 'payment_type', label: t('sales.colPayment', { defaultValue: 'Payment' }), render: (row) => <Badge variant="outline" className="capitalize">{paymentTypeLabels[row.payment_type] || paymentTypeLabels.cash}</Badge> },
     { key: 'is_vat', label: t('sales.colVat', { defaultValue: 'VAT' }), render: (row) => <Badge variant={row.is_vat ? 'default' : 'secondary'}>{row.is_vat ? t('sales.vatBadge', { defaultValue: 'VAT' }) : t('sales.nonVatBadge', { defaultValue: 'Non-VAT' })}</Badge> },
-    { key: 'total_amount', label: t('sales.colTotal', { defaultValue: 'Total' }), render: (row) => <span className="font-semibold font-mono">NPR {(row.total_amount || 0).toLocaleString()}</span> },
-    { key: 'status', label: t('sales.colStatus', { defaultValue: 'Status' }), filterValue: colFilters.status, onFilterChange: v => setCol('status', v), filterPlaceholder: t('sales.statusFilterPlaceholder', { defaultValue: 'e.g. confirmed' }), render: (row) => <Badge>{row.status}</Badge> },
+    { key: 'total_amount', label: t('sales.colTotal', { defaultValue: 'Total' }), render: (row) => <span className="font-semibold font-mono">NPR {Number(row.total_amount || 0).toLocaleString()}</span> },
+    { key: 'paid_amount', label: t('bills.colReceived', { defaultValue: 'Received' }), render: (row) => <span className="font-mono text-muted-foreground">NPR {Number(row.paid_amount || 0).toLocaleString()}</span> },
+    { key: 'due', label: t('bills.colDue', { defaultValue: 'Due' }), render: (row) => {
+      const due = billDue(row);
+      return <span className={`font-mono font-semibold ${due > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground'}`}>NPR {due.toLocaleString()}</span>;
+    }},
+    { key: 'status', label: t('sales.colStatus', { defaultValue: 'Status' }), filterValue: colFilters.status, onFilterChange: v => setCol('status', v), filterPlaceholder: t('bills.statusFilterPlaceholder', { defaultValue: 'e.g. unpaid' }), render: (row) => <BillStatusBadge bill={row} /> },
+    { key: 'actions', label: '', render: (row) => (
+      canCreate && billDue(row) > 0 && billStatusKey(row) !== 'CANCELLED' ? (
+        <Button size="sm" variant="outline" className="h-7 text-xs whitespace-nowrap" onClick={(e) => { e.stopPropagation(); setPaymentBillId(row.id); }}>
+          {t('bills.receivePayment', { defaultValue: 'Receive Payment' })}
+        </Button>
+      ) : null
+    )},
   ];
 
   if (loading) return <PageLoader />;
@@ -331,8 +355,18 @@ export default function Sales() {
           action={canCreate ? <Button onClick={openNewSale}>{t('sales.newSale', { defaultValue: 'New Sale' })}</Button> : null}
         />
       ) : (
-        <DataTable columns={columns} data={filtered} emptyMessage={t('sales.noSearchMatch', { defaultValue: 'No sales orders match your search.' })} />
+        <DataTable columns={columns} data={filtered} onRowClick={(row) => setPaymentBillId(row.id)} emptyMessage={t('sales.noSearchMatch', { defaultValue: 'No sales orders match your search.' })} />
       )}
+
+      {/* Payments: history + Receive Payment (opened from a row) */}
+      <BillPaymentDialog
+        kind="sales"
+        billId={paymentBillId}
+        open={!!paymentBillId}
+        onOpenChange={(open) => { if (!open) setPaymentBillId(null); }}
+        onSaved={loadData}
+        canPay={canCreate}
+      />
 
       {/* New Sale Dialog — two-column layout */}
       <Dialog open={showNew} onOpenChange={setShowNew}>
@@ -355,7 +389,7 @@ export default function Sales() {
                 <div className="space-y-3">
                   <div>
                     <Label className="text-xs">{t('sales.selectSavedClient', { defaultValue: 'Select Saved Client' })}</Label>
-                    <Select onValueChange={selectClientFromDropdown}>
+                    <Select value={form.client_id || undefined} onValueChange={selectClientFromDropdown}>
                       <SelectTrigger>
                         <SelectValue placeholder={t('sales.selectSavedClientPlaceholder', { defaultValue: 'Select saved client (or type below)' })} />
                       </SelectTrigger>
@@ -366,7 +400,14 @@ export default function Sales() {
                       </SelectContent>
                     </Select>
                   </div>
-                  <TaskLinkSelect tasks={workflowTasks} value={form.task_id} onChange={v => setForm(f => ({ ...f, task_id: v }))} />
+                  <WorkflowJobPicker
+                    tasks={workflowTasks}
+                    taskId={form.task_id}
+                    createJob={form.create_job}
+                    onTaskChange={v => setForm(f => ({ ...f, task_id: v }))}
+                    onCreateJobChange={v => setForm(f => ({ ...f, create_job: v }))}
+                    partyLabel={t('workflow.partyClient', { defaultValue: 'client' })}
+                  />
                   <div>
                     <Label className="text-xs">{t('sales.clientNameRequired', { defaultValue: 'Client Name *' })}</Label>
                     <Input value={form.client_name} onChange={e => setForm({ ...form, client_name: e.target.value })} placeholder={t('sales.clientNamePlaceholder', { defaultValue: 'Full name or business name' })} />
@@ -402,26 +443,6 @@ export default function Sales() {
                     <Label className="text-xs">{t('sales.dueDate', { defaultValue: 'Due Date' })} <span className="text-muted-foreground">({t('sales.credit', { defaultValue: 'credit' })})</span></Label>
                     <Input type="date" value={form.due_date} onChange={e => setForm({ ...form, due_date: e.target.value })} />
                   </div>
-                </div>
-              </div>
-
-              {/* Payment Type */}
-              <div>
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">{t('sales.payment', { defaultValue: 'Payment' })}</p>
-                <div className="flex gap-3">
-                  {['cash', 'cheque', 'credit'].map(type => (
-                    <label key={type} className="flex items-center gap-1.5 cursor-pointer">
-                      <input
-                        type="radio"
-                        name="sale_payment_type"
-                        value={type}
-                        checked={form.payment_type === type}
-                        onChange={() => setForm({ ...form, payment_type: type })}
-                        className="accent-primary"
-                      />
-                      <span className="text-sm capitalize">{paymentTypeLabels[type]}</span>
-                    </label>
-                  ))}
                 </div>
               </div>
 
@@ -542,6 +563,9 @@ export default function Sales() {
                 </div>
               </div>
 
+              {/* Payment — right next to the Total */}
+              <PayNowSection kind="sales" value={form.pay_now} total={round2(subtotal + vatAmount)} onChange={pay_now => setForm(f => ({ ...f, pay_now }))} />
+
               {/* Notes */}
               <div>
                 <Label className="text-xs">{t('sales.notesRemarks', { defaultValue: 'Notes / Remarks' })} <span className="text-muted-foreground">({t('sales.optional', { defaultValue: 'optional' })})</span></Label>
@@ -567,8 +591,8 @@ export default function Sales() {
 
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowNew(false)}>{t('sales.cancel', { defaultValue: 'Cancel' })}</Button>
-            <Button onClick={() => createOrder(false)} disabled={!form.client_name} variant="secondary">{t('sales.saveSale', { defaultValue: 'Save Sale' })}</Button>
-            <Button onClick={() => createOrder(true)} disabled={!form.client_name}>{t('sales.saveAndPrint', { defaultValue: 'Save & Print' })}</Button>
+            <Button onClick={() => createOrder(false)} disabled={!form.client_name.trim() || saving || !!validatePayNow(form.pay_now, round2(subtotal + vatAmount))} variant="secondary">{t('sales.saveSale', { defaultValue: 'Save Sale' })}</Button>
+            <Button onClick={() => createOrder(true)} disabled={!form.client_name.trim() || saving || !!validatePayNow(form.pay_now, round2(subtotal + vatAmount))}>{t('sales.saveAndPrint', { defaultValue: 'Save & Print' })}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

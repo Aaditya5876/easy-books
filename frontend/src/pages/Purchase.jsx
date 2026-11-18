@@ -23,18 +23,25 @@ import {
 import { SmartNumberInput } from "@/components/ui/smart-number-input";
 import { FileAttachmentZone } from "@/components/ui/file-attachment-zone";
 import { useRole } from "@/lib/useRole";
-import { TaskLinkSelect, TaskBadge, useWorkflowTasks } from '../components/shared/TaskLinkSelect';
+import { WorkflowJobPicker, TaskBadge, useWorkflowTasks } from '../components/shared/TaskLinkSelect';
 import { useIdempotencyKey } from '@/lib/useIdempotencyKey';
+import { toast } from 'sonner';
+import PayNowSection, { EMPTY_PAY_NOW } from '../components/shared/PayNowSection';
+import BillStatusBadge, { billStatusLabel } from '../components/shared/BillStatusBadge';
+import BillPaymentDialog from '../components/shared/BillPaymentDialog';
+import { apiErrorMessage, billDue, billStatusKey, buildPayNow, partyPayload, round2, validatePayNow } from '@/lib/bills';
 
 import { useCompanyUnits } from '@/lib/useCompanyUnits';
 
 const EMPTY_FORM = {
   task_id: '', // Workflow job this record is for (optional)
+  create_job: false, // "Also create a workflow job" — made by the server with the bill
+  vendor_id: '', // saved vendor picked from the dropdown
   vendor_name: '', vendor_contact: '', vendor_address: '', vendor_pan: '',
   order_number: '', ordered_by: '',
   date_ad: new Date().toISOString().split('T')[0],
   due_date: '',
-  payment_type: 'cash',
+  pay_now: { ...EMPTY_PAY_NOW }, // Udharo / Paid in full / Part paid
   is_vat: false,
   notes: '',
   items: [{ description: '', quantity: 1, unit: '', unit_price: 0, total: 0 }],
@@ -54,6 +61,8 @@ export default function Purchase() {
   const [showNew, setShowNew] = useState(false);
   const [vendors, setVendors] = useState([]);
   const [form, setForm] = useState({ ...EMPTY_FORM });
+  const [saving, setSaving] = useState(false);
+  const [paymentBillId, setPaymentBillId] = useState(null); // Record Payment / history dialog
   const UNITS = useCompanyUnits(); // this company's own unit list
   const workflowTasks = useWorkflowTasks();
   const saveKey = useIdempotencyKey(); // one key per purchase; reused if the save is retried
@@ -66,12 +75,6 @@ export default function Purchase() {
     Kg: t('purchase.unitKg', { defaultValue: 'Kg' }),
     gm: t('purchase.unitGm', { defaultValue: 'gm' }),
     NOS: t('purchase.unitNos', { defaultValue: 'NOS' }),
-  };
-
-  const PAYMENT_TYPE_LABELS = {
-    cash: t('purchase.paymentCash', { defaultValue: 'Cash' }),
-    cheque: t('purchase.paymentCheque', { defaultValue: 'Cheque' }),
-    credit: t('purchase.paymentCredit', { defaultValue: 'Credit' }),
   };
 
   useEffect(() => {
@@ -163,50 +166,57 @@ export default function Purchase() {
     const laborTotal = form.labor_items.reduce((s, li) => s + (Number(li.amount) || 0), 0);
     const subtotal = form.items.reduce((sum, i) => sum + (i.total || 0), 0) + laborTotal;
     const vatAmount = form.is_vat ? subtotal * 0.13 : 0;
-    const items = (await linkLinesToStock())
-      .map(i => ({ ...i, unit: i.unit && i.unit !== '__custom__' ? i.unit : UNITS[0] }));
-
-    await api.PurchaseOrder.create({
-      company_id: companyId,
-      ...(form.task_id ? { task_id: form.task_id } : {}),
-      vendor_name: form.vendor_name,
-      vendor_contact: form.vendor_contact,
-      vendor_address: form.vendor_address,
-      // API field names (vendor_pan / payment_type were silently dropped).
-      vendor_pan_vat: form.vendor_pan || undefined,
-      payment_method: String(form.payment_type || 'cash').toUpperCase(),
-      labor_charges: laborTotal,
-      date_ad: entryDate,
-      date_bs: bsDate.formatted,
-      due_date: form.due_date || null,
-      order_number: form.order_number,
-      ordered_by: form.ordered_by,
-      items,
-      work_description: form.labor_items.map(li => li.description).filter(Boolean).join(', '),
-      is_vat: form.is_vat,
-      notes: form.notes,
-      // Saved by the backend as a linked Purchase Bill (Memo → Purchase Bills).
-      attachments: form.attachments,
-      subtotal,
-      vat_amount: vatAmount,
-      total_amount: subtotal + vatAmount,
-    }, { idempotencyKey: saveKey.key });
-    saveKey.renew();
-
-    // Auto-create vendor if not exists
-    const existingVendors = await api.Vendor.filter({ company_id: companyId, name: form.vendor_name });
-    if (existingVendors.length === 0 && form.vendor_name) {
-      await api.Vendor.create({
-        company_id: companyId,
-        name: form.vendor_name,
-        phone: form.vendor_contact,
-        address: form.vendor_address,
-      });
+    if (validatePayNow(form.pay_now, round2(subtotal + vatAmount))) {
+      toast.error(t('bills.fixPayment', { defaultValue: 'Check the payment details' }));
+      return;
     }
 
-    setForm({ ...EMPTY_FORM, date_ad: new Date().toISOString().split('T')[0] });
-    setShowNew(false);
-    loadData();
+    setSaving(true);
+    try {
+      const items = (await linkLinesToStock())
+        .map(i => ({ ...i, unit: i.unit && i.unit !== '__custom__' ? i.unit : UNITS[0] }));
+
+      await api.PurchaseOrder.create({
+        company_id: companyId,
+        ...(form.task_id ? { task_id: form.task_id } : {}),
+        ...(form.create_job ? { create_job: true } : {}),
+        // The saved vendor (if still the one named) — otherwise the server links
+        // the typed name to an existing vendor or creates one, in the same save.
+        vendor_id: partyPayload(form.vendor_id, form.vendor_name, vendors).id,
+        vendor_name: form.vendor_name,
+        vendor_contact: form.vendor_contact,
+        vendor_address: form.vendor_address,
+        // API field names (vendor_pan / payment_type were silently dropped).
+        vendor_pan_vat: form.vendor_pan || undefined,
+        // Udharo / paid in full / part paid — saved with the bill (status follows from it).
+        payment: buildPayNow(form.pay_now),
+        labor_charges: laborTotal,
+        date_ad: entryDate,
+        date_bs: bsDate.formatted,
+        due_date: form.due_date || null,
+        order_number: form.order_number,
+        ordered_by: form.ordered_by,
+        items,
+        work_description: form.labor_items.map(li => li.description).filter(Boolean).join(', '),
+        is_vat: form.is_vat,
+        notes: form.notes,
+        // Saved by the backend as a linked Purchase Bill (Memo → Purchase Bills).
+        attachments: form.attachments,
+        subtotal,
+        vat_amount: vatAmount,
+        total_amount: subtotal + vatAmount,
+      }, { idempotencyKey: saveKey.key });
+      saveKey.renew();
+      toast.success(t('purchase.saved', { defaultValue: 'Purchase saved' }));
+
+      setForm({ ...EMPTY_FORM, pay_now: { ...EMPTY_PAY_NOW }, date_ad: new Date().toISOString().split('T')[0] });
+      setShowNew(false);
+      loadData();
+    } catch (err) {
+      toast.error(apiErrorMessage(err, t('purchase.saveFailed', { defaultValue: 'Could not save the purchase' })));
+    } finally {
+      setSaving(false);
+    }
   }
 
   const filtered = orders.filter(o =>
@@ -214,7 +224,7 @@ export default function Purchase() {
      o.order_number?.toLowerCase().includes(search.toLowerCase())) &&
     (!colFilters.vendor_name || o.vendor_name?.toLowerCase().includes(colFilters.vendor_name.toLowerCase())) &&
     (!colFilters.order_number || (o.order_number || '').toLowerCase().includes(colFilters.order_number.toLowerCase())) &&
-    (!colFilters.status || (o.status || '').toLowerCase().includes(colFilters.status.toLowerCase()))
+    (!colFilters.status || billStatusLabel(t, o).toLowerCase().includes(colFilters.status.toLowerCase()))
   );
 
   const totalLabor = form.labor_items.reduce((s, li) => s + (li.amount || 0), 0);
@@ -237,17 +247,28 @@ export default function Purchase() {
     { key: 'items', label: t('purchase.items', { defaultValue: 'Items' }), render: (row) => (
       <span className="text-muted-foreground">{t('purchase.itemsCount', { count: row.items?.length || 0, defaultValue: '{{count}} items' })}</span>
     )},
-    { key: 'payment_type', label: t('purchase.payment', { defaultValue: 'Payment' }), render: (row) => (
-      <Badge variant="outline">{PAYMENT_TYPE_LABELS[row.payment_type] || PAYMENT_TYPE_LABELS.cash}</Badge>
-    )},
     { key: 'is_vat', label: t('purchase.vat', { defaultValue: 'VAT' }), render: (row) => (
       <Badge variant={row.is_vat ? 'default' : 'secondary'}>{row.is_vat ? t('purchase.vatYes', { defaultValue: 'VAT' }) : t('purchase.vatNo', { defaultValue: 'Non-VAT' })}</Badge>
     )},
     { key: 'total_amount', label: t('purchase.total', { defaultValue: 'Total' }), render: (row) => (
-      <span className="font-semibold font-mono">NPR {(row.total_amount || 0).toLocaleString()}</span>
+      <span className="font-semibold font-mono">NPR {Number(row.total_amount || 0).toLocaleString()}</span>
     )},
-    { key: 'status', label: t('purchase.status', { defaultValue: 'Status' }), filterValue: colFilters.status, onFilterChange: v => setCol('status', v), filterPlaceholder: t('purchase.statusFilterPlaceholder', { defaultValue: 'e.g. confirmed' }), render: (row) => (
-      <Badge variant={row.status === 'confirmed' ? 'default' : 'secondary'}>{row.status}</Badge>
+    { key: 'paid_amount', label: t('bills.colPaid', { defaultValue: 'Paid' }), render: (row) => (
+      <span className="font-mono text-muted-foreground">NPR {Number(row.paid_amount || 0).toLocaleString()}</span>
+    )},
+    { key: 'due', label: t('bills.colDue', { defaultValue: 'Due' }), render: (row) => {
+      const due = billDue(row);
+      return <span className={`font-mono font-semibold ${due > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground'}`}>NPR {due.toLocaleString()}</span>;
+    }},
+    { key: 'status', label: t('purchase.status', { defaultValue: 'Status' }), filterValue: colFilters.status, onFilterChange: v => setCol('status', v), filterPlaceholder: t('bills.statusFilterPlaceholder', { defaultValue: 'e.g. unpaid' }), render: (row) => (
+      <BillStatusBadge bill={row} />
+    )},
+    { key: 'actions', label: '', render: (row) => (
+      canCreate && billDue(row) > 0 && billStatusKey(row) !== 'CANCELLED' ? (
+        <Button size="sm" variant="outline" className="h-7 text-xs whitespace-nowrap" onClick={(e) => { e.stopPropagation(); setPaymentBillId(row.id); }}>
+          {t('bills.recordPayment', { defaultValue: 'Record Payment' })}
+        </Button>
+      ) : null
     )},
   ];
 
@@ -272,11 +293,21 @@ export default function Purchase() {
           action={canCreate ? <Button onClick={() => setShowNew(true)}>{t('purchase.newPurchase', { defaultValue: 'New Purchase' })}</Button> : null}
         />
       ) : (
-        <DataTable columns={columns} data={filtered} emptyMessage={t('purchase.noSearchMatch', { defaultValue: 'No purchase orders match your search.' })} />
+        <DataTable columns={columns} data={filtered} onRowClick={(row) => setPaymentBillId(row.id)} emptyMessage={t('purchase.noSearchMatch', { defaultValue: 'No purchase orders match your search.' })} />
       )}
 
+      {/* Payments: history + Record Payment (opened from a row) */}
+      <BillPaymentDialog
+        kind="purchase"
+        billId={paymentBillId}
+        open={!!paymentBillId}
+        onOpenChange={(open) => { if (!open) setPaymentBillId(null); }}
+        onSaved={loadData}
+        canPay={canCreate}
+      />
+
       {/* New Purchase Dialog */}
-      <Dialog open={showNew} onOpenChange={open => { setShowNew(open); if (!open) setForm({ ...EMPTY_FORM, date_ad: new Date().toISOString().split('T')[0] }); }}>
+      <Dialog open={showNew} onOpenChange={open => { setShowNew(open); if (!open) setForm({ ...EMPTY_FORM, pay_now: { ...EMPTY_PAY_NOW }, date_ad: new Date().toISOString().split('T')[0] }); }}>
         <DialogContent className="max-w-5xl max-h-[90vh] overflow-hidden glass-card">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -298,10 +329,11 @@ export default function Purchase() {
               {vendors.length > 0 && (
                 <div>
                   <Label className="text-xs">{t('purchase.selectSavedVendor', { defaultValue: 'Select Saved Vendor' })}</Label>
-                  <Select onValueChange={v => {
+                  <Select value={form.vendor_id || undefined} onValueChange={v => {
                     const vend = vendors.find(x => x.id === v);
                     if (vend) setForm(f => ({
                       ...f,
+                      vendor_id: vend.id,
                       vendor_name: vend.name || '',
                       vendor_contact: vend.contact_person || vend.phone || '',
                       vendor_address: vend.address || '',
@@ -320,7 +352,14 @@ export default function Purchase() {
                 </div>
               )}
 
-              <TaskLinkSelect tasks={workflowTasks} value={form.task_id} onChange={v => setForm(f => ({ ...f, task_id: v }))} />
+              <WorkflowJobPicker
+                tasks={workflowTasks}
+                taskId={form.task_id}
+                createJob={form.create_job}
+                onTaskChange={v => setForm(f => ({ ...f, task_id: v }))}
+                onCreateJobChange={v => setForm(f => ({ ...f, create_job: v }))}
+                partyLabel={t('workflow.partyVendor', { defaultValue: 'vendor' })}
+              />
               <div>
                 <Label className="text-xs">{t('purchase.vendorName', { defaultValue: 'Vendor Name *' })}</Label>
                 <Input
@@ -406,26 +445,6 @@ export default function Purchase() {
                     onChange={e => setForm({ ...form, ordered_by: e.target.value })}
                     placeholder={t('purchase.orderedByPlaceholder', { defaultValue: 'Your staff name' })}
                   />
-                </div>
-              </div>
-
-              {/* Payment Type */}
-              <div>
-                <Label className="text-xs font-semibold">{t('purchase.paymentType', { defaultValue: 'Payment Type' })}</Label>
-                <div className="flex gap-4 mt-1">
-                  {['cash', 'cheque', 'credit'].map(type => (
-                    <label key={type} className="flex items-center gap-1.5 cursor-pointer">
-                      <input
-                        type="radio"
-                        name="payment_type"
-                        value={type}
-                        checked={form.payment_type === type}
-                        onChange={() => setForm({ ...form, payment_type: type })}
-                        className="accent-primary"
-                      />
-                      <span className="text-sm">{PAYMENT_TYPE_LABELS[type]}</span>
-                    </label>
-                  ))}
                 </div>
               </div>
 
@@ -616,12 +635,19 @@ export default function Purchase() {
                   <span className="font-mono">NPR {(subtotal + vatAmount).toLocaleString()}</span>
                 </div>
               </div>
+
+              {/* Payment — right next to the Total */}
+              <div className="mt-3">
+                <PayNowSection kind="purchase" value={form.pay_now} total={round2(subtotal + vatAmount)} onChange={pay_now => setForm(f => ({ ...f, pay_now }))} />
+              </div>
             </div>
           </div>
 
           <DialogFooter className="mt-2">
             <Button variant="outline" onClick={() => setShowNew(false)}>{t('purchase.cancel', { defaultValue: 'Cancel' })}</Button>
-            <Button onClick={createOrder} disabled={!form.vendor_name}>{t('purchase.savePurchase', { defaultValue: 'Save Purchase' })}</Button>
+            <Button onClick={createOrder} disabled={!form.vendor_name.trim() || saving || !!validatePayNow(form.pay_now, round2(subtotal + vatAmount))}>
+              {saving ? t('bills.saving', { defaultValue: 'Saving…' }) : t('purchase.savePurchase', { defaultValue: 'Save Purchase' })}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

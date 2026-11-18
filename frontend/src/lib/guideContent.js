@@ -351,9 +351,11 @@ export const GUIDE_SECTIONS = [
     summary: 'Selling to your customers.',
     blocks: [
       { list: [
-        'Clients: your customers, with contact details and what they owe you.',
-        'Quotations: price offers you can later turn into a sale.',
+        'Clients: your customers. "Owes us" shows what each still owes; "Statement" shows every bill and payment with a running balance.',
+        'Quotations: price offers you can later turn into a sale. A quotation never touches the ledger — only the sale does.',
         'Sales: invoices with VAT and automatic numbering. Stock is reduced for you.',
+        'Under the Total choose Udharo, Received in full or Part received. The status (Unpaid / Partially paid / Paid) follows from what was received.',
+        'When the client pays later, click "Receive Payment" on the sale. The ledger is updated for you.',
         'Credit notes for returns are available from a sale.',
       ] },
     ],
@@ -364,8 +366,10 @@ export const GUIDE_SECTIONS = [
     summary: 'Buying and keeping stock.',
     blocks: [
       { list: [
-        'Vendors: your suppliers and what you owe them.',
+        'Vendors: your suppliers. "We owe" shows what you still owe each one; "Statement" shows every bill and payment with a running balance.',
         'Purchase: record bills from vendors. Stock goes up for you.',
+        'Under the Total choose Udharo, Paid in full or Part paid. The status (Unpaid / Partially paid / Paid) follows from what was paid.',
+        'When you pay the vendor later, click "Record Payment" on the purchase. The ledger is updated for you.',
         'Inventory: products, prices and stock levels. You get an alert when stock runs low.',
       ] },
     ],

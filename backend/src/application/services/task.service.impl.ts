@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../core/db/psql/prisma.client';
 import { CreateTaskDTO, UpdateTaskDTO } from '@easy-books/shared';
+import { nextTaskNumberTx } from '../../../core/utils/task-number';
 
 // '' from a cleared form field means "no value", same as null.
 const blankToNull = <T>(v: T) => (v === '' ? null : v);
@@ -55,19 +56,12 @@ export class TaskServiceImpl {
   async create(dto: CreateTaskDTO, assignedBy?: string) {
     await this.assertLinks(dto.companyId, dto);
     const data = this.clean(dto) as Prisma.TaskUncheckedCreateInput;
-    // Next number per company; the unique (companyId, taskNumber) index turns
-    // a race between two simultaneous creates into a retry, not a duplicate.
-    for (let attempt = 0; ; attempt++) {
-      const last = await this.prisma.task.aggregate({ where: { companyId: dto.companyId }, _max: { taskNumber: true } });
-      try {
-        return await this.prisma.task.create({
-          data: { ...data, companyId: dto.companyId, assignedBy, taskNumber: (last._max.taskNumber ?? 0) + 1 },
-        });
-      } catch (err) {
-        const duplicate = err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002';
-        if (!duplicate || attempt >= 4) throw err;
-      }
-    }
+    // Next number per company, under the same lock bills use when they create
+    // a job (nextTaskNumberTx) — two jobs can never get the same number.
+    return this.prisma.$transaction(async (tx) => {
+      const taskNumber = await nextTaskNumberTx(tx, dto.companyId);
+      return tx.task.create({ data: { ...data, companyId: dto.companyId, assignedBy, taskNumber } });
+    });
   }
 
   async update(id: string, companyId: string, dto: UpdateTaskDTO) {

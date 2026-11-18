@@ -12,6 +12,8 @@ export const CreateVendorSchema = z.object({
   address: z.string().optional(),
   panVat: z.string().optional(),
   bankDetails: z.string().optional(),
+  // Already owed before this party was added (we owe a vendor / a client owes us).
+  openingBalance: z.coerce.number().finite().min(0).optional(),
   notes: z.string().optional(),
 });
 

@@ -26,6 +26,7 @@ const SYSTEM_ACCOUNTS = {
   BANK_GUARANTEE_ASSET: 'Bank Guarantee — Contingent Asset',
   BANK_GUARANTEE_LIABILITY: 'Bank Guarantee — Contingent Liability',
   FEE_RECEIVABLE: 'Fee Receivable',
+  OPENING_BALANCE_EQUITY: 'Opening Balance Equity',
 };
 
 @Injectable()
@@ -912,6 +913,51 @@ export class LedgerPostingService {
       const delta = acc ? this.ledgerDelta(acc.accountType, Number(s.debit), Number(s.credit)) : 0;
       await tx.ledgerAccount.update({ where: { id: s.accountId }, data: { currentBalance: { decrement: delta } } });
     }
+  }
+
+  // ─── Vendor / Client Opening Balance ─────────────────────────────────────────
+  // What a party already owed (or was owed) before being added to the books:
+  //   vendor: DR Opening Balance Equity / CR Accounts Payable  (we owe them)
+  //   client: DR Accounts Receivable / CR Opening Balance Equity (they owe us)
+  // Re-posting replaces the earlier entry (reverse, then post), so editing the
+  // amount never doubles it; 0 just removes it.
+  async postOpeningBalanceTx(
+    tx: Tx,
+    companyId: string,
+    params: { party: 'VENDOR' | 'CLIENT'; partyId: string; partyName: string; amount: number; date: Date },
+  ): Promise<void> {
+    await this.reverseEntriesTx(tx, companyId, 'OPENING_BALANCE', params.partyId);
+    const amount = Math.round(Number(params.amount) * 100) / 100;
+    if (!(amount > 0)) return;
+
+    const [equity, control] = await Promise.all([
+      this.getOrCreateSystemAccount(companyId, SYSTEM_ACCOUNTS.OPENING_BALANCE_EQUITY, 'EQUITY', tx),
+      params.party === 'VENDOR'
+        ? this.getOrCreateSystemAccount(companyId, SYSTEM_ACCOUNTS.ACCOUNTS_PAYABLE, 'LIABILITY', tx)
+        : this.getOrCreateSystemAccount(companyId, SYSTEM_ACCOUNTS.ACCOUNTS_RECEIVABLE, 'ASSET', tx),
+    ]);
+    const [debitAccount, creditAccount] = params.party === 'VENDOR' ? [equity, control] : [control, equity];
+    const description = `Opening balance — ${params.partyName}`;
+    const dateBs = adToBs(params.date);
+    const debitDelta = this.ledgerDelta(debitAccount.accountType, amount, 0);
+    const creditDelta = this.ledgerDelta(creditAccount.accountType, 0, amount);
+
+    await tx.ledgerEntry.create({
+      data: {
+        companyId, accountId: debitAccount.id, dateAd: params.date, dateBs, description,
+        debit: amount, credit: 0, balance: Number(debitAccount.currentBalance) + debitDelta,
+        referenceType: 'OPENING_BALANCE', referenceId: params.partyId, isAutoPosted: true,
+      },
+    });
+    await tx.ledgerEntry.create({
+      data: {
+        companyId, accountId: creditAccount.id, dateAd: params.date, dateBs, description,
+        debit: 0, credit: amount, balance: Number(creditAccount.currentBalance) + creditDelta,
+        referenceType: 'OPENING_BALANCE', referenceId: params.partyId, isAutoPosted: true,
+      },
+    });
+    await tx.ledgerAccount.update({ where: { id: debitAccount.id }, data: { currentBalance: { increment: debitDelta } } });
+    await tx.ledgerAccount.update({ where: { id: creditAccount.id }, data: { currentBalance: { increment: creditDelta } } });
   }
 
   // ─── Party (vendor/customer) Running Ledger ────────────────────────────────────

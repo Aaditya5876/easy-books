@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { taskApi } from '@/api';
 import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { workflowTypeLabel } from '@/lib/tasks';
 
@@ -35,6 +36,34 @@ export function TaskLinkSelect({ tasks, value, onChange }) {
           ))}
         </SelectContent>
       </Select>
+    </div>
+  );
+}
+
+// Workflow section of a purchase/sales bill: either link an open job, or tick
+// "Also create a workflow job" — the server then creates one filled from the
+// bill (party, items, amount) in the same save. Never both.
+export function WorkflowJobPicker({ tasks, taskId, createJob, onTaskChange, onCreateJobChange, partyLabel }) {
+  const { t } = useTranslation();
+  return (
+    <div className="space-y-2">
+      {!createJob && <TaskLinkSelect tasks={tasks} value={taskId} onChange={onTaskChange} />}
+      <label className="flex items-start gap-2 cursor-pointer rounded-md border border-dashed p-2">
+        <Checkbox
+          className="mt-0.5"
+          checked={!!createJob}
+          onCheckedChange={(v) => {
+            onCreateJobChange(!!v);
+            if (v) onTaskChange('');
+          }}
+        />
+        <span>
+          <span className="block text-sm">{t('workflow.createJobWithBill', { defaultValue: 'Also create a workflow job' })}</span>
+          <span className="block text-[11px] text-muted-foreground">
+            {t('workflow.createJobWithBillHint', { party: partyLabel, defaultValue: 'Filled with the {{party}}, items and amount, and linked to this bill.' })}
+          </span>
+        </span>
+      </label>
     </div>
   );
 }

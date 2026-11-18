@@ -24,8 +24,13 @@ import {
 import { useRole } from "@/lib/useRole";
 import BulkImportDialog from '../components/shared/BulkImportDialog';
 import { CLIENT_FIELDS } from '../components/shared/bulkImportFields';
+import PartyStatementDialog from '../components/shared/PartyStatementDialog';
+import { toast } from 'sonner';
+import { apiErrorMessage } from '@/lib/bills';
 
-const CRM_STATUSES = ['lead', 'prospect', 'active', 'inactive'];
+// Same values as the server's ClientStatus (sent upper-case, shown lower-case).
+const CRM_STATUSES = ['prospect', 'active', 'inactive'];
+const toServerStatus = (s) => String(s || 'active').toUpperCase();
 const PAYMENT_TERMS = ['Immediate', 'NET-15', 'NET-30', 'NET-45', 'NET-60'];
 const EMPTY_FORM = { name: '', contact_person: '', phone: '', email: '', address: '', pan_vat: '', crm_status: 'active', opening_balance: '', credit_limit: '', payment_terms: 'Immediate', notes: '' };
 
@@ -41,6 +46,7 @@ export default function Clients() {
   const [showAdd, setShowAdd] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
   const [editClient, setEditClient] = useState(null);
+  const [statementFor, setStatementFor] = useState(null); // client whose statement is open
   const [importOpen, setImportOpen] = useState(false);
 
   useEffect(() => {
@@ -50,41 +56,53 @@ export default function Clients() {
   async function loadData() {
     setLoading(true);
     const data = await api.Client.filter({ company_id: companyId });
-    setClients(data);
+    // Server sends ACTIVE / PROSPECT / INACTIVE; this page works in lower case.
+    setClients(data.map(c => ({ ...c, crm_status: String(c.crm_status || 'active').toLowerCase() })));
     setLoading(false);
   }
 
+  // The opening balance (already owed by this client) is posted to the ledger
+  // by the server: Dr Accounts Receivable.
   async function addClient() {
-    await api.Client.create({
-      ...form,
-      company_id: companyId,
-      opening_balance: form.opening_balance ? parseFloat(form.opening_balance) : 0,
-      credit_limit: form.credit_limit ? parseFloat(form.credit_limit) : null,
-    });
-    setForm(EMPTY_FORM);
-    setShowAdd(false);
-    loadData();
+    try {
+      await api.Client.create({
+        ...form,
+        company_id: companyId,
+        crm_status: toServerStatus(form.crm_status),
+        opening_balance: form.opening_balance ? parseFloat(form.opening_balance) : 0,
+        credit_limit: form.credit_limit ? parseFloat(form.credit_limit) : null,
+      });
+      setForm(EMPTY_FORM);
+      setShowAdd(false);
+      loadData();
+    } catch (err) {
+      toast.error(apiErrorMessage(err, t('clients.saveFailed', { defaultValue: 'Could not save the client' })));
+    }
   }
 
   async function updateClient() {
-    await api.Client.update(editClient.id, {
-      ...editClient,
-      opening_balance: parseFloat(editClient.opening_balance) || 0,
-      credit_limit: editClient.credit_limit ? parseFloat(editClient.credit_limit) : null,
-    });
-    setEditClient(null);
-    loadData();
+    try {
+      const { balance: _balance, ...client } = editClient;
+      await api.Client.update(editClient.id, {
+        ...client,
+        crm_status: toServerStatus(editClient.crm_status),
+        opening_balance: parseFloat(editClient.opening_balance) || 0,
+        credit_limit: editClient.credit_limit ? parseFloat(editClient.credit_limit) : null,
+      });
+      setEditClient(null);
+      loadData();
+    } catch (err) {
+      toast.error(apiErrorMessage(err, t('clients.saveFailed', { defaultValue: 'Could not save the client' })));
+    }
   }
 
   const statusColors = {
-    lead: 'bg-blue-100 text-blue-700',
     prospect: 'bg-amber-100 text-amber-700',
     active: 'bg-green-100 text-green-700',
     inactive: 'bg-gray-100 text-gray-600',
   };
 
   const statusLabels = {
-    lead: t('clients.statusLead', { defaultValue: 'Lead' }),
     prospect: t('clients.statusProspect', { defaultValue: 'Prospect' }),
     active: t('clients.statusActive', { defaultValue: 'Active' }),
     inactive: t('clients.statusInactive', { defaultValue: 'Inactive' }),
@@ -117,8 +135,18 @@ export default function Clients() {
         {statusLabels[row.crm_status] || row.crm_status}
       </span>
     )},
-    { key: 'total_sales', label: t('clients.totalSales', { defaultValue: 'Total Sales' }), render: (row) => (
-      <span className="font-mono">NPR {(row.total_sales || 0).toLocaleString()}</span>
+    { key: 'billed', label: t('clients.totalSales', { defaultValue: 'Total Sales' }), render: (row) => (
+      <span className="font-mono">NPR {Number(row.balance?.billed || 0).toLocaleString()}</span>
+    )},
+    // Opening + bills − payments − credit notes: what this client still owes us.
+    { key: 'due', label: t('clients.owesUs', { defaultValue: 'Owes us' }), render: (row) => {
+      const due = Number(row.balance?.due || 0);
+      return <span className={`font-mono font-semibold ${due > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground'}`}>NPR {due.toLocaleString()}</span>;
+    }},
+    { key: 'statement', label: '', render: (row) => (
+      <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={(e) => { e.stopPropagation(); setStatementFor(row); }}>
+        <FileText className="w-3 h-3" /> {t('statement.button', { defaultValue: 'Statement' })}
+      </Button>
     )},
   ];
 
@@ -144,7 +172,7 @@ export default function Clients() {
       />
 
       {/* CRM Summary */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-3 gap-3">
         {CRM_STATUSES.map(status => (
           <div key={status} className="glass-card rounded-xl p-4 text-center">
             <p className="text-2xl font-bold">{clients.filter(c => c.crm_status === status).length}</p>
@@ -158,6 +186,8 @@ export default function Clients() {
       ) : (
         <DataTable columns={columns} data={filtered} emptyMessage={t('clients.noClientsMatchSearch', { defaultValue: 'No clients match your search.' })} onRowClick={canEdit ? (row) => setEditClient({ ...row }) : undefined} />
       )}
+
+      <PartyStatementDialog kind="client" party={statementFor} open={!!statementFor} onOpenChange={(open) => { if (!open) setStatementFor(null); }} />
 
       {/* Add Dialog */}
       <Dialog open={showAdd} onOpenChange={setShowAdd}>

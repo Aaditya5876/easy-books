@@ -271,30 +271,22 @@ export class SpaceService {
       return { salesOrderId: null, invoiceNumber: null, totalAmount: 0 };
     }
 
+    // Paid at checkout (not on credit): the bill and its payment are saved
+    // together — the same "Paid in full" a Sales bill offers. On credit, the
+    // guest becomes a client who owes the bill (paid later from Sales).
     const paymentMethod = dto.paymentMethod ?? 'CASH';
+    const paid = paymentMethod !== 'CREDIT';
     const order = await this.sales.create({
       companyId,
       clientName: s.guestName,
       clientContact: s.guestContact ?? undefined,
       dateAd: new Date().toISOString().slice(0, 10),
       isVat: !!dto.isVat,
-      paymentMethod,
+      payment: paid ? { type: 'FULL', paymentMethod } : { type: 'CREDIT' },
       notes: `${s.space.type} ${s.space.name} — ${s.guestName}`,
       items,
-    } as any, (tx, created) => finish(tx, created.id));
+    }, (tx, created) => finish(tx, created.id));
 
-    // Paid at checkout (not on credit): record it. If that fails the bill
-    // stays as an unpaid receivable and can be paid from Sales.
-    let paid = false;
-    if (paymentMethod !== 'CREDIT') {
-      try {
-        await this.sales.recordPayment({
-          companyId, salesOrderId: order.id, amount: n(order.totalAmount), paymentMethod,
-          dateAd: new Date().toISOString().slice(0, 10), notes: `Checkout — ${s.space.type} ${s.space.name}`,
-        } as any);
-        paid = true;
-      } catch { /* left unpaid */ }
-    }
-    return { salesOrderId: order.id, invoiceNumber: (order as any).invoiceNumber, totalAmount: n(order.totalAmount), paid };
+    return { salesOrderId: order.id, invoiceNumber: order.invoiceNumber, totalAmount: n(order.totalAmount), paid };
   }
 }

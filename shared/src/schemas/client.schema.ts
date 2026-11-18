@@ -15,6 +15,8 @@ export const CreateClientSchema = z.object({
   address: z.string().optional(),
   panVat: z.string().optional(),
   crmStatus: ClientStatusEnum.default('ACTIVE'),
+  // Already owed before this party was added (we owe a vendor / a client owes us).
+  openingBalance: z.coerce.number().finite().min(0).optional(),
   notes: z.string().optional(),
 });
 

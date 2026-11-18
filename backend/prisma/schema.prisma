@@ -859,6 +859,9 @@ model Client {
   address       String?
   panVat        String?
   crmStatus     ClientStatus @default(ACTIVE)
+  // Amount this client already owed us before they were added (posted as
+  // Dr Accounts Receivable / Cr Opening Balance Equity, referenceType OPENING_BALANCE).
+  openingBalance Decimal     @default(0) @db.Decimal(14, 2)
   notes         String?
   deletedAt     DateTime?
   createdAt     DateTime     @default(now())
@@ -886,6 +889,9 @@ model Vendor {
   address       String?
   panVat        String?
   bankDetails   String?
+  // Amount we already owed this vendor before they were added (posted as
+  // Dr Opening Balance Equity / Cr Accounts Payable, referenceType OPENING_BALANCE).
+  openingBalance Decimal   @default(0) @db.Decimal(14, 2)
   notes         String?
   deletedAt     DateTime?
   createdAt     DateTime  @default(now())

@@ -41,6 +41,9 @@ export const salesApi = {
   create: (data: object, config?: object) => apiClient.post('/api/v1/sales', data, config),
   update: (id: string, data: object) => apiClient.put(`/api/v1/sales/${id}`, data, { params: { companyId: companyId() } }),
   remove: (id: string) => apiClient.delete(`/api/v1/sales/${id}`, { params: { companyId: companyId() } }),
+  // { amount, paymentMethod, dateAd, referenceNumber? } — pass { idempotencyKey } so a retry never records it twice.
+  recordPayment: (id: string, data: object, config?: object) =>
+    apiClient.post(`/api/v1/sales/${id}/payment`, data, { ...config, params: { companyId: companyId() } }),
 };
 
 // Purchases
@@ -50,6 +53,9 @@ export const purchaseApi = {
   create: (data: object, config?: object) => apiClient.post('/api/v1/purchases', data, config),
   update: (id: string, data: object) => apiClient.put(`/api/v1/purchases/${id}`, data, { params: { companyId: companyId() } }),
   remove: (id: string) => apiClient.delete(`/api/v1/purchases/${id}`, { params: { companyId: companyId() } }),
+  // { amount, paymentMethod, dateAd, referenceNumber? } — pass { idempotencyKey } so a retry never records it twice.
+  recordPayment: (id: string, data: object, config?: object) =>
+    apiClient.post(`/api/v1/purchases/${id}/payment`, data, { ...config, params: { companyId: companyId() } }),
 };
 
 // Clients
@@ -59,6 +65,8 @@ export const clientApi = {
   create: (data: object, config?: object) => apiClient.post('/api/v1/clients', data, config),
   update: (id: string, data: object) => apiClient.put(`/api/v1/clients/${id}`, data, { params: { companyId: companyId() } }),
   remove: (id: string) => apiClient.delete(`/api/v1/clients/${id}`, { params: { companyId: companyId() } }),
+  // Opening balance, bills, payments and returns with a running balance.
+  statement: (id: string) => apiClient.get(`/api/v1/clients/${id}/statement`, { params: { companyId: companyId() } }),
 };
 
 // Vendors
@@ -68,6 +76,8 @@ export const vendorApi = {
   create: (data: object, config?: object) => apiClient.post('/api/v1/vendors', data, config),
   update: (id: string, data: object) => apiClient.put(`/api/v1/vendors/${id}`, data, { params: { companyId: companyId() } }),
   remove: (id: string) => apiClient.delete(`/api/v1/vendors/${id}`, { params: { companyId: companyId() } }),
+  // Opening balance, bills, payments and returns with a running balance.
+  statement: (id: string) => apiClient.get(`/api/v1/vendors/${id}/statement`, { params: { companyId: companyId() } }),
 };
 
 // Employees

@@ -19,6 +19,15 @@ export class ClientController {
     return this.service.findAll(companyId);
   }
 
+  // Running statement (opening balance, bills, payments, returns) — the
+  // same layout as a hand-written party ledger.
+  @Get(':id/statement')
+  @ApiOperation({ summary: 'Client statement: opening balance, bills, payments and returns with a running balance' })
+  @ApiQuery({ name: 'companyId', required: true })
+  statement(@Param('id') id: string, @Query('companyId') companyId: string) {
+    return this.service.statement(id, companyId);
+  }
+
   @Get(':id')
   @ApiOperation({ summary: 'Get a client by id' })
   @ApiQuery({ name: 'companyId', required: true })

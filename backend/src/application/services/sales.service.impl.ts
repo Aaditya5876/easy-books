@@ -6,6 +6,9 @@ import { LedgerPostingService } from './ledger-posting.service';
 import { adToBs } from '@easy-books/shared';
 import { VAT_RATE } from '../../domain/vo';
 import { billAttachmentUrls } from '../../../core/utils/bill-attachments';
+import { BillPayment, assertWithinDue, billStatus, parseBillPayment, parseDate, parsePayNow, payNowAmount } from '../../../core/utils/bill-payment';
+import { resolveClientTx } from '../../../core/utils/bill-party';
+import { createBillJobTx } from '../../../core/utils/task-number';
 
 interface OrderItem {
   inventoryItemId?: string;
@@ -27,21 +30,19 @@ interface CreateSalesOrderInput {
   dateAd: string;
   isVat: boolean;
   laborCharges?: number;
-  paymentMethod?: string;
   issuedBy?: string;
   notes?: string;
   attachments?: unknown; // [{ url }] from /api/v1/upload — see core/utils/bill-attachments.ts
   items: OrderItem[];
+  // Received on the spot? Missing = udharo. See core/utils/bill-payment.ts (parsePayNow).
+  payment?: unknown;
+  // "Also create a workflow job" — a job filled from this bill, saved with it.
+  createJob?: boolean;
 }
 
-interface RecordPaymentInput {
+interface RecordPaymentInput extends Record<string, unknown> {
   companyId: string;
   salesOrderId: string;
-  amount: number;
-  paymentMethod: string;
-  referenceNumber?: string;
-  dateAd: string;
-  notes?: string;
 }
 
 @Injectable()
@@ -80,25 +81,39 @@ export class SalesServiceImpl {
     const { companyId, items, isVat, laborCharges = 0, ...rest } = dto;
 
     if (!items || items.length === 0) throw new BadRequestException('Order must have at least one item');
+    if (dto.createJob && rest.taskId) throw new BadRequestException('Link an existing job or create a new one — not both');
+    const payNow = parsePayNow(dto.payment);
+    const dateAd = parseDate(dto.dateAd, 'Bill date');
     await assertTaskLink(this.prisma, companyId, rest.taskId);
 
     // ── Validate stock availability ────────────────────────────────────────────
     await this.validateStock(companyId, items);
     const attachmentUrls = billAttachmentUrls(companyId, dto.attachments);
 
-    // ── Generate invoice number ────────────────────────────────────────────────
-    const invoiceNumber = await this.generateInvoiceNumber(companyId);
-
     // ── Calculate totals ──────────────────────────────────────────────────────
     const { computedItems, subtotal, discountTotal } = this.computeItems(items);
     const vatAmount = isVat ? Number(((subtotal - discountTotal + laborCharges) * VAT_RATE).toFixed(2)) : 0;
     const totalAmount = Number((subtotal - discountTotal + laborCharges + vatAmount).toFixed(2));
-
-    const dateAd = new Date(dto.dateAd);
+    const receivedNow = payNowAmount(payNow, totalAmount); // refuses receiving more than the bill
     const dateBs = adToBs(dateAd);
+
+    // ── Generate invoice number ────────────────────────────────────────────────
+    const invoiceNumber = await this.generateInvoiceNumber(companyId);
 
     // ── Create order + items in one transaction ────────────────────────────────
     const order = await this.prisma.$transaction(async (tx) => {
+      // Anyone who still owes us must be a tracked client; a fully paid
+      // walk-in sale doesn't create one.
+      const client = await resolveClientTx(tx, companyId, {
+        id: rest.clientId, name: rest.clientName, contact: rest.clientContact, address: rest.clientAddress, panVat: rest.clientPanVat,
+      }, receivedNow < totalAmount - 0.005);
+      const taskId = dto.createJob
+        ? await createBillJobTx(tx, companyId, {
+            kind: 'SALE', number: invoiceNumber, partyType: 'CLIENT', partyId: client.id, partyName: client.name,
+            partyContact: rest.clientContact, items: computedItems, totalAmount,
+          })
+        : rest.taskId;
+
       const created = await tx.salesOrder.create({
         data: {
           companyId,
@@ -113,13 +128,13 @@ export class SalesServiceImpl {
           totalAmount,
           paidAmount: 0,
           status: 'PENDING',
-          taskId: rest.taskId,
-          clientId: rest.clientId,
-          clientName: rest.clientName,
+          taskId,
+          clientId: client.id,
+          clientName: client.name,
           clientContact: rest.clientContact,
           clientAddress: rest.clientAddress,
           clientPanVat: rest.clientPanVat,
-          paymentMethod: (rest.paymentMethod ?? 'CASH') as any,
+          paymentMethod: payNow.type === 'CREDIT' ? 'CREDIT' : payNow.paymentMethod,
           issuedBy: rest.issuedBy,
           notes: rest.notes,
           items: {
@@ -155,57 +170,63 @@ export class SalesServiceImpl {
 
       // Ledger in the same transaction: a bill without its ledger entries (or
       // entries without a bill) can never be left behind.
+      // DR Accounts Receivable / CR Sales, then (if received now) DR Cash|Bank / CR Accounts Receivable.
       await this.ledgerPosting.postSalesOrder(companyId, created.id, tx);
+      if (payNow.type !== 'CREDIT' && receivedNow > 0) {
+        await this.applyPaymentTx(tx, companyId, created.id, {
+          amount: receivedNow, paymentMethod: payNow.paymentMethod, dateAd, referenceNumber: payNow.referenceNumber,
+        });
+      }
       if (inTx) await inTx(tx, created);
 
-      return created;
+      return tx.salesOrder.findUniqueOrThrow({ where: { id: created.id }, include: { items: true, payments: true } });
     }, { timeout: 15000 });
 
     return order;
   }
 
   async recordPayment(dto: RecordPaymentInput) {
+    const payment = parseBillPayment(dto);
     const order = await this.prisma.salesOrder.findFirst({
-      where: { id: dto.salesOrderId, companyId: dto.companyId },
+      where: { id: dto.salesOrderId, companyId: dto.companyId, deletedAt: null },
     });
     if (!order) throw new NotFoundException('Sales order not found');
     // Early, friendly check; the authoritative one is inside the transaction.
-    if (Number(order.paidAmount) + dto.amount > Number(order.totalAmount) + 0.005) {
-      throw new BadRequestException('Payment exceeds order total');
-    }
+    assertWithinDue(Number(order.paidAmount), payment.amount, Number(order.totalAmount));
 
-    return this.prisma.$transaction(async (tx) => {
-      // Increment (not "set to what I read"): the row stays locked until this
-      // transaction ends, so a racing payment waits and then sees this one.
-      const after = await tx.salesOrder.update({
-        where: { id: dto.salesOrderId },
-        data: { paidAmount: { increment: dto.amount } },
-        select: { paidAmount: true, totalAmount: true },
-      });
-      const paid = Number(after.paidAmount);
-      const total = Number(after.totalAmount);
-      if (paid > total + 0.005) throw new BadRequestException('Payment exceeds order total');
-      await tx.salesOrder.update({
-        where: { id: dto.salesOrderId },
-        data: { status: (paid >= total - 0.005 ? 'COMPLETED' : 'PARTIALLY_PAID') as any },
-      });
+    return this.prisma.$transaction((tx) => this.applyPaymentTx(tx, dto.companyId, order.id, payment));
+  }
 
-      const p = await tx.payment.create({
-        data: {
-          companyId: dto.companyId,
-          salesOrderId: dto.salesOrderId,
-          amount: dto.amount,
-          paymentMethod: dto.paymentMethod as any,
-          referenceNumber: dto.referenceNumber,
-          dateAd: new Date(dto.dateAd),
-          dateBs: adToBs(new Date(dto.dateAd)),
-          notes: dto.notes,
-        },
-      });
-
-      await this.ledgerPosting.postPaymentReceived(dto.companyId, p.id, tx);
-      return p;
+  // Adds a received payment to a bill: Paid goes up, the status follows the
+  // money, and the ledger gets DR Cash (or Bank) / CR Accounts Receivable.
+  private async applyPaymentTx(tx: Prisma.TransactionClient, companyId: string, salesOrderId: string, payment: BillPayment) {
+    // Increment (not "set to what I read"): the row stays locked until this
+    // transaction ends, so a racing payment waits and then sees this one.
+    const after = await tx.salesOrder.update({
+      where: { id: salesOrderId },
+      data: { paidAmount: { increment: payment.amount } },
+      select: { paidAmount: true, totalAmount: true },
     });
+    const paid = Number(after.paidAmount);
+    const total = Number(after.totalAmount);
+    assertWithinDue(paid - payment.amount, payment.amount, total);
+    await tx.salesOrder.update({ where: { id: salesOrderId }, data: { status: billStatus(paid, total) } });
+
+    const p = await tx.payment.create({
+      data: {
+        companyId,
+        salesOrderId,
+        amount: payment.amount,
+        paymentMethod: payment.paymentMethod,
+        referenceNumber: payment.referenceNumber,
+        dateAd: payment.dateAd,
+        dateBs: adToBs(payment.dateAd),
+        notes: payment.notes,
+      },
+    });
+
+    await this.ledgerPosting.postPaymentReceived(companyId, p.id, tx);
+    return p;
   }
 
   async update(id: string, companyId: string, data: any) {
@@ -216,8 +237,15 @@ export class SalesServiceImpl {
     // Only descriptive fields are editable: totals, paidAmount and status are
     // derived from items and recorded payments, never taken from the request.
     const edit: any = {};
-    for (const k of ['clientId', 'clientName', 'clientContact', 'clientAddress', 'clientPanVat', 'paymentMethod', 'notes']) {
+    for (const k of ['clientName', 'clientContact', 'clientAddress', 'clientPanVat', 'notes']) {
       if (data?.[k] !== undefined) edit[k] = data[k];
+    }
+    if (data?.clientId !== undefined) {
+      if (data.clientId) {
+        const client = await this.prisma.client.findFirst({ where: { id: data.clientId, companyId, deletedAt: null }, select: { id: true } });
+        if (!client) throw new BadRequestException('Client not found in this company');
+      }
+      edit.clientId = data.clientId || null;
     }
     if (data?.dateAd) {
       edit.dateAd = new Date(data.dateAd);
@@ -236,8 +264,9 @@ export class SalesServiceImpl {
       throw new BadRequestException('Cannot delete an order that has payments recorded');
     }
 
-    // Restore stock and soft-delete
+    // Restore stock, take its ledger entries back out, and soft-delete
     await this.prisma.$transaction(async (tx) => {
+      await this.ledgerPosting.reverseEntriesTx(tx, companyId, 'SALES_ORDER', id);
       for (const item of order.items) {
         if (item.inventoryItemId) {
           await tx.inventoryItem.update({

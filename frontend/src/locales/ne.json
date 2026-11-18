@@ -1900,7 +1900,9 @@
     "creditLimitPlaceholder": "जस्तै: ५०,०००",
     "cancel": "रद्द गर्नुहोस्",
     "editVendor": "विक्रेता सम्पादन गर्नुहोस्",
-    "saveChanges": "परिवर्तनहरू सुरक्षित गर्नुहोस्"
+    "saveChanges": "परिवर्तनहरू सुरक्षित गर्नुहोस्",
+    "weOwe": "हामीले तिर्नुपर्ने",
+    "saveFailed": "आपूर्तिकर्ता सेभ गर्न सकिएन"
   },
   "clients": {
     "title": "ग्राहकहरू",
@@ -1938,7 +1940,9 @@
     "notes": "टिप्पणी",
     "cancel": "रद्द गर्नुहोस्",
     "editClient": "ग्राहक सम्पादन गर्नुहोस्",
-    "saveChanges": "परिवर्तनहरू सुरक्षित गर्नुहोस्"
+    "saveChanges": "परिवर्तनहरू सुरक्षित गर्नुहोस्",
+    "owesUs": "हामीलाई तिर्नुपर्ने",
+    "saveFailed": "ग्राहक सेभ गर्न सकिएन"
   },
   "auditLog": {
     "title": "गतिविधि लगत",
@@ -2034,7 +2038,9 @@
     "laborTotal": "श्रम जम्मा",
     "vatPercent": "भ्याट (१३%)",
     "cancel": "रद्द गर्नुहोस्",
-    "savePurchase": "खरिद सुरक्षित गर्नुहोस्"
+    "savePurchase": "खरिद सुरक्षित गर्नुहोस्",
+    "saved": "खरिद सेभ भयो",
+    "saveFailed": "खरिद सेभ गर्न सकिएन"
   },
   "sales": {
     "unknownClient": "अज्ञात ग्राहक",
@@ -2122,7 +2128,9 @@
     "attachmentsHint": "बीजक, रसिद वा फोटोहरू संलग्न गर्नुहोस्",
     "cancel": "रद्द गर्नुहोस्",
     "saveSale": "बिक्री बचत गर्नुहोस्",
-    "saveAndPrint": "बचत गर्नुहोस् र प्रिन्ट गर्नुहोस्"
+    "saveAndPrint": "बचत गर्नुहोस् र प्रिन्ट गर्नुहोस्",
+    "saved": "बिक्री सेभ भयो",
+    "saveFailed": "बिक्री सेभ गर्न सकिएन"
   },
   "quotations": {
     "statusPending": "विचाराधीन",
@@ -2446,7 +2454,11 @@
     "linkToJob": "वर्कफ्लो काम",
     "optional": "ऐच्छिक",
     "noJob": "कुनै कामका लागि होइन",
-    "jobColumn": "काम"
+    "jobColumn": "काम",
+    "createJobWithBill": "साथै वर्कफ्लो काम बनाउनुहोस्",
+    "createJobWithBillHint": "{{party}}, सामान र रकमसहित भरिएको, यो बिलसँग जोडिएको।",
+    "partyVendor": "आपूर्तिकर्ता",
+    "partyClient": "ग्राहक"
   },
   "memo": {
     "title": "मेमो",
@@ -3395,5 +3407,85 @@
     "add": "थप्नुहोस्",
     "clientUnitsLabel": "यो व्यवसायका एकाइहरू",
     "clientUnitsHint": "व्यवसायको प्रकारअनुसार पहिले नै भरिएको — आवश्यकताअनुसार थप्नुहोस् वा हटाउनुहोस्। ग्राहकको एडमिनले पछि बदल्न सक्छ।"
+  },
+  "bills": {
+    "payment": "भुक्तानी",
+    "modeCredit": "उधारो",
+    "modeCreditHint": "पछि तिर्ने",
+    "modeCreditHintSale": "पछि उठाउने",
+    "modeFull": "पूरै तिरियो",
+    "modeFullSale": "पूरै प्राप्त भयो",
+    "modeFullHint": "अहिले नै फरफारक",
+    "modePartial": "आंशिक तिरियो",
+    "modePartialSale": "आंशिक प्राप्त भयो",
+    "modePartialHint": "बाँकी पछि",
+    "paidBy": "भुक्तानी माध्यम",
+    "receivedBy": "प्राप्त माध्यम",
+    "amountPaidNow": "अहिले तिरेको रकम",
+    "amountReceivedNow": "अहिले प्राप्त रकम",
+    "reference": "सन्दर्भ नं.",
+    "optional": "ऐच्छिक",
+    "referencePlaceholder": "चेक / कारोबार नं.",
+    "stillToPay": "तिर्न बाँकी",
+    "stillToCollect": "उठाउन बाँकी",
+    "methodCASH": "नगद",
+    "methodBANK_TRANSFER": "बैंक ट्रान्सफर",
+    "methodCHEQUE": "चेक",
+    "methodQR": "QR / वालेट",
+    "methodCREDIT": "उधारो",
+    "errAmountRequired": "० भन्दा बढी रकम लेख्नुहोस्",
+    "errAmountAboveTotal": "रकम बिलको जम्मा भन्दा बढी छ",
+    "errAmountAboveDue": "रकम बाँकी रकम भन्दा बढी छ",
+    "errMethodRequired": "कसरी भुक्तानी भयो छान्नुहोस्",
+    "errDateRequired": "भुक्तानी मिति छान्नुहोस्",
+    "fixPayment": "भुक्तानी विवरण जाँच गर्नुहोस्",
+    "statusPENDING": "बाँकी",
+    "statusPARTIAL": "आंशिक भुक्तानी",
+    "statusPAID": "भुक्तानी भयो",
+    "statusCANCELLED": "रद्द",
+    "statusFilterPlaceholder": "जस्तै: बाँकी",
+    "colPaid": "तिरेको",
+    "colReceived": "प्राप्त",
+    "colDue": "बाँकी",
+    "total": "जम्मा",
+    "recordPayment": "भुक्तानी दर्ता",
+    "receivePayment": "भुक्तानी प्राप्त",
+    "paymentHistory": "भुक्तानी इतिहास",
+    "noPayments": "अहिलेसम्म कुनै भुक्तानी छैन।",
+    "amount": "रकम",
+    "date": "मिति",
+    "fullyPaid": "यो बिल पूरै भुक्तानी भइसकेको छ।",
+    "savePayment": "भुक्तानी सेभ गर्नुहोस्",
+    "saving": "सेभ हुँदैछ…",
+    "loading": "लोड हुँदैछ…",
+    "close": "बन्द गर्नुहोस्",
+    "paidToast": "भुक्तानी दर्ता भयो",
+    "receivedToast": "भुक्तानी प्राप्त भयो",
+    "saveFailed": "भुक्तानी सेभ गर्न सकिएन",
+    "loadFailed": "यो बिल लोड गर्न सकिएन"
+  },
+  "statement": {
+    "button": "विवरण",
+    "title": "{{name}} — खाता विवरण",
+    "vendorHint": "Cr = हामीले तिर्नुपर्ने बढ्यो (बिल)। Dr = तिर्नुपर्ने घट्यो (भुक्तानी, फिर्ता)।",
+    "clientHint": "Dr = उहाँले तिर्नुपर्ने बढ्यो (बिल)। Cr = तिर्नुपर्ने घट्यो (भुक्तानी, फिर्ता)।",
+    "weOwe": "हामीले तिर्नुपर्ने",
+    "owesUs": "हामीलाई तिर्नुपर्ने",
+    "colDate": "मिति",
+    "colDescription": "विवरण",
+    "colRef": "सन्दर्भ",
+    "colDr": "डेबिट",
+    "colCr": "क्रेडिट",
+    "colBalance": "बाँकी",
+    "typeOPENING": "सुरुको",
+    "typeBILL": "बिल",
+    "typePAYMENT": "भुक्तानी",
+    "typeRETURN": "फिर्ता",
+    "totals": "जम्मा",
+    "nil": "शून्य",
+    "empty": "अहिलेसम्म कुनै बिल वा भुक्तानी छैन।",
+    "loading": "लोड हुँदैछ…",
+    "loadFailed": "विवरण लोड गर्न सकिएन",
+    "close": "बन्द गर्नुहोस्"
   }
 }
