@@ -39,6 +39,22 @@ export const FIRST_TERM_MONTHS = 12;
 
 export const SUBSCRIPTION_PAYMENT_METHODS = ['CASH', 'BANK_TRANSFER', 'CHEQUE', 'QR', 'ESEWA', 'KHALTI', 'OTHER'] as const;
 
+// Asking for a cheaper plan (Basic / Standard) while the free Premium trial
+// still runs ends Premium early, so the admin confirms it with their
+// password. Returns the trial days left that would be given up (0 = nothing
+// given up: Premium picked, trial over, plan already bought, or no plan).
+export function trialDaysGivenUp(
+  company: { planTier?: string | null; planStatus?: string | null; trialEndsAt?: string | Date | null } | null | undefined,
+  wishTier: string | null | undefined,
+  now: Date = new Date(),
+): number {
+  if (!company || company.planStatus !== 'TRIAL' || !company.trialEndsAt || !wishTier) return 0;
+  const rank = (t: string | null | undefined) => PLAN_TIERS.indexOf(t as PlanTier);
+  if (rank(wishTier) < 0 || rank(wishTier) >= rank(company.planTier ?? TRIAL_TIER)) return 0;
+  const left = new Date(company.trialEndsAt).getTime() - now.getTime();
+  return left > 0 ? Math.ceil(left / (24 * 60 * 60 * 1000)) : 0;
+}
+
 // Logins a tier allows, counting the admin. null = no limit.
 export function maxUsersFor(tier: string | null | undefined): number | null {
   return tier === 'BASIC' ? 1 : null;
@@ -133,6 +149,8 @@ export const UpdatePlanPriceSchema = z.object({
 export const RequestRenewalSchema = z.object({
   period: z.enum(BILLING_PERIODS).optional(),
   planTier: z.enum(PLAN_TIERS).optional(),
+  // Needed only when the request ends the free Premium trial early (see trialDaysGivenUp).
+  password: z.string().max(200).optional(),
 }).optional();
 
 export type ActivatePlanDTO = z.infer<typeof ActivatePlanSchema>;

@@ -163,9 +163,13 @@ export class SubscriptionService {
     return { company: updated, payment: SubscriptionService.toPayment(saved) };
   }
 
-  // First purchase: the installation fee buys one year of the chosen tier,
-  // starting today. Also how a company set up before plans existed is put on one.
-  async activate(companyId: string, dto: ActivatePlanDTO, recordedById: string) {
+  // First purchase: the installation fee buys one year of the chosen tier.
+  // Bought during the free trial, the year starts when the trial would have
+  // ended (buying early never costs the client trial days); the chosen tier
+  // applies straight away. After the trial ran out — or for a company set up
+  // before plans existed — the year starts today. carryTrial=false: paid at
+  // sign-up (provisioning), so there is no trial to carry over.
+  async activate(companyId: string, dto: ActivatePlanDTO, recordedById: string, { carryTrial = true } = {}) {
     const company = await this.prisma.company.findUnique({ where: { id: companyId } });
     if (!company) throw new NotFoundException('Company not found');
     if (company.planStatus === 'ACTIVE') {
@@ -175,12 +179,14 @@ export class SubscriptionService {
     await this.assertTierFits(companyId, company.name, dto.planTier);
     const price = await this.priceFor(productLine, dto.planTier);
     const now = new Date();
-    const end = addMonths(now, FIRST_TERM_MONTHS);
+    const trialLeft = carryTrial && company.planStatus === 'TRIAL' && company.trialEndsAt && company.trialEndsAt.getTime() > now.getTime();
+    const start = trialLeft ? company.trialEndsAt! : now;
+    const end = addMonths(start, FIRST_TERM_MONTHS);
     return this.record(company, {
       kind: 'ACTIVATION', planTier: dto.planTier, period: 'YEARLY', months: FIRST_TERM_MONTHS,
       amount: dto.amount ?? price.installationFee, paymentMethod: dto.paymentMethod,
       reference: dto.reference || null, note: dto.note || null, paidAt: dto.paidAt ?? now,
-      periodStart: now, periodEnd: end, recordedById,
+      periodStart: start, periodEnd: end, recordedById,
     }, {
       productLine, planTier: dto.planTier, planStatus: 'ACTIVE', subscriptionStartedAt: now, subscriptionExpiresAt: end,
     });

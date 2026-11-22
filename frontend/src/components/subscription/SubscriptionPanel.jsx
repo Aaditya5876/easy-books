@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { CalendarClock, Users, Receipt, Send, Sparkles } from 'lucide-react';
-import { PLAN_TIERS, BILLING_PERIODS } from '@easy-books/shared';
+import { CalendarClock, Users, Receipt, Send, Sparkles, AlertTriangle, Lock } from 'lucide-react';
+import { PLAN_TIERS, BILLING_PERIODS, trialDaysGivenUp } from '@easy-books/shared';
 import { subscriptionApi, companyApi } from '@/api';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { apiErrorMessage } from '@/lib/bills';
 import { defaultAmount, formatNpr, formatDate, planState } from '@/lib/subscription';
 import { PlanBadge, DaysLeft, PriceTable, PaymentHistory, useLabels } from './PlanParts';
@@ -24,10 +26,16 @@ export default function SubscriptionPanel({ companyId }) {
   });
   const [wish, setWish] = useState({ planTier: 'STANDARD', period: 'YEARLY' });
   const [sending, setSending] = useState(false);
+  // Cheaper plan during the free Premium trial: first a warning ('warn'),
+  // then the admin's password ('password'). The server checks it again.
+  const [confirmStep, setConfirmStep] = useState(null);
+  const [password, setPassword] = useState('');
 
+  // Start on the plan they are using now (the trial is Premium) — they change
+  // it only if they want a different one.
   useEffect(() => {
-    if (sub?.planStatus === 'ACTIVE' && sub.planTier) setWish((w) => ({ ...w, planTier: sub.planTier }));
-  }, [sub?.planStatus, sub?.planTier]);
+    if (sub?.planTier) setWish((w) => ({ ...w, planTier: sub.planTier }));
+  }, [sub?.planTier]);
 
   if (isLoading) return <div className="py-10 text-center text-sm text-muted-foreground">{t('subscription.loading', { defaultValue: 'Loading…' })}</div>;
   if (isError || !sub) {
@@ -45,17 +53,34 @@ export default function SubscriptionPanel({ companyId }) {
   const mode = bought ? 'RENEW' : 'ACTIVATE';
   const price = defaultAmount(sub.prices, wish.planTier, mode, wish.period);
 
-  async function sendRequest() {
+  const daysGivenUp = trialDaysGivenUp(sub, wish.planTier);
+
+  function closeConfirm() {
+    setConfirmStep(null);
+    setPassword('');
+  }
+
+  async function sendRequest(pwd) {
     setSending(true);
     try {
-      await companyApi.requestRenewal(companyId, bought ? wish : { planTier: wish.planTier });
+      const body = bought ? { ...wish } : { planTier: wish.planTier };
+      if (pwd) body.password = pwd;
+      await companyApi.requestRenewal(companyId, body);
+      closeConfirm();
       toast.success(t('subscription.requestSent', { defaultValue: 'Request sent — GeoInfosys will contact you to complete the payment.' }));
       refetch();
     } catch (err) {
+      // Wrong password: stay on the password step so they can try again.
+      if (pwd) setPassword('');
       toast.error(apiErrorMessage(err, t('subscription.requestFailed', { defaultValue: 'Could not send the request' })));
     } finally {
       setSending(false);
     }
+  }
+
+  function onRequestClick() {
+    if (daysGivenUp > 0) setConfirmStep('warn');
+    else sendRequest();
   }
 
   return (
@@ -115,7 +140,7 @@ export default function SubscriptionPanel({ companyId }) {
           <p className="text-sm text-muted-foreground mt-0.5">
             {bought
               ? t('subscription.renewSubtitle', { defaultValue: 'Renewing early adds the time on top of your current expiry — you never lose days.' })
-              : t('subscription.buySubtitle', { defaultValue: 'The first purchase is the installation fee and includes one year. After that you renew monthly, quarterly, half-yearly or yearly.' })}
+              : t('subscription.buySubtitle', { defaultValue: 'The first purchase is always one year — the installation fee includes it. Buy during your free trial and the year starts when the trial ends, so you lose no trial days. Monthly, quarterly and half-yearly are for renewals after that first year.' })}
           </p>
         </div>
         <div className="grid gap-3 sm:grid-cols-3 items-end">
@@ -133,7 +158,13 @@ export default function SubscriptionPanel({ companyId }) {
               </select>
             </div>
           ) : (
-            <div className="text-sm text-muted-foreground pb-2">{t('subscription.firstPurchase', { defaultValue: 'First purchase (1 year)' })}</div>
+            // First purchase always covers one year — shown, but not changeable.
+            <div className="space-y-1.5">
+              <Label>{t('subscription.period', { defaultValue: 'Period' })}</Label>
+              <select className={selectClass} value="FIRST_YEAR" disabled>
+                <option value="FIRST_YEAR">{t('subscription.firstYearIncluded', { defaultValue: '1 year (included with first purchase)' })}</option>
+              </select>
+            </div>
           )}
           <div className="pb-2 text-sm">
             {price !== '' && <span className="font-semibold">{formatNpr(price)}</span>}
@@ -143,7 +174,7 @@ export default function SubscriptionPanel({ companyId }) {
           <p className="text-xs text-amber-700">{t('subscription.basicTooMany', { n: sub.users.active, defaultValue: 'You have {{n}} active logins — Basic allows only the admin, so the others would need to be suspended.' })}</p>
         )}
         <div className="flex flex-wrap items-center gap-3">
-          <Button onClick={sendRequest} disabled={sending}>
+          <Button onClick={onRequestClick} disabled={sending}>
             <Send className="w-4 h-4 mr-1.5" />
             {sending ? t('subscription.sending', { defaultValue: 'Sending…' }) : t('subscription.sendRequest', { defaultValue: 'Request from GeoInfosys' })}
           </Button>
@@ -152,6 +183,48 @@ export default function SubscriptionPanel({ companyId }) {
           )}
         </div>
       </div>
+
+      <Dialog open={!!confirmStep} onOpenChange={(o) => { if (!o) closeConfirm(); }}>
+        <DialogContent className="sm:max-w-md">
+          {confirmStep === 'warn' ? (
+            <>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2"><AlertTriangle className="w-5 h-5 text-amber-600" />{t('subscription.trialNotOverTitle', { defaultValue: 'Your free trial has not ended yet' })}</DialogTitle>
+                <DialogDescription>
+                  {t('subscription.trialNotOverBody', {
+                    days: daysGivenUp, tier: tier(wish.planTier),
+                    defaultValue: 'You still have {{days}} day(s) of the free Premium trial. Switching to {{tier}} ends Premium early — features and users beyond {{tier}} stop once GeoInfosys records it. Do you still want to continue?',
+                  })}
+                </DialogDescription>
+              </DialogHeader>
+              <DialogFooter>
+                <Button variant="outline" onClick={closeConfirm}>{t('subscription.cancel', { defaultValue: 'Cancel' })}</Button>
+                <Button onClick={() => setConfirmStep('password')}>{t('subscription.continue', { defaultValue: 'Continue' })}</Button>
+              </DialogFooter>
+            </>
+          ) : (
+            <form onSubmit={(e) => { e.preventDefault(); if (password) sendRequest(password); }}>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2"><Lock className="w-5 h-5 text-primary" />{t('subscription.confirmPasswordTitle', { defaultValue: 'Confirm with your password' })}</DialogTitle>
+                <DialogDescription>
+                  {t('subscription.confirmPasswordBody', { tier: tier(wish.planTier), defaultValue: 'Enter your login password to send the request for {{tier}}.' })}
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-1.5 py-4">
+                <Label htmlFor="sub-confirm-password">{t('subscription.password', { defaultValue: 'Password' })}</Label>
+                <Input id="sub-confirm-password" type="password" autoComplete="current-password" autoFocus
+                  value={password} onChange={(e) => setPassword(e.target.value)} />
+              </div>
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={closeConfirm}>{t('subscription.cancel', { defaultValue: 'Cancel' })}</Button>
+                <Button type="submit" disabled={!password || sending}>
+                  {sending ? t('subscription.sending', { defaultValue: 'Sending…' }) : t('subscription.confirmAndSend', { defaultValue: 'Confirm & send' })}
+                </Button>
+              </DialogFooter>
+            </form>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Prices */}
       <div className="bg-card rounded-xl border p-5 space-y-3">

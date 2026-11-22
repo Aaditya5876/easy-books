@@ -1,7 +1,8 @@
 import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../../../core/db/psql/prisma.client';
 import { MODULE_KEYS, ModuleKey } from '../../../core/modules/module-keys';
-import { defaultUnitsFor, normalizeUnits, normalizeItemFields, BILLING_PERIOD_LABELS, PLAN_TIER_LABELS, type BillingPeriod, type PlanTier } from '@easy-books/shared';
+import { defaultUnitsFor, normalizeUnits, normalizeItemFields, BILLING_PERIOD_LABELS, PLAN_TIER_LABELS, trialDaysGivenUp, type BillingPeriod, type PlanTier } from '@easy-books/shared';
+import { confirmPassword } from '../../../core/utils/password-confirm';
 import { trialPlanFields } from '../../../core/utils/plan-limits';
 import { NotificationServiceImpl } from './notification.service.impl';
 
@@ -264,7 +265,7 @@ export class CompanyServiceImpl {
   // lastRenewalRequestedAt drives a client-side cooldown on the button so
   // one ADMIN mashing it doesn't flood SUPER_ADMIN's inbox.
   // The admin may say which period/plan they want (Settings → Subscription).
-  async requestRenewal(id: string, requestedByUserId: string, role: string, wish: { period?: BillingPeriod; planTier?: PlanTier } = {}) {
+  async requestRenewal(id: string, requestedByUserId: string, role: string, wish: { period?: BillingPeriod; planTier?: PlanTier; password?: string } = {}) {
     // Not covered by CompanyAccessGuard (this route's param is "id", not
     // "companyId" — deliberately, so a locked-out ADMIN can still reach it)
     // so membership is checked here instead, same as findOne/update/remove
@@ -276,6 +277,16 @@ export class CompanyServiceImpl {
       this.prisma.user.findUnique({ where: { id: requestedByUserId }, select: { name: true, email: true } }),
     ]);
     if (!company) throw new NotFoundException('Company not found');
+    // A cheaper plan while the free Premium trial still runs ends Premium
+    // early — the admin confirms that with their password (same check and
+    // lockout as login), checked here so it can't be skipped.
+    const daysGivenUp = trialDaysGivenUp(company, wish.planTier);
+    if (daysGivenUp > 0) {
+      if (!wish.password) {
+        throw new BadRequestException(`Your free Premium trial still has ${daysGivenUp} day(s) left — enter your password to confirm you want to switch.`);
+      }
+      await confirmPassword(this.prisma, requestedByUserId, wish.password);
+    }
     await this.prisma.company.update({ where: { id }, data: { lastRenewalRequestedAt: new Date() } });
     await this.notifications.notifySuperAdmins(id, {
       type: 'SUBSCRIPTION_RENEWAL_REQUESTED',
@@ -283,7 +294,8 @@ export class CompanyServiceImpl {
       message: `${requester?.name ?? requester?.email ?? 'An admin'} (${company.name}) requested a subscription renewal`
         + (wish.period || wish.planTier
           ? `: ${[wish.planTier && PLAN_TIER_LABELS[wish.planTier], wish.period && BILLING_PERIOD_LABELS[wish.period]].filter(Boolean).join(', ')}.`
-          : '.'),
+          : '.')
+        + (daysGivenUp > 0 ? ` This ends the free Premium trial early (${daysGivenUp} day(s) left) — confirmed with their password.` : ''),
       link: '/settings',
       referenceType: 'COMPANY',
       referenceId: id,

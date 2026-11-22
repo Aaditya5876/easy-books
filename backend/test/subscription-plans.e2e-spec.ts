@@ -127,9 +127,10 @@ describe('Subscription plans', () => {
       expect((await ctx.prisma.company.findUnique({ where: { id: cafe } }))!.planStatus).toBe('TRIAL');
     });
 
-    it('buying Basic: installation fee from the price list, one year, a receipt', async () => {
+    it('buying Basic during the trial: installation fee, a receipt, and the year starts when the trial ends — no trial days lost', async () => {
       const cashier = await ctx.prisma.user.findUnique({ where: { email: 'cashier@nutberry.test' } });
       expect((await admin.patch(`/api/v1/users/${cashier!.id}/status`, { isActive: false })).status).toBe(200);
+      const trialEnds = (await ctx.prisma.company.findUnique({ where: { id: cafe } }))!.trialEndsAt!;
 
       const res = await sa.post(`/api/v1/subscriptions/company/${cafe}/activate`, { planTier: 'BASIC', paymentMethod: 'BANK_TRANSFER', reference: 'TXN-1' });
       expect(res.status).toBe(201);
@@ -137,9 +138,11 @@ describe('Subscription plans', () => {
         kind: 'ACTIVATION', planTier: 'BASIC', months: 12, amount: 8000, paymentMethod: 'BANK_TRANSFER',
         receiptNumber: `SUB-${bsYear}-0001`,
       });
+      expect(near(res.body.payment.periodStart, trialEnds)).toBe(true);
       const company = await ctx.prisma.company.findUnique({ where: { id: cafe } });
+      // The plan they bought applies straight away; the paid year runs on from the trial's end.
       expect(company).toMatchObject({ planTier: 'BASIC', planStatus: 'ACTIVE' });
-      expect(near(company!.subscriptionExpiresAt!, months(new Date(), 12))).toBe(true);
+      expect(near(company!.subscriptionExpiresAt!, months(trialEnds, 12))).toBe(true);
     });
 
     it('activating twice is refused — the next purchase is a renewal', async () => {
@@ -220,6 +223,54 @@ describe('Subscription plans', () => {
     });
   });
 
+  describe('asking for a cheaper plan while the free Premium trial still runs', () => {
+    let shop: string;
+    let owner: Api;
+    let pwd: string;
+    const requests = () => ctx.prisma.notification.count({ where: { type: 'SUBSCRIPTION_RENEWAL_REQUESTED', referenceId: shop } });
+
+    beforeAll(async () => {
+      const res = await provision('Tea Shop ABC', 'FOOD_BEVERAGE', 'owner@abctea.test');
+      shop = res.body.company.id;
+      pwd = res.body.tempPassword;
+      owner = await adminOf(shop, 'owner@abctea.test', pwd);
+    });
+
+    it('needs the password — without it nothing is sent', async () => {
+      const res = await owner.post(`/api/v1/companies/${shop}/request-renewal`, { planTier: 'BASIC' });
+      expect(res.status).toBe(400);
+      expect(res.body.message).toMatch(/password/i);
+      expect(await requests()).toBe(0);
+    });
+
+    it('a wrong password is refused (403, not a logout)', async () => {
+      const res = await owner.post(`/api/v1/companies/${shop}/request-renewal`, { planTier: 'STANDARD', password: 'wrong-one' });
+      expect(res.status).toBe(403);
+      expect(await requests()).toBe(0);
+    });
+
+    it('with the right password it is sent, and GeoInfosys is told the trial ends early', async () => {
+      const res = await owner.post(`/api/v1/companies/${shop}/request-renewal`, { planTier: 'BASIC', password: pwd });
+      expect(res.status).toBe(201);
+      const note = await ctx.prisma.notification.findFirst({ where: { type: 'SUBSCRIPTION_RENEWAL_REQUESTED', referenceId: shop } });
+      expect(note!.message).toMatch(/Basic/);
+      expect(note!.message).toMatch(/ends the free Premium trial early/i);
+      expect(note!.message).not.toContain(pwd);
+    });
+
+    it('asking for Premium during the trial gives nothing up — no password needed', async () => {
+      expect((await owner.post(`/api/v1/companies/${shop}/request-renewal`, { planTier: 'PREMIUM' })).status).toBe(201);
+    });
+
+    it('after the trial ran out, a cheaper plan needs no password', async () => {
+      const past = new Date(Date.now() - DAY);
+      await ctx.prisma.company.update({ where: { id: shop }, data: { trialEndsAt: past, subscriptionExpiresAt: past } });
+      // Like the app: sent without a companyId, so the locked-out admin can still ask.
+      owner.companyId = undefined;
+      expect((await owner.post(`/api/v1/companies/${shop}/request-renewal`, { planTier: 'BASIC' })).status).toBe(201);
+    });
+  });
+
   it('a client who already paid can start on a paid plan right away', async () => {
     const res = await provision('Paid Pharmacy', 'PHARMACY', 'owner@paidpharmacy.test', { plan: { planTier: 'STANDARD', paymentMethod: 'CASH' } });
     expect(res.status).toBe(201);
@@ -240,6 +291,19 @@ describe('Subscription plans', () => {
     const act = await sa.post(`/api/v1/subscriptions/company/${old}/activate`, { planTier: 'PREMIUM', amount: 0, paymentMethod: 'OTHER', note: 'Existing client' });
     expect(act.status).toBe(201);
     expect(act.body.payment.amount).toBe(0);
+    // No trial to carry over: the year starts today.
+    expect(near(act.body.company.subscriptionExpiresAt, months(new Date(), 12))).toBe(true);
+  });
+
+  it('buying after the trial ran out: the year starts today', async () => {
+    const res = await provision('Late Buyer', 'RETAIL', 'owner@latebuyer.test');
+    const id = res.body.company.id;
+    const past = new Date(Date.now() - 3 * DAY);
+    await ctx.prisma.company.update({ where: { id }, data: { trialEndsAt: past, subscriptionExpiresAt: past } });
+    const act = await sa.post(`/api/v1/subscriptions/company/${id}/activate`, { planTier: 'STANDARD', paymentMethod: 'CASH' });
+    expect(act.status).toBe(201);
+    expect(near(act.body.payment.periodStart, new Date())).toBe(true);
+    expect(near(act.body.company.subscriptionExpiresAt, months(new Date(), 12))).toBe(true);
   });
 
   describe('expiry reminders (nightly)', () => {

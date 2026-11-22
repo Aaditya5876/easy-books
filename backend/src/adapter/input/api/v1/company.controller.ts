@@ -141,7 +141,7 @@ export class CompanyController {
   @Post(':id/request-renewal')
   @Roles('ADMIN')
   @ApiOperation({ summary: "Notify every SUPER_ADMIN that this company's admin wants their subscription renewed" })
-  requestRenewal(@Param('id') id: string, @Body(new ZodValidationPipe(RequestRenewalSchema)) body: { period?: any; planTier?: any } | undefined, @Req() req: any) {
+  requestRenewal(@Param('id') id: string, @Body(new ZodValidationPipe(RequestRenewalSchema)) body: { period?: any; planTier?: any; password?: string } | undefined, @Req() req: any) {
     return this.service.requestRenewal(id, req.user.sub, req.user.role, body ?? {});
   }
 

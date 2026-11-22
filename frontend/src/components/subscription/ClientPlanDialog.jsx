@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { PLAN_TIERS, BILLING_PERIODS, SUBSCRIPTION_PAYMENT_METHODS } from '@easy-books/shared';
+import { PLAN_TIERS, BILLING_PERIODS, SUBSCRIPTION_PAYMENT_METHODS, trialDaysGivenUp } from '@easy-books/shared';
 import { subscriptionApi } from '@/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -22,6 +22,7 @@ export default function ClientPlanDialog({ company, open, onOpenChange, onSaved 
   const [form, setForm] = useState(null);
   const [amountTouched, setAmountTouched] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [loadError, setLoadError] = useState('');
 
   const load = () => subscriptionApi.get(company.id)
     .then((res) => {
@@ -33,11 +34,14 @@ export default function ClientPlanDialog({ company, open, onOpenChange, onSaved 
       });
       setAmountTouched(false);
     })
-    .catch((err) => toast.error(apiErrorMessage(err, t('subscription.loadFailed', { defaultValue: 'Could not load the plan.' }))));
+    // Shown in the dialog with Try again — before, a failed load (e.g. the
+    // server restarting) left the dialog on "Loading…" for good.
+    .catch((err) => setLoadError(apiErrorMessage(err, t('subscription.loadFailed', { defaultValue: 'Could not load the plan.' }))));
 
   useEffect(() => {
     if (!open || !company?.id) return;
     setSub(null);
+    setLoadError('');
     load();
   }, [open, company?.id]);
 
@@ -100,13 +104,20 @@ export default function ClientPlanDialog({ company, open, onOpenChange, onSaved 
           )}
         </DialogHeader>
 
-        {!sub || !form ? (
+        {loadError ? (
+          <div className="py-10 text-center space-y-3">
+            <p className="text-sm text-destructive">{loadError}</p>
+            <Button type="button" variant="outline" size="sm" onClick={() => { setLoadError(''); load(); }}>
+              {t('subscription.tryAgain', { defaultValue: 'Try again' })}
+            </Button>
+          </div>
+        ) : !sub || !form ? (
           <div className="py-10 text-center text-sm text-muted-foreground">{t('subscription.loading', { defaultValue: 'Loading…' })}</div>
         ) : (
           <form id="client-plan-form" onSubmit={save} className="space-y-4">
             <div className="rounded-lg border bg-muted/20 px-3 py-2 text-sm">
               {mode === 'ACTIVATE'
-                ? t('subscription.activateHint', { defaultValue: 'First purchase: the installation fee, covering one year from today.' })
+                ? t('subscription.activateHint', { defaultValue: 'First purchase: the installation fee, covering one year. Bought during the free trial, the year starts when the trial ends, so no trial days are lost; the plan chosen applies right away.' })
                 : t('subscription.renewHint', { defaultValue: 'Renewal: added on top of the current expiry (or from today if it already ran out).' })}
             </div>
 
@@ -117,14 +128,19 @@ export default function ClientPlanDialog({ company, open, onOpenChange, onSaved 
                   {PLAN_TIERS.map((k) => <option key={k} value={k}>{tier(k)}</option>)}
                 </select>
               </div>
-              {mode === 'RENEW' && (
-                <div className="space-y-1.5">
-                  <Label>{t('subscription.period', { defaultValue: 'Period' })}</Label>
+              <div className="space-y-1.5">
+                <Label>{t('subscription.period', { defaultValue: 'Period' })}</Label>
+                {mode === 'RENEW' ? (
                   <select className={selectClass} value={form.period} onChange={set('period')}>
                     {BILLING_PERIODS.map((p) => <option key={p} value={p}>{period(p)}</option>)}
                   </select>
-                </div>
-              )}
+                ) : (
+                  // First purchase always covers one year — shown, but not changeable.
+                  <select className={selectClass} value="FIRST_YEAR" disabled>
+                    <option value="FIRST_YEAR">{t('subscription.firstYearIncluded', { defaultValue: '1 year (included with first purchase)' })}</option>
+                  </select>
+                )}
+              </div>
               <div className="space-y-1.5">
                 <Label>{t('subscription.amountReceived', { defaultValue: 'Amount received (Rs)' })}</Label>
                 <Input type="number" min="0" step="0.01" required value={form.amount}
@@ -160,12 +176,22 @@ export default function ClientPlanDialog({ company, open, onOpenChange, onSaved 
 
             <p className="text-sm">
               {t('subscription.willRunUntil', {
-                date: formatDate(projectedExpiry({ mode, period: form.period, currentExpiry: sub.subscriptionExpiresAt })),
+                date: formatDate(projectedExpiry({
+                  mode, period: form.period, currentExpiry: sub.subscriptionExpiresAt,
+                  trialEndsAt: sub.planStatus === 'TRIAL' ? sub.trialEndsAt : null,
+                })),
                 defaultValue: 'After saving, the plan runs until {{date}}.',
               })}
             </p>
             {form.planTier === 'BASIC' && sub.users.active > 1 && (
               <p className="text-xs text-amber-700">{t('subscription.basicTooManyAdmin', { n: sub.users.active, defaultValue: 'This company has {{n}} active logins — Basic allows only the admin. Ask them to suspend the others first.' })}</p>
+            )}
+            {/* Warning only — the client already confirmed with their password when asking. */}
+            {trialDaysGivenUp(sub, form.planTier) > 0 && (
+              <p className="text-xs text-amber-700">{t('subscription.trialEndsEarlyAdmin', {
+                days: trialDaysGivenUp(sub, form.planTier), tier: tier(form.planTier),
+                defaultValue: 'This company still has {{days}} day(s) of the free Premium trial — recording {{tier}} ends Premium now. Their paid year still starts when the trial would have ended.',
+              })}</p>
             )}
 
             <div className="space-y-2">

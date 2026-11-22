@@ -29,14 +29,19 @@ export function defaultAmount(prices, tier, mode, period) {
   return mode === 'ACTIVATE' ? Number(row.installationFee) : priceForPeriod(row, period);
 }
 
+// The later of `date` and now (now when there is no date).
+function fromLaterOf(date, now) {
+  const d = date ? new Date(date) : null;
+  return d && d.getTime() > now.getTime() ? d : now;
+}
+
 // When the plan would run until if saved now — same rule as the server:
-// first purchase = a year from today; renewal adds to the current expiry, or
-// to today if it already ran out.
-export function projectedExpiry({ mode, period, currentExpiry, now = new Date() }) {
-  if (mode === 'ACTIVATE') return addMonths(now, FIRST_TERM_MONTHS);
-  const cur = currentExpiry ? new Date(currentExpiry) : null;
-  const base = cur && cur.getTime() > now.getTime() ? cur : now;
-  return addMonths(base, BILLING_PERIOD_MONTHS[period] || 0);
+// first purchase = a year from when the free trial ends (pass trialEndsAt
+// only while on the trial), or from today; renewal adds to the current
+// expiry, or to today if it already ran out.
+export function projectedExpiry({ mode, period, currentExpiry, trialEndsAt, now = new Date() }) {
+  if (mode === 'ACTIVATE') return addMonths(fromLaterOf(trialEndsAt, now), FIRST_TERM_MONTHS);
+  return addMonths(fromLaterOf(currentExpiry, now), BILLING_PERIOD_MONTHS[period] || 0);
 }
 
 export function perMonth(row, period) {

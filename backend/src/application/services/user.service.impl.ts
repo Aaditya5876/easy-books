@@ -187,7 +187,8 @@ export class UserServiceImpl {
       await this.prisma.userCompany.create({ data: { userId: requesterId, companyId: company.id, isDefault: false } });
     }
 
-    if (plan) await this.subscriptions.activate(company.id, plan, requesterId);
+    // Paid at sign-up: no trial was used, so the year starts today.
+    if (plan) await this.subscriptions.activate(company.id, plan, requesterId, { carryTrial: false });
 
     const emailSent = await this.mailService.sendInvitation(data.adminEmail, data.adminName, company.name, tempPassword);
 

@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { trialDaysGivenUp } from '@easy-books/shared';
 import { planState, defaultAmount, projectedExpiry, perMonth, expiryTimerDelay } from './subscription';
 
 const prices = [
@@ -37,11 +38,35 @@ describe('projectedExpiry', () => {
   it('activation: a year from today', () => {
     expect(projectedExpiry({ mode: 'ACTIVATE', now }).toISOString()).toBe('2027-11-22T10:00:00.000Z');
   });
+  it('activation during the trial: a year from when the trial ends (no trial days lost)', () => {
+    expect(projectedExpiry({ mode: 'ACTIVATE', trialEndsAt: '2026-12-10T10:00:00Z', now }).toISOString()).toBe('2027-12-10T10:00:00.000Z');
+  });
+  it('activation after the trial ran out: a year from today', () => {
+    expect(projectedExpiry({ mode: 'ACTIVATE', trialEndsAt: '2026-11-01T10:00:00Z', now }).toISOString()).toBe('2027-11-22T10:00:00.000Z');
+  });
   it('early renewal adds on top of the current expiry', () => {
     expect(projectedExpiry({ mode: 'RENEW', period: 'QUARTERLY', currentExpiry: '2027-01-10T10:00:00Z', now }).toISOString()).toBe('2027-04-10T10:00:00.000Z');
   });
   it('after expiry it counts from today', () => {
     expect(projectedExpiry({ mode: 'RENEW', period: 'MONTHLY', currentExpiry: '2026-10-01T00:00:00Z', now }).toISOString()).toBe('2026-12-22T10:00:00.000Z');
+  });
+});
+
+describe('trialDaysGivenUp (cheaper plan picked while the Premium trial runs)', () => {
+  const now = new Date('2026-11-22T10:00:00Z');
+  const trial = { planTier: 'PREMIUM', planStatus: 'TRIAL', trialEndsAt: '2026-12-04T10:00:00Z' };
+  it('Basic or Standard during the trial: the trial days left', () => {
+    expect(trialDaysGivenUp(trial, 'BASIC', now)).toBe(12);
+    expect(trialDaysGivenUp(trial, 'STANDARD', now)).toBe(12);
+  });
+  it('Premium gives nothing up', () => {
+    expect(trialDaysGivenUp(trial, 'PREMIUM', now)).toBe(0);
+  });
+  it('trial over, bought plan, or no plan: nothing to give up', () => {
+    expect(trialDaysGivenUp({ ...trial, trialEndsAt: '2026-11-01T00:00:00Z' }, 'BASIC', now)).toBe(0);
+    expect(trialDaysGivenUp({ ...trial, planStatus: 'ACTIVE' }, 'BASIC', now)).toBe(0);
+    expect(trialDaysGivenUp({ planTier: null, planStatus: null, trialEndsAt: null }, 'BASIC', now)).toBe(0);
+    expect(trialDaysGivenUp(null, 'BASIC', now)).toBe(0);
   });
 });
 
