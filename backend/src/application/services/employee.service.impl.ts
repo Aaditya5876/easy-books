@@ -1,4 +1,4 @@
-import { Prisma } from '@prisma/client';
+import { createWithEmployeeId } from './self-service-employee.util';
 import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../../../core/db/psql/prisma.client';
 import { assertTaskLink } from '../../../core/utils/task-link';
@@ -26,10 +26,21 @@ export class EmployeeServiceImpl {
     if (existing) throw new ConflictException(`Employee ID "${employeeId}" is already in use`);
   }
 
+  // Each row carries its app access: the login (matched by email, the same
+  // link attendance/leave use) — role, duties, suspended or not — or null for
+  // an employee who doesn't use the app.
   async findAll(companyId: string) {
-    return this.prisma.employee.findMany({
-      where: { companyId, deletedAt: null },
-      orderBy: { createdAt: 'desc' },
+    const [employees, members] = await Promise.all([
+      this.prisma.employee.findMany({ where: { companyId, deletedAt: null }, orderBy: { createdAt: 'desc' } }),
+      this.prisma.user.findMany({
+        where: { userCompanies: { some: { companyId } }, role: { not: 'SUPER_ADMIN' } },
+        select: { id: true, email: true, role: true, staffTags: true, isActive: true, lastLoginAt: true },
+      }),
+    ]);
+    const byEmail = new Map(members.map((u) => [u.email.toLowerCase(), u]));
+    return employees.map((e) => {
+      const u = e.email ? byEmail.get(e.email.toLowerCase()) : undefined;
+      return { ...e, login: u ? { userId: u.id, role: u.role, staffTags: u.staffTags, isActive: u.isActive, lastLoginAt: u.lastLoginAt } : null };
     });
   }
 
@@ -59,27 +70,9 @@ export class EmployeeServiceImpl {
       await this.assertEmployeeIdFree(dto.companyId, typed);
       return this.prisma.employee.create({ data: { ...dto, name, employeeId: typed, dateOfJoining } as any });
     }
-    // No ID typed: the next free EMP-number. A clash with a simultaneous save
-    // (unique companyId+employeeId) just takes the following number.
-    for (let attempt = 0; ; attempt++) {
-      const employeeId = await this.nextEmployeeId(dto.companyId);
-      try {
-        return await this.prisma.employee.create({ data: { ...dto, name, employeeId, dateOfJoining } as any });
-      } catch (err) {
-        if (!(err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') || attempt >= 4) throw err;
-      }
-    }
-  }
-
-  // After the highest existing EMP-#### (not the count, so gaps and typed
-  // numbers never cause a clash).
-  private async nextEmployeeId(companyId: string) {
-    const rows = await this.prisma.employee.findMany({
-      where: { companyId, employeeId: { startsWith: 'EMP-', mode: 'insensitive' } },
-      select: { employeeId: true },
-    });
-    const max = rows.reduce((m, r) => Math.max(m, Number(/^EMP-(\d+)$/i.exec(r.employeeId)?.[1] ?? 0)), 0);
-    return `EMP-${String(max + 1).padStart(4, '0')}`;
+    // No ID typed: the next free EMP-number (shared with auto-created records).
+    return createWithEmployeeId(this.prisma, dto.companyId, (employeeId) =>
+      this.prisma.employee.create({ data: { ...dto, name, employeeId, dateOfJoining } as any }));
   }
 
   async update(id: string, companyId: string, dto: UpdateEmployeeDTO) {

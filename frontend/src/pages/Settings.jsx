@@ -614,8 +614,12 @@ export default function Settings() {
     setInviteLoading(true);
     try {
       const res = await usersApi.invite(activeCompanyId, inviteForm);
-      if (res.data.tempPassword) setTempPassword(res.data.tempPassword);
-      else { setShowInvite(false); setInviteForm({ name: '', email: '', role: 'STAFF', staffTags: [] }); }
+      // The temporary password is shown only if the invite email failed.
+      if (res.data.tempPassword && !res.data.emailSent) setTempPassword(res.data.tempPassword);
+      else {
+        if (res.data.emailSent) toast.success(t('settings.userInvitedEmailed', { defaultValue: 'User invited — login details emailed to {{email}}', email: inviteForm.email }));
+        setShowInvite(false); setInviteForm({ name: '', email: '', role: 'STAFF', staffTags: [] });
+      }
       loadUsers();
     } catch (err) {
       toast.error(err?.response?.data?.message || t('settings.failedInviteUser', { defaultValue: 'Failed to invite user' }));

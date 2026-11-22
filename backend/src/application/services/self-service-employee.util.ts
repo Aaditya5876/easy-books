@@ -1,4 +1,28 @@
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../core/db/psql/prisma.client';
+
+// Next EMP-#### after the highest existing one in the company (not the count,
+// so gaps and typed numbers never clash). The ID is internal — the screens
+// don't show it — but stays unique per company.
+export async function nextEmployeeId(prisma: PrismaService, companyId: string): Promise<string> {
+  const rows = await prisma.employee.findMany({
+    where: { companyId, employeeId: { startsWith: 'EMP-', mode: 'insensitive' } },
+    select: { employeeId: true },
+  });
+  const max = rows.reduce((m, r) => Math.max(m, Number(/^EMP-(\d+)$/i.exec(r.employeeId)?.[1] ?? 0)), 0);
+  return `EMP-${String(max + 1).padStart(4, '0')}`;
+}
+
+// Runs `create` with the next free number, retrying if a simultaneous save took it.
+export async function createWithEmployeeId<T>(prisma: PrismaService, companyId: string, create: (employeeId: string) => Promise<T>): Promise<T> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await create(await nextEmployeeId(prisma, companyId));
+    } catch (err) {
+      if (!(err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') || attempt >= 4) throw err;
+    }
+  }
+}
 
 // Shared by every "self-service" feature (attendance check-in/out, leave
 // requests, ...) that needs to map a logged-in User to their Employee record.
@@ -40,13 +64,16 @@ export async function ensureEmployeeRecord(
     where: { companyId, email: { equals: user.email, mode: 'insensitive' }, deletedAt: null },
   });
   if (existing) return existing;
-  return prisma.employee.create({
+  // The login's ROLE (Admin/Accountant/Staff) is an app permission, not a job
+  // title — the designation is left for HR to fill (it used to say "ADMIN").
+  // A teacher's job title really is Teacher.
+  return createWithEmployeeId(prisma, companyId, (employeeId) => prisma.employee.create({
     data: {
       companyId,
       name: user.name,
       email: user.email,
-      employeeId: `USER-${user.id}`,
-      designation: user.role === 'TEACHER' ? 'Teacher' : user.role,
+      employeeId,
+      designation: user.role === 'TEACHER' ? 'Teacher' : null,
     },
-  });
+  }));
 }

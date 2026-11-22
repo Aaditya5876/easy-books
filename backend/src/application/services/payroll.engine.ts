@@ -100,10 +100,20 @@ export class PayrollEngineService {
     private readonly notifications: NotificationServiceImpl,
   ) {}
 
-  async processMonthlyPayroll(companyId: string, month: string): Promise<{ queued: number }> {
+  // Who gets a payslip on "Generate Payroll": active, not deleted, and with
+  // something to pay. Deleted employees kept status ACTIVE and were still paid;
+  // logins' auto-created employee records (salary 0) got empty NPR 0 payslips.
+  private async payableEmployees(companyId: string) {
     const employees = await this.prisma.employee.findMany({
-      where: { companyId, status: 'ACTIVE' },
+      where: { companyId, status: 'ACTIVE', deletedAt: null },
     });
+    const allowanceTotal = (a: unknown) =>
+      a && typeof a === 'object' ? Object.values(a as Record<string, unknown>).reduce<number>((s, v) => s + (Number(v) || 0), 0) : 0;
+    return employees.filter((e) => Number(e.basicSalary) > 0 || allowanceTotal(e.allowances) > 0);
+  }
+
+  async processMonthlyPayroll(companyId: string, month: string): Promise<{ queued: number }> {
+    const employees = await this.payableEmployees(companyId);
 
     if (!this.payrollQueue) {
       await this.calculateAllInline(companyId, employees, month);
@@ -124,9 +134,7 @@ export class PayrollEngineService {
     companyId: string,
     month: string,
   ): Promise<{ queued: number; results: PayrollResult[] }> {
-    const employees = await this.prisma.employee.findMany({
-      where: { companyId, status: 'ACTIVE' },
-    });
+    const employees = await this.payableEmployees(companyId);
 
     if (!this.payrollQueue) {
       return { queued: employees.length, results: await this.calculateAllInline(companyId, employees, month) };

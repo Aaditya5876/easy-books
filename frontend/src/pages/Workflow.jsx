@@ -583,7 +583,7 @@ function QuickActionDialog({ kind, task, onClose, onDone }) {
       isVat: false, paymentMethod: kind === 'purchase' ? 'CREDIT' : 'CASH',
       notes: `Task #${task.taskNumber ?? ''} — ${task.title}`,
       quotationNumber: `QT-J${task.taskNumber ?? ''}-${String(Date.now()).slice(-4)}`,
-      employeeId: `EMP-${String(Date.now()).slice(-5)}`, department: task.department || '', designation: '', phone: '',
+      department: task.department || '', designation: '', phone: '',
       files: [],
     };
   });
@@ -622,7 +622,8 @@ function QuickActionDialog({ kind, task, onClose, onDone }) {
       } else {
         created = await employeeApi.create({
           companyId, taskId,
-          ...compact({ name: form.name.trim(), employeeId: form.employeeId.trim(), phone: form.phone, email: form.email, department: form.department, designation: form.designation }),
+          // No employee ID: the server numbers employees itself (EMP-0001…).
+          ...compact({ name: form.name.trim(), phone: form.phone, email: form.email, department: form.department, designation: form.designation }),
         }, cfg());
       }
       toast({ title: titles[kind], description: t('workflow.savedFor', { defaultValue: 'Saved for task #{{n}}.', n: task.taskNumber ?? '' }) });
@@ -643,7 +644,6 @@ function QuickActionDialog({ kind, task, onClose, onDone }) {
     employee: t('workflow.qaFullName', { defaultValue: 'Full Name' }),
   }[kind];
   const valid = form.name.trim()
-    && (kind !== 'employee' || form.employeeId.trim())
     && (!isOrder || items.length > 0)
     && (kind !== 'quotation' || form.quotationNumber.trim());
 
@@ -684,7 +684,6 @@ function QuickActionDialog({ kind, task, onClose, onDone }) {
           {kind === 'employee' && (
             <>
               <div className="grid grid-cols-2 gap-3">
-                <Field label={`${t('workflow.employeeId', { defaultValue: 'Employee ID' })} *`}><Input className="h-9 text-sm" value={form.employeeId} onChange={set('employeeId')} /></Field>
                 <Field label={t('workflow.phone', { defaultValue: 'Phone' })}><Input className="h-9 text-sm" value={form.phone} onChange={set('phone')} /></Field>
                 <Field label={t('workflow.department', { defaultValue: 'Department' })}><Input className="h-9 text-sm" value={form.department} onChange={set('department')} /></Field>
                 <Field label={t('workflow.designation', { defaultValue: 'Designation' })}><Input className="h-9 text-sm" value={form.designation} onChange={set('designation')} /></Field>

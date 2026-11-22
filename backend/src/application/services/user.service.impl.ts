@@ -95,9 +95,11 @@ export class UserServiceImpl {
 
     await ensureEmployeeRecord(this.prisma, companyId, user);
 
-    await this.mailService.sendInvitation(data.email, data.name, company.name, tempPassword);
+    // Like provisionClient: the screen shows the temporary password only when
+    // the email didn't go out — before, a failed email lost it for good.
+    const emailSent = await this.mailService.sendInvitation(data.email, data.name, company.name, tempPassword);
 
-    return { message: 'User invited', userId: user.id, user };
+    return { message: 'User invited', userId: user.id, user, tempPassword, emailSent };
   }
 
   // SUPER_ADMIN only (enforced by @Roles('SUPER_ADMIN') on the controller) —

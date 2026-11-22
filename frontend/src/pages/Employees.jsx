@@ -15,9 +15,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import PageLoader from '../components/PageLoader';
 import EmptyState from '../components/EmptyState';
 import {
-  UserCircle, User, Phone, Mail, MapPin, Hash,
-  Building2, Award, Calendar, Briefcase, Upload, Trash2,
+  UserCircle, User, Phone, Mail, MapPin,
+  Building2, Award, Calendar, Briefcase, Upload, Trash2, KeyRound, Lock,
 } from 'lucide-react';
+import { useAuth } from '@/lib/AuthContext';
+import { usersApi } from '@/api';
+import { apiErrorMessage } from '@/lib/bills';
+import { designationOptions } from '@/lib/designations';
 import { toast } from 'sonner';
 import { useRole } from "@/lib/useRole";
 import BulkImportDialog from '../components/shared/BulkImportDialog';
@@ -34,7 +38,6 @@ const statusColors = {
 
 const EMPTY_FORM = {
   name: '',
-  employee_id: '',
   department: '',
   designation: '',
   phone: '',
@@ -47,9 +50,98 @@ const EMPTY_FORM = {
   contracted_hours_per_day: '',
 };
 
-/* ── Reusable two-column dialog body ─────────────────────────────────── */
-function EmployeeFormBody({ data, onChange, errors = {} }) {
+const ROLE_LABELS = { ADMIN: 'Admin', ACCOUNTANT: 'Accountant', STAFF: 'Staff', TEACHER: 'Teacher' };
+const DUTY_LABELS = { HR: 'HR', SALES: 'Sales / Counter', LIBRARY: 'Library', HOSTEL: 'Hostel', TRANSPORT: 'Transport', FRONT_OFFICE: 'Front Office' };
+
+function accessText(t, login) {
+  if (!login) return null;
+  const role = t(`employees.role${login.role}`, { defaultValue: ROLE_LABELS[login.role] || login.role });
+  const duties = (login.staff_tags || []).map((d) => t(`employees.duty${d}`, { defaultValue: DUTY_LABELS[d] || d }));
+  return duties.length ? `${role} · ${duties.join(', ')}` : role;
+}
+
+// App access of an employee: their login (role, duties) — or, for an admin, a
+// way to give this employee a login without going to Settings → Users. The
+// invite links to THIS record (matched by email), never a duplicate.
+function AppAccessPanel({ employee, isSchool, canManageUsers, onInvited }) {
   const { t } = useTranslation();
+  const [role, setRole] = useState('STAFF');
+  const [duties, setDuties] = useState([]);
+  const [sending, setSending] = useState(false);
+  const login = employee.login;
+  const dutyOptions = isSchool ? ['HR', 'LIBRARY', 'HOSTEL', 'TRANSPORT', 'FRONT_OFFICE'] : ['HR', 'SALES'];
+
+  async function invite() {
+    if (!employee.email?.trim()) {
+      toast.error(t('employees.accessNeedsEmail', { defaultValue: 'Add an email address first — the login details are sent there.' }));
+      return;
+    }
+    setSending(true);
+    try {
+      const res = await usersApi.invite(getActiveCompanyId(), {
+        name: employee.name, email: employee.email.trim(), role, staffTags: role === 'STAFF' ? duties : [],
+      });
+      if (res.data?.tempPassword && !res.data?.emailSent) {
+        toast.warning(t('employees.accessEmailFailed', { defaultValue: 'Login created, but the email failed. Temporary password: {{p}}', p: res.data.tempPassword }), { duration: 60000 });
+      } else {
+        toast.success(t('employees.accessGranted', { defaultValue: 'App access given — login details emailed to {{email}}', email: employee.email }));
+      }
+      onInvited();
+    } catch (err) {
+      toast.error(apiErrorMessage(err, t('employees.accessFailed', { defaultValue: 'Could not give app access' })));
+    } finally {
+      setSending(false);
+    }
+  }
+
+  return (
+    <div className="mt-4 rounded-lg border p-3 space-y-2">
+      <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1.5">
+        <KeyRound className="w-3.5 h-3.5" />{t('employees.appAccess', { defaultValue: 'App access' })}
+      </h4>
+      {login ? (
+        <>
+          <p className="text-sm">
+            <span className="font-medium">{accessText(t, login)}</span>
+            {login.is_active === false && <span className="ml-2 text-xs text-red-600">{t('employees.suspended', { defaultValue: 'Suspended' })}</span>}
+          </p>
+          <p className="text-xs text-muted-foreground">{t('employees.accessManageHint', { defaultValue: 'Role and duties are changed in Settings → Users. Designation above is only the job title.' })}</p>
+        </>
+      ) : canManageUsers ? (
+        <>
+          <p className="text-xs text-muted-foreground">{t('employees.noLoginHint', { defaultValue: "This employee doesn't use the app. Give them a login if they need to (e.g. cashier, accountant)." })}</p>
+          <div className="flex flex-wrap items-center gap-2">
+            <Select value={role} onValueChange={setRole}>
+              <SelectTrigger className="h-8 w-36 text-xs"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="STAFF">{t('employees.roleSTAFF', { defaultValue: 'Staff' })}</SelectItem>
+                <SelectItem value="ACCOUNTANT">{t('employees.roleACCOUNTANT', { defaultValue: 'Accountant' })}</SelectItem>
+                {isSchool && <SelectItem value="TEACHER">{t('employees.roleTEACHER', { defaultValue: 'Teacher' })}</SelectItem>}
+              </SelectContent>
+            </Select>
+            {role === 'STAFF' && dutyOptions.map((d) => (
+              <button key={d} type="button" onClick={() => setDuties((x) => (x.includes(d) ? x.filter((y) => y !== d) : [...x, d]))}
+                className={`rounded-full border px-2 py-0.5 text-[11px] ${duties.includes(d) ? 'border-primary bg-primary text-primary-foreground' : 'hover:bg-muted'}`}>
+                {t(`employees.duty${d}`, { defaultValue: DUTY_LABELS[d] })}
+              </button>
+            ))}
+            <Button type="button" size="sm" className="h-8 ml-auto" disabled={sending} onClick={invite}>
+              {sending ? t('employees.sending', { defaultValue: 'Sending…' }) : t('employees.giveAccess', { defaultValue: 'Give app access' })}
+            </Button>
+          </div>
+        </>
+      ) : (
+        <p className="text-xs text-muted-foreground">{t('employees.noLogin', { defaultValue: 'No login' })}</p>
+      )}
+    </div>
+  );
+}
+
+/* ── Reusable two-column dialog body ─────────────────────────────────── */
+function EmployeeFormBody({ data, onChange, errors = {}, designations = [], emailLocked = false, footer = null }) {
+  const { t } = useTranslation();
+  // Designation: pick a job title, or "Other…" to type one.
+  const [customTitle, setCustomTitle] = useState(() => !!data.designation && !designations.includes(data.designation));
   return (
     <div className="grid grid-cols-2 gap-x-5 gap-y-0 mt-1">
       {/* LEFT column — Personal Info */}
@@ -98,10 +190,13 @@ function EmployeeFormBody({ data, onChange, errors = {} }) {
             <Input
               type="email"
               className="pl-8 h-9 text-sm"
-              value={data.email}
+              value={data.email || ''}
+              disabled={emailLocked}
               onChange={e => onChange('email', e.target.value)}
             />
+            {emailLocked && <Lock className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />}
           </div>
+          {emailLocked && <p className="text-[11px] text-muted-foreground">{t('employees.emailLockedHint', { defaultValue: 'Linked to their app login — change it in Settings → Users.' })}</p>}
         </div>
 
         {/* Address */}
@@ -117,6 +212,7 @@ function EmployeeFormBody({ data, onChange, errors = {} }) {
           </div>
         </div>
 
+        {footer}
       </motion.div>
 
       {/* RIGHT column — Employment Details */}
@@ -129,21 +225,6 @@ function EmployeeFormBody({ data, onChange, errors = {} }) {
         <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1.5 border-b pb-1.5 mb-2">
           <Briefcase className="w-3.5 h-3.5" />{t('employees.employmentDetails', { defaultValue: 'Employment Details' })}
         </h4>
-
-        {/* Employee ID */}
-        <div className="space-y-1">
-          <Label className="text-xs">{t('employees.employeeId', { defaultValue: 'Employee ID' })} <span className="text-muted-foreground">({t('employees.optional', { defaultValue: 'optional' })})</span></Label>
-          <div className="relative">
-            <Hash className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
-            <Input
-              className="pl-8 h-9 text-sm"
-              value={data.employee_id}
-              onChange={e => onChange('employee_id', e.target.value)}
-              placeholder={t('employees.employeeIdAutoPlaceholder', { defaultValue: 'Blank = automatic (EMP-0001…)' })}
-            />
-          </div>
-          {errors.employee_id && <p className="text-xs text-red-600">{errors.employee_id}</p>}
-        </div>
 
         {/* Department */}
         <div className="space-y-1">
@@ -161,14 +242,28 @@ function EmployeeFormBody({ data, onChange, errors = {} }) {
         {/* Designation */}
         <div className="space-y-1">
           <Label className="text-xs">{t('employees.designation', { defaultValue: 'Designation' })}</Label>
-          <div className="relative">
-            <Award className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
-            <Input
-              className="pl-8 h-9 text-sm"
-              value={data.designation}
-              onChange={e => onChange('designation', e.target.value)}
-            />
-          </div>
+          {customTitle ? (
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <Award className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                <Input className="pl-8 h-9 text-sm" autoFocus value={data.designation || ''} placeholder={t('employees.designationCustomPlaceholder', { defaultValue: 'Type a job title' })}
+                  onChange={e => onChange('designation', e.target.value)} />
+              </div>
+              <Button type="button" variant="outline" size="sm" className="h-9" onClick={() => setCustomTitle(false)}>↩</Button>
+            </div>
+          ) : (
+            <Select value={data.designation || '__none'} onValueChange={(v) => {
+              if (v === '__other') { setCustomTitle(true); onChange('designation', ''); }
+              else onChange('designation', v === '__none' ? '' : v);
+            }}>
+              <SelectTrigger className="h-9 text-sm"><SelectValue placeholder={t('employees.chooseDesignation', { defaultValue: 'Choose a job title' })} /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none">{t('employees.noDesignation', { defaultValue: '— Not set —' })}</SelectItem>
+                {designations.map((d) => <SelectItem key={d} value={d}>{d}</SelectItem>)}
+                <SelectItem value="__other">{t('employees.otherDesignation', { defaultValue: 'Other…' })}</SelectItem>
+              </SelectContent>
+            </Select>
+          )}
         </div>
 
         {/* Date of Joining */}
@@ -252,7 +347,10 @@ function EmployeeFormBody({ data, onChange, errors = {} }) {
 export default function Employees() {
   const { t } = useTranslation();
   const companyId = getActiveCompanyId();
-  const { canEdit, canDelete } = useRole();
+  const { canEdit, canDelete, canManageUsers } = useRole();
+  const { user } = useAuth();
+  const businessType = user?.defaultCompany?.businessType;
+  const isSchool = businessType === 'SCHOOL';
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -273,9 +371,9 @@ export default function Employees() {
     setLoading(false);
   }
 
-  // Employee ID is required by the backend (CreateEmployeeSchema) even though
-  // nothing in the UI used to say so — validate it here instead of letting the
-  // API 400 silently.
+  // Job titles for the dropdown: the company type's presets + titles in use.
+  const designations = designationOptions(businessType, employees.map((e) => e.designation));
+
   function validateEmployee(data) {
     const errs = {};
     if (!data.name?.trim()) errs.name = t('employees.fullNameRequired', { defaultValue: 'Full name is required' });
@@ -321,7 +419,7 @@ export default function Employees() {
       return;
     }
     setEditErrors({});
-    const { salary, contracted_hours_per_day, ...rest } = editEmployee;
+    const { salary, contracted_hours_per_day, login: _login, employee_id: _id, ...rest } = editEmployee;
     try {
       await api.Employee.update(editEmployee.id, {
         ...rest,
@@ -370,7 +468,6 @@ export default function Employees() {
   };
 
   const columns = [
-    { key: 'employee_id', label: t('employees.id', { defaultValue: 'ID' }) },
     {
       key: 'name',
       label: t('employees.name', { defaultValue: 'Name' }),
@@ -380,6 +477,15 @@ export default function Employees() {
     },
     { key: 'department', label: t('employees.department', { defaultValue: 'Department' }), filterValue: colFilters.department, onFilterChange: v => setCol('department', v) },
     { key: 'designation', label: t('employees.designation', { defaultValue: 'Designation' }), filterValue: colFilters.designation, onFilterChange: v => setCol('designation', v) },
+    {
+      key: 'login',
+      label: t('employees.appAccess', { defaultValue: 'App access' }),
+      render: r => r.login ? (
+        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${r.login.is_active === false ? 'bg-red-50 text-red-600' : 'bg-blue-50 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300'}`}>
+          {accessText(t, r.login)}{r.login.is_active === false ? ` · ${t('employees.suspended', { defaultValue: 'Suspended' })}` : ''}
+        </span>
+      ) : <span className="text-xs text-muted-foreground">{t('employees.noLogin', { defaultValue: 'No login' })}</span>,
+    },
     { key: 'phone', label: t('employees.phone', { defaultValue: 'Phone' }) },
     { key: 'date_of_joining', label: t('employees.joined', { defaultValue: 'Joined' }), render: r => formatDate(r.date_of_joining) },
     { key: 'basic_salary', label: t('employees.salary', { defaultValue: 'Salary' }), render: r => r.basic_salary ? `NPR ${Number(r.basic_salary).toLocaleString()}` : '—' },
@@ -475,6 +581,7 @@ export default function Employees() {
             data={form}
             onChange={(key, val) => setForm(f => ({ ...f, [key]: val }))}
             errors={formErrors}
+            designations={designations}
           />
           <DialogFooter className="mt-4">
             <Button variant="outline" onClick={() => { setShowForm(false); setForm(EMPTY_FORM); setFormErrors({}); }}>{t('employees.cancel', { defaultValue: 'Cancel' })}</Button>
@@ -494,9 +601,25 @@ export default function Employees() {
           </DialogHeader>
           {editEmployee && (
             <EmployeeFormBody
+              key={editEmployee.id}
               data={editEmployee}
               onChange={(key, val) => setEditEmployee(e => ({ ...e, [key]: val }))}
               errors={editErrors}
+              designations={designations}
+              emailLocked={!!editEmployee.login}
+              footer={(
+                <AppAccessPanel
+                  employee={editEmployee}
+                  isSchool={isSchool}
+                  canManageUsers={canManageUsers}
+                  onInvited={async () => {
+                    const fresh = await api.Employee.filter({ company_id: companyId });
+                    setEmployees(fresh);
+                    const me = fresh.find((x) => x.id === editEmployee.id);
+                    if (me) setEditEmployee((e) => ({ ...e, login: me.login }));
+                  }}
+                />
+              )}
             />
           )}
           <DialogFooter className="mt-4">
