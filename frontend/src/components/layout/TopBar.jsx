@@ -4,11 +4,12 @@ import { useTheme } from 'next-themes';
 import { api, apiAuth } from '@/api/adapter';
 import { notificationsApi, companyApi } from '@/api';
 import { fileUrl } from '@/lib/fileUrl';
+import { expiryTimerDelay } from '@/lib/subscription';
 import {
   Search, Bell, Settings, LogOut, Building2, ChevronDown, Plus, Menu,
   Wrench, Calculator, RefreshCw, CalendarDays, UserCircle, CalendarCheck,
   UsersRound, Banknote, Sun, Moon, X, Package, Users, UserCheck, Globe,
-  Sparkles, AlertTriangle, ShieldCheck, Send, HelpCircle,
+  Sparkles, AlertTriangle, ShieldCheck, Send, HelpCircle, Clock,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
@@ -38,6 +39,14 @@ const ROLE_LABEL_KEY = {
 
 export default function TopBar({ onMobileMenuToggle, onToolOpen }) {
   const navigate = useNavigate();
+  const [planNoticeDismissed, setPlanNoticeDismissed] = useState(() => {
+    try { return JSON.parse(sessionStorage.getItem('easybooks:plan-notice-dismissed') || '[]'); } catch { return []; }
+  });
+  const dismissPlanNotice = (key) => setPlanNoticeDismissed((list) => {
+    const next = [...list, key];
+    try { sessionStorage.setItem('easybooks:plan-notice-dismissed', JSON.stringify(next)); } catch { /* private mode */ }
+    return next;
+  });
   const { isAdmin, isAccountant, isSuperAdmin, canViewPayroll } = useRole();
   const { t, i18n } = useTranslation();
   const { resolvedTheme, setTheme } = useTheme();
@@ -96,8 +105,9 @@ export default function TopBar({ onMobileMenuToggle, onToolOpen }) {
       });
     };
 
-    const delay = expirationTime - Date.now();
-    if (delay <= 0) {
+    const delay = expiryTimerDelay(expirationTime);
+    if (delay === null) return undefined; // too far off to time — see expiryTimerDelay
+    if (delay === 0) {
       showExpiryModal();
       return undefined;
     }
@@ -419,6 +429,13 @@ export default function TopBar({ onMobileMenuToggle, onToolOpen }) {
   const activeCompanyIsActive = activeCompany?.is_active ?? activeCompany?.isActive;
   const activeCompanyExpiresAt = activeCompany?.subscription_expires_at ?? activeCompany?.subscriptionExpiresAt;
   const activeCompanyIsAccessible = isCompanyAccessible(activeCompany);
+  // Plan running out soon (admin only): the free trial, or a bought plan in
+  // its last 7 days. Dismissible for the session.
+  const planDaysLeft = activeCompanyExpiresAt ? Math.ceil((new Date(activeCompanyExpiresAt).getTime() - Date.now()) / 86400000) : null;
+  const planIsTrial = (activeCompany?.planStatus ?? activeCompany?.plan_status) === 'TRIAL';
+  const planNoticeKey = activeCompany ? `easybooks:plan-notice:${activeCompany.id}:${activeCompanyExpiresAt}` : '';
+  const showPlanNotice = isAdmin && !isSuperAdmin && activeCompanyIsAccessible && planDaysLeft != null && planDaysLeft > 0
+    && (planIsTrial || planDaysLeft <= 7) && !planNoticeDismissed.includes(planNoticeKey);
 
   return (
     <>
@@ -756,6 +773,27 @@ export default function TopBar({ onMobileMenuToggle, onToolOpen }) {
         </DropdownMenu>
       </div>
     </header>
+
+    {showPlanNotice && (
+      <div className={`px-4 lg:px-6 py-1.5 border-b flex flex-wrap items-center gap-x-3 gap-y-1 text-sm ${planIsTrial && planDaysLeft > 7 ? 'bg-blue-50 border-blue-200 text-blue-800' : 'bg-amber-50 border-amber-200 text-amber-800'}`}>
+        <Clock className="w-4 h-4 shrink-0" />
+        <span className="font-medium">
+          {planIsTrial
+            ? (planDaysLeft === 1
+              ? t('subscription.bannerTrialOne', { defaultValue: 'Free trial: last day.' })
+              : t('subscription.bannerTrial', { n: planDaysLeft, defaultValue: 'Free trial: {{n}} days left.' }))
+            : (planDaysLeft === 1
+              ? t('subscription.bannerPlanOne', { defaultValue: 'Your plan expires tomorrow.' })
+              : t('subscription.bannerPlan', { n: planDaysLeft, defaultValue: 'Your plan expires in {{n}} days.' }))}
+        </span>
+        <button type="button" className="underline font-medium" onClick={() => navigate('/settings', { state: { tab: 'subscription' } })}>
+          {planIsTrial ? t('subscription.bannerChoosePlan', { defaultValue: 'Choose a plan' }) : t('subscription.bannerRenew', { defaultValue: 'Renew' })}
+        </button>
+        <button type="button" className="ml-auto opacity-70 hover:opacity-100" aria-label={t('subscription.dismiss', { defaultValue: 'Dismiss' })} onClick={() => dismissPlanNotice(planNoticeKey)}>
+          <X className="w-4 h-4" />
+        </button>
+      </div>
+    )}
 
     {/* Suspended/expired banner — the company stays fully visible (name,
         cached data, nav) per design: losing access shouldn't feel like the

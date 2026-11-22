@@ -9,6 +9,7 @@ import { PinoLoggerModule } from '../../core/utils/logger';
 import { BullRootModule, QUEUES_ENABLED } from '../../core/queue/bull.client';
 import { AuthModule } from './identity-admin/auth.module';
 import { CompanyModule } from './identity-admin/company.module';
+import { SubscriptionModule } from './identity-admin/subscription.module';
 import { UserModule } from './identity-admin/user.module';
 import { AuditLogModule } from './identity-admin/audit-log.module';
 import { RecycleBinModule } from './identity-admin/recycle-bin.module';
@@ -62,6 +63,7 @@ import { PrismaService } from '../../core/db/psql/prisma.client';
     PinoLoggerModule,
     AuthModule,
     CompanyModule,
+    SubscriptionModule,
     InventoryModule,
     SalesModule,
     PurchaseModule,

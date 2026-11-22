@@ -1,5 +1,5 @@
 import { NoCompanyScope } from '../../../../modules/decorators/no-company-scope.decorator';
-import { UpdatePayrollSettingsSchema, UpdatePayrollSettingsDTO, UnitListSchema, UNIT_PRESETS, ItemFieldListSchema } from '@easy-books/shared';
+import { UpdatePayrollSettingsSchema, UpdatePayrollSettingsDTO, UnitListSchema, UNIT_PRESETS, ItemFieldListSchema, RequestRenewalSchema } from '@easy-books/shared';
 import { ZodValidationPipe } from '../../../../modules/pipes/zod-validation.pipe';
 import { Controller, Get, Post, Put, Patch, Delete, Body, Param, Req } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
@@ -141,8 +141,8 @@ export class CompanyController {
   @Post(':id/request-renewal')
   @Roles('ADMIN')
   @ApiOperation({ summary: "Notify every SUPER_ADMIN that this company's admin wants their subscription renewed" })
-  requestRenewal(@Param('id') id: string, @Req() req: any) {
-    return this.service.requestRenewal(id, req.user.sub, req.user.role);
+  requestRenewal(@Param('id') id: string, @Body(new ZodValidationPipe(RequestRenewalSchema)) body: { period?: any; planTier?: any } | undefined, @Req() req: any) {
+    return this.service.requestRenewal(id, req.user.sub, req.user.role, body ?? {});
   }
 
   // ADMIN only — one three-day grace period after subscription expiry.

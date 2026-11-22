@@ -1,7 +1,8 @@
 import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../../../core/db/psql/prisma.client';
 import { MODULE_KEYS, ModuleKey } from '../../../core/modules/module-keys';
-import { defaultUnitsFor, normalizeUnits, normalizeItemFields } from '@easy-books/shared';
+import { defaultUnitsFor, normalizeUnits, normalizeItemFields, BILLING_PERIOD_LABELS, PLAN_TIER_LABELS, type BillingPeriod, type PlanTier } from '@easy-books/shared';
+import { trialPlanFields } from '../../../core/utils/plan-limits';
 import { NotificationServiceImpl } from './notification.service.impl';
 
 // Every role a company can have besides SUPER_ADMIN (who never belongs to a
@@ -80,8 +81,14 @@ export class CompanyServiceImpl {
       }
     }
 
+    // Plan fields are GeoInfosys-owned; a new company always starts on the free trial.
+    const rest: any = Object.fromEntries(Object.entries(data ?? {}).filter(([k]) => !CompanyServiceImpl.PLAN_FIELDS.includes(k)));
     const company = await this.prisma.company.create({
-      data: { ...data, units: data?.units?.length ? normalizeUnits(data.units) : defaultUnitsFor(data?.businessType) },
+      data: {
+        ...rest,
+        units: rest?.units?.length ? normalizeUnits(rest.units) : defaultUnitsFor(rest?.businessType),
+        ...trialPlanFields(rest?.businessType),
+      },
     });
     if (userId) {
       const existingDefault = await this.prisma.userCompany.findFirst({
@@ -132,6 +139,10 @@ export class CompanyServiceImpl {
     await this.prisma.company.update({ where: { id }, data: { itemFields: clean as any } });
     return { fields: clean };
   }
+
+  private static readonly PLAN_FIELDS = [
+    'productLine', 'planTier', 'planStatus', 'subscriptionStartedAt', 'trialEndsAt', 'subscriptionExpiresAt', 'expiryReminderDays',
+  ];
 
   private static readonly EDITABLE_FIELDS = [
     'name', 'abbreviation', 'address', 'phone', 'email', 'panVat', 'registrationNumber', 'logoUrl',
@@ -201,6 +212,7 @@ export class CompanyServiceImpl {
       where: { id },
       data: {
         subscriptionExpiresAt: expiresAt,
+        expiryReminderDays: null,
         ...(restoring ? { accessBlockedNotifiedAt: null, lastRenewalRequestedAt: null } : {}),
       },
     });
@@ -251,7 +263,8 @@ export class CompanyServiceImpl {
   // (deactivated or subscription expired). Notifies every SUPER_ADMIN;
   // lastRenewalRequestedAt drives a client-side cooldown on the button so
   // one ADMIN mashing it doesn't flood SUPER_ADMIN's inbox.
-  async requestRenewal(id: string, requestedByUserId: string, role: string) {
+  // The admin may say which period/plan they want (Settings → Subscription).
+  async requestRenewal(id: string, requestedByUserId: string, role: string, wish: { period?: BillingPeriod; planTier?: PlanTier } = {}) {
     // Not covered by CompanyAccessGuard (this route's param is "id", not
     // "companyId" — deliberately, so a locked-out ADMIN can still reach it)
     // so membership is checked here instead, same as findOne/update/remove
@@ -267,7 +280,10 @@ export class CompanyServiceImpl {
     await this.notifications.notifySuperAdmins(id, {
       type: 'SUBSCRIPTION_RENEWAL_REQUESTED',
       title: 'Subscription renewal requested',
-      message: `${requester?.name ?? requester?.email ?? 'An admin'} (${company.name}) requested a subscription renewal.`,
+      message: `${requester?.name ?? requester?.email ?? 'An admin'} (${company.name}) requested a subscription renewal`
+        + (wish.period || wish.planTier
+          ? `: ${[wish.planTier && PLAN_TIER_LABELS[wish.planTier], wish.period && BILLING_PERIOD_LABELS[wish.period]].filter(Boolean).join(', ')}.`
+          : '.'),
       link: '/settings',
       referenceType: 'COMPANY',
       referenceId: id,

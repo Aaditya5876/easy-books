@@ -5,7 +5,10 @@ import { MODULE_KEYS, ModuleKey } from '../../../core/modules/module-keys';
 import { STAFF_TAGS } from '../../../core/modules/staff-tags';
 import * as bcrypt from 'bcrypt';
 import { ensureEmployeeRecord } from './self-service-employee.util';
-import { defaultUnitsFor, normalizeUnits } from '@easy-books/shared';
+import { defaultUnitsFor, normalizeUnits, ActivatePlanSchema } from '@easy-books/shared';
+import { assertCanAddLogin, trialPlanFields } from '../../../core/utils/plan-limits';
+import { SubscriptionService } from './subscription.service';
+import { zodErrorResponse } from '../../modules/pipes/zod-validation.pipe';
 
 const ROLE_HIERARCHY = ['STAFF', 'TEACHER', 'ACCOUNTANT', 'ADMIN', 'SUPER_ADMIN'];
 // Roles an ADMIN may grant (everything below ADMIN)
@@ -28,6 +31,7 @@ export class UserServiceImpl {
   constructor(
     private readonly prisma: PrismaService,
     private readonly mailService: MailService,
+    private readonly subscriptions: SubscriptionService,
   ) {}
 
   async inviteUser(
@@ -51,6 +55,7 @@ export class UserServiceImpl {
     }
 
     const staffTags = resolveStaffTags(data.role, data.staffTags);
+    await assertCanAddLogin(this.prisma, companyId);
 
     const existing = await this.prisma.user.findUnique({ where: { email: data.email } });
 
@@ -110,8 +115,17 @@ export class UserServiceImpl {
   // so they can switch into it afterward to manage its package/support it.
   async provisionClient(
     requesterId: string,
-    data: { companyName: string; businessType: string; adminName: string; adminEmail: string; enabledModules?: string[]; units?: string[] },
+    data: { companyName: string; businessType: string; adminName: string; adminEmail: string; enabledModules?: string[]; units?: string[]; plan?: unknown },
   ) {
+    // Optional: the client already paid — start them on that plan instead of
+    // the free trial. Checked before anything is created.
+    let plan: ReturnType<typeof ActivatePlanSchema.parse> | undefined;
+    if (data.plan != null) {
+      const parsed = ActivatePlanSchema.safeParse(data.plan);
+      if (!parsed.success) throw new BadRequestException(zodErrorResponse(parsed.error));
+      plan = parsed.data;
+    }
+
     // The email may already belong to an account. Only one left with no company
     // at all (its company was deleted before deletes cleaned those up) is
     // reused; one still working in another company — or a SUPER_ADMIN — is
@@ -136,6 +150,8 @@ export class UserServiceImpl {
     const company = await this.prisma.company.create({
       data: {
         name: data.companyName, businessType: data.businessType, enabledModules,
+        // Every new client starts on the free month of Premium.
+        ...trialPlanFields(data.businessType),
         // GeoInfosys picks the units at onboarding; none given = the type's defaults.
         units: Array.isArray(data.units) && normalizeUnits(data.units).length ? normalizeUnits(data.units) : defaultUnitsFor(data.businessType),
       },
@@ -170,6 +186,8 @@ export class UserServiceImpl {
     if (!requesterLink) {
       await this.prisma.userCompany.create({ data: { userId: requesterId, companyId: company.id, isDefault: false } });
     }
+
+    if (plan) await this.subscriptions.activate(company.id, plan, requesterId);
 
     const emailSent = await this.mailService.sendInvitation(data.adminEmail, data.adminName, company.name, tempPassword);
 
@@ -305,6 +323,7 @@ export class UserServiceImpl {
       where: { userId_companyId: { userId: targetUserId, companyId } },
     });
     if (!link) throw new NotFoundException('User does not belong to this company');
+    if (isActive && !user.isActive) await assertCanAddLogin(this.prisma, companyId, targetUserId);
 
     return this.prisma.user.update({
       where: { id: targetUserId },

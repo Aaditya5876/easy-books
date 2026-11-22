@@ -17,6 +17,10 @@ import PageHeader from '../components/shared/PageHeader';
 import UnitListEditor from '../components/shared/UnitListEditor';
 import CompanyUnitsCard from '../components/settings/CompanyUnitsCard';
 import ItemFieldsCard from '../components/settings/ItemFieldsCard';
+import SubscriptionPanel from '../components/subscription/SubscriptionPanel';
+import ClientPlanDialog from '../components/subscription/ClientPlanDialog';
+import PriceListEditor from '../components/subscription/PriceListEditor';
+import { PlanBadge, PAYMENT_METHOD_DEFAULTS } from '../components/subscription/PlanParts';
 import { defaultUnitsFor } from '@easy-books/shared';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,7 +34,7 @@ import {
   Building2, Plus, Trash2, Save, ImagePlus, X, UserPlus, Copy, Check, Shield,
   Phone, Mail, MapPin, Hash, User, Palette, Type, Bell, RotateCcw, Upload,
   Recycle, RotateCw, Lock, AlertTriangle, Clock, Zap, QrCode, Power, PowerOff, Layers, KeyRound, ExternalLink,
-  Search, ChevronRight, ChevronDown, UserCircle
+  Search, ChevronRight, ChevronDown, UserCircle, CreditCard, Tags
 } from 'lucide-react';
 
 const SIDEBAR_PALETTE = ['#1e293b', '#1e3a5f', '#14532d', '#4c1d95', '#881337', '#7c2d12'];
@@ -316,9 +320,12 @@ export default function Settings() {
   // "unrestricted", which is what an empty enabledModules means to
   // ModuleAccessGuard) and gets its real package set from the Clients tab
   // right after, where the full tier + checklist editor already lives.
+  // startPlan: 'TRIAL' (free month of Premium) or a tier the client already paid for.
   const [provisionForm, setProvisionForm] = useState({
     companyName: '', product: 'SCHOOL', businessType: '', otherBusinessDesc: '', adminName: '', adminEmail: '',
+    startPlan: 'TRIAL', paymentMethod: 'CASH',
   });
+  const [planDialogCompany, setPlanDialogCompany] = useState(null);
   const [provisioning, setProvisioning] = useState(false);
 
   const [automation, setAutomation] = useState({
@@ -1080,6 +1087,7 @@ export default function Settings() {
         adminEmail: provisionForm.adminEmail,
         enabledModules: businessType === 'SCHOOL' ? ['BASE'] : [],
         ...(businessType !== 'SCHOOL' && provisionForm.units?.length ? { units: provisionForm.units } : {}),
+        ...(provisionForm.startPlan !== 'TRIAL' ? { plan: { planTier: provisionForm.startPlan, paymentMethod: provisionForm.paymentMethod } } : {}),
       });
       if (res.data.emailSent) {
         toast.success(t('settings.clientCreatedEmailed', { defaultValue: 'Client created — login details emailed to {{email}}', email: provisionForm.adminEmail }));
@@ -1089,7 +1097,7 @@ export default function Settings() {
         toast.error(t('settings.clientCreatedEmailFailed', { defaultValue: 'Client created, but the invite email failed to send — share this password manually' }));
         setTempPassword(res.data.tempPassword);
       }
-      setProvisionForm({ companyName: '', product: 'SCHOOL', businessType: '', otherBusinessDesc: '', adminName: '', adminEmail: '', units: [] });
+      setProvisionForm({ companyName: '', product: 'SCHOOL', businessType: '', otherBusinessDesc: '', adminName: '', adminEmail: '', units: [], startPlan: 'TRIAL', paymentMethod: 'CASH' });
       // Step straight into the new client (no "Switch To" click needed): the
       // header dropdown and sidebar follow via notifyCompaniesChanged().
       if (res.data?.company?.id) setActiveCompanyId(res.data.company.id);
@@ -1221,7 +1229,7 @@ export default function Settings() {
       <PageHeader title={t('settings.title', { defaultValue: 'Settings' })} subtitle={t('settings.subtitle', { defaultValue: 'Manage companies, users and preferences' })} />
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList>
+        <TabsList className="max-w-full overflow-x-auto justify-start">
           {/* SUPER_ADMIN never has a company of their own to switch between or
               edit — that's the whole point of Clients (below) instead — so
               this tab would only ever be empty and confusing for them. */}
@@ -1236,6 +1244,16 @@ export default function Settings() {
           <TabsTrigger value="users" onClick={loadUsers}>{t('settings.tabUsers', { defaultValue: 'Users' })}</TabsTrigger>
           <TabsTrigger value="preferences">{t('settings.tabPreferences', { defaultValue: 'Preferences' })}</TabsTrigger>
           <TabsTrigger value="automation" onClick={loadBankAccounts}>{t('settings.tabAutomation', { defaultValue: 'Automation' })}</TabsTrigger>
+          {user?.role === 'ADMIN' && (
+            <TabsTrigger value="subscription" className="gap-1.5">
+              <CreditCard className="w-3.5 h-3.5" />{t('subscription.tab', { defaultValue: 'Subscription' })}
+            </TabsTrigger>
+          )}
+          {isSuperAdmin && (
+            <TabsTrigger value="pricing" className="gap-1.5">
+              <Tags className="w-3.5 h-3.5" />{t('subscription.pricingTab', { defaultValue: 'Pricing' })}
+            </TabsTrigger>
+          )}
           {isAdmin && (
             <TabsTrigger value="recycle-bin" className="gap-1.5">
               <Recycle className="w-3.5 h-3.5" />{t('settings.tabRecycleBin', { defaultValue: 'Recycle Bin' })}
@@ -1362,11 +1380,14 @@ export default function Settings() {
                                 <span className="text-[10px] bg-secondary text-muted-foreground px-1.5 py-0.5 rounded-full shrink-0">
                                   {businessTypeLabel(c.businessType) || c.businessType}
                                 </span>
-                                {tier && (
-                                  <span className="text-[10px] border px-1.5 py-0.5 rounded-full text-muted-foreground shrink-0">
-                                    {t(`settings.package${tier}`, { defaultValue: tier.charAt(0) + tier.slice(1).toLowerCase() })}
-                                  </span>
-                                )}
+                                <PlanBadge
+                                  className="shrink-0 !text-[10px]"
+                                  sub={{
+                                    planTier: c.planTier, planStatus: c.planStatus, subscriptionExpiresAt: c.subscriptionExpiresAt,
+                                    isExpired: !!isExpired,
+                                    daysLeft: c.subscriptionExpiresAt ? Math.max(0, Math.ceil((new Date(c.subscriptionExpiresAt).getTime() - nowTick) / 86400000)) : null,
+                                  }}
+                                />
                                 {c.isActive === false && (
                                   <span className="text-[10px] bg-red-50 text-red-600 px-1.5 py-0.5 rounded-full font-medium shrink-0">
                                     {t('settings.deactivated', { defaultValue: 'Deactivated' })}
@@ -1416,6 +1437,9 @@ export default function Settings() {
                                         <KeyRound className="w-3.5 h-3.5 mr-1.5" />{t('settings.resetPassword', { defaultValue: 'Reset Password' })}
                                       </Button>
                                     )}
+                                    <Button size="sm" variant="outline" onClick={() => setPlanDialogCompany(c)}>
+                                      <CreditCard className="w-3.5 h-3.5 mr-1.5" />{t('subscription.managePlan', { defaultValue: 'Manage plan' })}
+                                    </Button>
                                     <Button size="sm" variant="outline" onClick={() => handleClientActiveToggle(c)}>
                                       {c.isActive === false
                                         ? <><Power className="w-3.5 h-3.5 mr-1.5" />{t('settings.reactivate', { defaultValue: 'Reactivate' })}</>
@@ -1430,7 +1454,7 @@ export default function Settings() {
                                     {/* Plan row */}
                                     <div className="flex flex-wrap items-center gap-4 px-3 py-2.5 bg-card">
                                       <div className="flex items-center gap-1.5">
-                                        <span className="text-xs font-medium text-muted-foreground">{t('settings.packageHeading', { defaultValue: 'Package' })}</span>
+                                        <span className="text-xs font-medium text-muted-foreground" title={t('subscription.modulesHint', { defaultValue: 'Which school modules are switched on — separate from the paid plan (Manage plan).' })}>{t('subscription.modulesHeading', { defaultValue: 'Modules' })}</span>
                                         {['BASE', 'STANDARD', 'PREMIUM'].map(pt => (
                                           <button
                                             key={pt}
@@ -1710,14 +1734,59 @@ export default function Settings() {
                     <Input type="email" required value={provisionForm.adminEmail} onChange={e => setProvisionForm(f => ({ ...f, adminEmail: e.target.value }))} />
                   </div>
                 </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label>{t('subscription.startWith', { defaultValue: 'Start with' })}</Label>
+                    <select
+                      className="w-full border rounded-md px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring"
+                      value={provisionForm.startPlan}
+                      onChange={e => setProvisionForm(f => ({ ...f, startPlan: e.target.value }))}
+                    >
+                      <option value="TRIAL">{t('subscription.startTrial', { defaultValue: 'Free trial — 1 month of Premium' })}</option>
+                      {['BASIC', 'STANDARD', 'PREMIUM'].map(k => (
+                        <option key={k} value={k}>
+                          {t('subscription.startPaid', { tier: t(`subscription.tier${k.charAt(0) + k.slice(1).toLowerCase()}`, { defaultValue: k.charAt(0) + k.slice(1).toLowerCase() }), defaultValue: 'Paid — {{tier}} (1 year)' })}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  {provisionForm.startPlan !== 'TRIAL' && (
+                    <div className="space-y-1.5">
+                      <Label>{t('subscription.paymentMethod', { defaultValue: 'Paid by' })}</Label>
+                      <select
+                        className="w-full border rounded-md px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring"
+                        value={provisionForm.paymentMethod}
+                        onChange={e => setProvisionForm(f => ({ ...f, paymentMethod: e.target.value }))}
+                      >
+                        {Object.entries(PAYMENT_METHOD_DEFAULTS).map(([m, label]) => (
+                          <option key={m} value={m}>{t(`subscription.method_${m}`, { defaultValue: label })}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                </div>
                 <p className="text-xs text-muted-foreground -mt-1">
-                  {t('settings.packageSetAfterCreation', { defaultValue: 'Starts on the Base package — set their real package from the Clients list right after creating them.' })}
+                  {provisionForm.startPlan === 'TRIAL'
+                    ? t('subscription.provisionTrialHint', { defaultValue: 'When they pay, record the first purchase from the Clients list (Manage plan).' })
+                    : t('subscription.provisionPaidHint', { defaultValue: 'Records the installation fee from the price list and gives one year.' })}
                 </p>
                 <Button type="submit" disabled={provisioning} className="w-full">
                   {provisioning ? t('settings.creatingClient', { defaultValue: 'Creating…' }) : t('settings.createClientButton', { defaultValue: 'Create Client & Send Login' })}
                 </Button>
               </form>
             </div>
+          </TabsContent>
+        )}
+
+        {/* ── Subscription (company ADMIN) / Pricing (SUPER_ADMIN) ────────── */}
+        {user?.role === 'ADMIN' && (
+          <TabsContent value="subscription" className="mt-4">
+            <SubscriptionPanel companyId={activeCompanyId} />
+          </TabsContent>
+        )}
+        {isSuperAdmin && (
+          <TabsContent value="pricing" className="mt-4">
+            <PriceListEditor />
           </TabsContent>
         )}
 
@@ -2609,6 +2678,15 @@ export default function Settings() {
           )}
         </TabsContent>
       </Tabs>
+
+      {isSuperAdmin && planDialogCompany && (
+        <ClientPlanDialog
+          company={planDialogCompany}
+          open={!!planDialogCompany}
+          onOpenChange={(o) => { if (!o) setPlanDialogCompany(null); }}
+          onSaved={(updated) => setAllClients(list => list.map(x => (x.id === updated.id ? { ...x, ...updated } : x)))}
+        />
+      )}
 
       {/* ── Add Bank Account Dialog ───────────────────────────────────────── */}
       <Dialog open={showAddBank} onOpenChange={v => { setShowAddBank(v); if (!v) setBankForm({ bankName: '', accountNumber: '', accountType: '', branch: '', currentBalance: '', paymentType: 'BANK' }); }}>

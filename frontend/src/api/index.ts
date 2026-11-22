@@ -287,9 +287,21 @@ export const companyApi = {
   // SUPER_ADMIN only — set (ISO string) or clear (null) a company's automatic subscription expiry.
   setSubscriptionExpiry: (id: string, expiresAt: string | null) => apiClient.patch(`/api/v1/companies/${id}/subscription`, { expiresAt }),
   // ADMIN only — "Request Renewal" button shown once a company loses access. Notifies every SUPER_ADMIN.
-  requestRenewal: (id: string) => apiClient.post(`/api/v1/companies/${id}/request-renewal`),
+  // Optional wish: { period: 'QUARTERLY', planTier: 'STANDARD' } (Settings → Subscription).
+  requestRenewal: (id: string, wish?: { period?: string; planTier?: string }) => apiClient.post(`/api/v1/companies/${id}/request-renewal`, wish ?? {}),
   // ADMIN only — claim the one-time three-day extension after expiry.
   extendSubscription: (id: string) => apiClient.post(`/api/v1/companies/${id}/extend-subscription`),
+};
+
+// OneBook plans. Keyed on the company id (not the companyId param) so an admin
+// whose plan ran out can still open Settings → Subscription.
+export const subscriptionApi = {
+  get: (id: string) => apiClient.get(`/api/v1/subscriptions/company/${id}`),
+  // SUPER_ADMIN only from here down.
+  prices: () => apiClient.get('/api/v1/subscriptions/prices'),
+  updatePrice: (priceId: string, data: object) => apiClient.put(`/api/v1/subscriptions/prices/${priceId}`, data),
+  activate: (id: string, data: object) => apiClient.post(`/api/v1/subscriptions/company/${id}/activate`, data),
+  renew: (id: string, data: object) => apiClient.post(`/api/v1/subscriptions/company/${id}/renew`, data),
 };
 
 // File Upload
@@ -592,7 +604,8 @@ export const usersApi = {
   remove: (userId: string, cid: string) =>
     apiClient.delete(`/api/v1/users/${userId}`, { params: { companyId: cid } }),
   // SUPER_ADMIN only — sales-led onboarding: new company + its first ADMIN login.
-  provisionClient: (data: { companyName: string; businessType: string; adminName: string; adminEmail: string; enabledModules?: string[] }) =>
+  // plan (optional): the client already paid — start on that plan instead of the free trial.
+  provisionClient: (data: { companyName: string; businessType: string; adminName: string; adminEmail: string; enabledModules?: string[]; units?: string[]; plan?: object }) =>
     apiClient.post('/api/v1/users/provision-client', data),
   // SUPER_ADMIN only — how many companies this user may self-serve create.
   updateMaxCompanies: (userId: string, maxCompanies: number) =>

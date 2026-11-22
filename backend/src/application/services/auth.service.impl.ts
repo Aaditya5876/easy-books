@@ -1,3 +1,4 @@
+import { trialPlanFields } from '../../../core/utils/plan-limits';
 import {
   Injectable,
   Inject,
@@ -53,6 +54,7 @@ export class AuthServiceImpl implements IAuthService {
         businessType: dto.businessType,
         registrationNumber: dto.registrationNumber,
         defaultUnitType: dto.defaultUnitType,
+        ...trialPlanFields(dto.businessType),
       },
     });
 

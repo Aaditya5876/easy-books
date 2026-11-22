@@ -5,7 +5,7 @@ import { SchoolFinanceService } from './school-finance.service';
 import { PayrollEngineService } from './payroll.engine';
 import { NotificationServiceImpl } from './notification.service.impl';
 import { PortalNotificationService } from './portal-notification.service';
-import { bsYearMonth } from '@easy-books/shared';
+import { bsYearMonth, PLAN_TIER_LABELS, type PlanTier } from '@easy-books/shared';
 import { purgeRecycleBin } from './recycle-bin.service.impl';
 import { IDEMPOTENCY_TTL_MS } from '../../modules/interceptors/idempotency.interceptor';
 
@@ -73,9 +73,48 @@ export class ScheduledTasksService {
     }
   }
 
+  // Tells a company's admin(s) their plan or free trial is about to run out —
+  // 30, 7 and 1 day(s) before, each once (expiryReminderDays remembers the
+  // last step sent; buying or renewing resets it).
+  async notifyExpiringSubscriptions() {
+    const DAY = 24 * 60 * 60 * 1000;
+    const now = new Date();
+    const companies = await this.prisma.company.findMany({
+      where: { isActive: true, subscriptionExpiresAt: { gt: now, lte: new Date(now.getTime() + 30 * DAY) } },
+      select: { id: true, name: true, planTier: true, planStatus: true, subscriptionExpiresAt: true, expiryReminderDays: true },
+    });
+    for (const c of companies) {
+      const daysLeft = Math.ceil((c.subscriptionExpiresAt!.getTime() - now.getTime()) / DAY);
+      const step = daysLeft <= 1 ? 1 : daysLeft <= 7 ? 7 : 30;
+      if (c.expiryReminderDays != null && c.expiryReminderDays <= step) continue;
+      const claimed = await this.prisma.company.updateMany({
+        where: { id: c.id, OR: [{ expiryReminderDays: null }, { expiryReminderDays: { gt: step } }] },
+        data: { expiryReminderDays: step },
+      });
+      if (claimed.count === 0) continue;
+      const when = daysLeft <= 1 ? 'tomorrow' : `in ${daysLeft} days`;
+      const date = c.subscriptionExpiresAt!.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Asia/Kathmandu' });
+      const trial = c.planStatus === 'TRIAL';
+      await this.notifications.notifyRole(c.id, ['ADMIN'], {
+        type: 'SUBSCRIPTION_EXPIRING',
+        title: trial ? 'Free trial ending soon' : 'Plan expiring soon',
+        message: trial
+          ? `${c.name}'s free trial ends ${when} (${date}). Choose a plan in Settings → Subscription to keep using OneBook.`
+          : `${c.name}'s ${PLAN_TIER_LABELS[c.planTier as PlanTier] ?? ''} plan expires ${when} (${date}). Renew in Settings → Subscription to avoid interruption.`.replace('  ', ' '),
+        link: '/settings',
+      });
+    }
+  }
+
   @Cron(CronExpression.EVERY_DAY_AT_1AM)
   async runMonthlyAutomation() {
     const currentBsMonth = bsYearMonth(new Date());
+
+    try {
+      await this.notifyExpiringSubscriptions();
+    } catch (err) {
+      this.logger.error(`Subscription expiry reminders failed: ${(err as Error).message}`);
+    }
 
     // Idempotency keys only need to outlive a retry — keep a day.
     try {
