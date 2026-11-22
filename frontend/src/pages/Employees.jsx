@@ -132,13 +132,14 @@ function EmployeeFormBody({ data, onChange, errors = {} }) {
 
         {/* Employee ID */}
         <div className="space-y-1">
-          <Label className="text-xs">{t('employees.employeeId', { defaultValue: 'Employee ID' })} *</Label>
+          <Label className="text-xs">{t('employees.employeeId', { defaultValue: 'Employee ID' })} <span className="text-muted-foreground">({t('employees.optional', { defaultValue: 'optional' })})</span></Label>
           <div className="relative">
             <Hash className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
             <Input
               className="pl-8 h-9 text-sm"
               value={data.employee_id}
               onChange={e => onChange('employee_id', e.target.value)}
+              placeholder={t('employees.employeeIdAutoPlaceholder', { defaultValue: 'Blank = automatic (EMP-0001…)' })}
             />
           </div>
           {errors.employee_id && <p className="text-xs text-red-600">{errors.employee_id}</p>}
@@ -278,7 +279,6 @@ export default function Employees() {
   function validateEmployee(data) {
     const errs = {};
     if (!data.name?.trim()) errs.name = t('employees.fullNameRequired', { defaultValue: 'Full name is required' });
-    if (!data.employee_id?.trim()) errs.employee_id = t('employees.employeeIdRequired', { defaultValue: 'Employee ID is required' });
     if (data.employment_type === 'PART_TIME' && !(parseFloat(data.contracted_hours_per_day) > 0)) {
       errs.contracted_hours_per_day = t('employees.contractedHoursRequired', { defaultValue: 'Contracted hours/day is required for part-time employees' });
     }

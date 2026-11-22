@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../../../core/db/psql/prisma.client';
+import { requireText, requireDate, optionalDate, optionalText } from '../../../core/utils/input';
 import { SmsService } from './sms.service';
 import { AiService } from './ai.service';
 import { InventoryServiceImpl } from './inventory.service.impl';
@@ -454,7 +455,18 @@ export class SchoolService {
   }
 
   async saveAttendance(companyId: string, classId: string, date: string, academicYearId: string | undefined, entries: Array<{ studentId: string; status: string; notes?: string }>) {
-    const targetDate = new Date(date);
+    // A malformed save used to crash (500) on .map / an invalid date.
+    requireText(classId, 'Class');
+    const targetDate = requireDate(date, 'Attendance date');
+    if (!Array.isArray(entries) || entries.length === 0) throw new BadRequestException('Mark at least one student');
+    const STATUSES = ['PRESENT', 'ABSENT', 'LATE', 'EXCUSED'];
+    for (const e of entries) {
+      if (!e || typeof e.studentId !== 'string' || !e.studentId) throw new BadRequestException('Each entry needs a student');
+      if (!STATUSES.includes(e.status)) throw new BadRequestException(`Attendance status must be one of: ${STATUSES.join(', ')}`);
+      if (e.notes !== undefined && e.notes !== null && typeof e.notes !== 'string') throw new BadRequestException('Notes must be text');
+    }
+    const cls = await this.prisma.schoolClass.findFirst({ where: { id: classId, companyId }, select: { id: true } }).catch(() => null);
+    if (!cls) throw new NotFoundException('Class not found');
 
     const studentIds = [...new Set(entries.map(e => e.studentId))];
     const ownedCount = await this.prisma.student.count({ where: { id: { in: studentIds }, companyId } });
@@ -814,13 +826,12 @@ export class SchoolService {
   }
 
   async createExam(body: { companyId: string; name: string; examDate?: string; notes?: string }) {
-    if (!body.name?.trim()) throw new BadRequestException('Exam name is required');
     return this.prisma.exam.create({
       data: {
         companyId: body.companyId,
-        name: body.name.trim(),
-        examDate: body.examDate ? new Date(body.examDate) : undefined,
-        notes: body.notes || undefined,
+        name: requireText(body.name, 'Exam name'),
+        examDate: optionalDate(body.examDate, 'Exam date'),
+        notes: optionalText(body.notes, 'Notes'),
       },
     });
   }

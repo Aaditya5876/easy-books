@@ -199,8 +199,12 @@ const AuthenticatedApp = () => {
 
 
 function App() {
+  // next-themes renders an inline anti-flash <script> meant for server
+  // rendering; in this client-only app it never runs, and React 19 logged
+  // "Encountered a script tag…" on every page. A non-JS type makes it an
+  // inert data block (no warning); the provider still applies the theme.
   return (
-    <ThemeProvider attribute="class" defaultTheme="light" disableTransitionOnChange>
+    <ThemeProvider attribute="class" defaultTheme="light" disableTransitionOnChange scriptProps={{ type: 'application/json' }}>
       <PreferencesProvider>
       <AuthProvider>
         <QueryClientProvider client={queryClientInstance}>

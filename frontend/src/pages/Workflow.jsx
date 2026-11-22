@@ -18,6 +18,7 @@ import { cn } from '@/lib/utils';
 import {
   Plus, X, User, CheckCircle2, FileText, Paperclip, Search, Link2,
   Receipt, ShoppingCart, UserPlus, Truck, BadgePlus, Trash2, ExternalLink, FileSpreadsheet, Wallet, Clock,
+  LayoutGrid, List, AlertTriangle, CircleDot, Loader, CalendarClock, Building2,
 } from 'lucide-react';
 import { FileAttachmentZone } from '@/components/ui/file-attachment-zone';
 import { useToast } from '@/components/ui/use-toast';
@@ -34,22 +35,41 @@ import {
 
 // ─── Look ─────────────────────────────────────────────────────────────────────
 
-// Sticky-note colour per kind of work.
-const NOTE_COLORS = {
-  JOB_CARD: 'bg-amber-50 border-amber-200 dark:bg-amber-950/30 dark:border-amber-900',
-  ORDER_SLIP: 'bg-sky-50 border-sky-200 dark:bg-sky-950/30 dark:border-sky-900',
-  GENERAL_ASSESSMENT: 'bg-violet-50 border-violet-200 dark:bg-violet-950/30 dark:border-violet-900',
-  APPOINTMENT: 'bg-emerald-50 border-emerald-200 dark:bg-emerald-950/30 dark:border-emerald-900',
-  GENERAL: 'bg-slate-50 border-slate-200 dark:bg-slate-900/40 dark:border-slate-800',
-};
-const STATUS_BADGE = {
-  PENDING: 'bg-gray-100 text-gray-700',
-  IN_PROGRESS: 'bg-blue-100 text-blue-700',
-  COMPLETED: 'bg-green-100 text-green-700',
-  CANCELLED: 'bg-red-100 text-red-600',
-};
-const PRIORITY_DOT = { LOW: 'bg-green-500', MEDIUM: 'bg-amber-500', HIGH: 'bg-orange-500', URGENT: 'bg-red-600' };
 const COLUMN_DOT = { PENDING: 'bg-gray-400', IN_PROGRESS: 'bg-blue-500', COMPLETED: 'bg-green-500', CANCELLED: 'bg-red-400' };
+
+// Board / list look: one accent colour per kind of work, readable pills in
+// both themes.
+const TYPE_ACCENT = {
+  JOB_CARD: 'bg-amber-500', ORDER_SLIP: 'bg-sky-500', GENERAL_ASSESSMENT: 'bg-violet-500',
+  APPOINTMENT: 'bg-emerald-500', GENERAL: 'bg-slate-400',
+};
+const TYPE_PILL = {
+  JOB_CARD: 'bg-amber-100 text-amber-800 dark:bg-amber-500/15 dark:text-amber-300',
+  ORDER_SLIP: 'bg-sky-100 text-sky-800 dark:bg-sky-500/15 dark:text-sky-300',
+  GENERAL_ASSESSMENT: 'bg-violet-100 text-violet-800 dark:bg-violet-500/15 dark:text-violet-300',
+  APPOINTMENT: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-300',
+  GENERAL: 'bg-slate-100 text-slate-700 dark:bg-slate-500/15 dark:text-slate-300',
+};
+const PRIORITY_PILL = {
+  LOW: 'bg-green-100 text-green-800 dark:bg-green-500/15 dark:text-green-300',
+  MEDIUM: 'bg-amber-100 text-amber-800 dark:bg-amber-500/15 dark:text-amber-300',
+  HIGH: 'bg-orange-100 text-orange-800 dark:bg-orange-500/15 dark:text-orange-300',
+  URGENT: 'bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-300',
+};
+const STATUS_PILL = {
+  PENDING: 'bg-slate-100 text-slate-700 dark:bg-slate-500/15 dark:text-slate-300',
+  IN_PROGRESS: 'bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300',
+  COMPLETED: 'bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-300',
+  CANCELLED: 'bg-red-100 text-red-600 dark:bg-red-500/15 dark:text-red-300',
+};
+const COLUMN_TOP = { PENDING: 'border-t-slate-400', IN_PROGRESS: 'border-t-blue-500', COMPLETED: 'border-t-green-500', CANCELLED: 'border-t-red-400' };
+
+const isDueToday = (task) => !!task?.dueDate && new Date(task.dueDate).toDateString() === new Date().toDateString()
+  && task.status !== 'COMPLETED' && task.status !== 'CANCELLED';
+const initials = (name) => String(name || '').trim().split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase()).join('') || '?';
+const VIEW_KEY = 'workflow.view';
+const readView = () => { try { return localStorage.getItem(VIEW_KEY) === 'list' ? 'list' : 'board'; } catch { return 'board'; } };
+const saveView = (v) => { try { localStorage.setItem(VIEW_KEY, v); } catch { /* private mode — fine */ } };
 
 const EMPTY_TASK = {
   title: '', description: '', workflowType: 'JOB_CARD', category: 'General', priority: 'MEDIUM', status: 'PENDING',
@@ -294,56 +314,177 @@ function DocumentPicker({ files, onChange, defaultFolder }) {
 
 // From the outside a note shows only: number, title, assigned date, due date,
 // status and who it's assigned to — plus small counts of what's linked.
-function TaskNote({ task, onClick }) {
-  const { t } = useTranslation();
-  const overdue = isTaskOverdue(task);
+// Small pieces shared by the board card and the list row.
+function linkBitsFor(t, task) {
   const c = task.linkCounts || {};
-  const linkBits = [
+  return [
     c.quotations && { icon: FileSpreadsheet, n: c.quotations, label: t('workflow.quotations', { defaultValue: 'Quotations' }) },
     c.purchases && { icon: ShoppingCart, n: c.purchases, label: t('workflow.purchases', { defaultValue: 'Purchases' }) },
     c.sales && { icon: Receipt, n: c.sales, label: t('workflow.salesBills', { defaultValue: 'Sales bills' }) },
     c.documents && { icon: Paperclip, n: c.documents, label: t('workflow.documents', { defaultValue: 'Documents' }) },
   ].filter(Boolean);
+}
+
+function DueLabel({ task }) {
+  const { t } = useTranslation();
+  const overdue = isTaskOverdue(task);
+  const today = isDueToday(task);
+  if (!task.dueDate) return <span className="text-muted-foreground">{t('workflow.noDueDate', { defaultValue: 'No due date' })}</span>;
+  return (
+    <span className={cn('inline-flex items-center gap-1', overdue ? 'font-semibold text-red-600 dark:text-red-400' : today ? 'font-semibold text-amber-600 dark:text-amber-400' : 'text-muted-foreground')}>
+      {overdue ? <AlertTriangle className="h-3 w-3" /> : <CalendarClock className="h-3 w-3" />}
+      {today ? t('workflow.today', { defaultValue: 'Today' }) : fmtDate(task.dueDate)}
+      {task.dueTime ? ` · ${task.dueTime}` : ''}
+    </span>
+  );
+}
+
+function Assignee({ task, showName = true }) {
+  const { t } = useTranslation();
+  const name = task.assignedName || task.assignedTo;
+  return (
+    <span className="flex min-w-0 items-center gap-1.5" title={name || undefined}>
+      <span className={cn('flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold',
+        name ? 'bg-primary/15 text-primary' : 'border border-dashed text-muted-foreground')}>
+        {name ? initials(name) : <User className="h-3 w-3" />}
+      </span>
+      {showName && <span className={cn('truncate text-xs', !name && 'text-muted-foreground')}>{name || t('workflow.unassigned', { defaultValue: 'Unassigned' })}</span>}
+    </span>
+  );
+}
+
+function TaskNote({ task, onClick }) {
+  const { t } = useTranslation();
+  const overdue = isTaskOverdue(task);
+  const linkBits = linkBitsFor(t, task);
+  const done = task.status === 'COMPLETED' || task.status === 'CANCELLED';
   return (
     <button
       type="button"
       onClick={() => onClick(task)}
       className={cn(
-        'relative w-full rounded-md border p-3 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md',
-        NOTE_COLORS[task.workflowType] || NOTE_COLORS.GENERAL,
+        'group relative w-full overflow-hidden rounded-lg border bg-card p-3 pl-4 text-left shadow-sm transition',
+        'hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+        overdue && 'border-red-300 dark:border-red-900',
+        done && 'opacity-75',
       )}
     >
-      <span className={cn('absolute right-2 top-2 h-2 w-2 rounded-full', PRIORITY_DOT[task.priority] || 'bg-gray-300')} title={priorityLabel(t, task.priority)} />
-      <div className="mb-1 flex items-center gap-2 text-[11px] text-muted-foreground">
-        <span className="font-mono font-semibold text-foreground">#{task.taskNumber ?? '—'}</span>
-        <span>· {workflowTypeLabel(t, task.workflowType)}</span>
-      </div>
-      <p className="mb-2 line-clamp-2 pr-3 text-sm font-semibold leading-snug">{task.title}</p>
-      <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-[11px]">
-        <span className="text-muted-foreground">{t('workflow.assignedOn', { defaultValue: 'Assigned' })}</span>
-        <span className="text-right">{fmtDate(task.createdAt) || '—'}</span>
-        <span className="text-muted-foreground">{t('workflow.due', { defaultValue: 'Due' })}</span>
-        <span className={cn('text-right', overdue && 'font-semibold text-red-600')}>
-          {fmtDate(task.dueDate) || '—'}{task.dueTime ? ` ${task.dueTime}` : ''}
+      <span className={cn('absolute inset-y-0 left-0 w-1', TYPE_ACCENT[task.workflowType] || TYPE_ACCENT.GENERAL)} />
+
+      <div className="mb-1.5 flex items-center gap-2">
+        <span className="font-mono text-[11px] font-semibold text-muted-foreground">#{task.taskNumber ?? '—'}</span>
+        <span className={cn('rounded px-1.5 py-0.5 text-[10px] font-medium', TYPE_PILL[task.workflowType] || TYPE_PILL.GENERAL)}>
+          {workflowTypeLabel(t, task.workflowType)}
+        </span>
+        <span className={cn('ml-auto rounded-full px-2 py-0.5 text-[10px] font-medium', PRIORITY_PILL[task.priority] || PRIORITY_PILL.MEDIUM)}>
+          {priorityLabel(t, task.priority)}
         </span>
       </div>
-      <div className="mt-2 flex items-center justify-between gap-2">
-        <span className="flex min-w-0 items-center gap-1 text-xs">
-          <User className="h-3 w-3 shrink-0 text-muted-foreground" />
-          <span className="truncate">{task.assignedName || task.assignedTo || t('workflow.unassigned', { defaultValue: 'Unassigned' })}</span>
-        </span>
-        <span className={cn('shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium', STATUS_BADGE[task.status])}>
-          {overdue ? t('workflow.overdue', { defaultValue: 'Overdue' }) : statusLabel(t, task.status)}
-        </span>
+
+      <p className={cn('line-clamp-2 text-sm font-semibold leading-snug', task.status === 'COMPLETED' && 'line-through decoration-muted-foreground/50')}>{task.title}</p>
+
+      {task.partyName && (
+        <p className="mt-1 flex items-center gap-1 truncate text-xs text-muted-foreground">
+          <Building2 className="h-3 w-3 shrink-0" />
+          <span className="truncate">{task.partyName}</span>
+        </p>
+      )}
+
+      <div className="mt-3 flex items-center justify-between gap-2 border-t pt-2 text-[11px]">
+        <DueLabel task={task} />
+        <Assignee task={task} showName={false} />
       </div>
+
       {linkBits.length > 0 && (
-        <div className="mt-2 flex flex-wrap gap-2 border-t border-black/5 pt-2 text-[10px] text-muted-foreground dark:border-white/10">
+        <div className="mt-2 flex flex-wrap gap-1.5">
           {linkBits.map(({ icon: Icon, n, label }) => (
-            <span key={label} className="flex items-center gap-0.5" title={label}><Icon className="h-3 w-3" />{n}</span>
+            <span key={label} className="inline-flex items-center gap-1 rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground" title={label}>
+              <Icon className="h-3 w-3" />{n}
+            </span>
           ))}
         </div>
       )}
     </button>
+  );
+}
+
+// List view: every job in one sortable-at-a-glance table.
+function TaskTable({ tasks, onOpen }) {
+  const { t } = useTranslation();
+  if (tasks.length === 0) {
+    return <p className="rounded-lg border bg-card py-12 text-center text-sm text-muted-foreground">{t('workflow.noMatch', { defaultValue: 'No tasks match your filters.' })}</p>;
+  }
+  const head = 'px-3 py-2 text-left text-[11px] font-medium uppercase tracking-wide text-muted-foreground';
+  return (
+    <div className="overflow-x-auto rounded-lg border bg-card">
+      <table className="w-full min-w-[820px] text-sm">
+        <thead className="border-b bg-muted/40">
+          <tr>
+            <th className={cn(head, 'w-16')}>#</th>
+            <th className={head}>{t('workflow.colTask', { defaultValue: 'Task' })}</th>
+            <th className={head}>{t('workflow.forWhom', { defaultValue: 'For' })}</th>
+            <th className={head}>{t('workflow.assignedTo', { defaultValue: 'Assigned to' })}</th>
+            <th className={head}>{t('workflow.due', { defaultValue: 'Due' })}</th>
+            <th className={head}>{t('workflow.priority', { defaultValue: 'Priority' })}</th>
+            <th className={head}>{t('workflow.status', { defaultValue: 'Status' })}</th>
+            <th className={cn(head, 'text-right')}>{t('workflow.connectedRecords', { defaultValue: 'Linked' })}</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y">
+          {tasks.map((task) => {
+            const overdue = isTaskOverdue(task);
+            const linkBits = linkBitsFor(t, task);
+            return (
+              <tr
+                key={task.id}
+                tabIndex={0}
+                onClick={() => onOpen(task)}
+                onKeyDown={(e) => { if (e.key === 'Enter') onOpen(task); }}
+                className={cn('cursor-pointer transition-colors hover:bg-muted/50 focus-visible:bg-muted/50 focus-visible:outline-none', overdue && 'bg-red-50/60 dark:bg-red-950/20')}
+              >
+                <td className="px-3 py-2.5">
+                  <span className="flex items-center gap-2">
+                    <span className={cn('h-6 w-1 rounded-full', TYPE_ACCENT[task.workflowType] || TYPE_ACCENT.GENERAL)} />
+                    <span className="font-mono text-xs font-semibold text-muted-foreground">{task.taskNumber ?? '—'}</span>
+                  </span>
+                </td>
+                <td className="max-w-[280px] px-3 py-2.5">
+                  <p className={cn('truncate font-medium', task.status === 'COMPLETED' && 'text-muted-foreground line-through')}>{task.title}</p>
+                  <span className={cn('mt-0.5 inline-block rounded px-1.5 py-0.5 text-[10px] font-medium', TYPE_PILL[task.workflowType] || TYPE_PILL.GENERAL)}>
+                    {workflowTypeLabel(t, task.workflowType)}
+                  </span>
+                </td>
+                <td className="max-w-[180px] px-3 py-2.5">
+                  {task.partyName ? (
+                    <>
+                      <p className="truncate text-sm">{task.partyName}</p>
+                      {task.partyType && <p className="text-[11px] text-muted-foreground">{partyTypeLabel(t, task.partyType)}</p>}
+                    </>
+                  ) : <span className="text-muted-foreground">—</span>}
+                </td>
+                <td className="max-w-[170px] px-3 py-2.5"><Assignee task={task} /></td>
+                <td className="whitespace-nowrap px-3 py-2.5 text-xs"><DueLabel task={task} /></td>
+                <td className="px-3 py-2.5">
+                  <span className={cn('rounded-full px-2 py-0.5 text-[11px] font-medium', PRIORITY_PILL[task.priority] || PRIORITY_PILL.MEDIUM)}>{priorityLabel(t, task.priority)}</span>
+                </td>
+                <td className="px-3 py-2.5">
+                  <span className={cn('whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-medium', overdue ? STATUS_PILL.CANCELLED : STATUS_PILL[task.status])}>
+                    {overdue ? t('workflow.overdue', { defaultValue: 'Overdue' }) : statusLabel(t, task.status)}
+                  </span>
+                </td>
+                <td className="px-3 py-2.5">
+                  <span className="flex justify-end gap-1.5">
+                    {linkBits.length === 0 ? <span className="text-muted-foreground">—</span> : linkBits.map(({ icon: Icon, n, label }) => (
+                      <span key={label} className="inline-flex items-center gap-0.5 text-[11px] text-muted-foreground" title={label}><Icon className="h-3 w-3" />{n}</span>
+                    ))}
+                  </span>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
   );
 }
 
@@ -468,7 +609,10 @@ function QuickActionDialog({ kind, task, onClose, onDone }) {
           }, cfg());
         } else {
           const attachments = form.files.map(({ url, originalName }) => ({ url, originalName }));
-          const body = { companyId, taskId, ...party, dateAd: todayIso(), isVat: form.isVat, paymentMethod: form.paymentMethod, notes: form.notes || undefined, items, ...(attachments.length ? { attachments } : {}) };
+          // Credit = udharo (pay later from Purchase / Sales); any other method
+          // = paid in full now, saved with the bill (status Paid, ledger updated).
+          const payment = form.paymentMethod === 'CREDIT' ? { type: 'CREDIT' } : { type: 'FULL', paymentMethod: form.paymentMethod };
+          const body = { companyId, taskId, ...party, dateAd: todayIso(), isVat: form.isVat, payment, notes: form.notes || undefined, items, ...(attachments.length ? { attachments } : {}) };
           created = await (kind === 'sales' ? salesApi : purchaseApi).create(body, cfg());
         }
       } else if (isParty) {
@@ -505,12 +649,12 @@ function QuickActionDialog({ kind, task, onClose, onDone }) {
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className={cn('glass-dialog', isOrder ? 'max-w-2xl' : 'max-w-md')}>
+      <DialogContent className={cn('glass-dialog flex flex-col', isOrder ? 'max-w-2xl' : 'max-w-md')}>
         <DialogHeader>
           <DialogTitle>{titles[kind]}</DialogTitle>
           <p className="text-xs text-muted-foreground">{t('workflow.forTask', { defaultValue: 'For task #{{n}} — {{title}}', n: task.taskNumber ?? '', title: task.title })}</p>
         </DialogHeader>
-        <div className="max-h-[65vh] space-y-3 overflow-y-auto pr-1">
+        <div className="flex-1 min-h-0 space-y-3 overflow-y-auto pr-1">
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label={`${nameLabel} *`}>
               {isOrder ? (
@@ -892,9 +1036,9 @@ function NewTaskDialog({ open, onOpenChange, onCreated, initialType }) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="glass-dialog max-w-3xl">
+      <DialogContent className="glass-dialog max-w-3xl flex flex-col">
         <DialogHeader><DialogTitle>{t('workflow.newTask', { defaultValue: 'New Task' })}</DialogTitle></DialogHeader>
-        <div className="grid max-h-[68vh] gap-6 overflow-y-auto pr-1 md:grid-cols-[3fr_2fr]">
+        <div className="grid flex-1 min-h-0 gap-6 overflow-y-auto pr-1 md:grid-cols-[3fr_2fr]">
           <TaskFields value={form} onChange={setForm} />
           <div className="space-y-2">
             <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -928,6 +1072,8 @@ export default function Workflow() {
   const [typeFilter, setTypeFilter] = useState(null);
   const [search, setSearch] = useState('');
   const [showCancelled, setShowCancelled] = useState(false);
+  const [view, setView] = useState(readView); // 'board' | 'list' — remembered per browser
+  const changeView = (v) => { setView(v); saveView(v); };
 
   const load = useCallback(async (quiet = false) => {
     if (!quiet) setLoading(true);
@@ -955,6 +1101,17 @@ export default function Workflow() {
   const columns = showCancelled ? TASK_STATUSES : TASK_STATUSES.filter((s) => s !== 'CANCELLED');
   const byDue = (a, b) => (a.dueDate ? new Date(a.dueDate) : Infinity) - (b.dueDate ? new Date(b.dueDate) : Infinity);
   const counts = (type) => tasks.filter((x) => x.workflowType === type).length;
+  const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+  const summary = [
+    { key: 'open', icon: CircleDot, tone: 'text-slate-600 bg-slate-100 dark:text-slate-300 dark:bg-slate-500/15', label: t('workflow.kpiOpen', { defaultValue: 'Open' }), value: tasks.filter((x) => x.status === 'PENDING').length },
+    { key: 'progress', icon: Loader, tone: 'text-blue-600 bg-blue-100 dark:text-blue-300 dark:bg-blue-500/15', label: t('workflow.kpiInProgress', { defaultValue: 'In progress' }), value: tasks.filter((x) => x.status === 'IN_PROGRESS').length },
+    { key: 'overdue', icon: AlertTriangle, tone: 'text-red-600 bg-red-100 dark:text-red-300 dark:bg-red-500/15', label: t('workflow.kpiOverdue', { defaultValue: 'Overdue' }), value: tasks.filter(isTaskOverdue).length },
+    { key: 'done', icon: CheckCircle2, tone: 'text-green-600 bg-green-100 dark:text-green-300 dark:bg-green-500/15', label: t('workflow.kpiDoneThisMonth', { defaultValue: 'Done this month' }), value: tasks.filter((x) => x.status === 'COMPLETED' && new Date(x.updatedAt || x.createdAt) >= monthStart).length },
+  ];
+  const statusOrder = (s) => TASK_STATUSES.indexOf(s);
+  const listRows = visible
+    .filter((x) => showCancelled || x.status !== 'CANCELLED')
+    .sort((a, b) => statusOrder(a.status) - statusOrder(b.status) || byDue(a, b));
   const replaceTask = (saved) => setTasks((prev) => prev.map((x) => (x.id === saved.id ? { ...x, ...saved } : x)));
 
   return (
@@ -969,37 +1126,69 @@ export default function Workflow() {
           )}
         </PageHeader>
 
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
-          <button
-            type="button"
-            onClick={() => setTypeFilter(null)}
-            className={cn('rounded-lg border p-3 text-left', !typeFilter ? 'border-primary bg-primary text-primary-foreground' : 'bg-card')}
-          >
-            <p className="text-xl font-bold">{tasks.length}</p>
-            <p className="text-[11px]">{t('workflow.allTasks', { defaultValue: 'All tasks' })}</p>
-          </button>
-          {WORKFLOW_TYPES.map((type) => (
-            <button
-              key={type}
-              type="button"
-              onClick={() => setTypeFilter((cur) => (cur === type ? null : type))}
-              className={cn('rounded-lg border p-3 text-left', typeFilter === type ? 'border-primary bg-primary text-primary-foreground' : 'bg-card')}
-            >
-              <p className="text-xl font-bold">{counts(type)}</p>
-              <p className="text-[11px]">{workflowTypeLabel(t, type)}</p>
-            </button>
+        {/* At a glance */}
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          {summary.map(({ key, icon: Icon, tone, label, value }) => (
+            <div key={key} className={cn('flex items-center gap-3 rounded-xl border bg-card p-3 shadow-sm', key === 'overdue' && value > 0 && 'border-red-200 dark:border-red-900')}>
+              <span className={cn('flex h-9 w-9 shrink-0 items-center justify-center rounded-lg', tone)}><Icon className="h-4 w-4" /></span>
+              <div className="min-w-0">
+                <p className="text-xl font-bold leading-none">{value}</p>
+                <p className="mt-1 truncate text-xs text-muted-foreground">{label}</p>
+              </div>
+            </div>
           ))}
         </div>
 
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="relative min-w-[220px] flex-1 sm:max-w-xs">
-            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-            <Input className="h-9 pl-8 text-sm" value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t('workflow.searchPlaceholder', { defaultValue: 'Search number, title, person…' })} />
+        {/* Filters + view switch */}
+        <div className="space-y-3 rounded-xl border bg-card p-3 shadow-sm">
+          <div className="flex flex-wrap gap-1.5" role="tablist">
+            {[null, ...WORKFLOW_TYPES].map((type) => {
+              const active = typeFilter === type;
+              return (
+                <button
+                  key={type || 'all'}
+                  type="button"
+                  role="tab"
+                  aria-selected={active}
+                  onClick={() => setTypeFilter(type === null ? null : (cur) => (cur === type ? null : type))}
+                  className={cn(
+                    'inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors',
+                    active ? 'border-primary bg-primary text-primary-foreground' : 'bg-background hover:bg-muted',
+                  )}
+                >
+                  {type && <span className={cn('h-2 w-2 rounded-full', TYPE_ACCENT[type])} />}
+                  {type ? workflowTypeLabel(t, type) : t('workflow.allTasks', { defaultValue: 'All tasks' })}
+                  <span className={cn('rounded-full px-1.5 text-[10px]', active ? 'bg-primary-foreground/20' : 'bg-muted text-muted-foreground')}>
+                    {type ? counts(type) : tasks.length}
+                  </span>
+                </button>
+              );
+            })}
           </div>
-          <label className="flex items-center gap-2 text-xs text-muted-foreground">
-            <Checkbox checked={showCancelled} onCheckedChange={(v) => setShowCancelled(!!v)} />
-            {t('workflow.showCancelled', { defaultValue: 'Show cancelled' })}
-          </label>
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="relative min-w-[220px] flex-1 sm:max-w-sm">
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+              <Input className="h-9 pl-8 text-sm" value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t('workflow.searchPlaceholder', { defaultValue: 'Search number, title, person…' })} />
+            </div>
+            <label className="flex items-center gap-2 text-xs text-muted-foreground">
+              <Checkbox checked={showCancelled} onCheckedChange={(v) => setShowCancelled(!!v)} />
+              {t('workflow.showCancelled', { defaultValue: 'Show cancelled' })}
+            </label>
+            <div className="ml-auto inline-flex rounded-lg border bg-muted/40 p-0.5" role="group" aria-label={t('workflow.view', { defaultValue: 'View' })}>
+              {[['board', LayoutGrid, t('workflow.viewBoard', { defaultValue: 'Board' })], ['list', List, t('workflow.viewList', { defaultValue: 'List' })]].map(([key, Icon, label]) => (
+                <button
+                  key={key}
+                  type="button"
+                  aria-pressed={view === key}
+                  onClick={() => changeView(key)}
+                  className={cn('inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors',
+                    view === key ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground')}
+                >
+                  <Icon className="h-3.5 w-3.5" />{label}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
 
         {loading ? (
@@ -1011,21 +1200,26 @@ export default function Workflow() {
             description={t('workflow.noTasksYetHint', { defaultValue: 'Create a job card or order slip to start tracking work.' })}
             action={canCreate ? <Button onClick={() => setShowNew(true)} className="gap-2"><Plus className="h-4 w-4" />{t('workflow.newTask', { defaultValue: 'New Task' })}</Button> : null}
           />
+        ) : view === 'list' ? (
+          <TaskTable tasks={listRows} onOpen={setSelected} />
         ) : (
           <div className={cn('grid items-start gap-4 md:grid-cols-2', showCancelled ? 'xl:grid-cols-4' : 'xl:grid-cols-3')}>
             {columns.map((status) => {
               const items = visible.filter((x) => x.status === status).sort(byDue);
               return (
-                <section key={status} className="min-w-0">
-                  <div className="mb-2 flex items-center gap-2 px-1">
+                <section key={status} className={cn('min-w-0 rounded-xl border border-t-4 bg-muted/30', COLUMN_TOP[status])}>
+                  <div className="flex items-center gap-2 px-3 py-2.5">
                     <span className={cn('h-2 w-2 rounded-full', COLUMN_DOT[status])} />
                     <span className="text-sm font-semibold">{statusLabel(t, status)}</span>
-                    <span className="rounded-full bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">{items.length}</span>
+                    <span className="ml-auto rounded-full bg-background px-2 py-0.5 text-xs font-medium text-muted-foreground shadow-sm">{items.length}</span>
                   </div>
-                  <div className="min-h-[160px] space-y-2 rounded-lg bg-muted/20 p-2">
-                    {items.length === 0
-                      ? <p className="py-8 text-center text-xs text-muted-foreground">{t('workflow.noTasks', { defaultValue: 'No tasks' })}</p>
-                      : items.map((task) => <TaskNote key={task.id} task={task} onClick={setSelected} />)}
+                  <div className="max-h-[calc(100vh-360px)] min-h-[160px] space-y-2 overflow-y-auto px-2 pb-2">
+                    {items.length === 0 ? (
+                      <div className="flex flex-col items-center justify-center rounded-lg border border-dashed py-10 text-center">
+                        <CheckCircle2 className="mb-1 h-5 w-5 text-muted-foreground/50" />
+                        <p className="text-xs text-muted-foreground">{t('workflow.noTasks', { defaultValue: 'No tasks' })}</p>
+                      </div>
+                    ) : items.map((task) => <TaskNote key={task.id} task={task} onClick={setSelected} />)}
                   </div>
                 </section>
               );

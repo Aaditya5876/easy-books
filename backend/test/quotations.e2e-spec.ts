@@ -73,7 +73,9 @@ describe('Quotations page', () => {
     const sale = await admin.post(`/api/v1/quotations/${q.id}/convert`);
     expect(sale.status).toBe(201);
     const bill = await ctx.prisma.salesOrder.findFirst({ where: { notes: { contains: 'QT-3' } } });
-    expect(bill).toMatchObject({ clientContact: '9800000000', clientAddress: 'Baglung', clientPanVat: '123456789', paymentMethod: 'CHEQUE' });
+    // The quotation's planned method (cheque) isn't a payment: the new bill is
+    // unpaid (udharo) until "Receive Payment" records how it was actually paid.
+    expect(bill).toMatchObject({ clientContact: '9800000000', clientAddress: 'Baglung', clientPanVat: '123456789', paymentMethod: 'CREDIT', status: 'PENDING' });
     expect(Number(bill!.laborCharges)).toBe(300);
 
     // Billed already: money and status can't change, notes/remark can.

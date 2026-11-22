@@ -74,7 +74,8 @@ const SheetFooter = ({
   ...props
 }) => (
   <div
-    className={cn("flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2", className)}
+    // Sticky like DialogFooter: Save stays in view while a long panel scrolls.
+    className={cn("sticky bottom-0 z-10 -mx-6 px-6 py-3 bg-background flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-0 sm:space-x-2", className)}
     {...props} />
 )
 SheetFooter.displayName = "SheetFooter"

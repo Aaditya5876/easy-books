@@ -242,7 +242,25 @@ export class PurchaseServiceImpl {
       edit.dateAd = new Date(data.dateAd);
       edit.dateBs = adToBs(edit.dateAd);
     }
-    return this.prisma.purchaseOrder.update({ where: { id }, data: edit });
+    // The bill's ledger entries follow its date and party name (money can't
+    // change here, so nothing else in the ledger needs to). Payments keep
+    // their own dates.
+    return this.prisma.$transaction(async (tx) => {
+      const updated = await tx.purchaseOrder.update({ where: { id }, data: edit });
+      if (edit.dateAd) {
+        await tx.ledgerEntry.updateMany({
+          where: { companyId, referenceType: 'PURCHASE_ORDER', referenceId: id },
+          data: { dateAd: edit.dateAd, dateBs: edit.dateBs },
+        });
+      }
+      if (edit.vendorName !== undefined && edit.vendorName !== order.vendorName) {
+        await tx.ledgerEntry.updateMany({
+          where: { companyId, referenceType: 'PURCHASE_ORDER', referenceId: id, description: `Purchase #${order.orderNumber} — ${order.vendorName}` },
+          data: { description: `Purchase #${order.orderNumber} — ${updated.vendorName}` },
+        });
+      }
+      return updated;
+    });
   }
 
   async remove(id: string, companyId: string) {

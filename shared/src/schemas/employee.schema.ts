@@ -9,7 +9,8 @@ const employeeBaseFields = {
   // Workflow job this record belongs to (must be the same company's task).
   taskId: z.string().uuid().optional().nullable(),
   name: z.string().min(1),
-  employeeId: z.string().min(1),
+  // Optional: left blank, the server gives the next free EMP-0001-style number.
+  employeeId: z.string().trim().max(40).optional(),
   department: z.string().optional(),
   designation: z.string().optional(),
   phone: z.string().optional(),

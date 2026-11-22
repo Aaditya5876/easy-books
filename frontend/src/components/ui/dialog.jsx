@@ -131,8 +131,11 @@ const DialogHeader = ({ className, ...props }) => (
 )
 DialogHeader.displayName = "DialogHeader"
 
+// Sticky: when a tall dialog scrolls as a whole, Save/Cancel stay in view at
+// its bottom instead of scrolling away (laptop screens). bg-inherit hides the
+// content scrolling underneath. No effect on dialogs that don't scroll.
 const DialogFooter = ({ className, ...props }) => (
-  <div className={cn("flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2", className)} {...props} />
+  <div className={cn("sticky bottom-0 z-10 -mx-6 px-6 bg-inherit flex flex-col-reverse gap-2 pt-2 sm:flex-row sm:justify-end sm:gap-0 sm:space-x-2", className)} {...props} />
 )
 DialogFooter.displayName = "DialogFooter"
 

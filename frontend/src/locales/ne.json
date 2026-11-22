@@ -1863,7 +1863,9 @@
     "editEmployee": "कर्मचारी सम्पादन गर्नुहोस्",
     "cancel": "रद्द गर्नुहोस्",
     "save": "सुरक्षित गर्नुहोस्",
-    "saveChanges": "परिवर्तनहरू सुरक्षित गर्नुहोस्"
+    "saveChanges": "परिवर्तनहरू सुरक्षित गर्नुहोस्",
+    "optional": "ऐच्छिक",
+    "employeeIdAutoPlaceholder": "खाली = स्वचालित (EMP-0001…)"
   },
   "vendors": {
     "vendorName": "विक्रेताको नाम",
@@ -2214,7 +2216,9 @@
     "remarkCancelled": "रद्द",
     "remark": "टिप्पणी",
     "saveFailed": "कोटेसन सुरक्षित गर्न सकिएन।",
-    "billedLocked": "पहिले नै बिलमा परिणत भइसकेको — टिप्पणी, नोट र म्याद मात्र बदल्न सकिन्छ।"
+    "billedLocked": "पहिले नै बिलमा परिणत भइसकेको — टिप्पणी, नोट र म्याद मात्र बदल्न सकिन्छ।",
+    "notStockItem": "स्टक सामान होइन (सेवा / अन्य)",
+    "inStock": "स्टकमा: {{q}} {{unit}}"
   },
   "communication": {
     "pageTitle": "सञ्चार",
@@ -2458,7 +2462,18 @@
     "createJobWithBill": "साथै वर्कफ्लो काम बनाउनुहोस्",
     "createJobWithBillHint": "{{party}}, सामान र रकमसहित भरिएको, यो बिलसँग जोडिएको।",
     "partyVendor": "आपूर्तिकर्ता",
-    "partyClient": "ग्राहक"
+    "partyClient": "ग्राहक",
+    "noDueDate": "म्याद छैन",
+    "today": "आज",
+    "colTask": "काम",
+    "noMatch": "फिल्टरसँग मिल्ने कुनै काम छैन।",
+    "kpiOpen": "खुला",
+    "kpiInProgress": "प्रगतिमा",
+    "kpiOverdue": "म्याद नाघेको",
+    "kpiDoneThisMonth": "यो महिना सम्पन्न",
+    "view": "दृश्य",
+    "viewBoard": "बोर्ड",
+    "viewList": "सूची"
   },
   "memo": {
     "title": "मेमो",

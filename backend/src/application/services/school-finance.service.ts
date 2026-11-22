@@ -1,3 +1,4 @@
+import { requireText, optionalAmount, stringList } from '../../../core/utils/input';
 import { Prisma } from '@prisma/client';
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { randomBytes } from 'crypto';
@@ -280,13 +281,18 @@ export class SchoolFinanceService {
   }
 
   async createPackage(body: any) {
-    if (!body.name?.trim()) throw new BadRequestException('Package name is required');
-    const headIds: string[] = Array.isArray(body.feeHeadIds) ? body.feeHeadIds : [];
+    const name = requireText(body.name, 'Package name');
+    const price = optionalAmount(body.price, 'Package price');
+    const headIds = stringList(body.feeHeadIds, 'Fee heads');
+    if (headIds.length) {
+      const owned = await this.prisma.feeHead.count({ where: { id: { in: headIds }, companyId: body.companyId } });
+      if (owned !== new Set(headIds).size) throw new BadRequestException('One or more fee heads were not found');
+    }
     return this.prisma.feePackage.create({
       data: {
         companyId: body.companyId,
-        name: body.name.trim(),
-        price: body.price != null && body.price !== '' ? Number(body.price) : null,
+        name,
+        price,
         heads: { create: headIds.map(id => ({ feeHeadId: id })) },
       },
       include: { heads: { include: { feeHead: true } } },
@@ -581,7 +587,8 @@ export class SchoolFinanceService {
       bankAccountId: bankAccount?.id,
       notes: body.notes || null,
     });
-
+
+
 
     try {
       await this.notifications.notifyRole(companyId, ['ADMIN', 'ACCOUNTANT'], {

@@ -276,9 +276,11 @@ export default function SidebarNav({ collapsed, onToggle }) {
     .filter(section => section.items.length > 0);
 
   return (
+    // z-40: above the page and TopBar (z-30), BELOW dialogs (z-50) — at z-60
+    // it covered the left part of wide dialogs (Purchase, Sales, Quotations).
     <aside
       className={cn(
-        "fixed left-0 top-0 h-screen bg-sidebar text-sidebar-foreground z-[60] flex flex-col pointer-events-auto transition-[width] duration-300",
+        "fixed left-0 top-0 h-screen bg-sidebar text-sidebar-foreground z-40 flex flex-col pointer-events-auto transition-[width] duration-300",
         collapsed ? "w-[68px]" : "w-[240px]"
       )}
       style={hasBgColor ? { backgroundColor: prefs.sidebarColor } : undefined}

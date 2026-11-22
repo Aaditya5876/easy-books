@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../../core/db/psql/prisma.client';
 import { assertTaskLink } from '../../../core/utils/task-link';
 import { CreateClientDTO, UpdateClientDTO } from '@easy-books/shared';
@@ -63,6 +63,12 @@ export class ClientServiceImpl {
   async remove(id: string, companyId: string) {
     const client = await this.prisma.client.findFirst({ where: { id, companyId, deletedAt: null } });
     if (!client) throw new NotFoundException('Client not found');
+    // Deleting someone with money still owing would hide that balance from
+    // the client list while it stays in the ledger.
+    const due = (await this.statements.clientBalances(companyId)).get(id)?.due ?? 0;
+    if (Math.abs(due) > 0.005) {
+      throw new BadRequestException(`Can't delete: ${client.name} still owes NPR ${due.toLocaleString('en-IN')} — receive it (Sales → Receive Payment) before deleting`);
+    }
     return this.prisma.client.update({ where: { id }, data: { deletedAt: new Date() } });
   }
 }

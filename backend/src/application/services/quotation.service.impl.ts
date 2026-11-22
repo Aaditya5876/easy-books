@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../../core/db/psql/prisma.client';
 import { assertTaskLink } from '../../../core/utils/task-link';
+import { resolveClientTx } from '../../../core/utils/bill-party';
 import { LedgerPostingService } from './ledger-posting.service';
 import { CreateQuotationDTO, UpdateQuotationDTO, adToBs } from '@easy-books/shared';
 import { VAT_RATE } from '../../domain/vo';
@@ -153,17 +154,29 @@ export class QuotationServiceImpl {
     const dateBs = adToBs(dateAd);
 
     const salesOrder = await this.prisma.$transaction(async (tx) => {
+      // The sale is udharo (nothing paid yet), so the client must be a tracked
+      // record: the quotation's client if it still exists, else the typed name
+      // matched to an existing client or created — like a Sales bill.
+      const stillThere = quotation.clientId
+        ? await tx.client.findFirst({ where: { id: quotation.clientId, companyId, deletedAt: null }, select: { id: true } })
+        : null;
+      const client = await resolveClientTx(tx, companyId, {
+        id: stillThere?.id, name: quotation.clientName, contact: quotation.clientContact,
+        address: quotation.clientAddress, panVat: quotation.clientPanVat,
+      }, true);
       const order = await tx.salesOrder.create({
         data: {
           companyId,
-          clientId: quotation.clientId,
+          clientId: client.id,
           // The bill stays on the same Workflow job as its quotation.
           taskId: quotation.taskId,
-          clientName: quotation.clientName,
+          clientName: client.name,
           clientContact: quotation.clientContact,
           clientAddress: quotation.clientAddress,
           clientPanVat: quotation.clientPanVat,
-          paymentMethod: quotation.paymentMethod ?? 'CASH',
+          // Nothing is paid when a quotation becomes a bill; payments are
+          // recorded on the sale ("Receive Payment").
+          paymentMethod: 'CREDIT',
           invoiceNumber,
           dateAd,
           dateBs,

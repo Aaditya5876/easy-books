@@ -370,7 +370,7 @@ export default function Sales() {
 
       {/* New Sale Dialog — two-column layout */}
       <Dialog open={showNew} onOpenChange={setShowNew}>
-        <DialogContent className="max-w-5xl max-h-[90vh] overflow-hidden glass-card">
+        <DialogContent className="max-w-5xl max-h-[90vh] overflow-hidden glass-card flex flex-col">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Receipt className="w-5 h-5 text-primary" />
@@ -378,7 +378,7 @@ export default function Sales() {
             </DialogTitle>
           </DialogHeader>
 
-          <div className="flex gap-6 overflow-hidden" style={{ maxHeight: 'calc(90vh - 130px)' }}>
+          <div className="flex flex-1 min-h-0 gap-6 overflow-hidden">
 
             {/* LEFT COLUMN — Client + Invoice details */}
             <div className="w-80 shrink-0 flex flex-col gap-4 overflow-y-auto pr-1">

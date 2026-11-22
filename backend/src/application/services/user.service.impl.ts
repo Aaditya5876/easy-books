@@ -110,8 +110,22 @@ export class UserServiceImpl {
     requesterId: string,
     data: { companyName: string; businessType: string; adminName: string; adminEmail: string; enabledModules?: string[]; units?: string[] },
   ) {
-    const existing = await this.prisma.user.findUnique({ where: { email: data.adminEmail } });
-    if (existing) throw new ConflictException('A user with this email already exists');
+    // The email may already belong to an account. Only one left with no company
+    // at all (its company was deleted before deletes cleaned those up) is
+    // reused; one still working in another company — or a SUPER_ADMIN — is
+    // refused with a message that says where it is used.
+    const existing = await this.prisma.user.findUnique({
+      where: { email: data.adminEmail },
+      select: { id: true, role: true, userCompanies: { select: { company: { select: { name: true } } } } },
+    });
+    if (existing && (existing.role === 'SUPER_ADMIN' || existing.userCompanies.length > 0)) {
+      const where = existing.userCompanies.map((uc) => uc.company.name).join(', ');
+      throw new ConflictException(
+        existing.role === 'SUPER_ADMIN' || !where
+          ? 'This email belongs to a GeoInfosys administrator — use a different email'
+          : `This email already has a OneBook login for ${where} — use a different email for the new admin`,
+      );
+    }
 
     const enabledModules = data.enabledModules ?? [];
     const invalid = enabledModules.filter((m) => !MODULE_KEYS.includes(m as ModuleKey));
@@ -128,18 +142,24 @@ export class UserServiceImpl {
     const tempPassword = Math.random().toString(36).slice(-10);
     const hashed = await bcrypt.hash(tempPassword, 10);
 
-    const admin = await this.prisma.user.create({
-      data: {
-        email: data.adminEmail,
-        name: data.adminName,
-        password: hashed,
-        role: 'ADMIN',
-        emailVerified: true,
-        mustChangePassword: true,
-        userCompanies: { create: { companyId: company.id, isDefault: true } },
-      },
-      select: { id: true, email: true, name: true, role: true },
-    });
+    // A fresh start for a reused (company-less) account: new name, password,
+    // role and company; old lockout / suspension cleared.
+    const adminData = {
+      name: data.adminName,
+      password: hashed,
+      role: 'ADMIN' as const,
+      emailVerified: true,
+      mustChangePassword: true,
+      isActive: true,
+      failedLoginCount: 0,
+      lockedUntil: null,
+      refreshToken: null,
+      staffTags: [],
+      userCompanies: { create: { companyId: company.id, isDefault: true } },
+    };
+    const admin = existing
+      ? await this.prisma.user.update({ where: { id: existing.id }, data: adminData, select: { id: true, email: true, name: true, role: true } })
+      : await this.prisma.user.create({ data: { email: data.adminEmail, ...adminData }, select: { id: true, email: true, name: true, role: true } });
     await ensureEmployeeRecord(this.prisma, company.id, admin);
 
     const requesterLink = await this.prisma.userCompany.findUnique({

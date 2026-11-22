@@ -60,6 +60,9 @@ export default function Quotations() {
   const companyId = getActiveCompanyId();
   const [quotations, setQuotations] = useState([]);
   const [clients, setClients] = useState([]);
+  // Stock items: a quotation line linked to one is deducted from stock when
+  // the quotation is turned into a sale ("To Sale"). Unlinked lines never were.
+  const [inventory, setInventory] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [colFilters, setColFilters] = useState({ client_name: '', quotation_number: '', status: '' });
@@ -128,10 +131,36 @@ export default function Quotations() {
 
   async function loadData() {
     setLoading(true);
-    const data = await api.Quotation.filter({ company_id: companyId });
+    const [data, stock] = await Promise.all([
+      api.Quotation.filter({ company_id: companyId }),
+      api.InventoryItem.filter({ company_id: companyId }).catch(() => []),
+    ]);
     setQuotations(data);
+    setInventory(stock);
     setLoading(false);
     return data;
+  }
+
+  // Link a line to a stock item (or unlink it with '__none'): fills name, unit
+  // and selling price in one update.
+  function withStockItem(items, index, itemId) {
+    const next = [...items];
+    if (itemId === '__none') {
+      next[index] = { ...next[index], inventory_item_id: '' };
+      return next;
+    }
+    const inv = inventory.find(i => i.id === itemId);
+    if (!inv) return items;
+    const price = Number(inv.unit_selling_price) || 0;
+    next[index] = {
+      ...next[index],
+      inventory_item_id: inv.id,
+      description: inv.item_name || inv.description || next[index].description,
+      unit: inv.unit || next[index].unit,
+      unit_price: price,
+      total: (Number(next[index].quantity) || 0) * price,
+    };
+    return next;
   }
 
   async function loadClients() {
@@ -387,9 +416,9 @@ export default function Quotations() {
   if (loading) return <PageLoader />;
 
   // ── Reusable dialog body renderer ────────────────────────────────────────────
-  function DialogBody({ data, setData, onClientSelect, items, onUpdateItem, onAddItem, onRemoveItem, laborItems, onUpdateLabor, onAddLabor, onRemoveLabor, calcSubtotal, calcLabor, calcVat }) {
+  function DialogBody({ data, setData, onClientSelect, items, onUpdateItem, onPickStock, onAddItem, onRemoveItem, laborItems, onUpdateLabor, onAddLabor, onRemoveLabor, calcSubtotal, calcLabor, calcVat }) {
     return (
-      <div className="flex gap-6 overflow-hidden" style={{ maxHeight: 'calc(90vh - 130px)' }}>
+      <div className="flex flex-1 min-h-0 gap-6 overflow-hidden">
 
         {/* LEFT COLUMN */}
         <div className="w-80 shrink-0 flex flex-col gap-4 overflow-y-auto pr-1">
@@ -502,7 +531,22 @@ export default function Quotations() {
             </div>
             <div className="space-y-2">
               {items.map((item, idx) => (
-                <div key={idx} className="flex gap-2 items-end p-3 bg-secondary/50 rounded-lg">
+                <div key={idx} className="flex flex-wrap gap-2 items-end p-3 bg-secondary/50 rounded-lg">
+                  {inventory.length > 0 && (
+                    <div className="w-full">
+                      <Select value={item.inventory_item_id || '__none'} onValueChange={v => onPickStock(idx, v)}>
+                        <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__none">{t('quotations.notStockItem', { defaultValue: 'Not a stock item (service / custom)' })}</SelectItem>
+                          {inventory.map(inv => (
+                            <SelectItem key={inv.id} value={inv.id}>
+                              {inv.item_name || inv.description} · {t('quotations.inStock', { defaultValue: 'in stock: {{q}} {{unit}}', q: Number(inv.quantity ?? 0), unit: inv.unit || '' })}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
                   <div className="flex-1 min-w-0">
                     {idx === 0 && <Label className="text-xs">{t('quotations.description', { defaultValue: 'Description' })}</Label>}
                     <Input value={item.description} onChange={e => onUpdateItem(idx, 'description', e.target.value)} placeholder={t('quotations.itemDescriptionPlaceholder', { defaultValue: 'Item or service description' })} />
@@ -642,7 +686,7 @@ export default function Quotations() {
 
       {/* ── Add Quotation Dialog ── */}
       <Dialog open={showNew} onOpenChange={setShowNew}>
-        <DialogContent className="max-w-5xl max-h-[90vh] overflow-hidden glass-card">
+        <DialogContent className="max-w-5xl max-h-[90vh] overflow-hidden glass-card flex flex-col">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <ClipboardList className="w-5 h-5 text-primary" />
@@ -656,6 +700,7 @@ export default function Quotations() {
             onClientSelect={selectClientForForm}
             items={form.items}
             onUpdateItem={updateItem}
+            onPickStock={(idx, id) => setForm(f => ({ ...f, items: withStockItem(f.items, idx, id) }))}
             onAddItem={addItem}
             onRemoveItem={removeItem}
             laborItems={form.labor_items}
@@ -676,7 +721,7 @@ export default function Quotations() {
 
       {/* ── Edit Quotation Dialog ── */}
       <Dialog open={!!editQuotation} onOpenChange={open => { if (!open) setEditQuotation(null); }}>
-        <DialogContent className="max-w-5xl max-h-[90vh] overflow-hidden glass-card">
+        <DialogContent className="max-w-5xl max-h-[90vh] overflow-hidden glass-card flex flex-col">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <ClipboardList className="w-5 h-5 text-primary" />
@@ -691,6 +736,7 @@ export default function Quotations() {
               onClientSelect={selectClientForEdit}
               items={editQuotation.items}
               onUpdateItem={updateEditItem}
+              onPickStock={(idx, id) => setEditQuotation(q => ({ ...q, items: withStockItem(q.items, idx, id) }))}
               onAddItem={addEditItem}
               onRemoveItem={removeEditItem}
               laborItems={editQuotation.labor_items}

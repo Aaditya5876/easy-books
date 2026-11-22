@@ -302,9 +302,37 @@ export class CompanyServiceImpl {
     }));
   }
 
+  // Deleting a company also deletes the logins that belonged ONLY to it — an
+  // account with no company can't sign in anywhere, and leaving it behind kept
+  // its email "taken" (setting the client up again failed with "A user with
+  // this email already exists"). Users who also belong to another company stay;
+  // if this was their default company, another one becomes the default.
+  // SUPER_ADMINs are never removed. All in one transaction.
   async remove(id: string, userId: string, role: string) {
     await this.assertMembership(id, userId, role);
-    return this.prisma.company.delete({ where: { id } });
+    return this.prisma.$transaction(async (tx) => {
+      const members = await tx.userCompany.findMany({
+        where: { companyId: id },
+        select: { userId: true, isDefault: true, user: { select: { role: true, userCompanies: { where: { companyId: { not: id } }, select: { companyId: true, isDefault: true }, orderBy: { createdAt: 'asc' } } } } },
+      });
+      const deleted = await tx.company.delete({ where: { id } });
+
+      const orphanIds = members
+        .filter((m) => m.user.role !== 'SUPER_ADMIN' && m.user.userCompanies.length === 0)
+        .map((m) => m.userId);
+      if (orphanIds.length) await tx.user.deleteMany({ where: { id: { in: orphanIds } } });
+
+      for (const m of members) {
+        const others = m.user.userCompanies;
+        if (m.isDefault && others.length > 0 && !others.some((o) => o.isDefault)) {
+          await tx.userCompany.update({
+            where: { userId_companyId: { userId: m.userId, companyId: others[0].companyId } },
+            data: { isDefault: true },
+          });
+        }
+      }
+      return deleted;
+    });
   }
 
   // ─── Payroll Settings ────────────────────────────────────────────────────────

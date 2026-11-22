@@ -308,7 +308,7 @@ export default function Communication() {
 
       {/* ── Assign New Task Dialog ─────────────────────────────────────────── */}
       <Dialog open={showNew} onOpenChange={setShowNew}>
-        <DialogContent className="glass-dialog max-w-4xl overflow-hidden">
+        <DialogContent className="glass-dialog max-w-4xl overflow-hidden flex flex-col">
           <div className="h-1 bg-gradient-to-r from-teal-400 to-cyan-500 -mx-6 -mt-6 mb-4" />
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -316,7 +316,7 @@ export default function Communication() {
             </DialogTitle>
           </DialogHeader>
 
-          <div className="grid grid-cols-2 gap-6 max-h-[65vh] overflow-hidden mt-2">
+          <div className="grid flex-1 min-h-0 grid-cols-2 grid-rows-[minmax(0,1fr)] gap-6 overflow-hidden mt-2">
             {/* LEFT — Task Details */}
             <motion.div
               initial={{ opacity: 0, y: 8 }}

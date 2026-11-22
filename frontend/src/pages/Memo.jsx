@@ -500,7 +500,7 @@ export default function Memo() {
         setShowAdd(open);
         if (!open) setForm({ ...EMPTY_FORM, category: activeTab, date_ad: today });
       }}>
-        <DialogContent className="glass-dialog max-w-3xl overflow-hidden">
+        <DialogContent className="glass-dialog max-w-3xl overflow-hidden flex flex-col">
           <div className="h-1 bg-gradient-to-r from-violet-400 to-fuchsia-500 -mx-6 -mt-6 mb-4" />
           <DialogHeader className="mb-1">
             <DialogTitle className="flex items-center gap-2 text-base font-semibold">
@@ -509,7 +509,7 @@ export default function Memo() {
             </DialogTitle>
           </DialogHeader>
 
-          <div className="grid grid-cols-2 gap-6 max-h-[65vh] overflow-hidden mt-2">
+          <div className="grid flex-1 min-h-0 grid-cols-2 grid-rows-[minmax(0,1fr)] gap-6 overflow-hidden mt-2">
             {/* ── Left column: Document Info ── */}
             <motion.div
               initial={{ opacity: 0, y: 8 }}

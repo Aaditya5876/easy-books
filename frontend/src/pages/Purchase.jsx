@@ -308,7 +308,7 @@ export default function Purchase() {
 
       {/* New Purchase Dialog */}
       <Dialog open={showNew} onOpenChange={open => { setShowNew(open); if (!open) setForm({ ...EMPTY_FORM, pay_now: { ...EMPTY_PAY_NOW }, date_ad: new Date().toISOString().split('T')[0] }); }}>
-        <DialogContent className="max-w-5xl max-h-[90vh] overflow-hidden glass-card">
+        <DialogContent className="max-w-5xl max-h-[90vh] overflow-hidden glass-card flex flex-col">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <ShoppingCart className="w-5 h-5 text-primary" />
@@ -316,9 +316,9 @@ export default function Purchase() {
             </DialogTitle>
           </DialogHeader>
 
-          <div className="grid grid-cols-2 gap-6 overflow-hidden">
+          <div className="grid flex-1 min-h-0 grid-cols-2 grid-rows-[minmax(0,1fr)] gap-6 overflow-hidden">
             {/* ── Left column: bill header ── */}
-            <div className="space-y-3 overflow-y-auto max-h-[calc(85vh-180px)] pr-1">
+            <div className="space-y-3 overflow-y-auto min-h-0 pr-1">
 
               {/* Vendor Details section */}
               <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground border-b pb-1 flex items-center gap-1">
@@ -478,7 +478,7 @@ export default function Purchase() {
             </div>
 
             {/* ── Right column: items ── */}
-            <div className="overflow-y-auto max-h-[calc(85vh-180px)]">
+            <div className="overflow-y-auto min-h-0 pr-1">
 
               {/* Items */}
               <div className="mb-3">

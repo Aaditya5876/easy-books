@@ -1,6 +1,7 @@
-import { createContext, useState, useContext, useEffect } from 'react';
+import { createContext, useState, useContext, useEffect, useCallback } from 'react';
 import { authApi, companyApi } from '@/api';
 import { setActiveCompanyId, clearActiveCompany, getActiveCompanyId } from '@/lib/companyContext';
+import { onCompaniesChanged } from '@/lib/companyEvents';
 
 const AuthContext = createContext();
 
@@ -31,6 +32,11 @@ async function resolveActiveCompanyOverride(meData) {
     const res = await companyApi.get(activeId);
     return { ...meData, defaultCompanyId: res.data.id, defaultCompany: res.data };
   } catch {
+    // The selected company is gone (deleted) or no longer ours: forget it, so
+    // nothing keeps sending its id. SUPER_ADMIN then has no company (null
+    // default) and lands back on Settings -> Clients.
+    if (meData?.defaultCompanyId) setActiveCompanyId(meData.defaultCompanyId);
+    else clearActiveCompany();
     return meData;
   }
 }
@@ -56,6 +62,20 @@ export const AuthProvider = ({ children }) => {
       })
       .finally(() => setIsLoadingAuth(false));
   }, []);
+
+  // Re-reads the user + active company after a company change (see
+  // lib/companyEvents.js) so the sidebar and school/business routing follow
+  // without a page reload.
+  const refreshUser = useCallback(async () => {
+    try {
+      const res = await authApi.me();
+      const resolved = await resolveActiveCompanyOverride(res.data);
+      setUser(resolved);
+      if (resolved?.defaultCompanyId) setActiveCompanyId(resolved.defaultCompanyId);
+    } catch { /* signed out meanwhile — the 401 handler takes over */ }
+  }, []);
+
+  useEffect(() => onCompaniesChanged(() => { if (isAuthenticated) refreshUser(); }), [isAuthenticated, refreshUser]);
 
   const login = async (email, password) => {
     await authApi.login({ email, password });
@@ -91,6 +111,7 @@ export const AuthProvider = ({ children }) => {
       logout,
       navigateToLogin,
       login,
+      refreshUser,
     }}>
       {children}
     </AuthContext.Provider>

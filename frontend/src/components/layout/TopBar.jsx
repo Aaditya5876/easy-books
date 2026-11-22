@@ -21,7 +21,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { getActiveCompanyId, setActiveCompanyId, isCompanyAccessible } from '@/lib/companyContext';
+import { getActiveCompanyId, setActiveCompanyId, clearActiveCompany, isCompanyAccessible } from '@/lib/companyContext';
+import { onCompaniesChanged } from '@/lib/companyEvents';
 import { getTodayBS } from '@/lib/nepaliDate';
 import { useRole } from '@/lib/useRole';
 
@@ -63,6 +64,9 @@ export default function TopBar({ onMobileMenuToggle, onToolOpen }) {
 
   useEffect(() => {
     loadData();
+    // Company created / deleted / renamed / switched elsewhere (Settings):
+    // reload the dropdown instead of waiting for a page refresh.
+    return onCompaniesChanged(() => { loadData(); });
   }, []);
 
   useEffect(() => {
@@ -163,6 +167,8 @@ export default function TopBar({ onMobileMenuToggle, onToolOpen }) {
       let resolved = activeId ? companyList.find(c => c.id === activeId) : null;
       if (activeId && !resolved) {
         resolved = await api.Company.get(activeId).catch(() => null);
+        // Gone (deleted) — forget it instead of showing a dead company.
+        if (!resolved) clearActiveCompany();
       }
       // Deliberately NOT nulled out when inaccessible (deactivated/expired) —
       // SUPER_ADMIN bypasses CompanyAccessGuard entirely and needs to keep
@@ -187,9 +193,23 @@ export default function TopBar({ onMobileMenuToggle, onToolOpen }) {
     if (!resolved) {
       resolved = companyList.find(isCompanyAccessible) || companyList[0] || null;
       if (resolved) setActiveCompanyId(resolved.id);
+      else clearActiveCompany();
     }
     setActiveCompany(resolved);
     if (resolved && isCompanyAccessible(resolved)) {
+      loadSearchData(resolved, me);
+    }
+    // Pre-load unread count so the badge is right before the dropdown ever opens
+    if (import.meta.env.VITE_ENABLE_NOTIFICATIONS === 'true') {
+      notificationsApi.unreadCount()
+        .then(res => setUnreadCount(res?.data ?? 0))
+        .catch(() => {});
+    }
+  }
+
+  function loadSearchData(resolved = activeCompanyRef.current, me = user) {
+    if (!resolved || !isCompanyAccessible(resolved)) return;
+    {
       // Pre-load search data in background — Clients/Vendors/Inventory are
       // business-ERP-only modules (don't exist for school companies) and are
       // also role-gated to STAFF/ACCOUNTANT/ADMIN, so skip entirely for school
@@ -206,12 +226,6 @@ export default function TopBar({ onMobileMenuToggle, onToolOpen }) {
           setSearchData({ clients: cls, vendors: vens, inventory: inv });
         }).catch(() => {});
       }
-    }
-    // Pre-load unread count so the badge is right before the dropdown ever opens
-    if (import.meta.env.VITE_ENABLE_NOTIFICATIONS === 'true') {
-      notificationsApi.unreadCount()
-        .then(res => setUnreadCount(res?.data ?? 0))
-        .catch(() => {});
     }
   }
 
@@ -291,10 +305,13 @@ export default function TopBar({ onMobileMenuToggle, onToolOpen }) {
     if (n.link) navigate(n.link);
   }
 
+  // Every page holds data loaded for the company it opened with, so switching
+  // reloads the app on the dashboard (a page's own screen may not exist in
+  // the other company, e.g. school vs business).
   function switchCompany(company) {
     setActiveCompany(company);
     setActiveCompanyId(company.id);
-    window.location.reload();
+    window.location.href = '/';
   }
 
   function handleCompanyClick(company) {
@@ -611,7 +628,7 @@ export default function TopBar({ onMobileMenuToggle, onToolOpen }) {
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => setSearchOpen(true)}
+            onClick={() => { loadSearchData(); setSearchOpen(true); }}
             className="text-muted-foreground hover:text-foreground"
           >
             <Search className="w-4 h-4" />

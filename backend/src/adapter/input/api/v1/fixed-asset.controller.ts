@@ -2,6 +2,8 @@ import { Controller, Get, Post, Param, Body, Query } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { FixedAssetServiceImpl } from '../../../../application/services/fixed-asset.service.impl';
 import { Roles } from '../../../../modules/decorators/roles.decorator';
+import { ZodValidationPipe } from '../../../../modules/pipes/zod-validation.pipe';
+import { CreateFixedAssetSchema } from '../../../../../core/validation/finance-records.schema';
 import { RequiresModule } from '../../../../modules/decorators/requires-module.decorator';
 
 @ApiTags('Fixed Assets')
@@ -26,7 +28,7 @@ export class FixedAssetController {
 
   @Post()
   @ApiOperation({ summary: 'Record a fixed asset and post its purchase (INVESTING) entry' })
-  create(@Body() body: {
+  create(@Body(new ZodValidationPipe(CreateFixedAssetSchema)) body: {
     companyId: string; assetName: string; assetCode?: string; category?: string;
     purchaseDateAd: string; cost: number; usefulLifeYears: number; salvageValue?: number;
     paymentMethod?: 'CASH' | 'BANK' | 'CREDIT'; notes?: string;

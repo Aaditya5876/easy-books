@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../../../core/db/psql/prisma.client';
 import { assertTaskLink } from '../../../core/utils/task-link';
@@ -52,22 +53,47 @@ export class EmployeeServiceImpl {
   async create(dto: CreateEmployeeDTO) {
     await assertTaskLink(this.prisma, dto.companyId, dto.taskId);
     const name = dto.name?.trim();
-    const employeeId = dto.employeeId?.trim();
-    await this.assertEmployeeIdFree(dto.companyId, employeeId);
+    const typed = dto.employeeId?.trim();
     const dateOfJoining = dto.dateOfJoining ? new Date(dto.dateOfJoining) : undefined;
-    return this.prisma.employee.create({ data: { ...dto, name, employeeId, dateOfJoining } as any });
+    if (typed) {
+      await this.assertEmployeeIdFree(dto.companyId, typed);
+      return this.prisma.employee.create({ data: { ...dto, name, employeeId: typed, dateOfJoining } as any });
+    }
+    // No ID typed: the next free EMP-number. A clash with a simultaneous save
+    // (unique companyId+employeeId) just takes the following number.
+    for (let attempt = 0; ; attempt++) {
+      const employeeId = await this.nextEmployeeId(dto.companyId);
+      try {
+        return await this.prisma.employee.create({ data: { ...dto, name, employeeId, dateOfJoining } as any });
+      } catch (err) {
+        if (!(err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') || attempt >= 4) throw err;
+      }
+    }
+  }
+
+  // After the highest existing EMP-#### (not the count, so gaps and typed
+  // numbers never cause a clash).
+  private async nextEmployeeId(companyId: string) {
+    const rows = await this.prisma.employee.findMany({
+      where: { companyId, employeeId: { startsWith: 'EMP-', mode: 'insensitive' } },
+      select: { employeeId: true },
+    });
+    const max = rows.reduce((m, r) => Math.max(m, Number(/^EMP-(\d+)$/i.exec(r.employeeId)?.[1] ?? 0)), 0);
+    return `EMP-${String(max + 1).padStart(4, '0')}`;
   }
 
   async update(id: string, companyId: string, dto: UpdateEmployeeDTO) {
     const existing = await this.prisma.employee.findFirst({ where: { id, companyId, deletedAt: null } });
     if (!existing) throw new NotFoundException('Employee not found');
     await assertTaskLink(this.prisma, companyId, dto.taskId);
-    const employeeId = dto.employeeId?.trim();
+    // A blank ID on edit keeps the current one (it can't be removed).
+    const employeeId = dto.employeeId?.trim() || undefined;
     if (employeeId !== undefined) {
       await this.assertEmployeeIdFree(companyId, employeeId, id);
     }
     const name = dto.name?.trim();
-    return this.prisma.employee.update({ where: { id }, data: { ...dto, ...(name !== undefined ? { name } : {}), ...(employeeId !== undefined ? { employeeId } : {}) } as any });
+    const { employeeId: _typedId, ...rest } = dto;
+    return this.prisma.employee.update({ where: { id }, data: { ...rest, ...(name !== undefined ? { name } : {}), ...(employeeId !== undefined ? { employeeId } : {}) } as any });
   }
 
   async remove(id: string, companyId: string) {

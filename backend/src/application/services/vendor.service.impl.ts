@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../../core/db/psql/prisma.client';
 import { assertTaskLink } from '../../../core/utils/task-link';
 import { CreateVendorDTO, UpdateVendorDTO } from '@easy-books/shared';
@@ -63,6 +63,12 @@ export class VendorServiceImpl {
   async remove(id: string, companyId: string) {
     const vendor = await this.prisma.vendor.findFirst({ where: { id, companyId, deletedAt: null } });
     if (!vendor) throw new NotFoundException('Vendor not found');
+    // Deleting someone with money still owing would hide that balance from
+    // the vendor list while it stays in the ledger.
+    const due = (await this.statements.vendorBalances(companyId)).get(id)?.due ?? 0;
+    if (Math.abs(due) > 0.005) {
+      throw new BadRequestException(`Can't delete: we still owe ${vendor.name} NPR ${due.toLocaleString('en-IN')} — pay it (Purchase → Record Payment) before deleting`);
+    }
     return this.prisma.vendor.update({ where: { id }, data: { deletedAt: new Date() } });
   }
 }

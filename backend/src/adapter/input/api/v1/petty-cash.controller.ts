@@ -2,6 +2,8 @@ import { Controller, Get, Post, Delete, Body, Param, Query } from '@nestjs/commo
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { PettyCashServiceImpl } from '../../../../application/services/petty-cash.service.impl';
 import { Roles } from '../../../../modules/decorators/roles.decorator';
+import { ZodValidationPipe } from '../../../../modules/pipes/zod-validation.pipe';
+import { CreatePettyCashSchema } from '../../../../../core/validation/finance-records.schema';
 import { RequiresModule } from '../../../../modules/decorators/requires-module.decorator';
 
 @ApiTags('Petty Cash')
@@ -42,7 +44,7 @@ export class PettyCashController {
   @Post()
   @ApiOperation({ summary: 'Create a petty cash voucher' })
   @ApiQuery({ name: 'companyId', required: true })
-  create(@Query('companyId') companyId: string, @Body() body: any) {
+  create(@Query('companyId') companyId: string, @Body(new ZodValidationPipe(CreatePettyCashSchema)) body: any) {
     return this.service.create(companyId, body);
   }
 

@@ -10,7 +10,8 @@ import apiClient from '@/api/client';
 import { useAuth } from '@/lib/AuthContext';
 import { useRole } from "@/lib/useRole";
 import { usePreferences } from '@/lib/PreferencesContext';
-import { getActiveCompanyId, setActiveCompanyId } from '@/lib/companyContext';
+import { getActiveCompanyId, setActiveCompanyId, clearActiveCompany } from '@/lib/companyContext';
+import { notifyCompaniesChanged } from '@/lib/companyEvents';
 import { confirm, alertPopup } from '@/lib/confirm';
 import PageHeader from '../components/shared/PageHeader';
 import UnitListEditor from '../components/shared/UnitListEditor';
@@ -432,6 +433,7 @@ export default function Settings() {
     try {
       await companyApi.update(activeCompanyId, automation);
       setAutomationSaved(true);
+      notifyCompaniesChanged();
       setTimeout(() => setAutomationSaved(false), 2000);
     } catch {
       toast.error(t('settings.failedSaveAutomation', { defaultValue: 'Failed to save automation settings' }));
@@ -502,10 +504,13 @@ export default function Settings() {
 
   async function addCompany() {
     try {
-      await api.Company.create({ ...companyForm, is_active: true });
+      const created = await api.Company.create({ ...companyForm, is_active: true });
+      // Select the new company straight away (no "Set Active" step needed).
+      if (created?.id) setActiveCompanyId(created.id);
       setCompanyForm({ name: '', address: '', phone: '', email: '', pan_vat: '', registration_number: '', business_type: 'SCHOOL', default_unit_type: '', currency: 'NPR', logo_url: '' });
       setShowAddCompany(false);
       loadCompanies();
+      notifyCompaniesChanged();
     } catch (err) {
       const message = err?.response?.data?.message || t('settings.failedAddCompany', { defaultValue: 'Failed to add company' });
       // The company-limit message ("Contact GeoInfosys to add another") is
@@ -529,6 +534,7 @@ export default function Settings() {
     await api.Company.update(editingCompany.id, editingCompany);
     setEditingCompany(null);
     loadCompanies();
+    notifyCompaniesChanged();
   }
 
   async function deleteCompany(id) {
@@ -546,8 +552,10 @@ export default function Settings() {
     if (getActiveCompanyId() === id) {
       const remaining = companies.filter(c => c.id !== id);
       if (remaining.length > 0) setActiveCompanyId(remaining[0].id);
+      else clearActiveCompany();
     }
     loadCompanies();
+    notifyCompaniesChanged();
   }
 
   async function switchActiveCompany(company) {
@@ -574,6 +582,7 @@ export default function Settings() {
     }
     await companyApi.setActive(company.id, activating);
     loadCompanies();
+    notifyCompaniesChanged();
   }
 
   async function handleLogoUpload(e, isEditing = false) {
@@ -739,6 +748,7 @@ export default function Settings() {
         }),
       ]);
       setPrefsSaved(true);
+      notifyCompaniesChanged();
       setTimeout(() => setPrefsSaved(false), 2000);
     } catch {
       toast.error(t('settings.failedSavePreferences', { defaultValue: 'Failed to save preferences' }));
@@ -871,6 +881,7 @@ export default function Settings() {
         return;
       }
       setAllClients(list => list.map(c => c.id === company.id ? { ...c, enabledModules: modules } : c));
+      notifyCompaniesChanged();
       discardClientPackageChange(company);
       toast.success(t('settings.packageSaved', { defaultValue: 'Package updated' }));
     } catch (err) {
@@ -900,6 +911,7 @@ export default function Settings() {
     try {
       await companyApi.setActive(company.id, activating);
       setAllClients(list => list.map(c => c.id === company.id ? { ...c, isActive: activating } : c));
+      notifyCompaniesChanged();
     } catch (err) {
       toast.error(err?.response?.data?.message || t('settings.failedToggleActive', { defaultValue: 'Failed to update status' }));
     } finally {
@@ -955,6 +967,7 @@ export default function Settings() {
     try {
       await companyApi.setSubscriptionExpiry(company.id, expiresAt);
       setAllClients(list => list.map(c => c.id === company.id ? { ...c, subscriptionExpiresAt: expiresAt } : c));
+      notifyCompaniesChanged();
       discardSubscriptionExpiryChange(company.id);
       toast.success(t('settings.subscriptionSaved', { defaultValue: 'Subscription updated' }));
     } catch (err) {
@@ -975,7 +988,9 @@ export default function Settings() {
     try {
       await api.Company.delete(company.id);
       setAllClients(list => list.filter(c => c.id !== company.id));
-      if (getActiveCompanyId() === company.id) loadCompanies();
+      if (getActiveCompanyId() === company.id) clearActiveCompany();
+      loadCompanies();
+      notifyCompaniesChanged();
     } catch (err) {
       toast.error(err?.response?.data?.message || t('settings.failedDeleteCompany', { defaultValue: 'Failed to delete company' }));
     }
@@ -1066,8 +1081,12 @@ export default function Settings() {
         setTempPassword(res.data.tempPassword);
       }
       setProvisionForm({ companyName: '', product: 'SCHOOL', businessType: '', otherBusinessDesc: '', adminName: '', adminEmail: '', units: [] });
+      // Step straight into the new client (no "Switch To" click needed): the
+      // header dropdown and sidebar follow via notifyCompaniesChanged().
+      if (res.data?.company?.id) setActiveCompanyId(res.data.company.id);
       loadCompanies();
       loadAllClients();
+      notifyCompaniesChanged();
     } catch (err) {
       toast.error(err?.response?.data?.message || t('settings.provisionFailed', { defaultValue: 'Failed to create client' }));
     } finally {
@@ -2638,7 +2657,7 @@ export default function Settings() {
 
       {/* ── Add Company Dialog ────────────────────────────────────────────── */}
       <Dialog open={showAddCompany} onOpenChange={setShowAddCompany}>
-        <DialogContent className="glass-dialog max-w-3xl overflow-hidden">
+        <DialogContent className="glass-dialog max-w-3xl overflow-hidden flex flex-col">
           <div className="h-1 bg-gradient-to-r from-blue-800 to-blue-500 -mx-6 -mt-6 mb-4" />
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -2646,7 +2665,7 @@ export default function Settings() {
             </DialogTitle>
           </DialogHeader>
 
-          <div className="grid grid-cols-2 gap-6 max-h-[65vh] overflow-hidden mt-2">
+          <div className="grid flex-1 min-h-0 grid-cols-2 grid-rows-[minmax(0,1fr)] gap-6 overflow-hidden mt-2">
             {/* LEFT — Company Info */}
             <motion.div
               initial={{ opacity: 0, y: 8 }}
@@ -2756,7 +2775,7 @@ export default function Settings() {
 
       {/* ── Edit Company Dialog ───────────────────────────────────────────── */}
       <Dialog open={!!editingCompany} onOpenChange={() => setEditingCompany(null)}>
-        <DialogContent className="glass-dialog max-w-3xl overflow-hidden">
+        <DialogContent className="glass-dialog max-w-3xl overflow-hidden flex flex-col">
           <div className="h-1 bg-gradient-to-r from-blue-800 to-blue-500 -mx-6 -mt-6 mb-4" />
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -2765,7 +2784,7 @@ export default function Settings() {
           </DialogHeader>
 
           {editingCompany && (
-            <div className="grid grid-cols-2 gap-6 max-h-[65vh] overflow-hidden mt-2">
+            <div className="grid flex-1 min-h-0 grid-cols-2 grid-rows-[minmax(0,1fr)] gap-6 overflow-hidden mt-2">
               {/* LEFT — Company Info */}
               <motion.div
                 initial={{ opacity: 0, y: 8 }}

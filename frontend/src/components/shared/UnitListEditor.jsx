@@ -42,6 +42,9 @@ export default function UnitListEditor({ units, onChange, disabled }) {
             placeholder={t('units.addPlaceholder', { defaultValue: 'Add a unit, e.g. Strip, Tray, Plate (comma for several)' })}
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); add(); } }}
+            // A typed unit used to be lost unless "Add" was pressed first —
+            // going straight to "Save units" / "Create Client" dropped it.
+            onBlur={() => { if (draft.trim()) add(); }}
           />
           <Button type="button" variant="outline" size="sm" className="h-8 gap-1" disabled={!draft.trim()} onClick={add}>
             <Plus className="h-3.5 w-3.5" />{t('units.add', { defaultValue: 'Add' })}

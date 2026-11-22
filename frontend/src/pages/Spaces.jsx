@@ -320,9 +320,9 @@ function ManageSpacesDialog({ open, onOpenChange, spaces, onChanged }) {
   const editing = !!form.id;
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="glass-dialog max-w-2xl">
+      <DialogContent className="glass-dialog max-w-2xl flex flex-col">
         <DialogHeader><DialogTitle>{t('spaces.manage', { defaultValue: 'Manage spaces' })}</DialogTitle></DialogHeader>
-        <div className="grid max-h-[65vh] gap-4 overflow-y-auto pr-1 md:grid-cols-2">
+        <div className="grid flex-1 min-h-0 gap-4 overflow-y-auto pr-1 md:grid-cols-2">
           <div className="space-y-3">
             <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{editing ? t('spaces.editSpace', { defaultValue: 'Edit space' }) : t('spaces.addSpaces', { defaultValue: 'Add spaces' })}</p>
             <div><Label className="text-xs">{t('spaces.kind', { defaultValue: 'Kind (what you call it)' })} *</Label>

@@ -32,7 +32,7 @@ export default function Layout() {
           title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           onClick={() => setSidebarCollapsed(value => !value)}
           className={cn(
-            "fixed top-1/2 -translate-y-1/2 z-[70] flex h-12 w-5 items-center justify-center rounded-r-md border border-l-0 border-sidebar-border bg-sidebar text-sidebar-muted shadow-md hover:bg-sidebar-accent hover:text-sidebar-foreground transition-[left,color,background-color] duration-300",
+            "fixed top-1/2 -translate-y-1/2 z-[45] flex h-12 w-5 items-center justify-center rounded-r-md border border-l-0 border-sidebar-border bg-sidebar text-sidebar-muted shadow-md hover:bg-sidebar-accent hover:text-sidebar-foreground transition-[left,color,background-color] duration-300",
             sidebarCollapsed ? "left-[68px]" : "left-[240px]"
           )}
         >

@@ -72,6 +72,8 @@ export function WorkflowJobPicker({ tasks, taskId, createJob, onTaskChange, onCr
 export function TaskBadge({ tasks, taskId }) {
   if (!taskId) return <span className="text-muted-foreground">—</span>;
   const task = tasks.find((x) => x.id === taskId);
+  // Jobs have loaded but this one isn't among them: it was deleted.
+  if (!task && tasks.length > 0) return <span className="text-muted-foreground">—</span>;
   return (
     <Link to="/workflow" className="font-mono text-xs text-primary hover:underline" title={task?.title} onClick={(e) => e.stopPropagation()}>
       #{task?.taskNumber ?? '…'}

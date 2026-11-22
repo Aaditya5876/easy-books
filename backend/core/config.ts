@@ -1,6 +1,12 @@
 import { z } from 'zod';
 
-const EnvSchema = z.object({
+// looseObject, not object: the settings listed here are required/converted, but
+// every other one (SMTP_*, GEMINI_API_KEY, SMS, eSewa/Khalti, Blob…) must be
+// kept. Since @nestjs/config 12, only what validateEnv returns reaches
+// ConfigService and process.env — a strict object silently dropped every
+// setting that lives only in backend/.env (local invite emails then failed
+// with 'Missing credentials for "PLAIN"'). See test/unit/config.spec.ts.
+const EnvSchema = z.looseObject({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   PORT: z.coerce.number().default(3000),
   DATABASE_URL: z.string(),

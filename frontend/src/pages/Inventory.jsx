@@ -514,7 +514,7 @@ export default function Inventory() {
 
       {/* Update Price/Location/Image Dialog */}
       <Dialog open={showUpdateDialog} onOpenChange={(o) => { setShowUpdateDialog(o); if (!o) setConfirmedPassword(''); }}>
-        <DialogContent className="glass-dialog max-w-lg overflow-hidden">
+        <DialogContent className="glass-dialog max-w-lg overflow-hidden flex flex-col">
           <div className="h-1 bg-gradient-to-r from-cyan-400 to-sky-500 -mx-6 -mt-6 mb-4" />
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -526,7 +526,7 @@ export default function Inventory() {
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.2 }}
-            className="space-y-5 overflow-y-auto max-h-[calc(85vh-140px)] py-2 pr-1"
+            className="space-y-5 overflow-y-auto flex-1 min-h-0 py-2 pr-1"
           >
             {/* Image upload */}
             <div>
@@ -783,7 +783,7 @@ export default function Inventory() {
 
       {/* Add Item Dialog */}
       <Dialog open={showAdd} onOpenChange={(v) => { setShowAdd(v); if (!v) setShowExtraFields(false); }}>
-        <DialogContent className="glass-dialog max-w-5xl overflow-hidden">
+        <DialogContent className="glass-dialog max-w-5xl overflow-hidden flex flex-col">
           <div className="h-1 bg-gradient-to-r from-cyan-400 to-sky-500 -mx-6 -mt-6 mb-4" />
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -800,7 +800,7 @@ export default function Inventory() {
             )}
           </DialogHeader>
 
-          <div className="grid grid-cols-2 gap-6 max-h-[72vh] overflow-hidden mt-1">
+          <div className="grid flex-1 min-h-0 grid-cols-2 grid-rows-[minmax(0,1fr)] gap-6 overflow-hidden mt-1">
 
             {/* LEFT column — Item Details */}
             <div className="overflow-y-auto space-y-4 pr-2">
@@ -964,7 +964,8 @@ export default function Inventory() {
                   ) : (
                     <div className="flex gap-2 mt-1">
                       <Input value={form.unit === '__custom__' ? '' : form.unit}
-                        onChange={e => setForm({ ...form, unit: e.target.value })} placeholder={t('inventory.customUnit', { defaultValue: 'Custom unit' })} autoFocus className="h-9 text-sm" />
+                        // Emptying the box keeps it open (it used to flip back to the dropdown).
+                        onChange={e => setForm({ ...form, unit: e.target.value || '__custom__' })} placeholder={t('inventory.customUnit', { defaultValue: 'Custom unit' })} autoFocus className="h-9 text-sm" />
                       <Button type="button" variant="outline" size="sm" onClick={() => setForm({ ...form, unit: '' })}>↩</Button>
                     </div>
                   )}

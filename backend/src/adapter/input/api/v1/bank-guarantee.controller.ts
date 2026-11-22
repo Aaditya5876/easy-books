@@ -2,6 +2,8 @@ import { Controller, Get, Post, Patch, Body, Param, Query } from '@nestjs/common
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { BankGuaranteeServiceImpl } from '../../../../application/services/bank-guarantee.service.impl';
 import { Roles } from '../../../../modules/decorators/roles.decorator';
+import { ZodValidationPipe } from '../../../../modules/pipes/zod-validation.pipe';
+import { CreateBankGuaranteeSchema } from '../../../../../core/validation/finance-records.schema';
 import { RequiresModule } from '../../../../modules/decorators/requires-module.decorator';
 
 @ApiTags('Bank Guarantees')
@@ -38,7 +40,7 @@ export class BankGuaranteeController {
   @Post()
   @ApiOperation({ summary: 'Record a bank guarantee' })
   @ApiQuery({ name: 'companyId', required: true })
-  create(@Query('companyId') companyId: string, @Body() body: any) {
+  create(@Query('companyId') companyId: string, @Body(new ZodValidationPipe(CreateBankGuaranteeSchema)) body: any) {
     return this.service.create(companyId, body);
   }
 

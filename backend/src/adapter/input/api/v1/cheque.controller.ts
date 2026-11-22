@@ -2,6 +2,8 @@ import { Controller, Get, Post, Patch, Body, Param, Query } from '@nestjs/common
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { ChequeServiceImpl } from '../../../../application/services/cheque.service.impl';
 import { Roles } from '../../../../modules/decorators/roles.decorator';
+import { ZodValidationPipe } from '../../../../modules/pipes/zod-validation.pipe';
+import { CreateChequeSchema } from '../../../../../core/validation/finance-records.schema';
 import { RequiresModule } from '../../../../modules/decorators/requires-module.decorator';
 
 @ApiTags('Cheques')
@@ -38,7 +40,7 @@ export class ChequeController {
   @Post()
   @ApiOperation({ summary: 'Record a cheque' })
   @ApiQuery({ name: 'companyId', required: true })
-  create(@Query('companyId') companyId: string, @Body() body: any) {
+  create(@Query('companyId') companyId: string, @Body(new ZodValidationPipe(CreateChequeSchema)) body: any) {
     return this.service.create(companyId, body);
   }
 

@@ -111,7 +111,7 @@ export default function Templates() {
 
       {/* Template Generator Dialog */}
       <Dialog open={showGenerator} onOpenChange={setShowGenerator}>
-        <DialogContent className="glass-dialog max-w-4xl overflow-hidden">
+        <DialogContent className="glass-dialog max-w-4xl overflow-hidden flex flex-col">
           <div className={`h-1 bg-gradient-to-r ${STRIPE_COLORS[selectedType] || STRIPE_COLORS.invoice} -mx-6 -mt-6 mb-4`} />
           <DialogHeader className="mb-2">
             <DialogTitle className="flex items-center gap-2 text-base font-semibold">
@@ -125,7 +125,7 @@ export default function Templates() {
           </DialogHeader>
 
           <motion.div
-            className="overflow-y-auto max-h-[65vh] pr-1 space-y-4"
+            className="overflow-y-auto flex-1 min-h-0 pr-1 space-y-4"
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.22 }}

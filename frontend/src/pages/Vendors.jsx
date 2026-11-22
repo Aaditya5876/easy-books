@@ -152,7 +152,7 @@ export default function Vendors() {
 
       {/* Add Dialog */}
       <Dialog open={showAdd} onOpenChange={setShowAdd}>
-        <DialogContent className="glass-dialog max-w-3xl overflow-hidden">
+        <DialogContent className="glass-dialog max-w-3xl overflow-hidden flex flex-col">
           <div className="h-1 bg-gradient-to-r from-orange-400 to-amber-500 -mx-6 -mt-6 mb-4" />
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -161,7 +161,7 @@ export default function Vendors() {
             </DialogTitle>
           </DialogHeader>
 
-          <div className="grid grid-cols-2 gap-6 max-h-[65vh] overflow-hidden mt-2">
+          <div className="grid flex-1 min-h-0 grid-cols-2 grid-rows-[minmax(0,1fr)] gap-6 overflow-hidden mt-2">
             {/* LEFT COLUMN */}
             <motion.div
               initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
@@ -277,7 +277,7 @@ export default function Vendors() {
 
       {/* Edit Dialog */}
       <Dialog open={!!editVendor} onOpenChange={open => { if (!open) setEditVendor(null); }}>
-        <DialogContent className="glass-dialog max-w-3xl overflow-hidden">
+        <DialogContent className="glass-dialog max-w-3xl overflow-hidden flex flex-col">
           <div className="h-1 bg-gradient-to-r from-orange-400 to-amber-500 -mx-6 -mt-6 mb-4" />
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -287,7 +287,7 @@ export default function Vendors() {
           </DialogHeader>
 
           {editVendor && (
-            <div className="grid grid-cols-2 gap-6 max-h-[65vh] overflow-hidden mt-2">
+            <div className="grid flex-1 min-h-0 grid-cols-2 grid-rows-[minmax(0,1fr)] gap-6 overflow-hidden mt-2">
               {/* LEFT COLUMN */}
               <motion.div
                 initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}

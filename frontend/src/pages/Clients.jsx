@@ -191,7 +191,7 @@ export default function Clients() {
 
       {/* Add Dialog */}
       <Dialog open={showAdd} onOpenChange={setShowAdd}>
-        <DialogContent className="glass-dialog max-w-3xl overflow-hidden">
+        <DialogContent className="glass-dialog max-w-3xl overflow-hidden flex flex-col">
           <div className="h-1 bg-gradient-to-r from-rose-400 to-pink-500 -mx-6 -mt-6 mb-4" />
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -200,7 +200,7 @@ export default function Clients() {
             </DialogTitle>
           </DialogHeader>
 
-          <div className="grid grid-cols-2 gap-6 max-h-[65vh] overflow-hidden mt-2">
+          <div className="grid flex-1 min-h-0 grid-cols-2 grid-rows-[minmax(0,1fr)] gap-6 overflow-hidden mt-2">
             {/* LEFT COLUMN */}
             <motion.div
               initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
@@ -330,7 +330,7 @@ export default function Clients() {
 
       {/* Edit Dialog */}
       <Dialog open={!!editClient} onOpenChange={open => { if (!open) setEditClient(null); }}>
-        <DialogContent className="glass-dialog max-w-3xl overflow-hidden">
+        <DialogContent className="glass-dialog max-w-3xl overflow-hidden flex flex-col">
           <div className="h-1 bg-gradient-to-r from-rose-400 to-pink-500 -mx-6 -mt-6 mb-4" />
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -340,7 +340,7 @@ export default function Clients() {
           </DialogHeader>
 
           {editClient && (
-            <div className="grid grid-cols-2 gap-6 max-h-[65vh] overflow-hidden mt-2">
+            <div className="grid flex-1 min-h-0 grid-cols-2 grid-rows-[minmax(0,1fr)] gap-6 overflow-hidden mt-2">
               {/* LEFT COLUMN */}
               <motion.div
                 initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
