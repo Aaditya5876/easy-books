@@ -58,7 +58,7 @@ function SpaceCard({ space, onClick }) {
 
 function SpacePanel({ space, onClose, onChanged }) {
   const { t } = useTranslation();
-  const { canCreate } = useRole(); // billing = accountant / admin
+  const { canSell: canCreate } = useRole(); // billing = accountant / admin / Sales-tagged staff
   const closeKey = useIdempotencyKey();
   const [session, setSession] = useState(null);
   const [stock, setStock] = useState([]);

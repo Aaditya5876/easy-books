@@ -73,7 +73,12 @@ const STAFF_TAGS = [
   { value: 'TRANSPORT', i18n: 'settings.staffTagTransport', label: 'Transport', desc: 'Routes and student assignments' },
   { value: 'HR', i18n: 'settings.staffTagHr', label: 'HR', desc: 'Employee records and attendance for all staff' },
   { value: 'FRONT_OFFICE', i18n: 'settings.staffTagFrontOffice', label: 'Front Office', desc: 'Admissions — set up student/parent portal access' },
+  { value: 'SALES', i18n: 'settings.staffTagSales', label: 'Sales / Counter', desc: 'Make sales bills, receive payments, close & bill tables — no editing, deleting or accounts' },
 ];
+// School duties vs business duties — each company only sees its own.
+const SCHOOL_TAGS = ['LIBRARY', 'HOSTEL', 'TRANSPORT', 'HR', 'FRONT_OFFICE'];
+const BUSINESS_TAGS = ['HR', 'SALES'];
+const staffTagsFor = (isSchool) => STAFF_TAGS.filter((tag) => (isSchool ? SCHOOL_TAGS : BUSINESS_TAGS).includes(tag.value));
 
 // Every toggleable module a company's package can include — mirrors backend
 // core/modules/module-keys.ts. 'BASE' is deliberately excluded: it's a no-op
@@ -1869,7 +1874,7 @@ export default function Settings() {
                             </select>
                             {u.role === 'STAFF' && (
                               <div className="flex flex-wrap justify-end gap-1 max-w-[220px]">
-                                {STAFF_TAGS.map(tag => (
+                                {staffTagsFor(isSchool).map(tag => (
                                   <button
                                     key={tag.value}
                                     type="button"
@@ -2966,7 +2971,7 @@ export default function Settings() {
                 <div className="space-y-2">
                   <Label>{t('settings.staffDutiesLabel', { defaultValue: 'Duties (optional)' })}</Label>
                   <div className="flex flex-wrap gap-2">
-                    {STAFF_TAGS.map(tag => {
+                    {staffTagsFor(isSchool).map(tag => {
                       const active = inviteForm.staffTags.includes(tag.value);
                       return (
                         <button

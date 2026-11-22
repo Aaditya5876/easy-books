@@ -43,12 +43,13 @@ export function TaskLinkSelect({ tasks, value, onChange }) {
 // Workflow section of a purchase/sales bill: either link an open job, or tick
 // "Also create a workflow job" — the server then creates one filled from the
 // bill (party, items, amount) in the same save. Never both.
-export function WorkflowJobPicker({ tasks, taskId, createJob, onTaskChange, onCreateJobChange, partyLabel }) {
+export function WorkflowJobPicker({ tasks, taskId, createJob, onTaskChange, onCreateJobChange, partyLabel, allowCreate = true }) {
   const { t } = useTranslation();
   return (
     <div className="space-y-2">
       {!createJob && <TaskLinkSelect tasks={tasks} value={taskId} onChange={onTaskChange} />}
-      <label className="flex items-start gap-2 cursor-pointer rounded-md border border-dashed p-2">
+      {/* Creating jobs is ADMIN/ACCOUNTANT — a Sales-tagged cashier only links. */}
+      {allowCreate && <label className="flex items-start gap-2 cursor-pointer rounded-md border border-dashed p-2">
         <Checkbox
           className="mt-0.5"
           checked={!!createJob}
@@ -63,7 +64,7 @@ export function WorkflowJobPicker({ tasks, taskId, createJob, onTaskChange, onCr
             {t('workflow.createJobWithBillHint', { party: partyLabel, defaultValue: 'Filled with the {{party}}, items and amount, and linked to this bill.' })}
           </span>
         </span>
-      </label>
+      </label>}
     </div>
   );
 }

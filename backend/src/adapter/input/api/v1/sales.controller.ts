@@ -1,7 +1,8 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, Query } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param, Query, Req, ForbiddenException } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { SalesServiceImpl } from '../../../../application/services/sales.service.impl';
 import { Roles } from '../../../../modules/decorators/roles.decorator';
+import { RequiresStaffTag } from '../../../../modules/decorators/requires-staff-tag.decorator';
 
 @ApiTags('Sales')
 @ApiBearerAuth()
@@ -31,15 +32,22 @@ export class SalesController {
     return this.service.findOne(id, companyId);
   }
 
+  // STAFF only with the SALES ("Sales / Counter") tag — editing/deleting stays
+  // ACCOUNTANT/ADMIN.
   @Post()
-  @Roles('ACCOUNTANT', 'ADMIN')
+  @Roles('STAFF', 'ACCOUNTANT', 'ADMIN')
+  @RequiresStaffTag('SALES')
   @ApiOperation({ summary: 'Create a sales order (auto-generates invoice number, deducts stock, posts to ledger)' })
-  create(@Body() body: any) {
+  create(@Body() body: any, @Req() req: any) {
+    // Workflow jobs are created by ADMIN/ACCOUNTANT (POST /tasks); a cashier
+    // may link an existing job but not create one through a sale.
+    if (body?.createJob && req.user?.role === 'STAFF') throw new ForbiddenException('Only an admin or accountant can create a workflow job');
     return this.service.create(body);
   }
 
   @Post(':id/payment')
-  @Roles('ACCOUNTANT', 'ADMIN')
+  @Roles('STAFF', 'ACCOUNTANT', 'ADMIN')
+  @RequiresStaffTag('SALES')
   @ApiOperation({ summary: 'Record a payment against a sales order' })
   @ApiQuery({ name: 'companyId', required: true })
   recordPayment(@Param('id') salesOrderId: string, @Query('companyId') companyId: string, @Body() body: any) {

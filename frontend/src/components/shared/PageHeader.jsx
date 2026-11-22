@@ -5,13 +5,15 @@ import { useRole } from "@/lib/useRole";
 
 export default function PageHeader({
   title, subtitle,
-  onAdd, addLabel,
+  onAdd, addLabel, canAdd,
   onDelete, deleteLabel,
   onUpdatePrice, updatePriceLabel,
   searchValue, onSearchChange,
   children,
 }) {
-  const { canCreate, canDelete, canEdit } = useRole();
+  const { canCreate: roleCanCreate, canDelete, canEdit } = useRole();
+  // A page may widen who sees its Add button (e.g. Sales: a SALES-tagged cashier).
+  const canCreate = canAdd ?? roleCanCreate;
 
   return (
     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">

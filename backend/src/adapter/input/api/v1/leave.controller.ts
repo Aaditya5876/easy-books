@@ -3,6 +3,7 @@ import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger'
 import { LeaveServiceImpl } from '../../../../application/services/leave.service.impl';
 import { Roles } from '../../../../modules/decorators/roles.decorator';
 import { RequiresModule } from '../../../../modules/decorators/requires-module.decorator';
+import { RequiresStaffTag } from '../../../../modules/decorators/requires-staff-tag.decorator';
 
 @ApiTags('Leave')
 @ApiBearerAuth()
@@ -87,16 +88,20 @@ export class LeaveController {
 
   // ─── Leave Balances ──────────────────────────────────────────────────────────
 
+  // A plain STAFF login may read only their OWN balance (My Leave shows it);
+  // anyone's balance is for ADMIN / ACCOUNTANT / HR-tagged STAFF.
   @Get('balances/:employeeId')
   @Roles('STAFF', 'ACCOUNTANT', 'ADMIN')
   @ApiOperation({ summary: 'Get leave balances for an employee' })
   @ApiQuery({ name: 'companyId', required: true })
   @ApiQuery({ name: 'fiscalYear', required: false, example: '2081-82' })
-  getBalances(
+  async getBalances(
     @Param('employeeId') employeeId: string,
     @Query('companyId') companyId: string,
     @Query('fiscalYear') fiscalYear: string,
+    @Request() req: any,
   ) {
+    await this.service.assertOwnUnlessHr(req.user, companyId, employeeId);
     return this.service.getBalances(employeeId, companyId, fiscalYear);
   }
 
@@ -127,8 +132,10 @@ export class LeaveController {
 
   // ─── Leave Requests ──────────────────────────────────────────────────────────
 
+  // Everyone's leave (with reasons) is HR work. Staff use the /self routes.
   @Get('requests')
   @Roles('STAFF', 'ACCOUNTANT', 'ADMIN')
+  @RequiresStaffTag('HR')
   @ApiOperation({ summary: 'Get all leave requests' })
   @ApiQuery({ name: 'companyId', required: true })
   @ApiQuery({ name: 'employeeId', required: false })
@@ -143,6 +150,7 @@ export class LeaveController {
 
   @Get('requests/:id')
   @Roles('STAFF', 'ACCOUNTANT', 'ADMIN')
+  @RequiresStaffTag('HR')
   @ApiOperation({ summary: 'Get a leave request by id' })
   @ApiQuery({ name: 'companyId', required: true })
   findRequestById(@Param('id') id: string, @Query('companyId') companyId: string) {
@@ -151,6 +159,7 @@ export class LeaveController {
 
   @Post('requests')
   @Roles('STAFF', 'ACCOUNTANT', 'ADMIN')
+  @RequiresStaffTag('HR')
   @ApiOperation({ summary: 'Submit a leave request' })
   @ApiQuery({ name: 'companyId', required: true })
   createRequest(
@@ -178,6 +187,7 @@ export class LeaveController {
 
   @Patch('requests/:id/cancel')
   @Roles('STAFF', 'ACCOUNTANT', 'ADMIN')
+  @RequiresStaffTag('HR')
   @ApiOperation({ summary: 'Cancel a leave request' })
   @ApiQuery({ name: 'companyId', required: true })
   cancel(@Param('id') id: string, @Query('companyId') companyId: string) {

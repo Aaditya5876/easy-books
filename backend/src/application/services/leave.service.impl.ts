@@ -52,6 +52,13 @@ export class LeaveServiceImpl {
 
   // ─── Self-service (any authenticated employee) ─────────────────────────────
 
+  // A STAFF login without the HR tag may only look at their own leave record.
+  async assertOwnUnlessHr(user: { role?: string; email?: string; tags?: string[] } | undefined, companyId: string, employeeId: string) {
+    if (!user || user.role !== 'STAFF' || (user.tags ?? []).includes('HR')) return;
+    const own = user.email ? await resolveLinkedEmployee(this.prisma, companyId, user.email) : null;
+    if (!own || own.id !== employeeId) throw new ForbiddenException("You can only see your own leave");
+  }
+
   async getSelfContext(companyId: string, email: string) {
     const employee = await resolveLinkedEmployee(this.prisma, companyId, email);
     if (!employee) return { linked: false, employeeName: null, fiscalYear: null, balances: [] };

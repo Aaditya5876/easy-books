@@ -5,6 +5,7 @@ import {
   StartSpaceSessionSchema, UpdateSpaceSchema,
 } from '@easy-books/shared';
 import { Roles } from '../../../../modules/decorators/roles.decorator';
+import { RequiresStaffTag } from '../../../../modules/decorators/requires-staff-tag.decorator';
 import { ZodValidationPipe } from '../../../../modules/pipes/zod-validation.pipe';
 import { SpaceService } from '../../../../application/services/space.service';
 
@@ -102,8 +103,10 @@ export class SpaceController {
     return this.service.removeCharge(id, chargeId, companyId);
   }
 
+  // Close & Bill makes the sales bill: STAFF only with the SALES tag.
   @Post('space-sessions/:id/close')
-  @Roles('ACCOUNTANT', 'ADMIN')
+  @Roles('STAFF', 'ACCOUNTANT', 'ADMIN')
+  @RequiresStaffTag('SALES')
   @ApiOperation({ summary: 'Close and bill: charges + time rate become one sales bill' })
   @ApiQuery({ name: 'companyId', required: true })
   close(@Param('id') id: string, @Query('companyId') companyId: string, @Body(new ZodValidationPipe(CloseSpaceSessionSchema)) dto: any) {

@@ -49,7 +49,7 @@ const EMPTY_FORM = {
 
 export default function Sales() {
   const { t } = useTranslation();
-  const { canCreate } = useRole();
+  const { canSell: canCreate, canCreate: canCreateJobs } = useRole(); // canSell: ADMIN, ACCOUNTANT or STAFF with the Sales/Counter tag
   const companyId = getActiveCompanyId();
   const [orders, setOrders] = useState([]);
   const [inventory, setInventory] = useState([]);
@@ -344,6 +344,7 @@ export default function Sales() {
         searchValue={search}
         onSearchChange={setSearch}
         onAdd={openNewSale}
+        canAdd={canCreate}
         addLabel={t('sales.newSale', { defaultValue: 'New Sale' })}
       />
 
@@ -407,6 +408,7 @@ export default function Sales() {
                     onTaskChange={v => setForm(f => ({ ...f, task_id: v }))}
                     onCreateJobChange={v => setForm(f => ({ ...f, create_job: v }))}
                     partyLabel={t('workflow.partyClient', { defaultValue: 'client' })}
+                    allowCreate={canCreateJobs}
                   />
                   <div>
                     <Label className="text-xs">{t('sales.clientNameRequired', { defaultValue: 'Client Name *' })}</Label>

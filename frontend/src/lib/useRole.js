@@ -14,11 +14,15 @@ export function useRole() {
   // specific facility/HR duties (see backend core/modules/staff-tags.ts for
   // the whitelist). ADMIN/ACCOUNTANT are never tag-gated.
   const hasStaffTag = (tag) => isStaff && staffTags.includes(tag);
+  // Make sales bills, receive payments, Close & Bill a Space: ADMIN,
+  // ACCOUNTANT, or STAFF with the SALES ("Sales / Counter") tag.
+  const canSell = isAdmin || isAccountant || hasStaffTag('SALES');
 
   return {
     role,
     staffTags,
     hasStaffTag,
+    canSell,
     isAdmin,
     isAccountant,
     isStaff,

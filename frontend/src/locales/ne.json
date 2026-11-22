@@ -3069,7 +3069,9 @@
     "clearSelection": "हटाउनुहोस्",
     "restoreSelected": "छानिएका फिर्ता ल्याउनुहोस्",
     "deleteSelected": "छानिएका मेटाउनुहोस्",
-    "selectAllInSection": "सबै {{section}} छान्नुहोस्"
+    "selectAllInSection": "सबै {{section}} छान्नुहोस्",
+    "staffTagSales": "बिक्री / काउन्टर",
+    "staffTagSalesDesc": "बिक्री बिल, भुक्तानी प्राप्त, टेबल बिल — सम्पादन, मेटाउने वा खाता बाहेक"
   },
   "transactions": {
     "pageTitle": "कारोबारहरू",
